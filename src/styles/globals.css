@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./typography.css";
 @import "./editor.css";
+@import "./annotations.css";
 
 @theme {
   --color-page: #faf8f5;

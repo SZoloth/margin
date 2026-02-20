@@ -1,25 +1,31 @@
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Typography from "@tiptap/extension-typography";
-import Highlight from "@tiptap/extension-highlight";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
+import { MultiColorHighlight } from "./extensions/highlight";
+import { MarginNote } from "./extensions/margin-note";
+import { CommentThread } from "./extensions/comment-thread";
 import "../../styles/editor.css";
 
 interface ReaderProps {
   content: string;
   onUpdate: (content: string) => void;
   isLoading: boolean;
+  onEditorReady?: (editor: Editor) => void;
 }
 
-export function Reader({ content, onUpdate, isLoading }: ReaderProps) {
+export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderProps) {
   const isExternalUpdate = useRef(false);
 
   const editor = useEditor({
     extensions: [
       StarterKit,
       Typography,
-      Highlight.configure({ multicolor: true }),
+      MultiColorHighlight.configure({ multicolor: true }),
+      MarginNote,
+      CommentThread,
       Markdown.configure({
         html: true,
         tightLists: true,
@@ -43,6 +49,12 @@ export function Reader({ content, onUpdate, isLoading }: ReaderProps) {
       onUpdate(md as string);
     },
   });
+
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;

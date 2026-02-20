@@ -1,0 +1,329 @@
+use crate::db::migrations::get_db;
+use crate::db::models::{Comment, CommentThread, Highlight, MarginNote};
+use std::time::SystemTime;
+use uuid::Uuid;
+
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+}
+
+// === Highlights ===
+
+#[tauri::command]
+pub async fn create_highlight(
+    document_id: String,
+    color: String,
+    text_content: String,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<String>,
+    suffix_context: Option<String>,
+) -> Result<Highlight, String> {
+    let conn = get_db()?;
+    let id = Uuid::new_v4().to_string();
+    let now = now_millis();
+
+    conn.execute(
+        "INSERT INTO highlights
+            (id, document_id, color, text_content, from_pos, to_pos,
+             prefix_context, suffix_context, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![
+            id,
+            document_id,
+            color,
+            text_content,
+            from_pos,
+            to_pos,
+            prefix_context,
+            suffix_context,
+            now,
+            now,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(Highlight {
+        id,
+        document_id,
+        color,
+        text_content,
+        from_pos,
+        to_pos,
+        prefix_context,
+        suffix_context,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub async fn get_highlights(document_id: String) -> Result<Vec<Highlight>, String> {
+    let conn = get_db()?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, document_id, color, text_content, from_pos, to_pos,
+                    prefix_context, suffix_context, created_at, updated_at
+             FROM highlights
+             WHERE document_id = ?1
+             ORDER BY from_pos",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let highlights = stmt
+        .query_map([&document_id], |row| Highlight::from_row(row))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(highlights)
+}
+
+#[tauri::command]
+pub async fn update_highlight_color(id: String, color: String) -> Result<(), String> {
+    let conn = get_db()?;
+    let now = now_millis();
+
+    conn.execute(
+        "UPDATE highlights SET color = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![color, now, id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_highlight(id: String) -> Result<(), String> {
+    let conn = get_db()?;
+
+    conn.execute("DELETE FROM highlights WHERE id = ?1", rusqlite::params![id])
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// === Margin Notes ===
+
+#[tauri::command]
+pub async fn create_margin_note(
+    highlight_id: String,
+    content: String,
+) -> Result<MarginNote, String> {
+    let conn = get_db()?;
+    let id = Uuid::new_v4().to_string();
+    let now = now_millis();
+
+    conn.execute(
+        "INSERT INTO margin_notes (id, highlight_id, content, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![id, highlight_id, content, now, now],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(MarginNote {
+        id,
+        highlight_id,
+        content,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub async fn get_margin_notes(document_id: String) -> Result<Vec<MarginNote>, String> {
+    let conn = get_db()?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT mn.id, mn.highlight_id, mn.content, mn.created_at, mn.updated_at
+             FROM margin_notes mn
+             JOIN highlights h ON mn.highlight_id = h.id
+             WHERE h.document_id = ?1
+             ORDER BY h.from_pos",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let notes = stmt
+        .query_map([&document_id], |row| MarginNote::from_row(row))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(notes)
+}
+
+#[tauri::command]
+pub async fn update_margin_note(id: String, content: String) -> Result<(), String> {
+    let conn = get_db()?;
+    let now = now_millis();
+
+    conn.execute(
+        "UPDATE margin_notes SET content = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![content, now, id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_margin_note(id: String) -> Result<(), String> {
+    let conn = get_db()?;
+
+    conn.execute(
+        "DELETE FROM margin_notes WHERE id = ?1",
+        rusqlite::params![id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// === Comment Threads ===
+
+#[tauri::command]
+pub async fn create_comment_thread(
+    document_id: String,
+    text_content: String,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<String>,
+    suffix_context: Option<String>,
+) -> Result<CommentThread, String> {
+    let conn = get_db()?;
+    let id = Uuid::new_v4().to_string();
+    let now = now_millis();
+
+    conn.execute(
+        "INSERT INTO comment_threads
+            (id, document_id, text_content, from_pos, to_pos,
+             prefix_context, suffix_context, resolved, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9)",
+        rusqlite::params![
+            id,
+            document_id,
+            text_content,
+            from_pos,
+            to_pos,
+            prefix_context,
+            suffix_context,
+            now,
+            now,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(CommentThread {
+        id,
+        document_id,
+        text_content,
+        from_pos,
+        to_pos,
+        prefix_context,
+        suffix_context,
+        resolved: false,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub async fn get_comment_threads(document_id: String) -> Result<Vec<CommentThread>, String> {
+    let conn = get_db()?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, document_id, text_content, from_pos, to_pos,
+                    prefix_context, suffix_context, resolved, created_at, updated_at
+             FROM comment_threads
+             WHERE document_id = ?1
+             ORDER BY from_pos",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let threads = stmt
+        .query_map([&document_id], |row| CommentThread::from_row(row))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(threads)
+}
+
+#[tauri::command]
+pub async fn resolve_comment_thread(id: String, resolved: bool) -> Result<(), String> {
+    let conn = get_db()?;
+    let now = now_millis();
+    let resolved_int: i64 = if resolved { 1 } else { 0 };
+
+    conn.execute(
+        "UPDATE comment_threads SET resolved = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![resolved_int, now, id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_comment_thread(id: String) -> Result<(), String> {
+    let conn = get_db()?;
+
+    conn.execute(
+        "DELETE FROM comment_threads WHERE id = ?1",
+        rusqlite::params![id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+// === Comments ===
+
+#[tauri::command]
+pub async fn add_comment(thread_id: String, content: String) -> Result<Comment, String> {
+    let conn = get_db()?;
+    let id = Uuid::new_v4().to_string();
+    let now = now_millis();
+
+    conn.execute(
+        "INSERT INTO comments (id, thread_id, content, created_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![id, thread_id, content, now],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(Comment {
+        id,
+        thread_id,
+        content,
+        created_at: now,
+    })
+}
+
+#[tauri::command]
+pub async fn get_comments(thread_id: String) -> Result<Vec<Comment>, String> {
+    let conn = get_db()?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, thread_id, content, created_at
+             FROM comments
+             WHERE thread_id = ?1
+             ORDER BY created_at",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let comments = stmt
+        .query_map([&thread_id], |row| Comment::from_row(row))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(comments)
+}

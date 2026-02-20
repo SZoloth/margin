@@ -13,6 +13,20 @@ pub fn run() {
             commands::files::list_markdown_files,
             commands::documents::get_recent_documents,
             commands::documents::upsert_document,
+            commands::annotations::create_highlight,
+            commands::annotations::get_highlights,
+            commands::annotations::update_highlight_color,
+            commands::annotations::delete_highlight,
+            commands::annotations::create_margin_note,
+            commands::annotations::get_margin_notes,
+            commands::annotations::update_margin_note,
+            commands::annotations::delete_margin_note,
+            commands::annotations::create_comment_thread,
+            commands::annotations::get_comment_threads,
+            commands::annotations::resolve_comment_thread,
+            commands::annotations::delete_comment_thread,
+            commands::annotations::add_comment,
+            commands::annotations::get_comments,
         ])
         .setup(|_app| {
             db::migrations::init_db()?;
