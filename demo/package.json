@@ -1,0 +1,21 @@
+{
+  "name": "margin-demo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render MarginDemo out/margin-demo.mp4 --codec h264 --crf 18",
+    "render:webm": "remotion render MarginDemo out/margin-demo.webm --codec vp8 --crf 20"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.261",
+    "@remotion/google-fonts": "4.0.261",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "4.0.261"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "typescript": "^5.7.0"
+  }
+}
