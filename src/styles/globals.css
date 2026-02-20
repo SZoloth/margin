@@ -4,22 +4,31 @@
 @import "./annotations.css";
 
 @theme {
-  --color-page: #faf8f5;
-  --color-page-dark: #1a1a1e;
-  --color-sidebar: #f2efe9;
-  --color-sidebar-dark: #232328;
-  --color-text-primary: #1a1a1a;
-  --color-text-primary-dark: #e8e6e3;
-  --color-text-secondary: #4a4a4a;
-  --color-text-secondary-dark: #a0a0a0;
-  --color-border: #e5e2dc;
-  --color-border-dark: #3a3a3e;
-
   --color-highlight-yellow: #fef3c7;
   --color-highlight-green: #d1fae5;
   --color-highlight-blue: #dbeafe;
   --color-highlight-pink: #fce7f3;
   --color-highlight-orange: #ffedd5;
+}
+
+/* Light theme (default) */
+:root {
+  --color-page: #faf8f5;
+  --color-sidebar: #f2efe9;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #4a4a4a;
+  --color-border: #e5e2dc;
+}
+
+/* Dark theme */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-page: #1a1a1e;
+    --color-sidebar: #232328;
+    --color-text-primary: #e8e6e3;
+    --color-text-secondary: #a0a0a0;
+    --color-border: #3a3a3e;
+  }
 }
 
 body {
@@ -35,11 +44,4 @@ body {
 #root {
   height: 100vh;
   overflow: hidden;
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: var(--color-page-dark);
-    color: var(--color-text-primary-dark);
-  }
 }

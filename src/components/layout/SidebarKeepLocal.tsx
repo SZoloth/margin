@@ -132,8 +132,7 @@ export function SidebarKeepLocal({
                 transition: "background-color 0.1s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor =
-                  "var(--color-sidebar, rgba(128,128,128,0.1))";
+                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = "transparent";

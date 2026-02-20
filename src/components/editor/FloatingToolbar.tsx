@@ -41,20 +41,24 @@ export function FloatingToolbar({
       return;
     }
 
-    const from = editor.view.coordsAtPos(selection.from);
-    const to = editor.view.coordsAtPos(selection.to);
+    let from, to;
+    try {
+      from = editor.view.coordsAtPos(selection.from);
+      to = editor.view.coordsAtPos(selection.to);
+    } catch {
+      setIsVisible(false);
+      return;
+    }
 
     const toolbarWidth = toolbarRef.current?.offsetWidth ?? 240;
     const toolbarHeight = toolbarRef.current?.offsetHeight ?? 40;
 
+    // coordsAtPos returns viewport-relative coords; use fixed positioning directly
     const centerX = (from.left + to.right) / 2;
-    const top = from.top - toolbarHeight - 8 + window.scrollY;
+    const top = from.top - toolbarHeight - 8;
     const left = Math.max(
       8,
-      Math.min(
-        centerX - toolbarWidth / 2 + window.scrollX,
-        window.innerWidth - toolbarWidth - 8,
-      ),
+      Math.min(centerX - toolbarWidth / 2, window.innerWidth - toolbarWidth - 8),
     );
 
     setPosition({ top, left });
@@ -97,10 +101,12 @@ export function FloatingToolbar({
   return createPortal(
     <div
       ref={toolbarRef}
-      className="fixed z-50 flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 shadow-md"
+      className="fixed z-50 flex items-center gap-2 rounded-lg border px-3 py-2 shadow-md"
       style={{
         top: position.top,
         left: position.left,
+        borderColor: "var(--color-border)",
+        backgroundColor: "var(--color-page)",
       }}
       onMouseDown={(e) => {
         // Prevent toolbar clicks from stealing focus from editor
@@ -114,12 +120,16 @@ export function FloatingToolbar({
         size="sm"
       />
 
-      <div className="mx-1 h-5 w-px bg-stone-300" />
+      <div
+        className="mx-1 h-5 w-px"
+        style={{ backgroundColor: "var(--color-border)" }}
+      />
 
       <button
         type="button"
         onClick={onComment}
-        className="flex items-center gap-1 rounded px-2 py-1 text-sm text-stone-600 transition-colors hover:bg-stone-200 hover:text-stone-900"
+        className="flex items-center gap-1 rounded px-2 py-1 text-sm transition-colors"
+        style={{ color: "var(--color-text-secondary)" }}
         aria-label="Add comment"
       >
         <svg

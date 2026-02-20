@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Document } from "@/types/document";
 import {
   openFileDialog,
   readFile,
   saveFile as saveFileCommand,
   upsertDocument,
+  getRecentDocuments,
 } from "@/lib/tauri-commands";
 
 function basename(filePath: string): string {
@@ -23,6 +24,7 @@ function countWords(text: string): number {
 
 export interface UseDocumentReturn {
   currentDoc: Document | null;
+  recentDocs: Document[];
   content: string;
   filePath: string | null;
   isDirty: boolean;
@@ -31,18 +33,47 @@ export interface UseDocumentReturn {
   openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
   saveCurrentFile: () => Promise<void>;
   setContent: (newContent: string) => void;
+  setContentExternal: (newContent: string) => void;
 }
 
 export function useDocument(): UseDocumentReturn {
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
+  const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   const [content, setContentState] = useState<string>("");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Track keep-local doc IDs so we can reuse them
+  const keepLocalDocMapRef = useRef<Map<string, Document>>(new Map());
 
+  // Load recent documents on mount
+  useEffect(() => {
+    getRecentDocuments(20)
+      .then((docs) => {
+        setRecentDocs(docs);
+        // Populate keep-local doc map from recent docs
+        for (const d of docs) {
+          if (d.source === "keep-local" && d.keep_local_id) {
+            keepLocalDocMapRef.current.set(d.keep_local_id, d);
+          }
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  // User edit — marks dirty
   const setContent = useCallback((newContent: string) => {
     setContentState(newContent);
     setIsDirty(true);
+  }, []);
+
+  // External update (file watcher) — does NOT mark dirty
+  const setContentExternal = useCallback((newContent: string) => {
+    setContentState(newContent);
+  }, []);
+
+  const refreshRecentDocs = useCallback(() => {
+    getRecentDocuments(20).then(setRecentDocs).catch(console.error);
   }, []);
 
   const openFile = useCallback(async () => {
@@ -74,24 +105,41 @@ export function useDocument(): UseDocumentReturn {
       setContentState(fileContent);
       setCurrentDoc(saved);
       setIsDirty(false);
+      refreshRecentDocs();
     } catch (err) {
       console.error("Failed to open file:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [currentDoc]);
+  }, [currentDoc, refreshRecentDocs]);
 
   const openKeepLocalArticle = useCallback(async (docRecord: Document, markdown: string) => {
     try {
-      const saved = await upsertDocument(docRecord);
-      setFilePath(null); // keep-local articles have no local file path
+      // Reuse existing document ID if this keep-local article was opened before
+      const existingDoc = docRecord.keep_local_id
+        ? keepLocalDocMapRef.current.get(docRecord.keep_local_id)
+        : null;
+
+      const finalDoc: Document = existingDoc
+        ? { ...existingDoc, last_opened_at: Date.now(), word_count: docRecord.word_count }
+        : docRecord;
+
+      const saved = await upsertDocument(finalDoc);
+
+      // Cache for future lookups
+      if (saved.keep_local_id) {
+        keepLocalDocMapRef.current.set(saved.keep_local_id, saved);
+      }
+
+      setFilePath(null);
       setContentState(markdown);
       setCurrentDoc(saved);
       setIsDirty(false);
+      refreshRecentDocs();
     } catch (err) {
       console.error("Failed to open keep-local article:", err);
     }
-  }, []);
+  }, [refreshRecentDocs]);
 
   const saveCurrentFile = useCallback(async () => {
     if (!filePath || !isDirty) return;
@@ -108,11 +156,12 @@ export function useDocument(): UseDocumentReturn {
         };
         const saved = await upsertDocument(updated);
         setCurrentDoc(saved);
+        refreshRecentDocs();
       }
     } catch (err) {
       console.error("Failed to save file:", err);
     }
-  }, [filePath, isDirty, content, currentDoc]);
+  }, [filePath, isDirty, content, currentDoc, refreshRecentDocs]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -135,6 +184,7 @@ export function useDocument(): UseDocumentReturn {
 
   return {
     currentDoc,
+    recentDocs,
     content,
     filePath,
     isDirty,
@@ -143,5 +193,6 @@ export function useDocument(): UseDocumentReturn {
     openKeepLocalArticle,
     saveCurrentFile,
     setContent,
+    setContentExternal,
   };
 }

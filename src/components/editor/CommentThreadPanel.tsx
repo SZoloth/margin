@@ -54,9 +54,14 @@ function ThreadDetail({
 
   const loadComments = useCallback(async () => {
     setIsLoadingComments(true);
-    const loaded = await getComments(thread.id);
-    setComments(loaded);
-    setIsLoadingComments(false);
+    try {
+      const loaded = await getComments(thread.id);
+      setComments(loaded);
+    } catch (err) {
+      console.error("Failed to load comments:", err);
+    } finally {
+      setIsLoadingComments(false);
+    }
   }, [thread.id, getComments]);
 
   useEffect(() => {
@@ -72,11 +77,16 @@ function ThreadDetail({
     if (!trimmed || isSubmitting) return;
 
     setIsSubmitting(true);
-    await onAddComment(thread.id, trimmed);
-    setNewComment("");
-    await loadComments();
-    setIsSubmitting(false);
-    inputRef.current?.focus();
+    try {
+      await onAddComment(thread.id, trimmed);
+      setNewComment("");
+      await loadComments();
+    } catch (err) {
+      console.error("Failed to add comment:", err);
+    } finally {
+      setIsSubmitting(false);
+      inputRef.current?.focus();
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -89,13 +99,28 @@ function ThreadDetail({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-        <h3 className="text-sm font-medium text-stone-800">Thread</h3>
+      <div
+        className="flex items-center justify-between px-4 py-3 border-b"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        <h3
+          className="text-sm font-medium"
+          style={{ color: "var(--color-text-primary)" }}
+        >
+          Thread
+        </h3>
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600"
+          className="rounded p-1 transition-colors"
+          style={{ color: "var(--color-text-secondary)" }}
           aria-label="Close panel"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+          }}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path
@@ -109,8 +134,17 @@ function ThreadDetail({
       </div>
 
       {/* Quoted text */}
-      <div className="border-b border-stone-100 px-4 py-3">
-        <blockquote className="border-l-2 border-stone-300 pl-3 text-sm italic text-stone-500">
+      <div
+        className="px-4 py-3 border-b"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        <blockquote
+          className="border-l-2 pl-3 text-sm italic"
+          style={{
+            borderColor: "var(--color-border)",
+            color: "var(--color-text-secondary)",
+          }}
+        >
           {thread.text_content.length > 120
             ? `${thread.text_content.slice(0, 120)}...`
             : thread.text_content}
@@ -119,18 +153,22 @@ function ThreadDetail({
           <button
             type="button"
             onClick={() => onResolve(thread.id, !thread.resolved)}
-            className={`rounded px-2 py-0.5 text-xs transition-colors ${
-              thread.resolved
-                ? "bg-green-50 text-green-700 hover:bg-green-100"
-                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-            }`}
+            className="rounded px-2 py-0.5 text-xs transition-colors"
+            style={{
+              backgroundColor: thread.resolved
+                ? "rgba(34, 197, 94, 0.1)"
+                : "rgba(0,0,0,0.05)",
+              color: thread.resolved
+                ? "#16a34a"
+                : "var(--color-text-secondary)",
+            }}
           >
             {thread.resolved ? "Resolved" : "Resolve"}
           </button>
           <button
             type="button"
             onClick={() => onDelete(thread.id)}
-            className="rounded px-2 py-0.5 text-xs text-stone-400 transition-colors hover:text-red-500"
+            className="rounded px-2 py-0.5 text-xs text-red-400 transition-colors hover:text-red-600"
           >
             Delete
           </button>
@@ -140,11 +178,17 @@ function ThreadDetail({
       {/* Comments list */}
       <div className="flex-1 overflow-y-auto px-4 py-2">
         {isLoadingComments ? (
-          <div className="py-8 text-center text-sm text-stone-400">
+          <div
+            className="py-8 text-center text-sm"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
             Loading...
           </div>
         ) : comments.length === 0 ? (
-          <div className="py-8 text-center text-sm text-stone-400">
+          <div
+            className="py-8 text-center text-sm"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
             No comments yet. Start the conversation.
           </div>
         ) : (
@@ -152,10 +196,19 @@ function ThreadDetail({
             {comments.map((comment) => (
               <div
                 key={comment.id}
-                className="rounded-lg bg-stone-50 px-3 py-2"
+                className="rounded-lg px-3 py-2"
+                style={{ backgroundColor: "rgba(0,0,0,0.03)" }}
               >
-                <p className="text-sm text-stone-700">{comment.content}</p>
-                <span className="mt-1 block text-xs text-stone-400">
+                <p
+                  className="text-sm"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {comment.content}
+                </p>
+                <span
+                  className="mt-1 block text-xs"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
                   {formatTimestamp(comment.created_at)}
                 </span>
               </div>
@@ -166,7 +219,10 @@ function ThreadDetail({
       </div>
 
       {/* Add comment input */}
-      <div className="border-t border-stone-200 px-4 py-3">
+      <div
+        className="px-4 py-3 border-t"
+        style={{ borderColor: "var(--color-border)" }}
+      >
         <div className="flex gap-2">
           <textarea
             ref={inputRef}
@@ -174,19 +230,30 @@ function ThreadDetail({
             onChange={(e) => setNewComment(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Add a comment..."
-            className="flex-1 resize-none rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 placeholder:text-stone-400 focus:border-stone-300 focus:outline-none"
+            className="flex-1 resize-none rounded-lg border px-3 py-2 text-sm focus:outline-none"
+            style={{
+              borderColor: "var(--color-border)",
+              backgroundColor: "var(--color-page)",
+              color: "var(--color-text-primary)",
+            }}
             rows={2}
           />
           <button
             type="button"
             onClick={() => void handleSubmit()}
             disabled={!newComment.trim() || isSubmitting}
-            className="self-end rounded-lg bg-stone-800 px-3 py-2 text-sm text-white transition-colors hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="self-end rounded-lg px-3 py-2 text-sm text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            style={{
+              backgroundColor: "var(--color-text-primary)",
+            }}
           >
             Send
           </button>
         </div>
-        <p className="mt-1 text-xs text-stone-400">
+        <p
+          className="mt-1 text-xs"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
           {navigator.platform.includes("Mac") ? "Cmd" : "Ctrl"}+Enter to send
         </p>
       </div>
@@ -233,8 +300,12 @@ export function CommentThreadPanel({
       {/* Panel */}
       <div
         ref={panelRef}
-        className="fixed top-0 right-0 z-40 flex h-full flex-col border-l border-stone-200 bg-white shadow-xl"
-        style={{ width: 320 }}
+        className="fixed top-0 right-0 z-40 flex h-full flex-col border-l shadow-xl"
+        style={{
+          width: 320,
+          borderColor: "var(--color-border)",
+          backgroundColor: "var(--color-page)",
+        }}
       >
         <ThreadDetail
           thread={activeThread}

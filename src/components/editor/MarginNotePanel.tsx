@@ -79,15 +79,24 @@ function NoteCard({
 
   if (isEditing) {
     return (
-      <div className="rounded border border-stone-200 bg-stone-50/80 p-2">
+      <div
+        className="rounded border p-2"
+        style={{
+          borderColor: "var(--color-border)",
+          backgroundColor: "var(--color-page)",
+        }}
+      >
         <textarea
           ref={textareaRef}
           value={editValue}
           onChange={handleTextareaInput}
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
-          className="w-full resize-none border-none bg-transparent text-sm italic text-stone-700 outline-none"
-          style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
+          className="w-full resize-none border-none bg-transparent text-sm italic outline-none"
+          style={{
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            color: "var(--color-text-secondary)",
+          }}
           rows={1}
           placeholder="Add a note..."
         />
@@ -98,7 +107,8 @@ function NoteCard({
               e.preventDefault();
               setIsEditing(false);
             }}
-            className="rounded px-1.5 py-0.5 text-xs text-stone-400 hover:text-stone-600"
+            className="rounded px-1.5 py-0.5 text-xs transition-opacity hover:opacity-80"
+            style={{ color: "var(--color-text-secondary)" }}
           >
             Cancel
           </button>
@@ -108,7 +118,8 @@ function NoteCard({
               e.preventDefault();
               handleSave();
             }}
-            className="rounded px-1.5 py-0.5 text-xs text-stone-600 hover:text-stone-900"
+            className="rounded px-1.5 py-0.5 text-xs transition-opacity hover:opacity-80"
+            style={{ color: "var(--color-text-primary)" }}
           >
             Save
           </button>
@@ -122,8 +133,13 @@ function NoteCard({
       <button
         type="button"
         onClick={startEditing}
-        className="w-full rounded border border-dashed border-stone-300 px-2 py-1 text-left text-xs italic text-stone-400 transition-colors hover:border-stone-400 hover:text-stone-500"
-        style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
+        className="w-full rounded border border-dashed px-2 py-1 text-left text-xs italic transition-colors"
+        style={{
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          borderColor: "var(--color-border)",
+          color: "var(--color-text-secondary)",
+          opacity: 0.6,
+        }}
       >
         Add a note...
       </button>
@@ -131,12 +147,24 @@ function NoteCard({
   }
 
   return (
-    <div className="group rounded border border-transparent px-2 py-1 transition-colors hover:border-stone-200 hover:bg-stone-50/60">
+    <div
+      className="group rounded border border-transparent px-2 py-1 transition-colors"
+      style={{ ["--hover-bg" as string]: "rgba(0,0,0,0.03)" }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "var(--color-border)";
+        e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.02)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "transparent";
+        e.currentTarget.style.backgroundColor = "transparent";
+      }}
+    >
       <p
-        className="text-sm italic text-stone-600"
+        className="text-sm italic"
         style={{
           fontFamily: "Georgia, 'Times New Roman', serif",
           lineHeight: "1.5",
+          color: "var(--color-text-secondary)",
         }}
       >
         {note.content}
@@ -145,14 +173,15 @@ function NoteCard({
         <button
           type="button"
           onClick={startEditing}
-          className="text-xs text-stone-400 hover:text-stone-600"
+          className="text-xs hover:opacity-80"
+          style={{ color: "var(--color-text-secondary)" }}
         >
           Edit
         </button>
         <button
           type="button"
           onClick={() => onDelete(note.id)}
-          className="text-xs text-stone-400 hover:text-red-500"
+          className="text-xs text-red-400 hover:text-red-600"
         >
           Delete
         </button>
@@ -173,62 +202,78 @@ export function MarginNotePanel({
   const [isNarrow, setIsNarrow] = useState(false);
   const [popoverHighlight, setPopoverHighlight] = useState<string | null>(null);
 
-  const notesByHighlight = new Map<string, MarginNote>();
+  const notesByHighlight = useRef(new Map<string, MarginNote>());
+  // Rebuild the map whenever marginNotes changes
+  notesByHighlight.current = new Map();
   for (const note of marginNotes) {
-    notesByHighlight.set(note.highlight_id, note);
+    notesByHighlight.current.set(note.highlight_id, note);
   }
 
   const computePositions = useCallback(() => {
     if (!editorElement) return;
 
-    const editorRect = editorElement.getBoundingClientRect();
+    const scrollParent = editorElement.closest(".overflow-y-auto");
+    if (!scrollParent) return;
+
+    const scrollTop = scrollParent.scrollTop;
+    const containerRect = scrollParent.getBoundingClientRect();
     const positions: NotePosition[] = [];
 
-    for (const highlight of highlights) {
-      // Find highlight marks in the editor by scanning data attributes
-      const markElements = editorElement.querySelectorAll("mark[data-color]");
-      let matchedElement: Element | null = null;
+    // Build a map of mark elements by their text content for matching
+    const markElements = editorElement.querySelectorAll("mark[data-color]");
 
+    for (const highlight of highlights) {
+      let matchedElement: Element | null = null;
+      let bestScore = 0;
+
+      // Score-based matching: prefer exact text match, fall back to prefix
       for (const el of markElements) {
-        if (el.textContent?.includes(highlight.text_content.slice(0, 20))) {
+        const elText = el.textContent ?? "";
+        if (elText === highlight.text_content) {
           matchedElement = el;
-          break;
+          break; // exact match
+        }
+        // Partial match scoring
+        const matchLen = Math.min(elText.length, highlight.text_content.length, 40);
+        if (matchLen > 0 && elText.slice(0, matchLen) === highlight.text_content.slice(0, matchLen)) {
+          const score = matchLen;
+          if (score > bestScore) {
+            bestScore = score;
+            matchedElement = el;
+          }
         }
       }
 
-      if (!matchedElement) {
-        // Fallback: estimate position based on document order
-        const estimatedTop = (highlight.from_pos / 1000) * 40;
-        positions.push({
-          highlightId: highlight.id,
-          top: estimatedTop,
-          note: notesByHighlight.get(highlight.id) ?? null,
-        });
-        continue;
+      let relativeTop: number;
+      if (matchedElement) {
+        const elRect = matchedElement.getBoundingClientRect();
+        // Position relative to scroll container's content (not viewport)
+        relativeTop = elRect.top - containerRect.top + scrollTop;
+      } else {
+        // Fallback: use the from_pos to estimate
+        // Assume ~20px per editor position unit as rough guide
+        relativeTop = highlight.from_pos * 0.5;
       }
-
-      const elRect = matchedElement.getBoundingClientRect();
-      const relativeTop = elRect.top - editorRect.top;
 
       positions.push({
         highlightId: highlight.id,
         top: relativeTop,
-        note: notesByHighlight.get(highlight.id) ?? null,
+        note: notesByHighlight.current.get(highlight.id) ?? null,
       });
     }
 
-    // Avoid overlap: ensure at least 60px between notes
+    // Avoid overlap: ensure at least 70px between notes
     positions.sort((a, b) => a.top - b.top);
     for (let i = 1; i < positions.length; i++) {
-      const prev = positions[i - 1];
-      const curr = positions[i];
-      if (prev && curr && curr.top - prev.top < 60) {
-        curr.top = prev.top + 60;
+      const prev = positions[i - 1]!;
+      const curr = positions[i]!;
+      if (curr.top - prev.top < 70) {
+        curr.top = prev.top + 70;
       }
     }
 
     setNotePositions(positions);
-  }, [editorElement, highlights, notesByHighlight]);
+  }, [editorElement, highlights, marginNotes]);
 
   useEffect(() => {
     computePositions();
@@ -243,20 +288,21 @@ export function MarginNotePanel({
     return () => window.removeEventListener("resize", handleResize);
   }, [computePositions]);
 
-  // Recompute on scroll within the editor
+  // Recompute on scroll within the editor's scroll container
   useEffect(() => {
     if (!editorElement) return;
 
-    const scrollParent = editorElement.closest("[class*='overflow']") ?? window;
-    const handleScroll = () => computePositions();
+    const scrollParent = editorElement.closest(".overflow-y-auto");
+    if (!scrollParent) return;
 
+    const handleScroll = () => computePositions();
     scrollParent.addEventListener("scroll", handleScroll, { passive: true });
     return () => scrollParent.removeEventListener("scroll", handleScroll);
   }, [editorElement, computePositions]);
 
   if (highlights.length === 0) return null;
 
-  // Narrow screens: render a small popover button on each highlight
+  // Narrow screens: render a popover
   if (isNarrow) {
     return (
       <>
@@ -267,9 +313,15 @@ export function MarginNotePanel({
           />
         )}
         {popoverHighlight && (
-          <div className="fixed bottom-4 right-4 z-50 w-72 rounded-lg border border-stone-200 bg-white p-3 shadow-lg">
+          <div
+            className="fixed bottom-4 right-4 z-50 w-72 rounded-lg border p-3 shadow-lg"
+            style={{
+              borderColor: "var(--color-border)",
+              backgroundColor: "var(--color-page)",
+            }}
+          >
             <NoteCard
-              note={notesByHighlight.get(popoverHighlight) ?? null}
+              note={notesByHighlight.current.get(popoverHighlight) ?? null}
               highlightId={popoverHighlight}
               onAdd={onAddNote}
               onUpdate={onUpdateNote}

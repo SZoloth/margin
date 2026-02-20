@@ -44,18 +44,22 @@ export default function App() {
   }, [doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // File watcher: reload content on external changes
-  const handleFileChanged = useCallback(
-    async (path: string) => {
-      if (!doc.currentDoc || doc.currentDoc.file_path !== path) return;
-      try {
-        const newContent = await readFile(path);
-        doc.setContent(newContent);
-      } catch (err) {
-        console.error("Failed to reload file:", err);
-      }
-    },
-    [doc.currentDoc, doc.setContent]
-  );
+  // Use ref to avoid recreating the callback (which would cause useFileWatcher to re-subscribe)
+  const currentDocRef = useRef(doc.currentDoc);
+  currentDocRef.current = doc.currentDoc;
+  const setContentExternalRef = useRef(doc.setContentExternal);
+  setContentExternalRef.current = doc.setContentExternal;
+
+  const handleFileChanged = useCallback(async (path: string) => {
+    const currentDoc = currentDocRef.current;
+    if (!currentDoc || currentDoc.file_path !== path) return;
+    try {
+      const newContent = await readFile(path);
+      setContentExternalRef.current(newContent);
+    } catch (err) {
+      console.error("Failed to reload file:", err);
+    }
+  }, []);
 
   useFileWatcher(doc.filePath, handleFileChanged);
 
@@ -138,7 +142,10 @@ export default function App() {
         };
 
         await doc.openKeepLocalArticle(docRecord, markdown);
-        void search.indexDocument(docRecord.id, docRecord.title ?? "Untitled", markdown);
+        // indexDocument uses the saved doc's ID (which may be reused from a previous open)
+        if (doc.currentDoc) {
+          void search.indexDocument(doc.currentDoc.id, doc.currentDoc.title ?? "Untitled", markdown);
+        }
       } catch (err) {
         console.error("Failed to open keep-local article:", err);
       }
@@ -149,6 +156,7 @@ export default function App() {
   return (
     <AppShell
       currentDoc={doc.currentDoc}
+      recentDocs={doc.recentDocs}
       onOpenFile={doc.openFile}
       isDirty={doc.isDirty}
       keepLocal={keepLocal}

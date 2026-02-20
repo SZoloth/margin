@@ -21,11 +21,12 @@ export function useSearch() {
     }
     setIsSearching(true);
     try {
-      // FTS5 needs proper query format - wrap terms for prefix matching
+      // FTS5 query: escape quotes, wrap terms for prefix matching
       const ftsQuery = q
         .trim()
         .split(/\s+/)
-        .map((t) => `"${t}"*`)
+        .filter((t) => t.length > 0)
+        .map((t) => `"${t.replace(/"/g, '""')}"*`)
         .join(" ");
       const results = await invoke<SearchResult[]>("search_documents", {
         query: ftsQuery,

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { KeepLocalItem, KeepLocalListResult } from "@/types/keep-local";
 
 const HEALTH_INTERVAL_MS = 30_000;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function useKeepLocal() {
   const [items, setItems] = useState<KeepLocalItem[]>([]);
@@ -10,6 +11,7 @@ export function useKeepLocal() {
   const [isLoading, setIsLoading] = useState(false);
   const [query, setQuery] = useState("");
   const healthIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasOnlineRef = useRef(false);
 
   const checkHealth = useCallback(async () => {
@@ -48,27 +50,33 @@ export function useKeepLocal() {
   const search = useCallback(
     (q: string) => {
       setQuery(q);
-      loadItems(q);
+
+      // Debounce the actual API call
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+      searchTimerRef.current = setTimeout(() => {
+        void loadItems(q);
+      }, SEARCH_DEBOUNCE_MS);
     },
     [loadItems]
   );
 
   // Health check on mount + interval
   useEffect(() => {
-    checkHealth();
-    healthIntervalRef.current = setInterval(checkHealth, HEALTH_INTERVAL_MS);
+    void checkHealth();
+    healthIntervalRef.current = setInterval(() => void checkHealth(), HEALTH_INTERVAL_MS);
 
     return () => {
-      if (healthIntervalRef.current) {
-        clearInterval(healthIntervalRef.current);
-      }
+      if (healthIntervalRef.current) clearInterval(healthIntervalRef.current);
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
   }, [checkHealth]);
 
   // Auto-load items when transitioning to online
   useEffect(() => {
     if (isOnline && !wasOnlineRef.current) {
-      loadItems(query || undefined);
+      void loadItems(query || undefined);
     }
     wasOnlineRef.current = isOnline;
   }, [isOnline, loadItems, query]);

@@ -77,13 +77,13 @@
 .reader-content code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.875em;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(128, 128, 128, 0.1);
   padding: 0.15em 0.35em;
   border-radius: 3px;
 }
 
 .reader-content pre {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(128, 128, 128, 0.08);
   padding: 1.25rem;
   border-radius: 6px;
   overflow-x: auto;
@@ -151,37 +151,4 @@
 
 .reader-content th {
   font-weight: 600;
-}
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .reader-content {
-    color: var(--color-text-primary-dark);
-  }
-
-  .reader-content code {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .reader-content pre {
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .reader-content blockquote {
-    border-left-color: var(--color-border-dark);
-    color: var(--color-text-secondary-dark);
-  }
-
-  .reader-content a {
-    text-decoration-color: var(--color-text-secondary-dark);
-  }
-
-  .reader-content hr::before {
-    color: var(--color-text-secondary-dark);
-  }
-
-  .reader-content th,
-  .reader-content td {
-    border-bottom-color: var(--color-border-dark);
-  }
 }
