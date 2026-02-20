@@ -1,0 +1,36 @@
+{
+  "name": "margin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-fs": "^2",
+    "@tauri-apps/plugin-sql": "^2",
+    "@tiptap/extension-highlight": "^2.11",
+    "@tiptap/extension-typography": "^2.11",
+    "@tiptap/pm": "^2.11",
+    "@tiptap/react": "^2.11",
+    "@tiptap/starter-kit": "^2.11",
+    "react": "^19",
+    "react-dom": "^19",
+    "tiptap-markdown": "^0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@tauri-apps/cli": "^2",
+    "tailwindcss": "^4",
+    "typescript": "^5.7",
+    "vite": "^6",
+    "@vitejs/plugin-react": "^4"
+  }
+}
