@@ -10,7 +10,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "title": "Margin",
     "windows": [
       {
         "title": "Margin",
@@ -24,14 +23,6 @@
       "csp": null
     }
   },
-  "plugins": {
-    "dialog": {},
-    "fs": {
-      "scope": {
-        "allow": ["**"],
-        "deny": []
-      }
-    },
-    "sql": {}
-  }
+  "plugins": {}
+
 }

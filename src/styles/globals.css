@@ -1,1 +1,44 @@
 @import "tailwindcss";
+@import "./typography.css";
+@import "./editor.css";
+
+@theme {
+  --color-page: #faf8f5;
+  --color-page-dark: #1a1a1e;
+  --color-sidebar: #f2efe9;
+  --color-sidebar-dark: #232328;
+  --color-text-primary: #1a1a1a;
+  --color-text-primary-dark: #e8e6e3;
+  --color-text-secondary: #4a4a4a;
+  --color-text-secondary-dark: #a0a0a0;
+  --color-border: #e5e2dc;
+  --color-border-dark: #3a3a3e;
+
+  --color-highlight-yellow: #fef3c7;
+  --color-highlight-green: #d1fae5;
+  --color-highlight-blue: #dbeafe;
+  --color-highlight-pink: #fce7f3;
+  --color-highlight-orange: #ffedd5;
+}
+
+body {
+  background-color: var(--color-page);
+  color: var(--color-text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--color-page-dark);
+    color: var(--color-text-primary-dark);
+  }
+}

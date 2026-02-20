@@ -14,7 +14,7 @@ pub fn run() {
             commands::documents::get_recent_documents,
             commands::documents::upsert_document,
         ])
-        .setup(|app| {
+        .setup(|_app| {
             db::migrations::init_db()?;
             Ok(())
         })
