@@ -7,12 +7,20 @@ import { MarginNotePanel } from "@/components/editor/MarginNotePanel";
 import { CommentThreadPanel } from "@/components/editor/CommentThreadPanel";
 import { useDocument } from "@/hooks/useDocument";
 import { useAnnotations } from "@/hooks/useAnnotations";
+import { useKeepLocal } from "@/hooks/useKeepLocal";
+import { useFileWatcher } from "@/hooks/useFileWatcher";
+import { useSearch } from "@/hooks/useSearch";
 import { createAnchor } from "@/lib/text-anchoring";
+import { readFile } from "@/lib/tauri-commands";
 import type { HighlightColor } from "@/types/annotations";
+import type { KeepLocalItem } from "@/types/keep-local";
+import type { Document } from "@/types/document";
 
 export default function App() {
   const doc = useDocument();
   const annotations = useAnnotations();
+  const keepLocal = useKeepLocal();
+  const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const editorElementRef = useRef<HTMLElement | null>(null);
@@ -23,6 +31,33 @@ export default function App() {
       void annotations.loadAnnotations(doc.currentDoc.id);
     }
   }, [doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Index document for search when opened
+  useEffect(() => {
+    if (doc.currentDoc && doc.content) {
+      void search.indexDocument(
+        doc.currentDoc.id,
+        doc.currentDoc.title ?? "Untitled",
+        doc.content
+      );
+    }
+  }, [doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // File watcher: reload content on external changes
+  const handleFileChanged = useCallback(
+    async (path: string) => {
+      if (!doc.currentDoc || doc.currentDoc.file_path !== path) return;
+      try {
+        const newContent = await readFile(path);
+        doc.setContent(newContent);
+      } catch (err) {
+        console.error("Failed to reload file:", err);
+      }
+    },
+    [doc.currentDoc, doc.setContent]
+  );
+
+  useFileWatcher(doc.filePath, handleFileChanged);
 
   const handleEditorReady = useCallback((ed: Editor) => {
     setEditor(ed);
@@ -39,10 +74,8 @@ export default function App() {
       const selectedText = editor.state.doc.textBetween(from, to, "\n");
       const anchor = createAnchor(fullText, from, to);
 
-      // Apply the highlight mark in the editor
       editor.chain().focus().setHighlight({ color }).run();
 
-      // Persist to database
       await annotations.createHighlight({
         documentId: doc.currentDoc.id,
         color,
@@ -65,7 +98,6 @@ export default function App() {
     const selectedText = editor.state.doc.textBetween(from, to, "\n");
     const anchor = createAnchor(fullText, from, to);
 
-    // Apply comment thread mark
     const threadId = crypto.randomUUID();
     editor
       .chain()
@@ -85,11 +117,43 @@ export default function App() {
     setActiveThreadId(thread.id);
   }, [editor, doc.currentDoc, annotations]);
 
+  // Open a keep-local article
+  const handleSelectKeepLocalItem = useCallback(
+    async (item: KeepLocalItem) => {
+      try {
+        const markdown = await keepLocal.getContent(item.id);
+        const now = Date.now();
+
+        const docRecord: Document = {
+          id: crypto.randomUUID(),
+          source: "keep-local",
+          file_path: null,
+          keep_local_id: item.id,
+          title: item.title ?? "Untitled",
+          author: item.author ?? null,
+          url: item.url,
+          word_count: item.wordCount,
+          last_opened_at: now,
+          created_at: now,
+        };
+
+        await doc.openKeepLocalArticle(docRecord, markdown);
+        void search.indexDocument(docRecord.id, docRecord.title ?? "Untitled", markdown);
+      } catch (err) {
+        console.error("Failed to open keep-local article:", err);
+      }
+    },
+    [keepLocal, doc, search]
+  );
+
   return (
     <AppShell
       currentDoc={doc.currentDoc}
       onOpenFile={doc.openFile}
       isDirty={doc.isDirty}
+      keepLocal={keepLocal}
+      onSelectKeepLocalItem={handleSelectKeepLocalItem}
+      search={search}
     >
       <div className="relative">
         <Reader

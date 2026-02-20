@@ -1,11 +1,15 @@
 pub mod commands;
 pub mod db;
+pub mod watcher;
+
+use std::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(Mutex::new(watcher::FileWatcher::new()))
         .invoke_handler(tauri::generate_handler![
             commands::files::open_file_dialog,
             commands::files::read_file,
@@ -27,6 +31,15 @@ pub fn run() {
             commands::annotations::delete_comment_thread,
             commands::annotations::add_comment,
             commands::annotations::get_comments,
+            commands::keep_local::keep_local_health,
+            commands::keep_local::keep_local_list_items,
+            commands::keep_local::keep_local_get_item,
+            commands::keep_local::keep_local_get_content,
+            commands::search::index_document,
+            commands::search::search_documents,
+            commands::search::remove_document_index,
+            watcher::watch_file,
+            watcher::unwatch_file,
         ])
         .setup(|_app| {
             db::migrations::init_db()?;

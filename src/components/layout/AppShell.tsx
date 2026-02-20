@@ -1,32 +1,80 @@
 import type { Document } from "@/types/document";
+import type { KeepLocalItem } from "@/types/keep-local";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
+import { SearchBar } from "@/components/common/SearchBar";
+import type { useKeepLocal } from "@/hooks/useKeepLocal";
+import type { useSearch } from "@/hooks/useSearch";
 
 interface AppShellProps {
   children: React.ReactNode;
   currentDoc: Document | null;
   onOpenFile: () => void;
   isDirty: boolean;
+  keepLocal: ReturnType<typeof useKeepLocal>;
+  onSelectKeepLocalItem: (item: KeepLocalItem) => void;
+  search: ReturnType<typeof useSearch>;
 }
 
-export function AppShell({ children, currentDoc, onOpenFile, isDirty }: AppShellProps) {
+export function AppShell({
+  children,
+  currentDoc,
+  onOpenFile,
+  isDirty,
+  keepLocal,
+  onSelectKeepLocalItem,
+  search,
+}: AppShellProps) {
   const title = currentDoc?.title ?? "Untitled";
 
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
       <div
-        className="flex-shrink-0 h-full overflow-y-auto border-r"
+        className="flex flex-col flex-shrink-0 h-full border-r"
         style={{
           width: 260,
           backgroundColor: "var(--color-sidebar)",
           borderColor: "var(--color-border)",
         }}
       >
-        <Sidebar onOpenFile={onOpenFile} currentDoc={currentDoc} />
+        {/* Top section: files + search */}
+        <div className="flex-shrink-0">
+          <Sidebar onOpenFile={onOpenFile} currentDoc={currentDoc} />
+
+          {/* Search */}
+          <div className="px-4">
+            <SearchBar
+              query={search.query}
+              onSearch={search.search}
+              results={search.results}
+              isSearching={search.isSearching}
+              onSelectResult={(documentId) => {
+                // TODO: open document by ID from search results
+                console.log("Open document:", documentId);
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Bottom section: keep-local */}
+        <div
+          className="flex-1 overflow-hidden border-t"
+          style={{ borderColor: "var(--color-border)" }}
+        >
+          <SidebarKeepLocal
+            items={keepLocal.items}
+            isOnline={keepLocal.isOnline}
+            isLoading={keepLocal.isLoading}
+            query={keepLocal.query}
+            onSearch={keepLocal.search}
+            onSelectItem={onSelectKeepLocalItem}
+          />
+        </div>
       </div>
 
       {/* Main reader pane */}
-      <div className="flex flex-1 flex-col minw-0 h-full" style={{ minWidth: 0 }}>
+      <div className="flex flex-1 flex-col h-full" style={{ minWidth: 0 }}>
         {/* Title bar */}
         <div
           className="flex items-center gap-2 px-6 py-3 flex-shrink-0 border-b select-none"

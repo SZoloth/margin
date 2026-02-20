@@ -28,6 +28,7 @@ export interface UseDocumentReturn {
   isDirty: boolean;
   isLoading: boolean;
   openFile: () => Promise<void>;
+  openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
   saveCurrentFile: () => Promise<void>;
   setContent: (newContent: string) => void;
 }
@@ -80,6 +81,18 @@ export function useDocument(): UseDocumentReturn {
     }
   }, [currentDoc]);
 
+  const openKeepLocalArticle = useCallback(async (docRecord: Document, markdown: string) => {
+    try {
+      const saved = await upsertDocument(docRecord);
+      setFilePath(null); // keep-local articles have no local file path
+      setContentState(markdown);
+      setCurrentDoc(saved);
+      setIsDirty(false);
+    } catch (err) {
+      console.error("Failed to open keep-local article:", err);
+    }
+  }, []);
+
   const saveCurrentFile = useCallback(async () => {
     if (!filePath || !isDirty) return;
 
@@ -127,6 +140,7 @@ export function useDocument(): UseDocumentReturn {
     isDirty,
     isLoading,
     openFile,
+    openKeepLocalArticle,
     saveCurrentFile,
     setContent,
   };
