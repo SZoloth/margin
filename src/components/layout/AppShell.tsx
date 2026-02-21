@@ -8,7 +8,6 @@ import type { useSearch } from "@/hooks/useSearch";
 
 interface AppShellProps {
   children: React.ReactNode;
-  threadPanel?: React.ReactNode;
   currentDoc: Document | null;
   recentDocs: Document[];
   onOpenFile: () => void;
@@ -21,7 +20,6 @@ interface AppShellProps {
 
 export function AppShell({
   children,
-  threadPanel,
   currentDoc,
   recentDocs,
   onOpenFile,
@@ -130,8 +128,6 @@ export function AppShell({
         </div>
       </div>
 
-      {/* Thread panel — in-flow flex sibling so reader shrinks */}
-      {threadPanel}
     </div>
   );
 }

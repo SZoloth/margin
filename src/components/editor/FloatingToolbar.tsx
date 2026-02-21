@@ -7,7 +7,6 @@ import { ColorPicker } from "@/components/common/ColorPicker";
 interface FloatingToolbarProps {
   editor: Editor | null;
   onHighlight: (color: HighlightColor) => void;
-  onComment: () => void;
 }
 
 const HIGHLIGHT_COLORS: HighlightColor[] = [
@@ -21,7 +20,6 @@ const HIGHLIGHT_COLORS: HighlightColor[] = [
 export function FloatingToolbar({
   editor,
   onHighlight,
-  onComment,
 }: FloatingToolbarProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -119,37 +117,6 @@ export function FloatingToolbar({
         onSelect={onHighlight}
         size="sm"
       />
-
-      <div
-        className="mx-1 h-5 w-px"
-        style={{ backgroundColor: "var(--color-border)" }}
-      />
-
-      <button
-        type="button"
-        onClick={onComment}
-        className="flex items-center gap-1 rounded px-2 py-1 text-sm transition-colors"
-        style={{ color: "var(--color-text-secondary)" }}
-        aria-label="Add comment"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="shrink-0"
-        >
-          <path
-            d="M2 2.5C2 2.22386 2.22386 2 2.5 2H13.5C13.7761 2 14 2.22386 14 2.5V10.5C14 10.7761 13.7761 11 13.5 11H5.707L3.354 13.354C3.158 13.55 2.842 13.55 2.646 13.354C2.552 13.26 2.5 13.133 2.5 13V11H2.5C2.22386 11 2 10.7761 2 10.5V2.5Z"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span>Comment</span>
-      </button>
     </div>,
     document.body,
   );

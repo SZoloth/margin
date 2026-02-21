@@ -61,30 +61,11 @@ pub fn init_db() -> Result<(), Box<dyn std::error::Error>> {
             updated_at INTEGER NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS comment_threads (
-            id TEXT PRIMARY KEY,
-            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-            text_content TEXT NOT NULL,
-            from_pos INTEGER NOT NULL,
-            to_pos INTEGER NOT NULL,
-            prefix_context TEXT,
-            suffix_context TEXT,
-            resolved INTEGER DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS comments (
-            id TEXT PRIMARY KEY,
-            thread_id TEXT NOT NULL REFERENCES comment_threads(id) ON DELETE CASCADE,
-            content TEXT NOT NULL,
-            created_at INTEGER NOT NULL
-        );
-
         CREATE INDEX IF NOT EXISTS idx_highlights_document ON highlights(document_id);
         CREATE INDEX IF NOT EXISTS idx_margin_notes_highlight ON margin_notes(highlight_id);
-        CREATE INDEX IF NOT EXISTS idx_threads_document ON comment_threads(document_id);
-        CREATE INDEX IF NOT EXISTS idx_comments_thread ON comments(thread_id);",
+
+        DROP TABLE IF EXISTS comments;
+        DROP TABLE IF EXISTS comment_threads;",
     )?;
 
     Ok(())

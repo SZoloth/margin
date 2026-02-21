@@ -6,7 +6,6 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Reader } from "@/components/editor/Reader";
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { MarginNotePanel } from "@/components/editor/MarginNotePanel";
-import { CommentThreadPanel } from "@/components/editor/CommentThreadPanel";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
 import { useAnnotations } from "@/hooks/useAnnotations";
@@ -15,10 +14,9 @@ import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSearch } from "@/hooks/useSearch";
 import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown } from "@/lib/export-annotations";
-import type { ExportScope } from "@/lib/export-annotations";
 import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
-import type { Highlight, MarginNote, CommentThread, HighlightColor } from "@/types/annotations";
+import type { Highlight, MarginNote, HighlightColor } from "@/types/annotations";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
 
@@ -28,7 +26,6 @@ export default function App() {
   const keepLocal = useKeepLocal();
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const editorElementRef = useRef<HTMLElement | null>(null);
 
@@ -124,47 +121,6 @@ export default function App() {
     [editor, doc.currentDoc, annotations],
   );
 
-  const handleComment = useCallback(() => {
-    if (!editor || !doc.currentDoc) {
-      console.warn("[Margin] handleComment: no editor or doc");
-      return;
-    }
-    const { from, to } = editor.state.selection;
-    if (from === to) {
-      console.warn("[Margin] handleComment: empty selection");
-      return;
-    }
-
-    const currentDocId = doc.currentDoc.id;
-    const fullText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n");
-    const selectedText = editor.state.doc.textBetween(from, to, "\n");
-    const anchor = createAnchor(fullText, from, to);
-
-    // Apply Tiptap mark synchronously
-    const threadId = crypto.randomUUID();
-    editor
-      .chain()
-      .focus()
-      .setMark("commentThread", { threadId, resolved: false })
-      .run();
-
-    // Persist to DB — fire and handle
-    console.log("[Margin] saving comment thread, docId:", currentDocId);
-    annotations.createCommentThread({
-      documentId: currentDocId,
-      textContent: selectedText,
-      fromPos: from,
-      toPos: to,
-      prefixContext: anchor.prefix,
-      suffixContext: anchor.suffix,
-    }).then((thread) => {
-      console.log("[Margin] thread saved:", thread.id);
-      setActiveThreadId(thread.id);
-    }).catch((err) => {
-      console.error("[Margin] Failed to save comment thread:", err);
-    });
-  }, [editor, doc.currentDoc, annotations]);
-
   // Export annotations: Cmd+Shift+E
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -180,15 +136,14 @@ export default function App() {
   }, [doc.currentDoc, annotations.isLoaded]);
 
   const handleExportAnnotations = useCallback(
-    async (scope: ExportScope) => {
+    async () => {
       if (!editor || !doc.currentDoc) return;
       const documentId = doc.currentDoc.id;
 
       // Fetch fresh data directly from the DB to avoid stale React state
-      const [freshHighlights, freshNotes, freshThreads] = await Promise.all([
+      const [freshHighlights, freshNotes] = await Promise.all([
         invoke<Highlight[]>("get_highlights", { documentId }),
         invoke<MarginNote[]>("get_margin_notes", { documentId }),
-        invoke<CommentThread[]>("get_comment_threads", { documentId }),
       ]);
 
       const markdown = await formatAnnotationsMarkdown({
@@ -196,14 +151,11 @@ export default function App() {
         editor,
         highlights: freshHighlights,
         marginNotes: freshNotes,
-        commentThreads: freshThreads,
-        getComments: annotations.getComments,
-        scope,
       });
 
       await writeText(markdown);
     },
-    [editor, doc.currentDoc, annotations.getComments],
+    [editor, doc.currentDoc],
   );
 
   // Open a recent document from the sidebar
@@ -265,22 +217,6 @@ export default function App() {
       keepLocal={keepLocal}
       onSelectKeepLocalItem={handleSelectKeepLocalItem}
       search={search}
-      threadPanel={
-        activeThreadId ? (
-          <CommentThreadPanel
-            threads={annotations.commentThreads}
-            activeThreadId={activeThreadId}
-            onSelectThread={setActiveThreadId}
-            onResolve={annotations.resolveCommentThread}
-            onDelete={async (id) => {
-              await annotations.deleteCommentThread(id);
-              setActiveThreadId(null);
-            }}
-            onAddComment={async (threadId, content) => { await annotations.addComment(threadId, content); }}
-            getComments={annotations.getComments}
-          />
-        ) : undefined
-      }
     >
       <div className="relative">
         <Reader
@@ -293,7 +229,6 @@ export default function App() {
         <FloatingToolbar
           editor={editor}
           onHighlight={handleHighlight}
-          onComment={handleComment}
         />
 
         {annotations.isLoaded && (

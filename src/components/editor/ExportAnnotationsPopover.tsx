@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
-import type { ExportScope } from "@/lib/export-annotations";
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;
-  onExport: (scope: ExportScope) => Promise<void>;
+  onExport: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -33,20 +32,26 @@ export function ExportAnnotationsPopover({
   }, [isOpen, onClose]);
 
   const handleExport = useCallback(
-    async (scope: ExportScope) => {
+    async () => {
       try {
-        await onExport(scope);
+        await onExport();
         setCopied(true);
         setTimeout(() => onClose(), 1200);
       } catch (err) {
         console.error("Export failed:", err);
-        // Still close — the fallback in App.tsx should have handled the copy
         setCopied(true);
         setTimeout(() => onClose(), 1200);
       }
     },
     [onExport, onClose],
   );
+
+  // Auto-export when popover opens (no scope choice needed anymore)
+  useEffect(() => {
+    if (isOpen && !copied) {
+      void handleExport();
+    }
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null;
 
@@ -83,92 +88,17 @@ export function ExportAnnotationsPopover({
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
         }}
       >
-        {copied ? (
-          <div
-            style={{
-              textAlign: "center",
-              color: "var(--color-text-primary)",
-              fontSize: 14,
-              fontWeight: 500,
-              padding: "8px 0",
-            }}
-          >
-            Copied to clipboard
-          </div>
-        ) : (
-          <>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--color-text-primary)",
-                marginBottom: 16,
-              }}
-            >
-              Export annotations
-            </div>
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => void handleExport("all")}
-                style={{
-                  flex: 1,
-                  padding: "8px 16px",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 6,
-                  backgroundColor: "transparent",
-                  color: "var(--color-text-primary)",
-                  cursor: "pointer",
-                  transition: "background-color 0.1s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                }}
-              >
-                All
-              </button>
-              <button
-                onClick={() => void handleExport("unresolved")}
-                style={{
-                  flex: 1,
-                  padding: "8px 16px",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 6,
-                  backgroundColor: "transparent",
-                  color: "var(--color-text-primary)",
-                  cursor: "pointer",
-                  transition: "background-color 0.1s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                }}
-              >
-                Unresolved only
-              </button>
-            </div>
-
-            <div
-              style={{
-                marginTop: 12,
-                fontSize: 11,
-                color: "var(--color-text-secondary)",
-                textAlign: "center",
-              }}
-            >
-              Esc to cancel
-            </div>
-          </>
-        )}
+        <div
+          style={{
+            textAlign: "center",
+            color: "var(--color-text-primary)",
+            fontSize: 14,
+            fontWeight: 500,
+            padding: "8px 0",
+          }}
+        >
+          {copied ? "Copied to clipboard" : "Exporting..."}
+        </div>
       </div>
     </div>
   );

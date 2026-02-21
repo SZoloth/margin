@@ -6,7 +6,6 @@ import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
 import { MultiColorHighlight } from "./extensions/highlight";
 import { MarginNote } from "./extensions/margin-note";
-import { CommentThread } from "./extensions/comment-thread";
 import "../../styles/editor.css";
 
 interface ReaderProps {
@@ -25,7 +24,6 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
       Typography,
       MultiColorHighlight.configure({ multicolor: true }),
       MarginNote,
-      CommentThread,
       Markdown.configure({
         html: true,
         tightLists: true,
