@@ -104,8 +104,7 @@ export function FloatingToolbar({
       <button
         type="button"
         onClick={onHighlight}
-        className="flex items-center justify-center rounded p-1.5 transition-colors hover:bg-black/5"
-        style={{ color: "var(--color-text-secondary)" }}
+        className="toolbar-btn"
         aria-label="Highlight"
       >
         <svg
@@ -135,8 +134,7 @@ export function FloatingToolbar({
       <button
         type="button"
         onClick={onNote}
-        className="flex items-center justify-center rounded p-1.5 transition-colors hover:bg-black/5"
-        style={{ color: "var(--color-text-secondary)" }}
+        className="toolbar-btn"
         aria-label="Add note"
       >
         <svg
