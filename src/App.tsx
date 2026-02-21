@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { Editor } from "@tiptap/core";
+import { invoke } from "@tauri-apps/api/core";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
 import { Reader } from "@/components/editor/Reader";
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
@@ -16,7 +18,7 @@ import { formatAnnotationsMarkdown } from "@/lib/export-annotations";
 import type { ExportScope } from "@/lib/export-annotations";
 import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
-import type { HighlightColor } from "@/types/annotations";
+import type { Highlight, MarginNote, CommentThread, HighlightColor } from "@/types/annotations";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
 
@@ -105,28 +107,40 @@ export default function App() {
 
       editor.chain().focus().setHighlight({ color }).run();
 
-      await annotations.createHighlight({
-        documentId: doc.currentDoc.id,
-        color,
-        textContent: selectedText,
-        fromPos: from,
-        toPos: to,
-        prefixContext: anchor.prefix,
-        suffixContext: anchor.suffix,
-      });
+      try {
+        await annotations.createHighlight({
+          documentId: doc.currentDoc.id,
+          color,
+          textContent: selectedText,
+          fromPos: from,
+          toPos: to,
+          prefixContext: anchor.prefix,
+          suffixContext: anchor.suffix,
+        });
+      } catch (err) {
+        console.error("Failed to save highlight:", err, "documentId:", doc.currentDoc.id);
+      }
     },
     [editor, doc.currentDoc, annotations],
   );
 
-  const handleComment = useCallback(async () => {
-    if (!editor || !doc.currentDoc) return;
+  const handleComment = useCallback(() => {
+    if (!editor || !doc.currentDoc) {
+      console.warn("[Margin] handleComment: no editor or doc");
+      return;
+    }
     const { from, to } = editor.state.selection;
-    if (from === to) return;
+    if (from === to) {
+      console.warn("[Margin] handleComment: empty selection");
+      return;
+    }
 
+    const currentDocId = doc.currentDoc.id;
     const fullText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n");
     const selectedText = editor.state.doc.textBetween(from, to, "\n");
     const anchor = createAnchor(fullText, from, to);
 
+    // Apply Tiptap mark synchronously
     const threadId = crypto.randomUUID();
     editor
       .chain()
@@ -134,16 +148,21 @@ export default function App() {
       .setMark("commentThread", { threadId, resolved: false })
       .run();
 
-    const thread = await annotations.createCommentThread({
-      documentId: doc.currentDoc.id,
+    // Persist to DB — fire and handle
+    console.log("[Margin] saving comment thread, docId:", currentDocId);
+    annotations.createCommentThread({
+      documentId: currentDocId,
       textContent: selectedText,
       fromPos: from,
       toPos: to,
       prefixContext: anchor.prefix,
       suffixContext: anchor.suffix,
+    }).then((thread) => {
+      console.log("[Margin] thread saved:", thread.id);
+      setActiveThreadId(thread.id);
+    }).catch((err) => {
+      console.error("[Margin] Failed to save comment thread:", err);
     });
-
-    setActiveThreadId(thread.id);
   }, [editor, doc.currentDoc, annotations]);
 
   // Export annotations: Cmd+Shift+E
@@ -163,33 +182,28 @@ export default function App() {
   const handleExportAnnotations = useCallback(
     async (scope: ExportScope) => {
       if (!editor || !doc.currentDoc) return;
+      const documentId = doc.currentDoc.id;
+
+      // Fetch fresh data directly from the DB to avoid stale React state
+      const [freshHighlights, freshNotes, freshThreads] = await Promise.all([
+        invoke<Highlight[]>("get_highlights", { documentId }),
+        invoke<MarginNote[]>("get_margin_notes", { documentId }),
+        invoke<CommentThread[]>("get_comment_threads", { documentId }),
+      ]);
 
       const markdown = await formatAnnotationsMarkdown({
         document: doc.currentDoc,
         editor,
-        highlights: annotations.highlights,
-        marginNotes: annotations.marginNotes,
-        commentThreads: annotations.commentThreads,
+        highlights: freshHighlights,
+        marginNotes: freshNotes,
+        commentThreads: freshThreads,
         getComments: annotations.getComments,
         scope,
       });
 
-      try {
-        await navigator.clipboard.writeText(markdown);
-      } catch (err) {
-        console.error("Clipboard write failed, falling back to execCommand:", err);
-        // Fallback for webview contexts where navigator.clipboard is restricted
-        const textarea = document.createElement("textarea");
-        textarea.value = markdown;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
+      await writeText(markdown);
     },
-    [editor, doc.currentDoc, annotations],
+    [editor, doc.currentDoc, annotations.getComments],
   );
 
   // Open a recent document from the sidebar

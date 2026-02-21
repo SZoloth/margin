@@ -3,13 +3,25 @@ pub mod db;
 pub mod watcher;
 
 use std::sync::Mutex;
+use tauri::{Emitter, Manager};
+
+/// Stores file paths received before the frontend is ready.
+pub struct PendingOpenFiles(pub Mutex<Vec<String>>);
+
+#[tauri::command]
+fn drain_pending_open_files(state: tauri::State<'_, PendingOpenFiles>) -> Vec<String> {
+    let mut pending = state.0.lock().unwrap();
+    pending.drain(..).collect()
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(Mutex::new(watcher::FileWatcher::new()))
+        .manage(PendingOpenFiles(Mutex::new(Vec::new())))
         .invoke_handler(tauri::generate_handler![
             commands::files::open_file_dialog,
             commands::files::read_file,
@@ -40,11 +52,33 @@ pub fn run() {
             commands::search::remove_document_index,
             watcher::watch_file,
             watcher::unwatch_file,
+            drain_pending_open_files,
         ])
         .setup(|_app| {
             db::migrations::init_db()?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Opened { urls } = event {
+            for url in urls {
+                if let Ok(path) = url.to_file_path() {
+                    if let Some(path_str) = path.to_str() {
+                        let path_string = path_str.to_string();
+
+                        // Try emitting to the frontend (works if webview is ready)
+                        let emitted = app_handle.emit("open-file", &path_string).is_ok();
+
+                        // Also queue it in case the frontend isn't ready yet
+                        if let Some(state) = app_handle.try_state::<PendingOpenFiles>() {
+                            let mut pending = state.0.lock().unwrap();
+                            pending.push(path_string);
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
