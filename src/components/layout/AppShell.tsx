@@ -8,9 +8,11 @@ import type { useSearch } from "@/hooks/useSearch";
 
 interface AppShellProps {
   children: React.ReactNode;
+  threadPanel?: React.ReactNode;
   currentDoc: Document | null;
   recentDocs: Document[];
   onOpenFile: () => void;
+  onSelectRecentDoc: (doc: Document) => void;
   isDirty: boolean;
   keepLocal: ReturnType<typeof useKeepLocal>;
   onSelectKeepLocalItem: (item: KeepLocalItem) => void;
@@ -19,9 +21,11 @@ interface AppShellProps {
 
 export function AppShell({
   children,
+  threadPanel,
   currentDoc,
   recentDocs,
   onOpenFile,
+  onSelectRecentDoc,
   isDirty,
   keepLocal,
   onSelectKeepLocalItem,
@@ -44,6 +48,7 @@ export function AppShell({
         <div className="flex-shrink-0">
           <Sidebar
             onOpenFile={onOpenFile}
+            onSelectRecentDoc={onSelectRecentDoc}
             currentDoc={currentDoc}
             recentDocs={recentDocs}
           />
@@ -124,6 +129,9 @@ export function AppShell({
           )}
         </div>
       </div>
+
+      {/* Thread panel — in-flow flex sibling so reader shrinks */}
+      {threadPanel}
     </div>
   );
 }

@@ -290,23 +290,15 @@ export function CommentThreadPanel({
   if (!activeThreadId || !activeThread) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-30 bg-black/5"
-        onClick={() => onSelectThread(null)}
-      />
-
-      {/* Panel */}
-      <div
-        ref={panelRef}
-        className="fixed top-0 right-0 z-40 flex h-full flex-col border-l shadow-xl"
-        style={{
-          width: 320,
-          borderColor: "var(--color-border)",
-          backgroundColor: "var(--color-page)",
-        }}
-      >
+    <div
+      ref={panelRef}
+      className="flex h-full flex-shrink-0 flex-col border-l"
+      style={{
+        width: 320,
+        borderColor: "var(--color-border)",
+        backgroundColor: "var(--color-page)",
+      }}
+    >
         <ThreadDetail
           thread={activeThread}
           onResolve={onResolve}
@@ -319,6 +311,5 @@ export function CommentThreadPanel({
           getComments={getComments}
         />
       </div>
-    </>
   );
 }

@@ -5,13 +5,17 @@ import { Reader } from "@/components/editor/Reader";
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { MarginNotePanel } from "@/components/editor/MarginNotePanel";
 import { CommentThreadPanel } from "@/components/editor/CommentThreadPanel";
+import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
 import { useAnnotations } from "@/hooks/useAnnotations";
 import { useKeepLocal } from "@/hooks/useKeepLocal";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSearch } from "@/hooks/useSearch";
 import { createAnchor } from "@/lib/text-anchoring";
-import { readFile } from "@/lib/tauri-commands";
+import { formatAnnotationsMarkdown } from "@/lib/export-annotations";
+import type { ExportScope } from "@/lib/export-annotations";
+import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
+import { listen } from "@tauri-apps/api/event";
 import type { HighlightColor } from "@/types/annotations";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
@@ -23,6 +27,7 @@ export default function App() {
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [showExportPopover, setShowExportPopover] = useState(false);
   const editorElementRef = useRef<HTMLElement | null>(null);
 
   // Load annotations when document changes
@@ -62,6 +67,26 @@ export default function App() {
   }, []);
 
   useFileWatcher(doc.filePath, handleFileChanged);
+
+  // Handle files opened via macOS "Open With" / double-click
+  const openFilePathRef = useRef(doc.openFilePath);
+  openFilePathRef.current = doc.openFilePath;
+
+  useEffect(() => {
+    // Drain any files queued before the frontend was ready
+    drainPendingOpenFiles().then((paths) => {
+      const lastPath = paths[paths.length - 1];
+      if (lastPath) {
+        void openFilePathRef.current(lastPath);
+      }
+    }).catch(console.error);
+
+    // Listen for files opened while the app is running
+    const unlisten = listen<string>("open-file", (event) => {
+      void openFilePathRef.current(event.payload);
+    });
+    return () => { void unlisten.then((fn) => fn()); };
+  }, []);
 
   const handleEditorReady = useCallback((ed: Editor) => {
     setEditor(ed);
@@ -121,6 +146,56 @@ export default function App() {
     setActiveThreadId(thread.id);
   }, [editor, doc.currentDoc, annotations]);
 
+  // Export annotations: Cmd+Shift+E
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
+        e.preventDefault();
+        if (doc.currentDoc && annotations.isLoaded) {
+          setShowExportPopover(true);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [doc.currentDoc, annotations.isLoaded]);
+
+  const handleExportAnnotations = useCallback(
+    async (scope: ExportScope) => {
+      if (!editor || !doc.currentDoc) return;
+
+      const markdown = await formatAnnotationsMarkdown({
+        document: doc.currentDoc,
+        editor,
+        highlights: annotations.highlights,
+        marginNotes: annotations.marginNotes,
+        commentThreads: annotations.commentThreads,
+        getComments: annotations.getComments,
+        scope,
+      });
+
+      await navigator.clipboard.writeText(markdown);
+    },
+    [editor, doc.currentDoc, annotations],
+  );
+
+  // Open a recent document from the sidebar
+  const handleSelectRecentDoc = useCallback(
+    async (recentDoc: Document) => {
+      if (recentDoc.source === "file") {
+        await doc.openRecentDocument(recentDoc);
+      } else if (recentDoc.source === "keep-local" && recentDoc.keep_local_id) {
+        try {
+          const markdown = await keepLocal.getContent(recentDoc.keep_local_id);
+          await doc.openKeepLocalArticle(recentDoc, markdown);
+        } catch (err) {
+          console.error("Failed to reopen keep-local article:", err);
+        }
+      }
+    },
+    [doc, keepLocal]
+  );
+
   // Open a keep-local article
   const handleSelectKeepLocalItem = useCallback(
     async (item: KeepLocalItem) => {
@@ -158,10 +233,27 @@ export default function App() {
       currentDoc={doc.currentDoc}
       recentDocs={doc.recentDocs}
       onOpenFile={doc.openFile}
+      onSelectRecentDoc={handleSelectRecentDoc}
       isDirty={doc.isDirty}
       keepLocal={keepLocal}
       onSelectKeepLocalItem={handleSelectKeepLocalItem}
       search={search}
+      threadPanel={
+        activeThreadId ? (
+          <CommentThreadPanel
+            threads={annotations.commentThreads}
+            activeThreadId={activeThreadId}
+            onSelectThread={setActiveThreadId}
+            onResolve={annotations.resolveCommentThread}
+            onDelete={async (id) => {
+              await annotations.deleteCommentThread(id);
+              setActiveThreadId(null);
+            }}
+            onAddComment={async (threadId, content) => { await annotations.addComment(threadId, content); }}
+            getComments={annotations.getComments}
+          />
+        ) : undefined
+      }
     >
       <div className="relative">
         <Reader
@@ -188,21 +280,13 @@ export default function App() {
           />
         )}
 
-        {activeThreadId && (
-          <CommentThreadPanel
-            threads={annotations.commentThreads}
-            activeThreadId={activeThreadId}
-            onSelectThread={setActiveThreadId}
-            onResolve={annotations.resolveCommentThread}
-            onDelete={async (id) => {
-              await annotations.deleteCommentThread(id);
-              setActiveThreadId(null);
-            }}
-            onAddComment={async (threadId, content) => { await annotations.addComment(threadId, content); }}
-            getComments={annotations.getComments}
-          />
-        )}
       </div>
+
+      <ExportAnnotationsPopover
+        isOpen={showExportPopover}
+        onExport={handleExportAnnotations}
+        onClose={() => setShowExportPopover(false)}
+      />
     </AppShell>
   );
 }
