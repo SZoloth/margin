@@ -293,8 +293,9 @@ export function MarginNotePanel({
     for (let i = 1; i < positions.length; i++) {
       const prev = positions[i - 1]!;
       const curr = positions[i]!;
-      // Each note takes ~40px, plus ~30px for the "add" button, minimum 70px
-      const prevHeight = Math.max(70, prev.notes.length * 40 + 30);
+      // Only highlights with notes need vertical space in the gutter
+      if (prev.notes.length === 0) continue;
+      const prevHeight = Math.max(40, prev.notes.length * 40);
       if (curr.top - prev.top < prevHeight) {
         curr.top = prev.top + prevHeight;
       }
@@ -362,13 +363,16 @@ export function MarginNotePanel({
                 onDelete={onDeleteNote}
               />
             ))}
-            <NoteCard
-              note={null}
-              highlightId={popoverHighlight}
-              onAdd={onAddNote}
-              onUpdate={onUpdateNote}
-              onDelete={onDeleteNote}
-            />
+            {popoverNotes.length === 0 && (
+              <NoteCard
+                note={null}
+                highlightId={popoverHighlight}
+                onAdd={onAddNote}
+                onUpdate={onUpdateNote}
+                onDelete={onDeleteNote}
+                autoFocus
+              />
+            )}
           </div>
         )}
       </>
@@ -382,6 +386,8 @@ export function MarginNotePanel({
     >
       {notePositions.map((pos) => {
         const isFocused = focusHighlightId === pos.highlightId;
+        // Don't render anything in the gutter for highlights with no notes (unless focused)
+        if (pos.notes.length === 0 && !isFocused) return null;
 
         return (
           <div
@@ -394,7 +400,7 @@ export function MarginNotePanel({
             }}
           >
             {/* Existing notes */}
-            {pos.notes.map((note, idx) => (
+            {pos.notes.map((note) => (
               <NoteCard
                 key={note.id}
                 note={note}
@@ -402,18 +408,19 @@ export function MarginNotePanel({
                 onAdd={onAddNote}
                 onUpdate={onUpdateNote}
                 onDelete={onDeleteNote}
-                autoFocus={isFocused && idx === 0 && pos.notes.length === 1}
               />
             ))}
-            {/* Add another note button */}
-            <NoteCard
-              note={null}
-              highlightId={pos.highlightId}
-              onAdd={onAddNote}
-              onUpdate={onUpdateNote}
-              onDelete={onDeleteNote}
-              autoFocus={isFocused && pos.notes.length === 0}
-            />
+            {/* New note editor — only when focused via Note button */}
+            {isFocused && (
+              <NoteCard
+                note={null}
+                highlightId={pos.highlightId}
+                onAdd={onAddNote}
+                onUpdate={onUpdateNote}
+                onDelete={onDeleteNote}
+                autoFocus
+              />
+            )}
           </div>
         );
       })}
