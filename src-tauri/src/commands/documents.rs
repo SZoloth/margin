@@ -28,11 +28,32 @@ pub async fn get_recent_documents(limit: Option<i64>) -> Result<Vec<Document>, S
 
 #[tauri::command]
 pub async fn upsert_document(mut doc: Document) -> Result<Document, String> {
-    if doc.id.is_empty() {
+    let conn = get_db()?;
+
+    // Look up existing document by file_path or keep_local_id to preserve annotation links
+    let existing_id: Option<String> = if let Some(ref fp) = doc.file_path {
+        conn.query_row(
+            "SELECT id FROM documents WHERE file_path = ?1",
+            rusqlite::params![fp],
+            |row| row.get(0),
+        )
+        .ok()
+    } else if let Some(ref kl_id) = doc.keep_local_id {
+        conn.query_row(
+            "SELECT id FROM documents WHERE keep_local_id = ?1",
+            rusqlite::params![kl_id],
+            |row| row.get(0),
+        )
+        .ok()
+    } else {
+        None
+    };
+
+    if let Some(eid) = existing_id {
+        doc.id = eid;
+    } else if doc.id.is_empty() {
         doc.id = Uuid::new_v4().to_string();
     }
-
-    let conn = get_db()?;
 
     conn.execute(
         "INSERT OR REPLACE INTO documents
