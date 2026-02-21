@@ -25,6 +25,7 @@ function NoteCard({
   onUpdate,
   onDelete,
   autoFocus,
+  onEditingDone,
 }: {
   note: MarginNote | null;
   highlightId: string;
@@ -32,10 +33,16 @@ function NoteCard({
   onUpdate: (noteId: string, content: string) => void;
   onDelete: (noteId: string) => void;
   autoFocus?: boolean;
+  onEditingDone?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(autoFocus && !note);
   const [editValue, setEditValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const stopEditing = useCallback(() => {
+    setIsEditing(false);
+    onEditingDone?.();
+  }, [onEditingDone]);
 
   const startEditing = useCallback(() => {
     setEditValue(note?.content ?? "");
@@ -60,7 +67,7 @@ function NoteCard({
   const handleSave = () => {
     const trimmed = editValue.trim();
     if (!trimmed) {
-      setIsEditing(false);
+      stopEditing();
       return;
     }
 
@@ -69,7 +76,7 @@ function NoteCard({
     } else {
       onAdd(highlightId, trimmed);
     }
-    setIsEditing(false);
+    stopEditing();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -78,7 +85,7 @@ function NoteCard({
       handleSave();
     }
     if (e.key === "Escape") {
-      setIsEditing(false);
+      stopEditing();
     }
   };
 
@@ -116,7 +123,7 @@ function NoteCard({
             type="button"
             onMouseDown={(e) => {
               e.preventDefault();
-              setIsEditing(false);
+              stopEditing();
             }}
             className="rounded px-1.5 py-0.5 text-xs transition-opacity hover:opacity-80"
             style={{ color: "var(--color-text-secondary)" }}
@@ -223,18 +230,6 @@ export function MarginNotePanel({
     existing.push(note);
     notesByHighlight.current.set(note.highlight_id, existing);
   }
-
-  // Consume focus signal
-  const consumedFocusRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (focusHighlightId && focusHighlightId !== consumedFocusRef.current) {
-      consumedFocusRef.current = focusHighlightId;
-      // Defer consuming so the render with autoFocus happens first
-      requestAnimationFrame(() => {
-        onFocusConsumed?.();
-      });
-    }
-  }, [focusHighlightId, onFocusConsumed]);
 
   const computePositions = useCallback(() => {
     if (!editorElement) return;
@@ -419,6 +414,7 @@ export function MarginNotePanel({
                 onUpdate={onUpdateNote}
                 onDelete={onDeleteNote}
                 autoFocus
+                onEditingDone={onFocusConsumed}
               />
             )}
           </div>
