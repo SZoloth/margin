@@ -174,7 +174,20 @@ export default function App() {
         scope,
       });
 
-      await navigator.clipboard.writeText(markdown);
+      try {
+        await navigator.clipboard.writeText(markdown);
+      } catch (err) {
+        console.error("Clipboard write failed, falling back to execCommand:", err);
+        // Fallback for webview contexts where navigator.clipboard is restricted
+        const textarea = document.createElement("textarea");
+        textarea.value = markdown;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
     },
     [editor, doc.currentDoc, annotations],
   );
