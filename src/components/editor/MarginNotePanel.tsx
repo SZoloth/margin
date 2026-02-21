@@ -8,12 +8,14 @@ interface MarginNotePanelProps {
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
   editorElement: HTMLElement | null;
+  focusHighlightId?: string | null;
+  onFocusConsumed?: () => void;
 }
 
 interface NotePosition {
   highlightId: string;
   top: number;
-  note: MarginNote | null;
+  notes: MarginNote[];
 }
 
 function NoteCard({
@@ -22,14 +24,16 @@ function NoteCard({
   onAdd,
   onUpdate,
   onDelete,
+  autoFocus,
 }: {
   note: MarginNote | null;
   highlightId: string;
   onAdd: (highlightId: string, content: string) => void;
   onUpdate: (noteId: string, content: string) => void;
   onDelete: (noteId: string) => void;
+  autoFocus?: boolean;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(autoFocus && !note);
   const [editValue, setEditValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -37,6 +41,13 @@ function NoteCard({
     setEditValue(note?.content ?? "");
     setIsEditing(true);
   }, [note]);
+
+  // Handle autoFocus for existing notes
+  useEffect(() => {
+    if (autoFocus && note && !isEditing) {
+      startEditing();
+    }
+  }, [autoFocus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -197,17 +208,33 @@ export function MarginNotePanel({
   onUpdateNote,
   onDeleteNote,
   editorElement,
+  focusHighlightId,
+  onFocusConsumed,
 }: MarginNotePanelProps) {
   const [notePositions, setNotePositions] = useState<NotePosition[]>([]);
   const [isNarrow, setIsNarrow] = useState(false);
   const [popoverHighlight, setPopoverHighlight] = useState<string | null>(null);
 
-  const notesByHighlight = useRef(new Map<string, MarginNote>());
+  const notesByHighlight = useRef(new Map<string, MarginNote[]>());
   // Rebuild the map whenever marginNotes changes
   notesByHighlight.current = new Map();
   for (const note of marginNotes) {
-    notesByHighlight.current.set(note.highlight_id, note);
+    const existing = notesByHighlight.current.get(note.highlight_id) ?? [];
+    existing.push(note);
+    notesByHighlight.current.set(note.highlight_id, existing);
   }
+
+  // Consume focus signal
+  const consumedFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusHighlightId && focusHighlightId !== consumedFocusRef.current) {
+      consumedFocusRef.current = focusHighlightId;
+      // Defer consuming so the render with autoFocus happens first
+      requestAnimationFrame(() => {
+        onFocusConsumed?.();
+      });
+    }
+  }, [focusHighlightId, onFocusConsumed]);
 
   const computePositions = useCallback(() => {
     if (!editorElement) return;
@@ -251,24 +278,25 @@ export function MarginNotePanel({
         relativeTop = elRect.top - containerRect.top + scrollTop;
       } else {
         // Fallback: use the from_pos to estimate
-        // Assume ~20px per editor position unit as rough guide
         relativeTop = highlight.from_pos * 0.5;
       }
 
       positions.push({
         highlightId: highlight.id,
         top: relativeTop,
-        note: notesByHighlight.current.get(highlight.id) ?? null,
+        notes: notesByHighlight.current.get(highlight.id) ?? [],
       });
     }
 
-    // Avoid overlap: ensure at least 70px between notes
+    // Avoid overlap: estimate height per group and enforce minimum gap
     positions.sort((a, b) => a.top - b.top);
     for (let i = 1; i < positions.length; i++) {
       const prev = positions[i - 1]!;
       const curr = positions[i]!;
-      if (curr.top - prev.top < 70) {
-        curr.top = prev.top + 70;
+      // Each note takes ~40px, plus ~30px for the "add" button, minimum 70px
+      const prevHeight = Math.max(70, prev.notes.length * 40 + 30);
+      if (curr.top - prev.top < prevHeight) {
+        curr.top = prev.top + prevHeight;
       }
     }
 
@@ -304,6 +332,10 @@ export function MarginNotePanel({
 
   // Narrow screens: render a popover
   if (isNarrow) {
+    const popoverNotes = popoverHighlight
+      ? notesByHighlight.current.get(popoverHighlight) ?? []
+      : [];
+
     return (
       <>
         {popoverHighlight && (
@@ -320,8 +352,18 @@ export function MarginNotePanel({
               backgroundColor: "var(--color-page)",
             }}
           >
+            {popoverNotes.map((note) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                highlightId={popoverHighlight}
+                onAdd={onAddNote}
+                onUpdate={onUpdateNote}
+                onDelete={onDeleteNote}
+              />
+            ))}
             <NoteCard
-              note={notesByHighlight.current.get(popoverHighlight) ?? null}
+              note={null}
               highlightId={popoverHighlight}
               onAdd={onAddNote}
               onUpdate={onUpdateNote}
@@ -338,25 +380,43 @@ export function MarginNotePanel({
       className="pointer-events-none absolute top-0 right-0 h-full"
       style={{ width: 220 }}
     >
-      {notePositions.map((pos) => (
-        <div
-          key={pos.highlightId}
-          className="pointer-events-auto absolute"
-          style={{
-            top: pos.top,
-            left: 0,
-            width: 200,
-          }}
-        >
-          <NoteCard
-            note={pos.note}
-            highlightId={pos.highlightId}
-            onAdd={onAddNote}
-            onUpdate={onUpdateNote}
-            onDelete={onDeleteNote}
-          />
-        </div>
-      ))}
+      {notePositions.map((pos) => {
+        const isFocused = focusHighlightId === pos.highlightId;
+
+        return (
+          <div
+            key={pos.highlightId}
+            className="pointer-events-auto absolute"
+            style={{
+              top: pos.top,
+              left: 0,
+              width: 200,
+            }}
+          >
+            {/* Existing notes */}
+            {pos.notes.map((note, idx) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                highlightId={pos.highlightId}
+                onAdd={onAddNote}
+                onUpdate={onUpdateNote}
+                onDelete={onDeleteNote}
+                autoFocus={isFocused && idx === 0 && pos.notes.length === 1}
+              />
+            ))}
+            {/* Add another note button */}
+            <NoteCard
+              note={null}
+              highlightId={pos.highlightId}
+              onAdd={onAddNote}
+              onUpdate={onUpdateNote}
+              onDelete={onDeleteNote}
+              autoFocus={isFocused && pos.notes.length === 0}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
