@@ -47,10 +47,10 @@ export const MultiColorHighlight = Highlight.extend({
                 }),
               );
             } else {
-              // Click: scroll to annotation
+              // Click: open thread popover
               window.dispatchEvent(
                 new CustomEvent("margin:highlight-click", {
-                  detail: { text },
+                  detail: { text, element: mark },
                 }),
               );
             }

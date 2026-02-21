@@ -1,4 +1,5 @@
 use crate::db::migrations::get_db;
+use std::process::Command;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -7,6 +8,58 @@ pub struct SearchResult {
     pub title: String,
     pub snippet: String,
     pub rank: f64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSearchResult {
+    pub path: String,
+    pub filename: String,
+}
+
+/// Search all .md files on the machine using macOS Spotlight (mdfind).
+/// Matches filename OR content.
+#[tauri::command]
+pub fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<FileSearchResult>, String> {
+    let limit = limit.unwrap_or(20);
+
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // mdfind query: markdown files where name or content matches
+    let mdfind_query = format!(
+        "(kMDItemFSName == '*.md' || kMDItemFSName == '*.markdown') && (kMDItemDisplayName == '*{}*'cdw || kMDItemTextContent == '*{}*'cdw)",
+        query, query
+    );
+
+    let output = Command::new("mdfind")
+        .arg(&mdfind_query)
+        .output()
+        .map_err(|e| format!("Failed to run mdfind: {e}"))?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let results: Vec<FileSearchResult> = stdout
+        .lines()
+        .filter(|line| !line.is_empty())
+        // Skip hidden directories (e.g. .git, node_modules is not hidden but skip .dirs)
+        .filter(|line| !line.split('/').any(|seg| seg.starts_with('.') && seg.len() > 1))
+        .take(limit)
+        .map(|line| {
+            let path = line.to_string();
+            let filename = std::path::Path::new(&path)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.clone());
+            FileSearchResult { path, filename }
+        })
+        .collect();
+
+    Ok(results)
 }
 
 fn ensure_fts_table(conn: &rusqlite::Connection) -> Result<(), String> {

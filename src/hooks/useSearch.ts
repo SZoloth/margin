@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface SearchResult {
@@ -8,37 +8,49 @@ export interface SearchResult {
   rank: number;
 }
 
+interface FileSearchResult {
+  path: string;
+  filename: string;
+}
+
+export interface FileResult {
+  path: string;
+  filename: string;
+}
+
 export function useSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [fileResults, setFileResults] = useState<FileResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [query, setQuery] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const search = useCallback(async (q: string) => {
+  const search = useCallback((q: string) => {
     setQuery(q);
     if (!q.trim()) {
       setResults([]);
+      setFileResults([]);
+      setIsSearching(false);
       return;
     }
     setIsSearching(true);
-    try {
-      // FTS5 query: escape quotes, wrap terms for prefix matching
-      const ftsQuery = q
-        .trim()
-        .split(/\s+/)
-        .filter((t) => t.length > 0)
-        .map((t) => `"${t.replace(/"/g, '""')}"*`)
-        .join(" ");
-      const results = await invoke<SearchResult[]>("search_documents", {
-        query: ftsQuery,
-        limit: 20,
-      });
-      setResults(results);
-    } catch (err) {
-      console.error("Search failed:", err);
-      setResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+
+    // Debounce filesystem search (Spotlight can be slow on first call)
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const files = await invoke<FileSearchResult[]>("search_files_on_disk", {
+          query: q.trim(),
+          limit: 20,
+        });
+        setFileResults(files);
+      } catch (err) {
+        console.error("File search failed:", err);
+        setFileResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 150);
   }, []);
 
   const indexDocument = useCallback(
@@ -60,5 +72,5 @@ export function useSearch() {
     }
   }, []);
 
-  return { results, isSearching, query, search, indexDocument, removeIndex };
+  return { results, fileResults, isSearching, query, search, indexDocument, removeIndex };
 }

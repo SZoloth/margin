@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Menu01Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
 import type { KeepLocalItem } from "@/types/keep-local";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
-import { SearchBar } from "@/components/common/SearchBar";
 import type { useKeepLocal } from "@/hooks/useKeepLocal";
 import type { useSearch } from "@/hooks/useSearch";
 
 interface AppShellProps {
   children: React.ReactNode;
-  marginPanel?: React.ReactNode;
   currentDoc: Document | null;
   recentDocs: Document[];
   onOpenFile: () => void;
@@ -18,11 +18,13 @@ interface AppShellProps {
   keepLocal: ReturnType<typeof useKeepLocal>;
   onSelectKeepLocalItem: (item: KeepLocalItem) => void;
   search: ReturnType<typeof useSearch>;
+  hasAnnotations?: boolean;
+  onExport?: () => void;
+  onOpenFilePath: (path: string) => void;
 }
 
 export function AppShell({
   children,
-  marginPanel,
   currentDoc,
   recentDocs,
   onOpenFile,
@@ -31,6 +33,9 @@ export function AppShell({
   keepLocal,
   onSelectKeepLocalItem,
   search,
+  hasAnnotations,
+  onExport,
+  onOpenFilePath,
 }: AppShellProps) {
   const title = currentDoc?.title ?? "Untitled";
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -93,22 +98,12 @@ export function AppShell({
             onSelectRecentDoc={(doc) => { onSelectRecentDoc(doc); closeSidebar(); }}
             currentDoc={currentDoc}
             recentDocs={recentDocs}
+            searchQuery={search.query}
+            onSearch={search.search}
+            fileResults={search.fileResults}
+            isSearching={search.isSearching}
+            onOpenFilePath={(path) => { onOpenFilePath(path); closeSidebar(); }}
           />
-
-          {/* Search */}
-          <div className="px-4">
-            <SearchBar
-              query={search.query}
-              onSearch={search.search}
-              results={search.results}
-              isSearching={search.isSearching}
-              onSelectResult={(documentId) => {
-                // TODO: open document by ID from search results
-                console.log("Open document:", documentId);
-                closeSidebar();
-              }}
-            />
-          </div>
         </div>
 
         {/* Bottom section: keep-local */}
@@ -142,12 +137,10 @@ export function AppShell({
             <button
               type="button"
               onClick={toggleSidebar}
-              className="toolbar-hamburger p-1.5 rounded"
+              className="toolbar-hamburger p-1.5"
               aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
             >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 5H15M3 9H15M3 13H15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              <HugeiconsIcon icon={Menu01Icon} size={18} color="currentColor" strokeWidth={1.5} />
             </button>
           )}
 
@@ -163,6 +156,22 @@ export function AppShell({
               style={{ backgroundColor: "var(--color-text-secondary)" }}
               title="Unsaved changes"
             />
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {hasAnnotations && onExport && (
+            <button
+              type="button"
+              onClick={onExport}
+              className="btn-sm p-1"
+              style={{ color: "var(--color-text-secondary)" }}
+              aria-label="Export annotations"
+              title="Export annotations (⌘⇧E)"
+            >
+              <HugeiconsIcon icon={Download01Icon} size={16} color="currentColor" strokeWidth={1.5} />
+            </button>
           )}
         </div>
 
@@ -188,19 +197,6 @@ export function AppShell({
         </div>
       </div>
 
-      {/* Margin notes panel (right) */}
-      {marginPanel && (
-        <div
-          className="flex-shrink-0 border-l h-full overflow-y-auto"
-          style={{
-            width: 280,
-            borderColor: "var(--color-border)",
-            backgroundColor: "var(--color-page)",
-          }}
-        >
-          {marginPanel}
-        </div>
-      )}
     </div>
   );
 }

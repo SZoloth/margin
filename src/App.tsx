@@ -5,7 +5,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
 import { Reader } from "@/components/editor/Reader";
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
-import { MarginNotePanel } from "@/components/editor/MarginNotePanel";
+import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
 import { useAnnotations } from "@/hooks/useAnnotations";
@@ -28,6 +28,8 @@ export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const [autoFocusNew, setAutoFocusNew] = useState(false);
 
   // Load annotations when document changes
   useEffect(() => {
@@ -87,13 +89,15 @@ export default function App() {
     return () => { void unlisten.then((fn) => fn()); };
   }, []);
 
-  // Handle highlight click → scroll to note in margin
+  // Handle highlight click → open thread popover
   useEffect(() => {
     const handleHighlightClick = (e: Event) => {
-      const { text } = (e as CustomEvent).detail;
+      const { text, element } = (e as CustomEvent).detail;
       const match = annotations.highlights.find((h) => h.text_content === text);
-      if (match) {
+      if (match && element) {
+        setAnchorRect((element as HTMLElement).getBoundingClientRect());
         setFocusHighlightId(match.id);
+        setAutoFocusNew(false);
       }
     };
 
@@ -139,6 +143,10 @@ export default function App() {
 
     const highlight = annotations.highlights.find((h) => h.id === id);
     await annotations.deleteHighlight(id);
+
+    // Close the thread popover
+    setFocusHighlightId(null);
+    setAnchorRect(null);
 
     // Remove marks from editor
     if (highlight && editor) {
@@ -212,7 +220,19 @@ export default function App() {
         prefixContext: anchor.prefix,
         suffixContext: anchor.suffix,
       });
-      setFocusHighlightId(highlight.id);
+
+      // Find the mark element in the editor DOM to anchor the popover
+      requestAnimationFrame(() => {
+        const marks = editor.view.dom.querySelectorAll("mark[data-color]");
+        for (const mark of marks) {
+          if (mark.textContent === selectedText) {
+            setAnchorRect(mark.getBoundingClientRect());
+            break;
+          }
+        }
+        setFocusHighlightId(highlight.id);
+        setAutoFocusNew(true);
+      });
     } catch (err) {
       console.error("Failed to save highlight for note:", err);
     }
@@ -258,6 +278,8 @@ export default function App() {
   // Open a recent document from the sidebar
   const handleSelectRecentDoc = useCallback(
     async (recentDoc: Document) => {
+      if (doc.currentDoc?.id === recentDoc.id) return;
+
       if (recentDoc.source === "file") {
         await doc.openRecentDocument(recentDoc);
       } else if (recentDoc.source === "keep-local" && recentDoc.keep_local_id) {
@@ -314,20 +336,9 @@ export default function App() {
       keepLocal={keepLocal}
       onSelectKeepLocalItem={handleSelectKeepLocalItem}
       search={search}
-      marginPanel={
-        annotations.isLoaded ? (
-          <MarginNotePanel
-            highlights={annotations.highlights}
-            marginNotes={annotations.marginNotes}
-            onAddNote={annotations.createMarginNote}
-            onUpdateNote={annotations.updateMarginNote}
-            onDeleteNote={annotations.deleteMarginNote}
-            onDeleteHighlight={handleDeleteHighlight}
-            focusHighlightId={focusHighlightId}
-            onFocusConsumed={() => setFocusHighlightId(null)}
-          />
-        ) : undefined
-      }
+      hasAnnotations={annotations.isLoaded && annotations.highlights.length > 0}
+      onExport={() => setShowExportPopover(true)}
+      onOpenFilePath={doc.openFilePath}
     >
       <Reader
         content={doc.content}
@@ -341,6 +352,29 @@ export default function App() {
         onHighlight={handleHighlight}
         onNote={handleNote}
       />
+
+      {focusHighlightId && annotations.isLoaded && (() => {
+        const highlight = annotations.highlights.find((h) => h.id === focusHighlightId);
+        if (!highlight) return null;
+        const notes = annotations.marginNotes.filter((n) => n.highlight_id === focusHighlightId);
+        return (
+          <HighlightThread
+            highlight={highlight}
+            notes={notes}
+            onAddNote={annotations.createMarginNote}
+            onUpdateNote={annotations.updateMarginNote}
+            onDeleteNote={annotations.deleteMarginNote}
+            onDeleteHighlight={handleDeleteHighlight}
+            onClose={() => {
+              setFocusHighlightId(null);
+              setAnchorRect(null);
+              setAutoFocusNew(false);
+            }}
+            anchorRect={anchorRect}
+            autoFocusNew={autoFocusNew}
+          />
+        );
+      })()}
 
       <ExportAnnotationsPopover
         isOpen={showExportPopover}

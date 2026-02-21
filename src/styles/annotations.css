@@ -20,3 +20,154 @@
     background-color: rgba(250, 204, 21, 0.7);
   }
 }
+
+/* ─── Thread popover ─── */
+.thread-popover {
+  position: fixed;
+  z-index: 50;
+  width: 300px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-page);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: opacity 120ms ease, transform 120ms ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.thread-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.thread-header-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.thread-excerpt {
+  padding: 8px 12px;
+  border-left: 2px solid var(--highlight-yellow, #fde68a);
+  margin: 0 12px;
+  margin-top: 8px;
+}
+
+.thread-excerpt p {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.thread-body {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px 12px;
+}
+
+.thread-message {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.thread-message:last-child {
+  border-bottom: none;
+}
+
+.thread-message-time {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.thread-message-content {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.thread-message-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.thread-message:hover .thread-message-actions {
+  opacity: 1;
+}
+
+.thread-footer {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.thread-textarea {
+  width: 100%;
+  resize: none;
+  border: none;
+  background: transparent;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  outline: none;
+}
+
+.thread-textarea::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.5;
+}
+
+/* Action buttons (shared by thread and legacy) */
+.note-action-btn {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 120ms ease, opacity 120ms ease, transform 120ms ease;
+}
+
+.note-action-btn:hover {
+  background-color: var(--hover-bg);
+}
+
+.note-action-btn:active {
+  transform: scale(0.95);
+  background-color: var(--active-bg);
+}
+
+.note-action-btn--delete {
+  color: rgb(248 113 113);
+}
+
+.note-action-btn--delete:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+
+.note-action-btn--delete:active {
+  background-color: rgba(239, 68, 68, 0.25);
+}
+
+/* Dark mode — thread */
+@media (prefers-color-scheme: dark) {
+  .thread-popover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}

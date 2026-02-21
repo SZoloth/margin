@@ -30,6 +30,8 @@ export interface UseDocumentReturn {
   isDirty: boolean;
   isLoading: boolean;
   openFile: () => Promise<void>;
+  openFilePath: (path: string) => Promise<void>;
+  openRecentDocument: (doc: Document) => Promise<void>;
   openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
   saveCurrentFile: () => Promise<void>;
   setContent: (newContent: string) => void;
@@ -42,7 +44,19 @@ export function useDocument(): UseDocumentReturn {
   const [content, setContentState] = useState<string>("");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoadingRaw] = useState(false);
+  const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Delay showing loading state to avoid flash for fast loads
+  const setIsLoading = useCallback((v: boolean) => {
+    if (v) {
+      loadingTimerRef.current = setTimeout(() => setIsLoadingRaw(true), 150);
+    } else {
+      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+      setIsLoadingRaw(false);
+    }
+  }, []);
   // Track keep-local doc IDs so we can reuse them
   const keepLocalDocMapRef = useRef<Map<string, Document>>(new Map());
 
@@ -111,6 +125,69 @@ export function useDocument(): UseDocumentReturn {
     } finally {
       setIsLoading(false);
     }
+  }, [currentDoc, refreshRecentDocs]);
+
+  const openFilePath = useCallback(async (path: string) => {
+    try {
+      setIsLoading(true);
+      const fileContent = await readFile(path);
+      const title = basename(path);
+      const now = Date.now();
+
+      const doc: Document = {
+        id: currentDoc?.file_path === path ? currentDoc.id : crypto.randomUUID(),
+        source: "file",
+        file_path: path,
+        keep_local_id: null,
+        title,
+        author: null,
+        url: null,
+        word_count: countWords(fileContent),
+        last_opened_at: now,
+        created_at: currentDoc?.file_path === path ? currentDoc.created_at : now,
+      };
+
+      const saved = await upsertDocument(doc);
+
+      setFilePath(path);
+      setContentState(fileContent);
+      setCurrentDoc(saved);
+      setIsDirty(false);
+      refreshRecentDocs();
+    } catch (err) {
+      console.error("Failed to open file path:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentDoc, refreshRecentDocs]);
+
+  const openRecentDocument = useCallback(async (recentDoc: Document) => {
+    // Skip if already viewing this document
+    if (currentDoc?.id === recentDoc.id) return;
+
+    if (recentDoc.source === "file" && recentDoc.file_path) {
+      try {
+        setIsLoading(true);
+        const fileContent = await readFile(recentDoc.file_path);
+        const now = Date.now();
+        const updated: Document = {
+          ...recentDoc,
+          word_count: countWords(fileContent),
+          last_opened_at: now,
+        };
+        const saved = await upsertDocument(updated);
+        setFilePath(recentDoc.file_path);
+        setContentState(fileContent);
+        setCurrentDoc(saved);
+        setIsDirty(false);
+        refreshRecentDocs();
+      } catch (err) {
+        console.error("Failed to open recent file:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    // keep-local docs need external content fetch — handled by App.tsx
   }, [currentDoc, refreshRecentDocs]);
 
   const openKeepLocalArticle = useCallback(async (docRecord: Document, markdown: string) => {
@@ -190,6 +267,8 @@ export function useDocument(): UseDocumentReturn {
     isDirty,
     isLoading,
     openFile,
+    openFilePath,
+    openRecentDocument,
     openKeepLocalArticle,
     saveCurrentFile,
     setContent,
