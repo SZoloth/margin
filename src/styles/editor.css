@@ -128,3 +128,19 @@
     background-color: rgba(255, 255, 255, 0.15);
   }
 }
+
+/* Highlight click interaction */
+.tiptap mark[data-color] {
+  transition: background-color 0.15s ease, filter 0.15s ease;
+  cursor: pointer;
+}
+
+.tiptap mark[data-color]:hover {
+  filter: brightness(0.95);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tiptap mark[data-color]:hover {
+    filter: brightness(1.15);
+  }
+}

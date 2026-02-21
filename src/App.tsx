@@ -88,6 +88,77 @@ export default function App() {
     return () => { void unlisten.then((fn) => fn()); };
   }, []);
 
+  // Handle highlight click → scroll to note in margin
+  useEffect(() => {
+    const handleHighlightClick = (e: Event) => {
+      const { text } = (e as CustomEvent).detail;
+      const match = annotations.highlights.find((h) => h.text_content === text);
+      if (match) {
+        setFocusHighlightId(match.id);
+      }
+    };
+
+    const handleHighlightDelete = async (e: Event) => {
+      const { text } = (e as CustomEvent).detail;
+      const match = annotations.highlights.find((h) => h.text_content === text);
+      if (!match || !editor) return;
+
+      // Remove from database
+      await annotations.deleteHighlight(match.id);
+
+      // Remove the mark from the editor
+      const { state } = editor;
+      const { tr } = state;
+      let removed = false;
+      state.doc.descendants((node, pos) => {
+        if (removed) return false;
+        node.marks.forEach((mark) => {
+          if (mark.type.name === "highlight") {
+            const nodeText = node.text ?? "";
+            if (nodeText === text || text.includes(nodeText)) {
+              tr.removeMark(pos, pos + node.nodeSize, mark.type);
+              removed = true;
+            }
+          }
+        });
+      });
+      if (removed) {
+        editor.view.dispatch(tr);
+      }
+    };
+
+    window.addEventListener("margin:highlight-click", handleHighlightClick);
+    window.addEventListener("margin:highlight-delete", handleHighlightDelete);
+    return () => {
+      window.removeEventListener("margin:highlight-click", handleHighlightClick);
+      window.removeEventListener("margin:highlight-delete", handleHighlightDelete);
+    };
+  }, [annotations.highlights, editor]);
+
+  const handleDeleteHighlight = useCallback(async (id: string) => {
+    if (!editor) return;
+
+    const highlight = annotations.highlights.find((h) => h.id === id);
+    await annotations.deleteHighlight(id);
+
+    // Remove marks from editor
+    if (highlight && editor) {
+      const { state } = editor;
+      const { tr } = state;
+      state.doc.descendants((node, pos) => {
+        node.marks.forEach((mark) => {
+          if (mark.type.name === "highlight") {
+            const nodeText = node.text ?? "";
+            if (nodeText === highlight.text_content || highlight.text_content.includes(nodeText)) {
+              tr.removeMark(pos, pos + node.nodeSize, mark.type);
+            }
+          }
+        });
+      });
+      editor.view.dispatch(tr);
+    }
+  }, [editor, annotations]);
+
   const handleEditorReady = useCallback((ed: Editor) => {
     setEditor(ed);
     editorElementRef.current = ed.view.dom;
@@ -267,6 +338,7 @@ export default function App() {
             onAddNote={annotations.createMarginNote}
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
+            onDeleteHighlight={handleDeleteHighlight}
             editorElement={editorElementRef.current}
             focusHighlightId={focusHighlightId}
             onFocusConsumed={() => setFocusHighlightId(null)}

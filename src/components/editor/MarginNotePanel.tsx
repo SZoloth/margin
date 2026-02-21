@@ -7,6 +7,7 @@ interface MarginNotePanelProps {
   onAddNote: (highlightId: string, content: string) => void;
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
+  onDeleteHighlight: (id: string) => void;
   editorElement: HTMLElement | null;
   focusHighlightId?: string | null;
   onFocusConsumed?: () => void;
@@ -214,6 +215,7 @@ export function MarginNotePanel({
   onAddNote,
   onUpdateNote,
   onDeleteNote,
+  onDeleteHighlight,
   editorElement,
   focusHighlightId,
   onFocusConsumed,
@@ -324,6 +326,15 @@ export function MarginNotePanel({
     return () => scrollParent.removeEventListener("scroll", handleScroll);
   }, [editorElement, computePositions]);
 
+  // Scroll to focused highlight
+  const focusedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusHighlightId && focusedRef.current) {
+      focusedRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      onFocusConsumed?.();
+    }
+  }, [focusHighlightId, onFocusConsumed]);
+
   if (highlights.length === 0) return null;
 
   // Narrow screens: render a popover
@@ -368,6 +379,18 @@ export function MarginNotePanel({
                 autoFocus
               />
             )}
+            <div className="mt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteHighlight(popoverHighlight);
+                  setPopoverHighlight(null);
+                }}
+                className="text-xs text-red-400 hover:text-red-600"
+              >
+                Remove highlight
+              </button>
+            </div>
           </div>
         )}
       </>
@@ -381,12 +404,14 @@ export function MarginNotePanel({
     >
       {notePositions.map((pos) => {
         const isFocused = focusHighlightId === pos.highlightId;
+        const hasNotes = pos.notes.length > 0;
         // Don't render anything in the gutter for highlights with no notes (unless focused)
-        if (pos.notes.length === 0 && !isFocused) return null;
+        if (!hasNotes && !isFocused) return null;
 
         return (
           <div
             key={pos.highlightId}
+            ref={isFocused ? focusedRef : undefined}
             className="pointer-events-auto absolute"
             style={{
               top: pos.top,
@@ -417,6 +442,21 @@ export function MarginNotePanel({
                 onEditingDone={onFocusConsumed}
               />
             )}
+            {/* Remove highlight button */}
+            <div
+              className="mt-1"
+              style={{ opacity: 0, transition: "opacity 120ms ease" }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = "0"; }}
+            >
+              <button
+                type="button"
+                onClick={() => onDeleteHighlight(pos.highlightId)}
+                className="text-xs text-red-400 hover:text-red-600"
+              >
+                Remove highlight
+              </button>
+            </div>
           </div>
         );
       })}
