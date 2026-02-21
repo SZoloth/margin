@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react";
 import type { Document } from "@/types/document";
 import type { KeepLocalItem } from "@/types/keep-local";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -23,30 +24,67 @@ export function AppShell({
   currentDoc,
   recentDocs,
   onOpenFile,
-  onSelectRecentDoc,
+  onSelectRecentDoc: _onSelectRecentDoc,
   isDirty,
   keepLocal,
   onSelectKeepLocalItem,
   search,
 }: AppShellProps) {
   const title = currentDoc?.title ?? "Untitled";
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 768);
+      setIsTablet(w >= 768 && w <= 1024);
+      if (w < 768) setSidebarOpen(false);
+      else setSidebarOpen(true);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
+
+  const closeSidebar = useCallback(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [isMobile]);
+
+  const sidebarWidth = isTablet ? 220 : 260;
 
   return (
     <div className="flex h-screen overflow-hidden">
+      {/* Mobile overlay backdrop */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30"
+          onClick={closeSidebar}
+          style={{ transition: "opacity 200ms ease" }}
+        />
+      )}
+
       {/* Sidebar */}
       <div
-        className="flex flex-col flex-shrink-0 h-full border-r"
+        className={`flex flex-col flex-shrink-0 h-full border-r${
+          isMobile ? " fixed z-50 top-0 left-0" : ""
+        }`}
         style={{
-          width: 260,
+          width: sidebarWidth,
           backgroundColor: "var(--color-sidebar)",
           borderColor: "var(--color-border)",
+          transform: sidebarOpen ? "translateX(0)" : `translateX(-${sidebarWidth}px)`,
+          transition: "transform 200ms ease",
+          ...(isMobile ? { boxShadow: sidebarOpen ? "4px 0 12px rgba(0,0,0,0.15)" : "none" } : {}),
         }}
       >
         {/* Top section: files + search */}
         <div className="flex-shrink-0">
           <Sidebar
-            onOpenFile={onOpenFile}
-            onSelectRecentDoc={onSelectRecentDoc}
+            onOpenFile={() => { onOpenFile(); closeSidebar(); }}
             currentDoc={currentDoc}
             recentDocs={recentDocs}
           />
@@ -61,6 +99,7 @@ export function AppShell({
               onSelectResult={(documentId) => {
                 // TODO: open document by ID from search results
                 console.log("Open document:", documentId);
+                closeSidebar();
               }}
             />
           </div>
@@ -77,10 +116,15 @@ export function AppShell({
             isLoading={keepLocal.isLoading}
             query={keepLocal.query}
             onSearch={keepLocal.search}
-            onSelectItem={onSelectKeepLocalItem}
+            onSelectItem={(item) => { onSelectKeepLocalItem(item); closeSidebar(); }}
           />
         </div>
       </div>
+
+      {/* Spacer for non-mobile when sidebar is open */}
+      {!isMobile && sidebarOpen && (
+        <div style={{ width: sidebarWidth, flexShrink: 0, transition: "width 200ms ease" }} />
+      )}
 
       {/* Main reader pane */}
       <div className="flex flex-1 flex-col h-full" style={{ minWidth: 0 }}>
@@ -89,8 +133,23 @@ export function AppShell({
           className="flex items-center gap-2 px-6 py-3 flex-shrink-0 border-b select-none"
           style={{
             borderColor: "var(--color-border)",
+            paddingLeft: isMobile ? "0.75rem" : undefined,
           }}
         >
+          {/* Hamburger toggle */}
+          {(isMobile || isTablet) && (
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="toolbar-hamburger p-1.5 rounded"
+              aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 5H15M3 9H15M3 13H15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+
           <span
             className="text-sm font-medium truncate"
             style={{ color: "var(--color-text-primary)" }}

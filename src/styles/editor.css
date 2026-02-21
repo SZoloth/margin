@@ -144,3 +144,21 @@
     filter: brightness(1.15);
   }
 }
+
+/* Hamburger toggle button */
+.toolbar-hamburger {
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.toolbar-hamburger:hover {
+  color: var(--color-text-primary);
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .toolbar-hamburger:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}

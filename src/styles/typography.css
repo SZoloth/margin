@@ -152,3 +152,45 @@
 .reader-content th {
   font-weight: 600;
 }
+
+/* Responsive typography */
+@media (max-width: 768px) {
+  .reader-content {
+    font-size: 1rem;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .reader-content h1 {
+    font-size: 1.75rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .reader-content h2 {
+    font-size: 1.375rem;
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .reader-content h3 {
+    font-size: 1.125rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .reader-content blockquote {
+    margin: 1em 0;
+    padding-left: 1em;
+  }
+
+  .reader-content pre {
+    padding: 1rem;
+    margin: 1em 0;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .reader-content {
+    padding: 2.5rem 1.25rem 5rem;
+  }
+}

@@ -305,7 +305,7 @@ export function MarginNotePanel({
     computePositions();
 
     const handleResize = () => {
-      setIsNarrow(window.innerWidth < 1000);
+      setIsNarrow(window.innerWidth < 1024);
       computePositions();
     };
 
