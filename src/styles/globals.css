@@ -2,6 +2,7 @@
 @import "./typography.css";
 @import "./editor.css";
 @import "./annotations.css";
+@import "./interactions.css";
 
 @theme {
   --color-highlight-yellow: #fef3c7;
@@ -18,16 +19,26 @@
   --color-text-primary: #1a1a1a;
   --color-text-secondary: #4a4a4a;
   --color-border: #e5e2dc;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --hover-bg: rgba(0, 0, 0, 0.05);
+  --active-bg: rgba(0, 0, 0, 0.08);
 }
 
 /* Dark theme */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-page: #1a1a1e;
-    --color-sidebar: #232328;
-    --color-text-primary: #e8e6e3;
-    --color-text-secondary: #a0a0a0;
-    --color-border: #3a3a3e;
+    --color-page: #1C1C1C;
+    --color-sidebar: #232323;
+    --color-text-primary: #E5E5E5;
+    --color-text-secondary: #A1A1A1;
+    --color-border: #333333;
+
+    --hover-bg: rgba(255, 255, 255, 0.07);
+    --active-bg: rgba(255, 255, 255, 0.12);
   }
 }
 

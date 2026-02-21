@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon, File01Icon } from "@hugeicons/core-free-icons";
 import type { FileEntry } from "@/types/document";
 
 interface SidebarFileTreeProps {
@@ -37,31 +39,19 @@ export function SidebarFileTree({ entries, onSelectFile, selectedPath }: Sidebar
             <button
               key={entry.path}
               onClick={() => toggleDir(entry.path)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md text-left w-full transition-colors cursor-pointer"
+              className="interactive-item flex items-center gap-2 px-3 py-1.5 text-sm text-left w-full"
               style={{ color: "var(--color-text-secondary)" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-              }}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+              <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                size={14}
+                color="currentColor"
+                strokeWidth={1.5}
                 className="flex-shrink-0 transition-transform"
                 style={{
                   transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
                 }}
-              >
-                <path d="M4 6l4 4 4-4" />
-              </svg>
+              />
               <span className="truncate">{fileName(entry)}</span>
             </button>
           );
@@ -71,40 +61,22 @@ export function SidebarFileTree({ entries, onSelectFile, selectedPath }: Sidebar
           <button
             key={entry.path}
             onClick={() => onSelectFile(entry.path)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md text-left w-full transition-colors cursor-pointer"
+            className="interactive-item flex items-center gap-2 px-3 py-1.5 text-sm text-left w-full"
             style={{
-              backgroundColor: isSelected ? "rgba(0, 0, 0, 0.08)" : "transparent",
+              backgroundColor: isSelected ? "var(--active-bg)" : "transparent",
               color: isSelected
                 ? "var(--color-text-primary)"
                 : "var(--color-text-secondary)",
               fontWeight: isSelected ? 500 : 400,
             }}
-            onMouseEnter={(e) => {
-              if (!isSelected) {
-                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSelected) {
-                e.currentTarget.style.backgroundColor = "transparent";
-              }
-            }}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            <HugeiconsIcon
+              icon={File01Icon}
+              size={14}
+              color="var(--color-text-secondary)"
+              strokeWidth={1.5}
               className="flex-shrink-0"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              <path d="M9 1.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5L9 1.5Z" />
-              <path d="M9 1.5V5.5h4" />
-            </svg>
+            />
             <span className="truncate">{fileName(entry)}</span>
           </button>
         );

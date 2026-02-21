@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Menu01Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
@@ -38,19 +38,24 @@ export function AppShell({
   onOpenFilePath,
 }: AppShellProps) {
   const title = currentDoc?.title ?? "Untitled";
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isTablet, setIsTablet] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [isTablet, setIsTablet] = useState(() => {
+    const w = window.innerWidth;
+    return w >= 768 && w <= 1024;
+  });
+  const prevWidthRef = useRef(window.innerWidth);
 
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
+      const prev = prevWidthRef.current;
+      prevWidthRef.current = w;
       setIsMobile(w < 768);
       setIsTablet(w >= 768 && w <= 1024);
-      if (w < 768) setSidebarOpen(false);
-      else setSidebarOpen(true);
+      // Auto-collapse only when crossing into mobile
+      if (w < 768 && prev >= 768) setSidebarOpen(false);
     };
-    update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
@@ -133,16 +138,14 @@ export function AppShell({
           }}
         >
           {/* Hamburger toggle (left side) */}
-          {(isMobile || isTablet) && (
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              className="toolbar-hamburger p-1.5"
-              aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-            >
-              <HugeiconsIcon icon={Menu01Icon} size={18} color="currentColor" strokeWidth={1.5} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="toolbar-hamburger p-1.5"
+            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+          >
+            <HugeiconsIcon icon={Menu01Icon} size={18} color="currentColor" strokeWidth={1.5} />
+          </button>
 
           <span
             className="text-sm font-medium truncate"
@@ -197,6 +200,31 @@ export function AppShell({
         </div>
       </div>
 
+      {/* Dev mode indicator */}
+      {import.meta.env.DEV && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 10,
+            right: 10,
+            fontSize: 9,
+            fontWeight: 700,
+            fontFamily: "ui-monospace, 'SF Mono', SFMono-Regular, monospace",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#FF5722",
+            backgroundColor: "rgba(255, 87, 34, 0.08)",
+            border: "1px solid rgba(255, 87, 34, 0.25)",
+            borderRadius: 4,
+            padding: "2px 6px",
+            pointerEvents: "none",
+            userSelect: "none",
+            zIndex: 9999,
+          }}
+        >
+          dev
+        </div>
+      )}
     </div>
   );
 }

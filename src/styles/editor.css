@@ -91,9 +91,9 @@
   }
 }
 
-/* Smooth typing feel */
-.tiptap * {
-  transition: background-color 0.1s ease;
+/* Smooth highlight color transitions */
+.tiptap mark[data-color] {
+  transition: background-color 0.15s ease;
 }
 
 /* Floating toolbar button states */
@@ -102,7 +102,7 @@
   align-items: center;
   justify-content: center;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   background-color: transparent;
   cursor: pointer;
@@ -110,23 +110,13 @@
 }
 
 .toolbar-btn:hover {
-  background-color: rgba(0, 0, 0, 0.08);
+  background-color: var(--hover-bg);
   color: var(--color-text-primary);
 }
 
 .toolbar-btn:active {
-  background-color: rgba(0, 0, 0, 0.12);
+  background-color: var(--active-bg);
   transform: scale(0.92);
-}
-
-@media (prefers-color-scheme: dark) {
-  .toolbar-btn:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .toolbar-btn:active {
-    background-color: rgba(255, 255, 255, 0.15);
-  }
 }
 
 /* Highlight click interaction */
@@ -149,16 +139,16 @@
 .toolbar-hamburger {
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: color 120ms ease, background-color 120ms ease;
+  border-radius: var(--radius-sm);
+  transition: color 120ms ease, background-color 120ms ease, transform 120ms ease;
 }
 
 .toolbar-hamburger:hover {
   color: var(--color-text-primary);
-  background-color: rgba(0, 0, 0, 0.06);
+  background-color: var(--hover-bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  .toolbar-hamburger:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-  }
+.toolbar-hamburger:active {
+  background-color: var(--active-bg);
+  transform: scale(0.92);
 }

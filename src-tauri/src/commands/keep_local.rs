@@ -137,8 +137,20 @@ pub fn keep_local_get_content(item_id: String) -> Result<String, String> {
         .send()
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
 
-    resp.text()
-        .map_err(|e| format!("Failed to read content response: {e}"))
+    let status = resp.status();
+    let body = resp
+        .text()
+        .map_err(|e| format!("Failed to read content response: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!("Content not available (HTTP {status})"));
+    }
+
+    if body.is_empty() {
+        return Err("Content not available".to_string());
+    }
+
+    Ok(body)
 }
 
 /// Simple percent-encoding for query parameter values.

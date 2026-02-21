@@ -59,7 +59,7 @@
 }
 
 .thread-excerpt p {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'Newsreader', Georgia, serif;
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-text-secondary);
@@ -94,7 +94,7 @@
 }
 
 .thread-message-content {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'Newsreader', Georgia, serif;
   font-size: 13px;
   font-style: italic;
   line-height: 1.5;
@@ -105,12 +105,6 @@
   display: flex;
   gap: 4px;
   margin-top: 4px;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.thread-message:hover .thread-message-actions {
-  opacity: 1;
 }
 
 .thread-footer {
@@ -123,7 +117,7 @@
   resize: none;
   border: none;
   background: transparent;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'Newsreader', Georgia, serif;
   font-size: 13px;
   font-style: italic;
   line-height: 1.5;
@@ -169,5 +163,29 @@
 @media (prefers-color-scheme: dark) {
   .thread-popover {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Mobile — thread as bottom sheet */
+@media (max-width: 767px) {
+  .thread-popover.thread-popover--mobile {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100%;
+    max-height: 60vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+
+  .thread-popover--mobile .thread-body {
+    max-height: min(280px, 40vh);
+  }
+
+  .thread-popover--mobile .note-action-btn {
+    min-height: 32px;
+    padding: 6px 10px;
   }
 }

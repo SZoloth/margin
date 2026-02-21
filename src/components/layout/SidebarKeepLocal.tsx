@@ -63,7 +63,7 @@ export function SidebarKeepLocal({
               padding: "6px 8px",
               fontSize: 13,
               border: "1px solid var(--color-border)",
-              borderRadius: 4,
+              borderRadius: "var(--radius-sm)",
               backgroundColor: "transparent",
               color: "var(--color-text-primary)",
               outline: "none",
@@ -120,6 +120,8 @@ export function SidebarKeepLocal({
             <button
               key={item.id}
               onClick={() => onSelectItem(item)}
+              disabled={!item.contentAvailable}
+              className={item.contentAvailable ? "interactive-item" : ""}
               style={{
                 display: "block",
                 width: "100%",
@@ -127,15 +129,10 @@ export function SidebarKeepLocal({
                 border: "none",
                 borderBottom: "1px solid var(--color-border)",
                 backgroundColor: "transparent",
-                cursor: "pointer",
+                cursor: item.contentAvailable ? "pointer" : "default",
                 textAlign: "left",
-                transition: "background-color 0.1s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
+                opacity: item.contentAvailable ? 1 : 0.5,
+                borderRadius: 0,
               }}
             >
               <div
@@ -164,6 +161,7 @@ export function SidebarKeepLocal({
                 {item.wordCount > 0 && (
                   <span>{item.wordCount.toLocaleString()} words</span>
                 )}
+                {!item.contentAvailable && <span>No content</span>}
               </div>
             </button>
           ))}

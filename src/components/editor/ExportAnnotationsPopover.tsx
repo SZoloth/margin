@@ -82,9 +82,9 @@ export function ExportAnnotationsPopover({
           position: "relative",
           backgroundColor: "var(--color-page)",
           border: "1px solid var(--color-border)",
-          borderRadius: 10,
+          borderRadius: "var(--radius-lg)",
           padding: "20px 24px",
-          minWidth: 280,
+          minWidth: "min(280px, calc(100vw - 32px))",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
         }}
       >

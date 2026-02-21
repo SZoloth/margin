@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Search01Icon } from "@hugeicons/core-free-icons";
 import type { SearchResult } from "@/hooks/useSearch";
 
 interface SearchBarProps {
@@ -63,29 +65,22 @@ export function SearchBar({
   return (
     <div ref={containerRef} className="relative mb-4">
       <div
-        className="flex items-center gap-2 px-3 py-2 rounded-md border"
+        className="flex items-center gap-2 px-3 py-2 border"
         style={{
           borderColor: isFocused
             ? "var(--color-text-secondary)"
             : "var(--color-border)",
           backgroundColor: "var(--color-page)",
+          borderRadius: "var(--radius-sm)",
         }}
       >
-        {/* Search icon */}
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}
-        >
-          <circle cx="7" cy="7" r="5.5" />
-          <path d="M11.5 11.5L15 15" />
-        </svg>
+        <HugeiconsIcon
+          icon={Search01Icon}
+          size={14}
+          color="var(--color-text-secondary)"
+          strokeWidth={1.5}
+          className="flex-shrink-0"
+        />
 
         <input
           ref={inputRef}
@@ -103,10 +98,11 @@ export function SearchBar({
       {/* Dropdown results */}
       {showDropdown && (
         <div
-          className="absolute left-0 right-0 top-full mt-1 rounded-md border shadow-lg overflow-hidden z-50"
+          className="absolute left-0 right-0 top-full mt-1 border shadow-lg overflow-hidden z-50"
           style={{
             borderColor: "var(--color-border)",
             backgroundColor: "var(--color-page)",
+            borderRadius: "var(--radius-md)",
             maxHeight: "300px",
             overflowY: "auto",
           }}
@@ -137,15 +133,8 @@ export function SearchBar({
                   onSelectResult(result.documentId);
                   setIsFocused(false);
                 }}
-                className="w-full text-left px-3 py-2 transition-colors cursor-pointer"
-                style={{ color: "var(--color-text-primary)" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor =
-                    "rgba(0, 0, 0, 0.05)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                }}
+                className="interactive-item w-full text-left px-3 py-2"
+                style={{ color: "var(--color-text-primary)", borderRadius: 0 }}
               >
                 <div className="text-sm font-medium truncate">
                   {result.title}

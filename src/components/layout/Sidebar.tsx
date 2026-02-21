@@ -122,7 +122,7 @@ export function Sidebar({
               borderColor: "var(--color-border)",
               backgroundColor: "var(--color-page)",
               borderRadius: "var(--radius-md)",
-              maxHeight: "300px",
+              maxHeight: "min(300px, 50vh)",
               overflowY: "auto",
             }}
           >

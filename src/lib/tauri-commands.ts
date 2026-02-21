@@ -24,3 +24,7 @@ export async function getRecentDocuments(limit?: number): Promise<Document[]> {
 export async function upsertDocument(doc: Document): Promise<Document> {
   return invoke<Document>("upsert_document", { doc });
 }
+
+export async function drainPendingOpenFiles(): Promise<string[]> {
+  return invoke<string[]>("drain_pending_open_files");
+}

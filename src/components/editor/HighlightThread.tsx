@@ -83,10 +83,26 @@ function ThreadMessage({
             e.target.style.height = `${e.target.scrollHeight}px`;
           }}
           onKeyDown={handleKeyDown}
-          onBlur={handleSave}
           className="thread-textarea"
           rows={1}
         />
+        <div className="thread-message-actions" style={{ marginTop: 4 }}>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); setIsEditing(false); }}
+            className="note-action-btn text-xs"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); handleSave(); }}
+            className="note-action-btn text-xs"
+            style={{ fontWeight: 500 }}
+          >
+            Save
+          </button>
+        </div>
       </div>
     );
   }
@@ -182,17 +198,22 @@ export function HighlightThread({
   // Position calculation
   if (!anchorRect) return null;
 
+  const isMobile = window.innerWidth < 768;
+
+  // Desktop: position to the right of the highlight
   const popoverWidth = 300;
   const gap = 12;
-  // Always place to the right of the highlight — clamp to viewport edge
   const left = Math.min(anchorRect.right + gap, window.innerWidth - popoverWidth - 8);
   const top = Math.max(8, Math.min(anchorRect.top, window.innerHeight - 400));
 
   return createPortal(
     <div
       ref={popoverRef}
-      className="thread-popover"
-      style={{
+      className={`thread-popover ${isMobile ? "thread-popover--mobile" : ""}`}
+      style={isMobile ? {
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(100%)",
+      } : {
         top,
         left: Math.max(8, left),
         opacity: isVisible ? 1 : 0,
@@ -243,6 +264,18 @@ export function HighlightThread({
           placeholder="Add a note..."
           rows={1}
         />
+        {newNoteValue.trim() && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={handleAddNote}
+              className="note-action-btn text-xs"
+              style={{ fontWeight: 500 }}
+            >
+              Save
+            </button>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
