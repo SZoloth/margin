@@ -8,15 +8,8 @@ interface MarginNotePanelProps {
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
   onDeleteHighlight: (id: string) => void;
-  editorElement: HTMLElement | null;
   focusHighlightId?: string | null;
   onFocusConsumed?: () => void;
-}
-
-interface NotePosition {
-  highlightId: string;
-  top: number;
-  notes: MarginNote[];
 }
 
 function NoteCard({
@@ -137,7 +130,7 @@ function NoteCard({
               e.preventDefault();
               handleSave();
             }}
-            className="rounded px-1.5 py-0.5 text-xs transition-opacity hover:opacity-80"
+            className="note-save-btn rounded px-1.5 py-0.5 text-xs transition-opacity hover:opacity-80"
             style={{ color: "var(--color-text-primary)" }}
           >
             Save
@@ -152,12 +145,10 @@ function NoteCard({
       <button
         type="button"
         onClick={startEditing}
-        className="w-full rounded border border-dashed px-2 py-1 text-left text-xs italic transition-colors"
+        className="note-add-placeholder w-full rounded border border-dashed px-2 py-1 text-left text-xs italic"
         style={{
           fontFamily: "Georgia, 'Times New Roman', serif",
-          borderColor: "var(--color-border)",
           color: "var(--color-text-secondary)",
-          opacity: 0.6,
         }}
       >
         Add a note...
@@ -166,18 +157,7 @@ function NoteCard({
   }
 
   return (
-    <div
-      className="group rounded border border-transparent px-2 py-1 transition-colors"
-      style={{ ["--hover-bg" as string]: "rgba(0,0,0,0.03)" }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "var(--color-border)";
-        e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.02)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "transparent";
-        e.currentTarget.style.backgroundColor = "transparent";
-      }}
-    >
+    <div className="note-card">
       <p
         className="text-sm italic"
         style={{
@@ -188,11 +168,11 @@ function NoteCard({
       >
         {note.content}
       </p>
-      <div className="mt-0.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="note-card-actions mt-1 flex gap-1">
         <button
           type="button"
           onClick={startEditing}
-          className="text-xs hover:opacity-80"
+          className="note-action-btn text-xs"
           style={{ color: "var(--color-text-secondary)" }}
         >
           Edit
@@ -200,7 +180,7 @@ function NoteCard({
         <button
           type="button"
           onClick={() => onDelete(note.id)}
-          className="text-xs text-red-400 hover:text-red-600"
+          className="note-action-btn note-action-btn--delete text-xs text-red-400"
         >
           Delete
         </button>
@@ -216,14 +196,9 @@ export function MarginNotePanel({
   onUpdateNote,
   onDeleteNote,
   onDeleteHighlight,
-  editorElement,
   focusHighlightId,
   onFocusConsumed,
 }: MarginNotePanelProps) {
-  const [notePositions, setNotePositions] = useState<NotePosition[]>([]);
-  const [isNarrow, setIsNarrow] = useState(false);
-  const [popoverHighlight, setPopoverHighlight] = useState<string | null>(null);
-
   const notesByHighlight = useRef(new Map<string, MarginNote[]>());
   // Rebuild the map whenever marginNotes changes
   notesByHighlight.current = new Map();
@@ -232,99 +207,6 @@ export function MarginNotePanel({
     existing.push(note);
     notesByHighlight.current.set(note.highlight_id, existing);
   }
-
-  const computePositions = useCallback(() => {
-    if (!editorElement) return;
-
-    const scrollParent = editorElement.closest(".overflow-y-auto");
-    if (!scrollParent) return;
-
-    const scrollTop = scrollParent.scrollTop;
-    const containerRect = scrollParent.getBoundingClientRect();
-    const positions: NotePosition[] = [];
-
-    // Build a map of mark elements by their text content for matching
-    const markElements = editorElement.querySelectorAll("mark[data-color]");
-
-    for (const highlight of highlights) {
-      let matchedElement: Element | null = null;
-      let bestScore = 0;
-
-      // Score-based matching: prefer exact text match, fall back to prefix
-      for (const el of markElements) {
-        const elText = el.textContent ?? "";
-        if (elText === highlight.text_content) {
-          matchedElement = el;
-          break; // exact match
-        }
-        // Partial match scoring
-        const matchLen = Math.min(elText.length, highlight.text_content.length, 40);
-        if (matchLen > 0 && elText.slice(0, matchLen) === highlight.text_content.slice(0, matchLen)) {
-          const score = matchLen;
-          if (score > bestScore) {
-            bestScore = score;
-            matchedElement = el;
-          }
-        }
-      }
-
-      let relativeTop: number;
-      if (matchedElement) {
-        const elRect = matchedElement.getBoundingClientRect();
-        // Position relative to scroll container's content (not viewport)
-        relativeTop = elRect.top - containerRect.top + scrollTop;
-      } else {
-        // Fallback: use the from_pos to estimate
-        relativeTop = highlight.from_pos * 0.5;
-      }
-
-      positions.push({
-        highlightId: highlight.id,
-        top: relativeTop,
-        notes: notesByHighlight.current.get(highlight.id) ?? [],
-      });
-    }
-
-    // Avoid overlap: estimate height per group and enforce minimum gap
-    positions.sort((a, b) => a.top - b.top);
-    for (let i = 1; i < positions.length; i++) {
-      const prev = positions[i - 1]!;
-      const curr = positions[i]!;
-      // Only highlights with notes need vertical space in the gutter
-      if (prev.notes.length === 0) continue;
-      const prevHeight = Math.max(40, prev.notes.length * 40);
-      if (curr.top - prev.top < prevHeight) {
-        curr.top = prev.top + prevHeight;
-      }
-    }
-
-    setNotePositions(positions);
-  }, [editorElement, highlights, marginNotes]);
-
-  useEffect(() => {
-    computePositions();
-
-    const handleResize = () => {
-      setIsNarrow(window.innerWidth < 1024);
-      computePositions();
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [computePositions]);
-
-  // Recompute on scroll within the editor's scroll container
-  useEffect(() => {
-    if (!editorElement) return;
-
-    const scrollParent = editorElement.closest(".overflow-y-auto");
-    if (!scrollParent) return;
-
-    const handleScroll = () => computePositions();
-    scrollParent.addEventListener("scroll", handleScroll, { passive: true });
-    return () => scrollParent.removeEventListener("scroll", handleScroll);
-  }, [editorElement, computePositions]);
 
   // Scroll to focused highlight
   const focusedRef = useRef<HTMLDivElement>(null);
@@ -337,111 +219,71 @@ export function MarginNotePanel({
 
   if (highlights.length === 0) return null;
 
-  // Narrow screens: render a popover
-  if (isNarrow) {
-    const popoverNotes = popoverHighlight
-      ? notesByHighlight.current.get(popoverHighlight) ?? []
-      : [];
-
-    return (
-      <>
-        {popoverHighlight && (
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setPopoverHighlight(null)}
-          />
-        )}
-        {popoverHighlight && (
-          <div
-            className="fixed bottom-4 right-4 z-50 w-72 rounded-lg border p-3 shadow-lg"
-            style={{
-              borderColor: "var(--color-border)",
-              backgroundColor: "var(--color-page)",
-            }}
-          >
-            {popoverNotes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                highlightId={popoverHighlight}
-                onAdd={onAddNote}
-                onUpdate={onUpdateNote}
-                onDelete={onDeleteNote}
-              />
-            ))}
-            {popoverNotes.length === 0 && (
-              <NoteCard
-                note={null}
-                highlightId={popoverHighlight}
-                onAdd={onAddNote}
-                onUpdate={onUpdateNote}
-                onDelete={onDeleteNote}
-                autoFocus
-              />
-            )}
-            <div className="mt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteHighlight(popoverHighlight);
-                  setPopoverHighlight(null);
-                }}
-                className="text-xs text-red-400 hover:text-red-600"
-              >
-                Remove highlight
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
-
   return (
-    <div
-      className="pointer-events-none absolute top-0 right-0 h-full"
-      style={{ width: 220 }}
-    >
-      {notePositions.map((pos) => {
-        const isFocused = focusHighlightId === pos.highlightId;
-        const hasNotes = pos.notes.length > 0;
-        // Don't render anything in the gutter for highlights with no notes (unless focused)
-        if (!hasNotes && !isFocused) return null;
+    <div className="p-3 space-y-3">
+      {highlights.map((highlight) => {
+        const notes = notesByHighlight.current.get(highlight.id) ?? [];
+        const isFocused = focusHighlightId === highlight.id;
+        const hasNotes = notes.length > 0;
 
         return (
           <div
-            key={pos.highlightId}
+            key={highlight.id}
             ref={isFocused ? focusedRef : undefined}
-            className="pointer-events-auto absolute"
-            style={{
-              top: pos.top,
-              left: 0,
-              width: 200,
-            }}
+            className={hasNotes ? "note-card-connected" : ""}
           >
+            {/* Highlight excerpt */}
+            <p
+              className="text-xs mb-1 line-clamp-2"
+              style={{
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                color: "var(--color-text-secondary)",
+                opacity: 0.7,
+                borderLeft: "2px solid var(--highlight-yellow, #fde68a)",
+                paddingLeft: 6,
+              }}
+            >
+              {highlight.text_content}
+            </p>
+
             {/* Existing notes */}
-            {pos.notes.map((note) => (
+            {notes.map((note) => (
               <NoteCard
                 key={note.id}
                 note={note}
-                highlightId={pos.highlightId}
+                highlightId={highlight.id}
                 onAdd={onAddNote}
                 onUpdate={onUpdateNote}
                 onDelete={onDeleteNote}
               />
             ))}
-            {/* New note editor — only when focused via Note button */}
-            {isFocused && (
+
+            {/* New note editor — opens when focused via Note button */}
+            <div className={`note-editor-reveal${isFocused ? " is-open" : ""}`}>
+              {isFocused && (
+                <NoteCard
+                  note={null}
+                  highlightId={highlight.id}
+                  onAdd={onAddNote}
+                  onUpdate={onUpdateNote}
+                  onDelete={onDeleteNote}
+                  autoFocus
+                  onEditingDone={onFocusConsumed}
+                />
+              )}
+            </div>
+
+            {/* Add note placeholder when no notes and not focused */}
+            {!hasNotes && !isFocused && (
               <NoteCard
                 note={null}
-                highlightId={pos.highlightId}
+                highlightId={highlight.id}
                 onAdd={onAddNote}
                 onUpdate={onUpdateNote}
                 onDelete={onDeleteNote}
-                autoFocus
-                onEditingDone={onFocusConsumed}
               />
             )}
+
             {/* Remove highlight button */}
             <div
               className="mt-1"
@@ -451,7 +293,7 @@ export function MarginNotePanel({
             >
               <button
                 type="button"
-                onClick={() => onDeleteHighlight(pos.highlightId)}
+                onClick={() => onDeleteHighlight(highlight.id)}
                 className="text-xs text-red-400 hover:text-red-600"
               >
                 Remove highlight

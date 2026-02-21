@@ -9,6 +9,7 @@ import type { useSearch } from "@/hooks/useSearch";
 
 interface AppShellProps {
   children: React.ReactNode;
+  marginPanel?: React.ReactNode;
   currentDoc: Document | null;
   recentDocs: Document[];
   onOpenFile: () => void;
@@ -21,10 +22,11 @@ interface AppShellProps {
 
 export function AppShell({
   children,
+  marginPanel,
   currentDoc,
   recentDocs,
   onOpenFile,
-  onSelectRecentDoc: _onSelectRecentDoc,
+  onSelectRecentDoc,
   isDirty,
   keepLocal,
   onSelectKeepLocalItem,
@@ -67,10 +69,13 @@ export function AppShell({
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar (left) */}
+      {!isMobile && sidebarOpen && (
+        <div style={{ width: sidebarWidth, flexShrink: 0, transition: "width 200ms ease" }} />
+      )}
       <div
         className={`flex flex-col flex-shrink-0 h-full border-r${
-          isMobile ? " fixed z-50 top-0 left-0" : ""
+          isMobile ? " fixed z-50 top-0 left-0" : " fixed left-0 top-0"
         }`}
         style={{
           width: sidebarWidth,
@@ -85,6 +90,7 @@ export function AppShell({
         <div className="flex-shrink-0">
           <Sidebar
             onOpenFile={() => { onOpenFile(); closeSidebar(); }}
+            onSelectRecentDoc={(doc) => { onSelectRecentDoc(doc); closeSidebar(); }}
             currentDoc={currentDoc}
             recentDocs={recentDocs}
           />
@@ -121,11 +127,6 @@ export function AppShell({
         </div>
       </div>
 
-      {/* Spacer for non-mobile when sidebar is open */}
-      {!isMobile && sidebarOpen && (
-        <div style={{ width: sidebarWidth, flexShrink: 0, transition: "width 200ms ease" }} />
-      )}
-
       {/* Main reader pane */}
       <div className="flex flex-1 flex-col h-full" style={{ minWidth: 0 }}>
         {/* Title bar */}
@@ -136,7 +137,7 @@ export function AppShell({
             paddingLeft: isMobile ? "0.75rem" : undefined,
           }}
         >
-          {/* Hamburger toggle */}
+          {/* Hamburger toggle (left side) */}
           {(isMobile || isTablet) && (
             <button
               type="button"
@@ -166,7 +167,7 @@ export function AppShell({
         </div>
 
         {/* Scrollable reader area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" data-scroll-container>
           {!currentDoc ? (
             <div
               className="flex h-full items-center justify-center"
@@ -187,6 +188,19 @@ export function AppShell({
         </div>
       </div>
 
+      {/* Margin notes panel (right) */}
+      {marginPanel && (
+        <div
+          className="flex-shrink-0 border-l h-full overflow-y-auto"
+          style={{
+            width: 280,
+            borderColor: "var(--color-border)",
+            backgroundColor: "var(--color-page)",
+          }}
+        >
+          {marginPanel}
+        </div>
+      )}
     </div>
   );
 }

@@ -28,7 +28,6 @@ export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
-  const editorElementRef = useRef<HTMLElement | null>(null);
 
   // Load annotations when document changes
   useEffect(() => {
@@ -161,7 +160,6 @@ export default function App() {
 
   const handleEditorReady = useCallback((ed: Editor) => {
     setEditor(ed);
-    editorElementRef.current = ed.view.dom;
   }, []);
 
   const handleHighlight = useCallback(
@@ -316,22 +314,8 @@ export default function App() {
       keepLocal={keepLocal}
       onSelectKeepLocalItem={handleSelectKeepLocalItem}
       search={search}
-    >
-      <div className="relative">
-        <Reader
-          content={doc.content}
-          onUpdate={doc.setContent}
-          isLoading={doc.isLoading}
-          onEditorReady={handleEditorReady}
-        />
-
-        <FloatingToolbar
-          editor={editor}
-          onHighlight={handleHighlight}
-          onNote={handleNote}
-        />
-
-        {annotations.isLoaded && (
+      marginPanel={
+        annotations.isLoaded ? (
           <MarginNotePanel
             highlights={annotations.highlights}
             marginNotes={annotations.marginNotes}
@@ -339,13 +323,24 @@ export default function App() {
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
             onDeleteHighlight={handleDeleteHighlight}
-            editorElement={editorElementRef.current}
             focusHighlightId={focusHighlightId}
             onFocusConsumed={() => setFocusHighlightId(null)}
           />
-        )}
+        ) : undefined
+      }
+    >
+      <Reader
+        content={doc.content}
+        onUpdate={doc.setContent}
+        isLoading={doc.isLoading}
+        onEditorReady={handleEditorReady}
+      />
 
-      </div>
+      <FloatingToolbar
+        editor={editor}
+        onHighlight={handleHighlight}
+        onNote={handleNote}
+      />
 
       <ExportAnnotationsPopover
         isOpen={showExportPopover}
