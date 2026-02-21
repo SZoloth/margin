@@ -16,7 +16,7 @@ import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown } from "@/lib/export-annotations";
 import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
-import type { Highlight, MarginNote, HighlightColor } from "@/types/annotations";
+import type { Highlight, MarginNote } from "@/types/annotations";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
 
@@ -94,7 +94,7 @@ export default function App() {
   }, []);
 
   const handleHighlight = useCallback(
-    async (color: HighlightColor) => {
+    async () => {
       if (!editor || !doc.currentDoc) return;
       const { from, to } = editor.state.selection;
       if (from === to) return;
@@ -103,12 +103,12 @@ export default function App() {
       const selectedText = editor.state.doc.textBetween(from, to, "\n");
       const anchor = createAnchor(fullText, from, to);
 
-      editor.chain().focus().setHighlight({ color }).run();
+      editor.chain().focus().setHighlight({ color: "yellow" }).run();
 
       try {
         await annotations.createHighlight({
           documentId: doc.currentDoc.id,
-          color,
+          color: "yellow",
           textContent: selectedText,
           fromPos: from,
           toPos: to,

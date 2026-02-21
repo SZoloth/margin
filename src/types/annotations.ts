@@ -1,7 +1,7 @@
 export interface Highlight {
   id: string;
   document_id: string;
-  color: HighlightColor;
+  color: string;
   text_content: string;
   from_pos: number;
   to_pos: number;
@@ -11,8 +11,6 @@ export interface Highlight {
   updated_at: number;
 }
 
-export type HighlightColor = "yellow" | "green" | "blue" | "pink" | "orange";
-
 export interface MarginNote {
   id: string;
   highlight_id: string;
@@ -20,4 +18,3 @@ export interface MarginNote {
   created_at: number;
   updated_at: number;
 }
-

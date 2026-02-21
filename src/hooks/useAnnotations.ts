@@ -2,7 +2,6 @@ import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Highlight,
-  HighlightColor,
   MarginNote,
 } from "@/types/annotations";
 
@@ -15,14 +14,13 @@ export interface UseAnnotationsReturn {
 
   createHighlight: (params: {
     documentId: string;
-    color: HighlightColor;
+    color: string;
     textContent: string;
     fromPos: number;
     toPos: number;
     prefixContext: string | null;
     suffixContext: string | null;
   }) => Promise<Highlight>;
-  updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
   deleteHighlight: (id: string) => Promise<void>;
 
   createMarginNote: (highlightId: string, content: string) => Promise<MarginNote>;
@@ -49,7 +47,7 @@ export function useAnnotations(): UseAnnotationsReturn {
   const createHighlight = useCallback(
     async (params: {
       documentId: string;
-      color: HighlightColor;
+      color: string;
       textContent: string;
       fromPos: number;
       toPos: number;
@@ -67,18 +65,6 @@ export function useAnnotations(): UseAnnotationsReturn {
       });
       setHighlights((prev) => [...prev, highlight]);
       return highlight;
-    },
-    [],
-  );
-
-  const updateHighlightColor = useCallback(
-    async (id: string, color: HighlightColor) => {
-      await invoke("update_highlight_color", { id, color });
-      setHighlights((prev) =>
-        prev.map((h) =>
-          h.id === id ? { ...h, color, updated_at: Date.now() } : h,
-        ),
-      );
     },
     [],
   );
@@ -124,7 +110,6 @@ export function useAnnotations(): UseAnnotationsReturn {
     isLoaded,
     loadAnnotations,
     createHighlight,
-    updateHighlightColor,
     deleteHighlight,
     createMarginNote,
     updateMarginNote,

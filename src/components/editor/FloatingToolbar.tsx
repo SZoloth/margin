@@ -1,22 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/core";
-import type { HighlightColor } from "@/types/annotations";
-import { ColorPicker } from "@/components/common/ColorPicker";
 
 interface FloatingToolbarProps {
   editor: Editor | null;
-  onHighlight: (color: HighlightColor) => void;
+  onHighlight: () => void;
   onNote: () => void;
 }
-
-const HIGHLIGHT_COLORS: HighlightColor[] = [
-  "yellow",
-  "green",
-  "blue",
-  "pink",
-  "orange",
-];
 
 export function FloatingToolbar({
   editor,
@@ -50,10 +40,9 @@ export function FloatingToolbar({
       return;
     }
 
-    const toolbarWidth = toolbarRef.current?.offsetWidth ?? 240;
+    const toolbarWidth = toolbarRef.current?.offsetWidth ?? 100;
     const toolbarHeight = toolbarRef.current?.offsetHeight ?? 40;
 
-    // coordsAtPos returns viewport-relative coords; use fixed positioning directly
     const centerX = (from.left + to.right) / 2;
     const top = from.top - toolbarHeight - 8;
     const left = Math.max(
@@ -73,7 +62,6 @@ export function FloatingToolbar({
     };
 
     const handleBlur = () => {
-      // Small delay so clicks on the toolbar itself register before hiding
       setTimeout(() => {
         if (!editor.isFocused) {
           setIsVisible(false);
@@ -101,7 +89,7 @@ export function FloatingToolbar({
   return createPortal(
     <div
       ref={toolbarRef}
-      className="fixed z-50 flex items-center gap-2 rounded-lg border px-3 py-2 shadow-md"
+      className="fixed z-50 flex items-center gap-1 rounded-lg border px-2 py-1.5 shadow-md"
       style={{
         top: position.top,
         left: position.left,
@@ -109,46 +97,63 @@ export function FloatingToolbar({
         backgroundColor: "var(--color-page)",
       }}
       onMouseDown={(e) => {
-        // Prevent toolbar clicks from stealing focus from editor
         e.preventDefault();
       }}
     >
-      <ColorPicker
-        colors={HIGHLIGHT_COLORS}
-        activeColor={null}
-        onSelect={onHighlight}
-        size="sm"
-      />
+      {/* Highlight */}
+      <button
+        type="button"
+        onClick={onHighlight}
+        className="flex items-center justify-center rounded p-1.5 transition-colors hover:bg-black/5"
+        style={{ color: "var(--color-text-secondary)" }}
+        aria-label="Highlight"
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 18 18"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M10.5 2.5L15 7L7 15H2.5V10.5L10.5 2.5Z"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M2 16.5H16"
+            stroke="#EAB308"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
 
-      <div
-        className="mx-1 h-5 w-px"
-        style={{ backgroundColor: "var(--color-border)" }}
-      />
-
+      {/* Note */}
       <button
         type="button"
         onClick={onNote}
-        className="flex items-center gap-1 rounded px-2 py-1 text-sm transition-colors"
+        className="flex items-center justify-center rounded p-1.5 transition-colors hover:bg-black/5"
         style={{ color: "var(--color-text-secondary)" }}
         aria-label="Add note"
       >
         <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
+          width="18"
+          height="18"
+          viewBox="0 0 18 18"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="shrink-0"
         >
           <path
-            d="M11.5 2.5L13.5 4.5M2 14L2.5 11.5L11 3L13 5L4.5 13.5L2 14Z"
+            d="M3 3.5C3 3.22386 3.22386 3 3.5 3H14.5C14.7761 3 15 3.22386 15 3.5V12.5C15 12.7761 14.7761 13 14.5 13H6.707L4.354 15.354C4.158 15.55 3.842 15.55 3.646 15.354C3.552 15.26 3.5 15.133 3.5 15V13H3.5C3.22386 13 3 12.7761 3 12.5V3.5Z"
             stroke="currentColor"
-            strokeWidth="1.2"
+            strokeWidth="1.3"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         </svg>
-        <span>Note</span>
       </button>
     </div>,
     document.body,
