@@ -7,6 +7,7 @@ import { ColorPicker } from "@/components/common/ColorPicker";
 interface FloatingToolbarProps {
   editor: Editor | null;
   onHighlight: (color: HighlightColor) => void;
+  onNote: () => void;
 }
 
 const HIGHLIGHT_COLORS: HighlightColor[] = [
@@ -20,6 +21,7 @@ const HIGHLIGHT_COLORS: HighlightColor[] = [
 export function FloatingToolbar({
   editor,
   onHighlight,
+  onNote,
 }: FloatingToolbarProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -117,6 +119,37 @@ export function FloatingToolbar({
         onSelect={onHighlight}
         size="sm"
       />
+
+      <div
+        className="mx-1 h-5 w-px"
+        style={{ backgroundColor: "var(--color-border)" }}
+      />
+
+      <button
+        type="button"
+        onClick={onNote}
+        className="flex items-center gap-1 rounded px-2 py-1 text-sm transition-colors"
+        style={{ color: "var(--color-text-secondary)" }}
+        aria-label="Add note"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="shrink-0"
+        >
+          <path
+            d="M11.5 2.5L13.5 4.5M2 14L2.5 11.5L11 3L13 5L4.5 13.5L2 14Z"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span>Note</span>
+      </button>
     </div>,
     document.body,
   );

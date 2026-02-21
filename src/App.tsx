@@ -27,6 +27,7 @@ export default function App() {
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [showExportPopover, setShowExportPopover] = useState(false);
+  const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const editorElementRef = useRef<HTMLElement | null>(null);
 
   // Load annotations when document changes
@@ -120,6 +121,33 @@ export default function App() {
     },
     [editor, doc.currentDoc, annotations],
   );
+
+  const handleNote = useCallback(async () => {
+    if (!editor || !doc.currentDoc) return;
+    const { from, to } = editor.state.selection;
+    if (from === to) return;
+
+    const fullText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n");
+    const selectedText = editor.state.doc.textBetween(from, to, "\n");
+    const anchor = createAnchor(fullText, from, to);
+
+    editor.chain().focus().setHighlight({ color: "yellow" }).run();
+
+    try {
+      const highlight = await annotations.createHighlight({
+        documentId: doc.currentDoc.id,
+        color: "yellow",
+        textContent: selectedText,
+        fromPos: from,
+        toPos: to,
+        prefixContext: anchor.prefix,
+        suffixContext: anchor.suffix,
+      });
+      setFocusHighlightId(highlight.id);
+    } catch (err) {
+      console.error("Failed to save highlight for note:", err);
+    }
+  }, [editor, doc.currentDoc, annotations]);
 
   // Export annotations: Cmd+Shift+E
   useEffect(() => {
@@ -229,6 +257,7 @@ export default function App() {
         <FloatingToolbar
           editor={editor}
           onHighlight={handleHighlight}
+          onNote={handleNote}
         />
 
         {annotations.isLoaded && (
@@ -239,6 +268,8 @@ export default function App() {
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
             editorElement={editorElementRef.current}
+            focusHighlightId={focusHighlightId}
+            onFocusConsumed={() => setFocusHighlightId(null)}
           />
         )}
 
