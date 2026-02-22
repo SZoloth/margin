@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Document, FileEntry } from "@/types/document";
 import type { CorrectionInput } from "@/types/annotations";
+import type { PersistedTab } from "@/types/tab";
 
 export async function openFileDialog(): Promise<string | null> {
   return invoke<string | null>("open_file_dialog");
@@ -32,6 +33,14 @@ export async function renameFile(oldPath: string, newName: string): Promise<Docu
 
 export async function drainPendingOpenFiles(): Promise<string[]> {
   return invoke<string[]>("drain_pending_open_files");
+}
+
+export async function getOpenTabs(): Promise<PersistedTab[]> {
+  return invoke<PersistedTab[]>("get_open_tabs");
+}
+
+export async function saveOpenTabs(tabs: PersistedTab[]): Promise<void> {
+  return invoke<void>("save_open_tabs", { tabs });
 }
 
 export async function persistCorrections(

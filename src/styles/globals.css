@@ -3,6 +3,7 @@
 @import "./editor.css";
 @import "./annotations.css";
 @import "./interactions.css";
+@import "./tabs.css";
 
 @theme {
   --color-highlight-yellow: #fef3c7;

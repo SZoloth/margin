@@ -4,7 +4,7 @@ interface SidebarKeepLocalProps {
   items: KeepLocalItem[];
   isOnline: boolean;
   isLoading: boolean;
-  onSelectItem: (item: KeepLocalItem) => void;
+  onSelectItem: (item: KeepLocalItem, newTab: boolean) => void;
 }
 
 export function SidebarKeepLocal({
@@ -51,7 +51,7 @@ export function SidebarKeepLocal({
       {items.map((item) => (
         <button
           key={item.id}
-          onClick={() => onSelectItem(item)}
+          onClick={(e) => onSelectItem(item, e.metaKey)}
           disabled={!item.contentAvailable}
           className={item.contentAvailable ? "interactive-item" : ""}
           style={{

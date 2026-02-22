@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Menu01Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
+import type { Tab } from "@/types/tab";
 import type { KeepLocalItem } from "@/types/keep-local";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { TabBar } from "@/components/layout/TabBar";
 import type { useKeepLocal } from "@/hooks/useKeepLocal";
 import type { useSearch } from "@/hooks/useSearch";
 
@@ -12,15 +14,22 @@ interface AppShellProps {
   currentDoc: Document | null;
   recentDocs: Document[];
   onOpenFile: () => void;
-  onSelectRecentDoc: (doc: Document) => void;
+  onSelectRecentDoc: (doc: Document, newTab: boolean) => void;
   isDirty: boolean;
   keepLocal: ReturnType<typeof useKeepLocal>;
-  onSelectKeepLocalItem: (item: KeepLocalItem) => void;
+  onSelectKeepLocalItem: (item: KeepLocalItem, newTab: boolean) => void;
   search: ReturnType<typeof useSearch>;
   hasAnnotations?: boolean;
   onExport?: () => void;
-  onOpenFilePath: (path: string) => void;
+  onOpenFilePath: (path: string, newTab: boolean) => void;
   onRenameFile?: (doc: Document, newName: string) => void;
+  // Tab props
+  tabs: Tab[];
+  activeTabId: string | null;
+  onSelectTab: (id: string) => void;
+  onCloseTab: (id: string) => void;
+  onReorderTabs: (fromIndex: number, toIndex: number) => void;
+  onNewTab: () => void;
 }
 
 export function AppShell({
@@ -29,7 +38,7 @@ export function AppShell({
   recentDocs,
   onOpenFile,
   onSelectRecentDoc,
-  isDirty,
+  isDirty: _isDirty,
   keepLocal,
   onSelectKeepLocalItem,
   search,
@@ -37,8 +46,13 @@ export function AppShell({
   onExport,
   onOpenFilePath,
   onRenameFile,
+  tabs,
+  activeTabId,
+  onSelectTab,
+  onCloseTab,
+  onReorderTabs,
+  onNewTab,
 }: AppShellProps) {
-  const title = currentDoc?.title ?? "Untitled";
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [isTablet, setIsTablet] = useState(() => {
@@ -54,7 +68,6 @@ export function AppShell({
       prevWidthRef.current = w;
       setIsMobile(w < 768);
       setIsTablet(w >= 768 && w <= 1024);
-      // Auto-collapse only when crossing into mobile
       if (w < 768 && prev >= 768) setSidebarOpen(false);
     };
     window.addEventListener("resize", update);
@@ -119,6 +132,8 @@ export function AppShell({
     };
   }, []);
 
+  const hasContent = currentDoc !== null;
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Mobile overlay backdrop */}
@@ -150,21 +165,21 @@ export function AppShell({
         <div className="flex flex-col flex-1 min-w-0 border-r" style={{ borderColor: "var(--color-border)" }}>
         <Sidebar
           onOpenFile={() => { onOpenFile(); closeSidebar(); }}
-          onSelectRecentDoc={(doc) => { onSelectRecentDoc(doc); closeSidebar(); }}
+          onSelectRecentDoc={(doc, newTab) => { onSelectRecentDoc(doc, newTab); closeSidebar(); }}
           currentDoc={currentDoc}
           recentDocs={recentDocs}
           searchQuery={search.query}
           onSearch={search.search}
           fileResults={search.fileResults}
           isSearching={search.isSearching}
-          onOpenFilePath={(path) => { onOpenFilePath(path); closeSidebar(); }}
+          onOpenFilePath={(path, newTab) => { onOpenFilePath(path, newTab); closeSidebar(); }}
           onRenameFile={onRenameFile}
           keepLocalItems={keepLocal.items}
           keepLocalIsOnline={keepLocal.isOnline}
           keepLocalIsLoading={keepLocal.isLoading}
           keepLocalQuery={keepLocal.query}
           onKeepLocalSearch={keepLocal.search}
-          onSelectKeepLocalItem={(item) => { onSelectKeepLocalItem(item); closeSidebar(); }}
+          onSelectKeepLocalItem={(item, newTab) => { onSelectKeepLocalItem(item, newTab); closeSidebar(); }}
         />
         </div>
 
@@ -218,22 +233,18 @@ export function AppShell({
             <HugeiconsIcon icon={Menu01Icon} size={18} color="currentColor" strokeWidth={1.5} />
           </button>
 
-          <span
-            className="text-sm font-medium truncate"
-            style={{ color: "var(--color-text-primary)" }}
-          >
-            {title}
-          </span>
-          {isDirty && (
-            <span
-              className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: "var(--color-text-secondary)" }}
-              title="Unsaved changes"
-            />
-          )}
+          {/* Tab bar (inline) */}
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onSelectTab={onSelectTab}
+            onCloseTab={onCloseTab}
+            onReorderTabs={onReorderTabs}
+            onNewTab={onNewTab}
+          />
 
-          {/* Spacer */}
-          <div className="flex-1" />
+          {/* Spacer — only when no tabs */}
+          {tabs.length === 0 && <div className="flex-1" />}
 
           {hasAnnotations && onExport && (
             <button
@@ -251,7 +262,7 @@ export function AppShell({
 
         {/* Scrollable reader area */}
         <div className="flex-1 overflow-y-auto" data-scroll-container>
-          {!currentDoc ? (
+          {!hasContent ? (
             <div
               className="flex h-full items-center justify-center"
               style={{ color: "var(--color-text-secondary)" }}

@@ -88,6 +88,14 @@ pub fn init_db() -> Result<(), Box<dyn std::error::Error>> {
         CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
         CREATE INDEX IF NOT EXISTS idx_corrections_session ON corrections(session_id);
 
+        CREATE TABLE IF NOT EXISTS open_tabs (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            tab_order INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        );
+
         DROP TABLE IF EXISTS comments;
         DROP TABLE IF EXISTS comment_threads;",
     )?;

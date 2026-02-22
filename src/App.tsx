@@ -11,9 +11,11 @@ import { useAnnotations } from "@/hooks/useAnnotations";
 import { useKeepLocal } from "@/hooks/useKeepLocal";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSearch } from "@/hooks/useSearch";
+import { useTabs } from "@/hooks/useTabs";
+import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
-import { readFile, drainPendingOpenFiles, persistCorrections } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 
 import type { KeepLocalItem } from "@/types/keep-local";
@@ -82,6 +84,126 @@ export default function App() {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
 
+  // Snapshot function for useTabs — captures current active tab state
+  const snapshotFn = useCallback((): SnapshotData => {
+    const scrollContainer = document.querySelector("[data-scroll-container]");
+    return {
+      document: doc.currentDoc,
+      content: doc.content,
+      filePath: doc.filePath,
+      isDirty: doc.isDirty,
+      highlights: annotations.highlights,
+      marginNotes: annotations.marginNotes,
+      annotationsLoaded: annotations.isLoaded,
+      scrollPosition: scrollContainer?.scrollTop ?? 0,
+    };
+  }, [doc.currentDoc, doc.content, doc.filePath, doc.isDirty, annotations.highlights, annotations.marginNotes, annotations.isLoaded]);
+
+  const tabsHook = useTabs(snapshotFn);
+
+  // Listen for Cmd+O from useTabs keyboard shortcut
+  useEffect(() => {
+    const handler = () => { void doc.openFile(); };
+    window.addEventListener("margin:open-file-for-tab", handler);
+    return () => window.removeEventListener("margin:open-file-for-tab", handler);
+  }, [doc.openFile]);
+
+  // Track whether next doc open should create a new tab vs replace active
+  const openAsNewTabRef = useRef(true);
+
+  // When a document is opened via useDocument, register it as a tab
+  const prevDocIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!doc.currentDoc || doc.currentDoc.id === prevDocIdRef.current) return;
+    // Don't open tabs until tab system is ready (to avoid duplication during restore)
+    if (!tabsHook.isReady) return;
+    prevDocIdRef.current = doc.currentDoc.id;
+    if (openAsNewTabRef.current) {
+      tabsHook.openTab(doc.currentDoc, doc.content, doc.filePath);
+    } else {
+      tabsHook.openInActiveTab(doc.currentDoc, doc.content, doc.filePath);
+    }
+    // Reset to default (new tab) after each use
+    openAsNewTabRef.current = true;
+  }, [doc.currentDoc?.id, tabsHook.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When activeTabId changes, restore the cached tab state
+  const prevActiveTabIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tabsHook.activeTabId || tabsHook.activeTabId === prevActiveTabIdRef.current) return;
+    prevActiveTabIdRef.current = tabsHook.activeTabId;
+
+    const cache = tabsHook.getCachedTab(tabsHook.activeTabId);
+    if (!cache) return;
+
+    // Pre-set prevDocIdRef so the doc-change effect doesn't re-register this as a new tab
+    if (cache.document) {
+      prevDocIdRef.current = cache.document.id;
+    }
+
+    doc.restoreFromCache(cache.document, cache.content, cache.filePath, false);
+
+    if (cache.annotationsLoaded) {
+      annotations.restoreFromCache(cache.highlights, cache.marginNotes);
+    }
+
+    // Reset highlight mark restoration so marks re-apply for new doc
+    lastRestoredDocId.current = null;
+
+    // Restore scroll position after content renders
+    requestAnimationFrame(() => {
+      const scrollContainer = document.querySelector("[data-scroll-container]");
+      if (scrollContainer && cache.scrollPosition) {
+        scrollContainer.scrollTop = cache.scrollPosition;
+      }
+    });
+
+    // Close any open highlight thread
+    setFocusHighlightId(null);
+    setAnchorRect(null);
+    setAutoFocusNew(false);
+  }, [tabsHook.activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync dirty state to tab — only if the current doc matches the active tab
+  useEffect(() => {
+    const activeTab = tabsHook.tabs.find((t) => t.id === tabsHook.activeTabId);
+    if (activeTab && doc.currentDoc && activeTab.documentId === doc.currentDoc.id) {
+      tabsHook.updateActiveTabDirty(doc.isDirty);
+    }
+  }, [doc.isDirty]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync title to tab — only if the current doc matches the active tab
+  useEffect(() => {
+    if (!doc.currentDoc?.title) return;
+    const activeTab = tabsHook.tabs.find((t) => t.id === tabsHook.activeTabId);
+    if (activeTab && activeTab.documentId === doc.currentDoc.id) {
+      tabsHook.updateActiveTabTitle(doc.currentDoc.title);
+    }
+  }, [doc.currentDoc?.title]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When no active tab but tabs restored, load the active tab's content from disk
+  useEffect(() => {
+    if (!tabsHook.isReady || tabsHook.tabs.length === 0) return;
+    if (doc.currentDoc) return; // Already have content loaded
+
+    const activeTab = tabsHook.tabs.find((t) => t.id === tabsHook.activeTabId);
+    if (!activeTab) return;
+
+    const cache = tabsHook.getCachedTab(activeTab.id);
+    if (cache?.document) {
+      // Pre-set prevDocIdRef so the doc-change effect doesn't create a duplicate tab
+      prevDocIdRef.current = cache.document.id;
+
+      if (cache.document.source === "file" && cache.document.file_path) {
+        void doc.openRecentDocument(cache.document);
+      } else if (cache.document.source === "keep-local" && cache.document.keep_local_id) {
+        void keepLocal.getContent(cache.document.keep_local_id).then((markdown) => {
+          void doc.openKeepLocalArticle(cache.document!, markdown);
+        }).catch(console.error);
+      }
+    }
+  }, [tabsHook.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load annotations when document changes
   useEffect(() => {
     if (doc.currentDoc) {
@@ -112,8 +234,6 @@ export default function App() {
   const isRestoringMarksRef = useRef(false);
 
   // Restore highlight marks in the editor when annotations load for a document.
-  // Marks are ephemeral TipTap state — they're lost when the editor content resets.
-  // This re-applies them from the persisted annotation data.
   const lastRestoredDocId = useRef<string | null>(null);
   useEffect(() => {
     if (!editor || !annotations.isLoaded || !doc.currentDoc) return;
@@ -128,7 +248,6 @@ export default function App() {
     if (!markType) return;
 
     for (const h of annotations.highlights) {
-      // Try stored TipTap positions first — works when document hasn't changed
       try {
         const textAtPos = state.doc.textBetween(h.from_pos, h.to_pos, "\n");
         if (textAtPos === h.text_content) {
@@ -136,16 +255,15 @@ export default function App() {
           continue;
         }
       } catch {
-        // Positions out of range — document changed
+        // Positions out of range
       }
 
-      // Fall back to doc-tree search for correct TipTap positions
       const found = findTextInDoc(state.doc, h.text_content);
       if (found) {
         try {
           tr.addMark(found.from, found.to, markType.create({ color: h.color }));
         } catch {
-          // Position out of range — skip
+          // Position out of range
         }
       }
     }
@@ -185,7 +303,6 @@ export default function App() {
   openFilePathRef.current = doc.openFilePath;
 
   useEffect(() => {
-    // Drain any files queued before the frontend was ready
     drainPendingOpenFiles().then((paths) => {
       const lastPath = paths[paths.length - 1];
       if (lastPath) {
@@ -193,15 +310,12 @@ export default function App() {
       }
     }).catch(console.error);
 
-    // Listen for files opened while the app is running
     const unlisten = listen<string>("open-file", (event) => {
       void openFilePathRef.current(event.payload);
     });
     return () => { void unlisten.then((fn) => fn()); };
   }, []);
 
-  // Find the highlight record that matches a clicked mark element.
-  // Matches by text content — stored positions may be stale after edits.
   const findHighlightAtElement = useCallback((element: HTMLElement) => {
     const text = element.textContent ?? "";
     return annotations.highlights.find((h) => h.text_content === text) ?? null;
@@ -227,21 +341,18 @@ export default function App() {
       const match = findHighlightAtElement(el);
       if (!match) return;
 
-      // Capture actual mark positions from DOM before async delete
       let markFrom: number;
       let markTo: number;
       try {
         markFrom = editor.view.posAtDOM(el, 0);
         markTo = markFrom + (el.textContent?.length ?? 0);
       } catch {
-        // Element detached — fall back to doc tree walk
         markFrom = -1;
         markTo = -1;
       }
 
       await annotations.deleteHighlight(match.id);
 
-      // Remove the mark from the editor
       const { state } = editor;
       const { tr } = state;
       const markType = state.schema.marks.highlight;
@@ -250,7 +361,6 @@ export default function App() {
       if (markFrom >= 0 && markTo >= 0) {
         tr.removeMark(markFrom, markTo, markType);
       } else {
-        // Fallback: walk doc tree to find the mark by text + color
         state.doc.descendants((node, pos) => {
           if (!node.isText) return;
           const hlMark = node.marks.find(
@@ -285,7 +395,6 @@ export default function App() {
     setAnchorRect(null);
 
     if (highlight) {
-      // Walk doc tree to find and remove marks matching this highlight
       const { state } = editor;
       const { tr } = state;
       const markType = state.schema.marks.highlight;
@@ -361,7 +470,6 @@ export default function App() {
         suffixContext: anchor.suffix,
       });
 
-      // Find the mark element in the editor DOM to anchor the popover
       requestAnimationFrame(() => {
         const marks = editor.view.dom.querySelectorAll("mark[data-color]");
         for (const mark of marks) {
@@ -396,8 +504,6 @@ export default function App() {
     async () => {
       if (!editor || !doc.currentDoc) return;
 
-      // Read latest annotation state via refs to avoid both stale closures
-      // and race conditions with in-flight DB writes
       const markdown = await formatAnnotationsMarkdown({
         document: doc.currentDoc,
         editor,
@@ -407,7 +513,6 @@ export default function App() {
 
       await writeText(markdown);
 
-      // Persist corrections (fire-and-forget — don't block clipboard feedback)
       const highlights = highlightsRef.current;
       const marginNotes = marginNotesRef.current;
       const currentDoc = doc.currentDoc;
@@ -438,6 +543,7 @@ export default function App() {
 
         if (correctionInputs.length > 0) {
           const today = new Date().toISOString().slice(0, 10);
+          const { persistCorrections } = await import("@/lib/tauri-commands");
           persistCorrections(
             correctionInputs,
             currentDoc.id,
@@ -452,10 +558,25 @@ export default function App() {
     [editor, doc.currentDoc],
   );
 
-  // Open a recent document from the sidebar
+  // Open a recent document from the sidebar (now goes through tabs)
   const handleSelectRecentDoc = useCallback(
-    async (recentDoc: Document) => {
-      if (doc.currentDoc?.id === recentDoc.id) return;
+    async (recentDoc: Document, newTab: boolean) => {
+      openAsNewTabRef.current = newTab;
+
+      // If already the current doc, just let the tab system handle dedup
+      if (doc.currentDoc?.id === recentDoc.id) {
+        // Still route through tabs for dedup/focus behavior
+        if (newTab) {
+          tabsHook.openTab(recentDoc, doc.content, doc.filePath);
+        } else {
+          tabsHook.openInActiveTab(recentDoc, doc.content, doc.filePath);
+        }
+        return;
+      }
+
+      // Snapshot current tab BEFORE changing the document —
+      // after openRecentDocument, live state will reflect the new doc
+      tabsHook.snapshotActive();
 
       if (recentDoc.source === "file") {
         await doc.openRecentDocument(recentDoc);
@@ -468,12 +589,14 @@ export default function App() {
         }
       }
     },
-    [doc, keepLocal]
+    [doc, keepLocal, tabsHook]
   );
 
   // Open a keep-local article
   const handleSelectKeepLocalItem = useCallback(
-    async (item: KeepLocalItem) => {
+    async (item: KeepLocalItem, newTab: boolean) => {
+      openAsNewTabRef.current = newTab;
+      tabsHook.snapshotActive();
       try {
         const markdown = await keepLocal.getContent(item.id);
         const now = Date.now();
@@ -492,7 +615,6 @@ export default function App() {
         };
 
         await doc.openKeepLocalArticle(docRecord, markdown);
-        // indexDocument uses the saved doc's ID (which may be reused from a previous open)
         if (doc.currentDoc) {
           void search.indexDocument(doc.currentDoc.id, doc.currentDoc.title ?? "Untitled", markdown);
         }
@@ -515,7 +637,11 @@ export default function App() {
       search={search}
       hasAnnotations={annotations.isLoaded && annotations.highlights.length > 0}
       onExport={() => setShowExportPopover(true)}
-      onOpenFilePath={doc.openFilePath}
+      onOpenFilePath={(path: string, newTab: boolean) => {
+        openAsNewTabRef.current = newTab;
+        tabsHook.snapshotActive();
+        void doc.openFilePath(path);
+      }}
       onRenameFile={async (targetDoc, newName) => {
         try {
           await doc.renameDocFile(targetDoc, newName);
@@ -523,6 +649,12 @@ export default function App() {
           // Error already logged in the hook
         }
       }}
+      tabs={tabsHook.tabs}
+      activeTabId={tabsHook.activeTabId}
+      onSelectTab={tabsHook.switchTab}
+      onCloseTab={tabsHook.closeTab}
+      onReorderTabs={tabsHook.reorderTabs}
+      onNewTab={doc.openFile}
     >
       <Reader
         content={doc.content}

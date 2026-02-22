@@ -38,6 +38,7 @@ export interface UseDocumentReturn {
   renameDocFile: (doc: Document, newName: string) => Promise<void>;
   setContent: (newContent: string) => void;
   setContentExternal: (newContent: string) => void;
+  restoreFromCache: (doc: Document | null, content: string, filePath: string | null, isDirty: boolean) => void;
 }
 
 export function useDocument(): UseDocumentReturn {
@@ -258,6 +259,19 @@ export function useDocument(): UseDocumentReturn {
     }
   }, [filePath, isDirty, content, currentDoc, refreshRecentDocs]);
 
+  const restoreFromCache = useCallback((
+    cachedDoc: Document | null,
+    cachedContent: string,
+    cachedFilePath: string | null,
+    cachedIsDirty: boolean,
+  ) => {
+    setCurrentDoc(cachedDoc);
+    setContentState(cachedContent);
+    setFilePath(cachedFilePath);
+    setIsDirty(cachedIsDirty);
+  }, []);
+
+  // Cmd+S to save (Cmd+O moved to useTabs)
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const isMod = e.metaKey || e.ctrlKey;
@@ -266,16 +280,11 @@ export function useDocument(): UseDocumentReturn {
         e.preventDefault();
         void saveCurrentFile();
       }
-
-      if (isMod && e.key === "o") {
-        e.preventDefault();
-        void openFile();
-      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [saveCurrentFile, openFile]);
+  }, [saveCurrentFile]);
 
   return {
     currentDoc,
@@ -292,5 +301,6 @@ export function useDocument(): UseDocumentReturn {
     renameDocFile,
     setContent,
     setContentExternal,
+    restoreFromCache,
   };
 }

@@ -10,14 +10,14 @@ type SidebarTab = "files" | "articles";
 
 interface SidebarProps {
   onOpenFile: () => void;
-  onSelectRecentDoc: (doc: Document) => void;
+  onSelectRecentDoc: (doc: Document, newTab: boolean) => void;
   currentDoc: Document | null;
   recentDocs: Document[];
   searchQuery: string;
   onSearch: (query: string) => void;
   fileResults: FileResult[];
   isSearching: boolean;
-  onOpenFilePath: (path: string) => void;
+  onOpenFilePath: (path: string, newTab: boolean) => void;
   onRenameFile?: (doc: Document, newName: string) => void;
   // Keep-local props
   keepLocalItems: KeepLocalItem[];
@@ -25,7 +25,7 @@ interface SidebarProps {
   keepLocalIsLoading: boolean;
   keepLocalQuery: string;
   onKeepLocalSearch: (q: string) => void;
-  onSelectKeepLocalItem: (item: KeepLocalItem) => void;
+  onSelectKeepLocalItem: (item: KeepLocalItem, newTab: boolean) => void;
 }
 
 export function Sidebar({
@@ -196,8 +196,8 @@ export function Sidebar({
               return (
                 <button
                   key={file.path}
-                  onClick={() => {
-                    onOpenFilePath(file.path);
+                  onClick={(e) => {
+                    onOpenFilePath(file.path, e.metaKey);
                     setIsFocused(false);
                     setInputValue("");
                     onSearch("");
@@ -297,7 +297,7 @@ export function Sidebar({
                   return (
                     <button
                       key={doc.id}
-                      onClick={() => onSelectRecentDoc(doc)}
+                      onClick={(e) => onSelectRecentDoc(doc, e.metaKey)}
                       onContextMenu={(e) => {
                         if (doc.source !== "file" || !doc.file_path || !onRenameFile) return;
                         e.preventDefault();

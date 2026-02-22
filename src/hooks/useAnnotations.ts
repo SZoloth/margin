@@ -26,6 +26,8 @@ export interface UseAnnotationsReturn {
   createMarginNote: (highlightId: string, content: string) => Promise<MarginNote>;
   updateMarginNote: (id: string, content: string) => Promise<void>;
   deleteMarginNote: (id: string) => Promise<void>;
+
+  restoreFromCache: (highlights: Highlight[], marginNotes: MarginNote[]) => void;
 }
 
 export function useAnnotations(): UseAnnotationsReturn {
@@ -104,6 +106,12 @@ export function useAnnotations(): UseAnnotationsReturn {
     setMarginNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
+  const restoreFromCache = useCallback((cachedHighlights: Highlight[], cachedMarginNotes: MarginNote[]) => {
+    setHighlights(cachedHighlights);
+    setMarginNotes(cachedMarginNotes);
+    setIsLoaded(true);
+  }, []);
+
   return {
     highlights,
     marginNotes,
@@ -114,5 +122,6 @@ export function useAnnotations(): UseAnnotationsReturn {
     createMarginNote,
     updateMarginNote,
     deleteMarginNote,
+    restoreFromCache,
   };
 }

@@ -1,0 +1,121 @@
+.tab-bar {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-bar-inner {
+  display: flex;
+  align-items: stretch;
+  min-height: 32px;
+  padding-left: 0;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  max-width: 200px;
+  min-width: 0;
+  cursor: pointer;
+  position: relative;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.tab-item:hover {
+  background-color: var(--hover-bg);
+}
+
+.tab-item.tab-active {
+  background-color: var(--color-page);
+  color: var(--color-text-primary);
+  /* Active tab blends into the reader area below */
+  border-bottom: 1px solid var(--color-page);
+  margin-bottom: -1px;
+}
+
+.tab-item.tab-dragging {
+  opacity: 0.4;
+}
+
+.tab-item.tab-drop-target {
+  border-left: 2px solid var(--color-text-secondary);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.tab-dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.tab-item:hover .tab-close {
+  opacity: 1;
+}
+
+/* When dirty indicator is shown on hover, hide it and show X instead */
+.tab-item:hover .tab-dirty {
+  display: none;
+}
+
+.tab-close:hover {
+  background-color: var(--active-bg);
+}
+
+.tab-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 4px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 120ms ease;
+}
+
+.tab-new:hover {
+  background-color: var(--hover-bg);
+}
