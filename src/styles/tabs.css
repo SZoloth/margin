@@ -15,7 +15,7 @@
 .tab-bar-inner {
   display: flex;
   align-items: stretch;
-  min-height: 32px;
+  min-height: 36px;
   padding-left: 0;
 }
 
@@ -30,7 +30,7 @@
   position: relative;
   border-right: 1px solid var(--color-border);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   transition: background-color var(--duration-fast) var(--ease-micro), color var(--duration-fast) var(--ease-micro);
 }
@@ -136,16 +136,3 @@
   outline-offset: -1px;
 }
 
-/* Tab content crossfade on switch */
-@keyframes tab-content-enter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.tab-content-animate {
-  animation: tab-content-enter var(--duration-normal) var(--ease-entrance);
-}
