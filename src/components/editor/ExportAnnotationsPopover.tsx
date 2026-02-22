@@ -78,6 +78,8 @@ export function ExportAnnotationsPopover({
 
       {/* Popover */}
       <div
+        role="dialog"
+        aria-label="Export annotations"
         style={{
           position: "relative",
           backgroundColor: "var(--color-page)",

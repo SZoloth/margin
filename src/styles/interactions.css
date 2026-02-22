@@ -4,7 +4,7 @@
 .interactive-item {
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background-color 120ms ease, transform 120ms ease;
+  transition: background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
 }
 
 .interactive-item:hover {
@@ -20,7 +20,7 @@
 .btn-sm {
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background-color 120ms ease, transform 120ms ease;
+  transition: background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
 }
 
 .btn-sm:hover {
@@ -30,6 +30,27 @@
 .btn-sm:active {
   background-color: var(--active-bg);
   transform: scale(0.95);
+}
+
+/* Sidebar tab switcher (Files / Articles) */
+.sidebar-tab {
+  transition: background-color var(--duration-fast) var(--ease-micro), color var(--duration-fast) var(--ease-micro);
+}
+
+.sidebar-tab:hover {
+  background-color: var(--hover-bg);
+}
+
+.sidebar-tab:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -2px;
+}
+
+/* Focus indicators for keyboard navigation */
+.interactive-item:focus-visible,
+.btn-sm:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -2px;
 }
 
 /* Sidebar resize handle */

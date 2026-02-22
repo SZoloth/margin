@@ -23,6 +23,7 @@ export function TableOfContents({
               className={activeHeadingId === h.id ? "toc-active" : ""}
               onClick={() => onScrollToHeading(h.id)}
               data-tooltip={h.text}
+              aria-label={h.text}
             >
               <span className="toc-label">{h.text}</span>
               <span className="toc-dot" />

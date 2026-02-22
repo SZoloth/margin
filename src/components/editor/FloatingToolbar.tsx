@@ -113,7 +113,9 @@ export function FloatingToolbar({
         borderRadius: "var(--radius-lg)",
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "translateY(0) scale(1)" : "translateY(4px) scale(0.97)",
-        transition: "opacity 120ms ease, transform 120ms ease",
+        transition: isVisible
+          ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
+          : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
         pointerEvents: isVisible ? "auto" : "none",
       }}
       onMouseDown={(e) => {

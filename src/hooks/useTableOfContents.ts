@@ -8,7 +8,7 @@ export interface TocHeading {
   pos: number;
 }
 
-export function useTableOfContents(editor: Editor | null) {
+export function useTableOfContents(editor: Editor | null, documentId?: string | null) {
   const [headings, setHeadings] = useState<TocHeading[]>([]);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -56,6 +56,14 @@ export function useTableOfContents(editor: Editor | null) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [editor, extractHeadings]);
+
+  // Immediately re-extract when the active document changes (tab switch)
+  useEffect(() => {
+    if (editor && documentId) {
+      // Small delay to let editor content settle after setContent
+      requestAnimationFrame(() => extractHeadings());
+    }
+  }, [documentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Active heading tracking via IntersectionObserver
   useEffect(() => {

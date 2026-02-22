@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Menu01Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
@@ -134,16 +135,38 @@ export function AppShell({
     };
   }, []);
 
+  const backdrop = useAnimatedPresence(isMobile && sidebarOpen, 200);
   const hasContent = currentDoc !== null;
+
+  // Tab crossfade: replay CSS animation when activeTabId changes (without remounting)
+  const readerGridRef = useRef<HTMLDivElement>(null);
+  const prevTabIdRef = useRef(activeTabId);
+  useEffect(() => {
+    if (activeTabId && activeTabId !== prevTabIdRef.current) {
+      prevTabIdRef.current = activeTabId;
+      const el = readerGridRef.current;
+      if (el) {
+        el.classList.remove("tab-content-animate");
+        // Force reflow to restart the animation
+        void el.offsetWidth;
+        el.classList.add("tab-content-animate");
+      }
+    }
+  }, [activeTabId]);
 
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Mobile overlay backdrop */}
-      {isMobile && sidebarOpen && (
+      {backdrop.isMounted && (
         <div
           className="fixed inset-0 z-40 bg-black/30"
           onClick={closeSidebar}
-          style={{ transition: "opacity 200ms ease" }}
+          style={{
+            opacity: backdrop.isVisible ? 1 : 0,
+            transition: backdrop.isVisible
+              ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1)"
+              : "opacity 150ms cubic-bezier(0.4, 0, 1, 1)",
+          }}
         />
       )}
 
@@ -160,7 +183,9 @@ export function AppShell({
           backgroundColor: "var(--color-sidebar)",
           borderColor: "var(--color-border)",
           transform: sidebarOpen ? "translateX(0)" : `translateX(-${sidebarWidth}px)`,
-          transition: "transform 200ms ease",
+          transition: sidebarOpen
+            ? "transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
+            : "transform 150ms cubic-bezier(0.4, 0, 1, 1)",
           ...(isMobile ? { boxShadow: sidebarOpen ? "4px 0 12px rgba(0,0,0,0.15)" : "none" } : {}),
         }}
       >
@@ -269,17 +294,17 @@ export function AppShell({
               className="flex h-full items-center justify-center"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              <div className="text-center">
-                <p className="text-lg" style={{ fontFamily: "'Newsreader', Georgia, serif" }}>
+              <div className="text-center" style={{ maxWidth: 280 }}>
+                <p className="text-lg" style={{ fontFamily: "'Newsreader', Georgia, serif", fontStyle: "italic", letterSpacing: "-0.01em" }}>
                   Open a file or select an article to start reading
                 </p>
-                <p className="mt-2 text-sm opacity-60">
+                <p className="mt-2 opacity-60" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: "0.8125rem", letterSpacing: "0.01em" }}>
                   Cmd+O to open a file
                 </p>
               </div>
             </div>
           ) : (
-            <div className="reader-grid">
+            <div ref={readerGridRef} className="reader-grid">
               <div className="toc-column">{tocElement}</div>
               <div className="reader-content-column">{children}</div>
               <div />

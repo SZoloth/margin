@@ -140,13 +140,31 @@ export function HighlightThread({
 }: HighlightThreadProps) {
   const [newNoteValue, setNewNoteValue] = useState("");
   const [isVisible, setIsVisible] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Animate in
   useEffect(() => {
     requestAnimationFrame(() => setIsVisible(true));
   }, []);
+
+  // Cleanup close timer
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  const handleClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setIsVisible(false);
+    closeTimerRef.current = setTimeout(() => {
+      onClose();
+    }, 200);
+  }, [isClosing, onClose]);
 
   // Auto-focus the new note textarea when opening from Note button
   useEffect(() => {
@@ -158,17 +176,17 @@ export function HighlightThread({
   // Close on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [handleClose]);
 
   // Close on click outside
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
+        handleClose();
       }
     };
     // Delay listener to avoid closing immediately from the triggering click
@@ -179,7 +197,7 @@ export function HighlightThread({
       clearTimeout(timer);
       window.removeEventListener("mousedown", handleClick);
     };
-  }, [onClose]);
+  }, [handleClose]);
 
   const handleAddNote = useCallback(() => {
     const trimmed = newNoteValue.trim();
@@ -213,11 +231,17 @@ export function HighlightThread({
       style={isMobile ? {
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "translateY(0)" : "translateY(100%)",
+        transition: isVisible
+          ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
+          : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
       } : {
         top,
         left: Math.max(8, left),
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "scale(1)" : "scale(0.97)",
+        transition: isVisible
+          ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
+          : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
       }}
     >
       {/* Header */}

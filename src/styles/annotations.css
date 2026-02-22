@@ -30,7 +30,7 @@
   background-color: var(--color-page);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition: opacity var(--duration-normal) var(--ease-entrance), transform var(--duration-normal) var(--ease-entrance);
   display: flex;
   flex-direction: column;
 }
@@ -135,7 +135,7 @@
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 120ms ease, opacity 120ms ease, transform 120ms ease;
+  transition: background-color var(--duration-fast) var(--ease-micro), opacity var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
 }
 
 .note-action-btn:hover {
@@ -145,6 +145,11 @@
 .note-action-btn:active {
   transform: scale(0.95);
   background-color: var(--active-bg);
+}
+
+.note-action-btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
 }
 
 .note-action-btn--delete {
@@ -177,7 +182,7 @@
     width: 100%;
     max-height: 60vh;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    transition: opacity 200ms ease, transform 200ms ease;
+    transition: opacity var(--duration-normal) var(--ease-entrance), transform var(--duration-normal) var(--ease-entrance);
   }
 
   .thread-popover--mobile .thread-body {

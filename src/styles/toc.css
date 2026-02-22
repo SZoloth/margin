@@ -55,7 +55,7 @@
   padding: 3px 0;
   box-sizing: border-box;
   color: var(--color-text-secondary);
-  transition: color 120ms ease;
+  transition: color var(--duration-fast) var(--ease-micro);
   border-radius: 3px;
 }
 
@@ -66,6 +66,11 @@
 .toc button.toc-active {
   color: var(--color-text-primary);
   font-weight: 500;
+}
+
+.toc button:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
 }
 
 /* Full mode — text labels (≥1200px, default) */
@@ -87,7 +92,7 @@
   background-color: currentColor;
   opacity: 0.4;
   flex-shrink: 0;
-  transition: transform 120ms ease, opacity 120ms ease;
+  transition: transform var(--duration-fast) var(--ease-micro), opacity var(--duration-fast) var(--ease-micro);
 }
 
 .toc button.toc-active .toc-dot {
@@ -142,7 +147,7 @@
     padding: 3px 8px;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 120ms ease;
+    transition: opacity var(--duration-fast) var(--ease-micro);
     z-index: 10;
   }
 

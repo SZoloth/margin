@@ -81,7 +81,7 @@ export default function App() {
   const keepLocal = useKeepLocal();
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
-  const toc = useTableOfContents(editor);
+  const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -137,7 +137,32 @@ export default function App() {
     prevActiveTabIdRef.current = tabsHook.activeTabId;
 
     const cache = tabsHook.getCachedTab(tabsHook.activeTabId);
-    if (!cache) return;
+
+    if (!cache) {
+      // Tab was restored from persistence but never loaded (no cache).
+      // Find the document and load it from disk.
+      const tab = tabsHook.tabs.find((t) => t.id === tabsHook.activeTabId);
+      if (tab?.documentId) {
+        const recentDoc = doc.recentDocs.find((d) => d.id === tab.documentId);
+        if (recentDoc) {
+          // Pre-set so the doc-change effect doesn't create a duplicate tab
+          prevDocIdRef.current = recentDoc.id;
+          openAsNewTabRef.current = false;
+          if (recentDoc.source === "file" && recentDoc.file_path) {
+            void doc.openRecentDocument(recentDoc);
+          } else if (recentDoc.source === "keep-local" && recentDoc.keep_local_id) {
+            void keepLocal.getContent(recentDoc.keep_local_id).then((markdown) => {
+              void doc.openKeepLocalArticle(recentDoc, markdown);
+            }).catch(console.error);
+          }
+        }
+      }
+      // Close any open highlight thread
+      setFocusHighlightId(null);
+      setAnchorRect(null);
+      setAutoFocusNew(false);
+      return;
+    }
 
     // Pre-set prevDocIdRef so the doc-change effect doesn't re-register this as a new tab
     if (cache.document) {

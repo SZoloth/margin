@@ -93,7 +93,7 @@
 
 /* Smooth highlight color transitions */
 .tiptap mark[data-color] {
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-normal) var(--ease-micro);
 }
 
 /* Floating toolbar button states */
@@ -106,7 +106,7 @@
   color: var(--color-text-secondary);
   background-color: transparent;
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+  transition: background-color var(--duration-fast) var(--ease-micro), color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
 }
 
 .toolbar-btn:hover {
@@ -119,9 +119,14 @@
   transform: scale(0.92);
 }
 
+.toolbar-btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
+}
+
 /* Highlight click interaction */
 .tiptap mark[data-color] {
-  transition: background-color 0.15s ease, filter 0.15s ease;
+  transition: background-color var(--duration-normal) var(--ease-micro), filter var(--duration-normal) var(--ease-micro);
   cursor: pointer;
 }
 
@@ -140,7 +145,7 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: color 120ms ease, background-color 120ms ease, transform 120ms ease;
+  transition: color var(--duration-fast) var(--ease-micro), background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
 }
 
 .toolbar-hamburger:hover {
@@ -151,4 +156,9 @@
 .toolbar-hamburger:active {
   background-color: var(--active-bg);
   transform: scale(0.92);
+}
+
+.toolbar-hamburger:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
 }

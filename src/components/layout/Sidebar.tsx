@@ -225,7 +225,7 @@ export function Sidebar({
       <div className="flex gap-1 px-4 mb-3">
         <button
           onClick={() => handleTabChange("files")}
-          className="flex-1 py-1.5 text-xs font-medium text-center"
+          className="sidebar-tab flex-1 py-1.5 text-xs font-medium text-center"
           style={{
             backgroundColor: activeTab === "files" ? "var(--active-bg)" : "transparent",
             color: activeTab === "files" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
@@ -233,14 +233,13 @@ export function Sidebar({
             borderRadius: "var(--radius-sm)",
             border: "none",
             cursor: "pointer",
-            transition: "background-color 120ms ease, color 120ms ease",
           }}
         >
           Files
         </button>
         <button
           onClick={() => handleTabChange("articles")}
-          className="flex-1 py-1.5 text-xs font-medium text-center flex items-center justify-center gap-1.5"
+          className="sidebar-tab flex-1 py-1.5 text-xs font-medium text-center flex items-center justify-center gap-1.5"
           style={{
             backgroundColor: activeTab === "articles" ? "var(--active-bg)" : "transparent",
             color: activeTab === "articles" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
@@ -248,7 +247,6 @@ export function Sidebar({
             borderRadius: "var(--radius-sm)",
             border: "none",
             cursor: "pointer",
-            transition: "background-color 120ms ease, color 120ms ease",
           }}
         >
           Articles
