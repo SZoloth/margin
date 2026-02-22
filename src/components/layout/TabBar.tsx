@@ -74,7 +74,7 @@ export function TabBar({
             >
               <span className="tab-title">{tab.title || "Untitled"}</span>
               {tab.isDirty && (
-                <span className="tab-dirty" title="Unsaved changes" />
+                <span className="tab-dirty" title="Unsaved changes" role="status" aria-label="Unsaved changes" />
               )}
               <button
                 type="button"

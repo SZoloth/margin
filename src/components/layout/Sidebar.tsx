@@ -254,6 +254,8 @@ export function Sidebar({
         >
           Articles
           <span
+            role="status"
+            aria-label={keepLocalIsOnline ? "Online" : "Offline"}
             style={{
               width: 6,
               height: 6,
