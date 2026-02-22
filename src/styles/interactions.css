@@ -31,3 +31,11 @@
   background-color: var(--active-bg);
   transform: scale(0.95);
 }
+
+/* Sidebar resize handle */
+*:hover > .resize-handle-line {
+  opacity: 0.4 !important;
+}
+*:active > .resize-handle-line {
+  opacity: 0.6 !important;
+}

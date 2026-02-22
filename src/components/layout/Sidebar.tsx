@@ -2,7 +2,11 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FolderOpenIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
+import type { KeepLocalItem } from "@/types/keep-local";
 import type { FileResult } from "@/hooks/useSearch";
+import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
+
+type SidebarTab = "files" | "articles";
 
 interface SidebarProps {
   onOpenFile: () => void;
@@ -15,6 +19,13 @@ interface SidebarProps {
   isSearching: boolean;
   onOpenFilePath: (path: string) => void;
   onRenameFile?: (doc: Document, newName: string) => void;
+  // Keep-local props
+  keepLocalItems: KeepLocalItem[];
+  keepLocalIsOnline: boolean;
+  keepLocalIsLoading: boolean;
+  keepLocalQuery: string;
+  onKeepLocalSearch: (q: string) => void;
+  onSelectKeepLocalItem: (item: KeepLocalItem) => void;
 }
 
 export function Sidebar({
@@ -28,13 +39,31 @@ export function Sidebar({
   isSearching,
   onOpenFilePath,
   onRenameFile,
+  keepLocalItems,
+  keepLocalIsOnline,
+  keepLocalIsLoading,
+  keepLocalQuery,
+  onKeepLocalSearch,
+  onSelectKeepLocalItem,
 }: SidebarProps) {
+  const [activeTab, setActiveTab] = useState<SidebarTab>("files");
   const [isFocused, setIsFocused] = useState(false);
   const [inputValue, setInputValue] = useState(searchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setInputValue(searchQuery); }, [searchQuery]);
+  // Sync input value when the active tab's query changes externally
+  useEffect(() => {
+    setInputValue(activeTab === "files" ? searchQuery : keepLocalQuery);
+  }, [searchQuery, keepLocalQuery, activeTab]);
+
+  // Reset input when switching tabs
+  const handleTabChange = (tab: SidebarTab) => {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    setInputValue(tab === "files" ? searchQuery : keepLocalQuery);
+    setIsFocused(false);
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -49,10 +78,14 @@ export function Sidebar({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setInputValue("");
-      onSearch("");
+      if (activeTab === "files") {
+        onSearch("");
+      } else {
+        onKeepLocalSearch("");
+      }
       inputRef.current?.blur();
       setIsFocused(false);
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && activeTab === "files") {
       onSearch(inputValue);
     }
   };
@@ -60,10 +93,14 @@ export function Sidebar({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
-    onSearch(value);
+    if (activeTab === "files") {
+      onSearch(value);
+    } else {
+      onKeepLocalSearch(value);
+    }
   };
 
-  const showDropdown = isFocused && inputValue.trim().length > 0;
+  const showDropdown = activeTab === "files" && isFocused && inputValue.trim().length > 0;
 
   const duplicateTitles = useMemo(() => {
     const counts = new Map<string, number>();
@@ -79,9 +116,9 @@ export function Sidebar({
   }, [recentDocs]);
 
   return (
-    <div className="flex flex-col px-4 py-5">
+    <div className="flex flex-col h-full">
       {/* App header */}
-      <div className="mb-4">
+      <div className="px-4 pt-5 pb-4">
         <h1
           className="text-lg font-semibold tracking-tight"
           style={{ color: "var(--color-text-primary)" }}
@@ -91,7 +128,7 @@ export function Sidebar({
       </div>
 
       {/* Search + Open File row */}
-      <div ref={containerRef} className="relative mb-5">
+      <div ref={containerRef} className="relative px-4 mb-3">
         <div
           className="flex items-center gap-1.5 px-2.5 py-1.5 border"
           style={{
@@ -110,7 +147,7 @@ export function Sidebar({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search..."
+            placeholder={activeTab === "files" ? "Search files..." : "Search articles..."}
             value={inputValue}
             onChange={handleChange}
             onFocus={() => setIsFocused(true)}
@@ -118,21 +155,23 @@ export function Sidebar({
             className="flex-1 text-sm bg-transparent outline-none"
             style={{ color: "var(--color-text-primary)", minWidth: 0 }}
           />
-          <button
-            onClick={onOpenFile}
-            className="btn-sm flex-shrink-0 p-1"
-            style={{ color: "var(--color-text-secondary)" }}
-            aria-label="Open file"
-            title="Open file (⌘O)"
-          >
-            <HugeiconsIcon icon={FolderOpenIcon} size={15} color="currentColor" strokeWidth={1.5} />
-          </button>
+          {activeTab === "files" && (
+            <button
+              onClick={onOpenFile}
+              className="btn-sm flex-shrink-0 p-1"
+              style={{ color: "var(--color-text-secondary)" }}
+              aria-label="Open file"
+              title="Open file (⌘O)"
+            >
+              <HugeiconsIcon icon={FolderOpenIcon} size={15} color="currentColor" strokeWidth={1.5} />
+            </button>
+          )}
         </div>
 
-        {/* Search dropdown */}
+        {/* Search dropdown (files tab only) */}
         {showDropdown && (
           <div
-            className="absolute left-0 right-0 top-full mt-1 border shadow-lg overflow-hidden z-50"
+            className="absolute left-4 right-4 top-full mt-1 border shadow-lg overflow-hidden z-50"
             style={{
               borderColor: "var(--color-border)",
               backgroundColor: "var(--color-page)",
@@ -152,7 +191,6 @@ export function Sidebar({
               </div>
             )}
             {fileResults.map((file) => {
-              // Show parent folder for context
               const parts = file.path.split("/");
               const parentDir = parts.length > 2 ? parts[parts.length - 2] : "";
               return (
@@ -183,83 +221,137 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Recent documents */}
-      <div>
-        <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3 px-3"
-          style={{ color: "var(--color-text-secondary)" }}
+      {/* Tab bar */}
+      <div className="flex gap-1 px-4 mb-3">
+        <button
+          onClick={() => handleTabChange("files")}
+          className="flex-1 py-1.5 text-xs font-medium text-center"
+          style={{
+            backgroundColor: activeTab === "files" ? "var(--active-bg)" : "transparent",
+            color: activeTab === "files" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+            fontWeight: activeTab === "files" ? 500 : 400,
+            borderRadius: "var(--radius-sm)",
+            border: "none",
+            cursor: "pointer",
+            transition: "background-color 120ms ease, color 120ms ease",
+          }}
         >
-          Recent
-        </h2>
-        {recentDocs.length === 0 ? (
-          <div
-            className="px-3 text-sm italic"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            No recent documents
+          Files
+        </button>
+        <button
+          onClick={() => handleTabChange("articles")}
+          className="flex-1 py-1.5 text-xs font-medium text-center flex items-center justify-center gap-1.5"
+          style={{
+            backgroundColor: activeTab === "articles" ? "var(--active-bg)" : "transparent",
+            color: activeTab === "articles" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+            fontWeight: activeTab === "articles" ? 500 : 400,
+            borderRadius: "var(--radius-sm)",
+            border: "none",
+            cursor: "pointer",
+            transition: "background-color 120ms ease, color 120ms ease",
+          }}
+        >
+          Articles
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              backgroundColor: keepLocalIsOnline ? "#22c55e" : "#ef4444",
+              flexShrink: 0,
+            }}
+          />
+        </button>
+      </div>
+
+      {/* Tab content — scrollable */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        {activeTab === "files" ? (
+          <div>
+            <h2
+              className="text-xs font-semibold uppercase tracking-wider mb-3 px-3"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Recent
+            </h2>
+            {recentDocs.length === 0 ? (
+              <div
+                className="px-3 text-sm italic"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                No recent documents
+              </div>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                {recentDocs.map((doc) => {
+                  const isActive = currentDoc?.id === doc.id;
+                  const title = doc.title ?? "Untitled";
+                  const needsDisambiguation = duplicateTitles.has(title) && doc.file_path;
+                  let parentFolder = "";
+                  if (needsDisambiguation && doc.file_path) {
+                    const parts = doc.file_path.split("/");
+                    const dirPath = parts.slice(0, -1).join("/");
+                    const homePrefix = dirPath.match(/^\/Users\/[^/]+/)?.[0];
+                    parentFolder = homePrefix ? dirPath.replace(homePrefix, "~") : dirPath;
+                  }
+                  return (
+                    <button
+                      key={doc.id}
+                      onClick={() => onSelectRecentDoc(doc)}
+                      onContextMenu={(e) => {
+                        if (doc.source !== "file" || !doc.file_path || !onRenameFile) return;
+                        e.preventDefault();
+                        const segments = doc.file_path.split("/");
+                        const currentFilename = segments[segments.length - 1] ?? "";
+                        const newName = window.prompt("Rename file:", currentFilename);
+                        if (newName && newName !== currentFilename) {
+                          onRenameFile(doc, newName);
+                        }
+                      }}
+                      className="interactive-item flex items-start gap-2 px-3 py-1.5 text-sm text-left"
+                      style={{
+                        color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                        backgroundColor: isActive ? "var(--active-bg)" : "transparent",
+                        fontWeight: isActive ? 500 : 400,
+                        border: "none",
+                        width: "100%",
+                      }}
+                      title={doc.file_path ?? doc.title ?? "Untitled"}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.5,
+                          flexShrink: 0,
+                          marginTop: 2,
+                        }}
+                      >
+                        {doc.source === "keep-local" ? "KL" : "F"}
+                      </span>
+                      <span className="truncate min-w-0">
+                        <span className="block truncate">{title}</span>
+                        {parentFolder && (
+                          <span
+                            className="block truncate"
+                            style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
+                          >
+                            {parentFolder}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="flex flex-col gap-0.5">
-            {recentDocs.map((doc) => {
-              const isActive = currentDoc?.id === doc.id;
-              const title = doc.title ?? "Untitled";
-              const needsDisambiguation = duplicateTitles.has(title) && doc.file_path;
-              let parentFolder = "";
-              if (needsDisambiguation && doc.file_path) {
-                const parts = doc.file_path.split("/");
-                const dirPath = parts.slice(0, -1).join("/");
-                const homePrefix = dirPath.match(/^\/Users\/[^/]+/)?.[0];
-                parentFolder = homePrefix ? dirPath.replace(homePrefix, "~") : dirPath;
-              }
-              return (
-                <button
-                  key={doc.id}
-                  onClick={() => onSelectRecentDoc(doc)}
-                  onContextMenu={(e) => {
-                    if (doc.source !== "file" || !doc.file_path || !onRenameFile) return;
-                    e.preventDefault();
-                    const segments = doc.file_path.split("/");
-                    const currentFilename = segments[segments.length - 1] ?? "";
-                    const newName = window.prompt("Rename file:", currentFilename);
-                    if (newName && newName !== currentFilename) {
-                      onRenameFile(doc, newName);
-                    }
-                  }}
-                  className="interactive-item flex items-start gap-2 px-3 py-1.5 text-sm text-left"
-                  style={{
-                    color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                    backgroundColor: isActive ? "var(--active-bg)" : "transparent",
-                    fontWeight: isActive ? 500 : 400,
-                    border: "none",
-                    width: "100%",
-                  }}
-                  title={doc.file_path ?? doc.title ?? "Untitled"}
-                >
-                  <span
-                    style={{
-                      fontSize: 11,
-                      opacity: 0.5,
-                      flexShrink: 0,
-                      marginTop: 2,
-                    }}
-                  >
-                    {doc.source === "keep-local" ? "KL" : "F"}
-                  </span>
-                  <span className="truncate min-w-0">
-                    <span className="block truncate">{title}</span>
-                    {parentFolder && (
-                      <span
-                        className="block truncate"
-                        style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
-                      >
-                        {parentFolder}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <SidebarKeepLocal
+            items={keepLocalItems}
+            isOnline={keepLocalIsOnline}
+            isLoading={keepLocalIsLoading}
+            onSelectItem={onSelectKeepLocalItem}
+          />
         )}
       </div>
     </div>

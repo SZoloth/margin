@@ -4,7 +4,6 @@ import { Menu01Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
 import type { KeepLocalItem } from "@/types/keep-local";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
 import type { useKeepLocal } from "@/hooks/useKeepLocal";
 import type { useSearch } from "@/hooks/useSearch";
 
@@ -62,13 +61,63 @@ export function AppShell({
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
+  const defaultWidth = isTablet ? 220 : 260;
+  const MIN_WIDTH = 160;
+  const MAX_WIDTH = 400;
+  const COLLAPSE_THRESHOLD = 100;
+
+  const [sidebarWidth, setSidebarWidth] = useState(defaultWidth);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartWidthRef = useRef(0);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((v) => {
+      if (!v) setSidebarWidth(defaultWidth);
+      return !v;
+    });
+  }, [defaultWidth]);
 
   const closeSidebar = useCallback(() => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
 
-  const sidebarWidth = isTablet ? 220 : 260;
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartWidthRef.current = sidebarWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = e.clientX - dragStartXRef.current;
+      const newWidth = dragStartWidthRef.current + delta;
+      if (newWidth < COLLAPSE_THRESHOLD) {
+        isDraggingRef.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        setSidebarOpen(false);
+        return;
+      }
+      setSidebarWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth)));
+    };
+    const handleMouseUp = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -83,10 +132,10 @@ export function AppShell({
 
       {/* Sidebar (left) */}
       {!isMobile && sidebarOpen && (
-        <div style={{ width: sidebarWidth, flexShrink: 0, transition: "width 200ms ease" }} />
+        <div style={{ width: sidebarWidth, flexShrink: 0 }} />
       )}
       <div
-        className={`flex flex-col flex-shrink-0 h-full border-r${
+        className={`flex flex-shrink-0 h-full${
           isMobile ? " fixed z-50 top-0 left-0" : " fixed left-0 top-0"
         }`}
         style={{
@@ -98,36 +147,55 @@ export function AppShell({
           ...(isMobile ? { boxShadow: sidebarOpen ? "4px 0 12px rgba(0,0,0,0.15)" : "none" } : {}),
         }}
       >
-        {/* Top section: files + search */}
-        <div className="flex-shrink-0">
-          <Sidebar
-            onOpenFile={() => { onOpenFile(); closeSidebar(); }}
-            onSelectRecentDoc={(doc) => { onSelectRecentDoc(doc); closeSidebar(); }}
-            currentDoc={currentDoc}
-            recentDocs={recentDocs}
-            searchQuery={search.query}
-            onSearch={search.search}
-            fileResults={search.fileResults}
-            isSearching={search.isSearching}
-            onOpenFilePath={(path) => { onOpenFilePath(path); closeSidebar(); }}
-            onRenameFile={onRenameFile}
-          />
+        <div className="flex flex-col flex-1 min-w-0 border-r" style={{ borderColor: "var(--color-border)" }}>
+        <Sidebar
+          onOpenFile={() => { onOpenFile(); closeSidebar(); }}
+          onSelectRecentDoc={(doc) => { onSelectRecentDoc(doc); closeSidebar(); }}
+          currentDoc={currentDoc}
+          recentDocs={recentDocs}
+          searchQuery={search.query}
+          onSearch={search.search}
+          fileResults={search.fileResults}
+          isSearching={search.isSearching}
+          onOpenFilePath={(path) => { onOpenFilePath(path); closeSidebar(); }}
+          onRenameFile={onRenameFile}
+          keepLocalItems={keepLocal.items}
+          keepLocalIsOnline={keepLocal.isOnline}
+          keepLocalIsLoading={keepLocal.isLoading}
+          keepLocalQuery={keepLocal.query}
+          onKeepLocalSearch={keepLocal.search}
+          onSelectKeepLocalItem={(item) => { onSelectKeepLocalItem(item); closeSidebar(); }}
+        />
         </div>
 
-        {/* Bottom section: keep-local */}
-        <div
-          className="flex-1 overflow-hidden border-t"
-          style={{ borderColor: "var(--color-border)" }}
-        >
-          <SidebarKeepLocal
-            items={keepLocal.items}
-            isOnline={keepLocal.isOnline}
-            isLoading={keepLocal.isLoading}
-            query={keepLocal.query}
-            onSearch={keepLocal.search}
-            onSelectItem={(item) => { onSelectKeepLocalItem(item); closeSidebar(); }}
-          />
-        </div>
+        {/* Resize handle */}
+        {!isMobile && (
+          <div
+            onMouseDown={handleResizeStart}
+            style={{
+              width: 6,
+              cursor: "col-resize",
+              flexShrink: 0,
+              position: "relative",
+            }}
+          >
+            {/* Visible line on hover */}
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 2,
+                width: 2,
+                borderRadius: 1,
+                backgroundColor: "var(--color-text-secondary)",
+                opacity: 0,
+                transition: "opacity 120ms ease",
+              }}
+              className="resize-handle-line"
+            />
+          </div>
+        )}
       </div>
 
       {/* Main reader pane */}

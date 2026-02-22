@@ -4,8 +4,6 @@ interface SidebarKeepLocalProps {
   items: KeepLocalItem[];
   isOnline: boolean;
   isLoading: boolean;
-  query: string;
-  onSearch: (q: string) => void;
   onSelectItem: (item: KeepLocalItem) => void;
 }
 
@@ -13,159 +11,79 @@ export function SidebarKeepLocal({
   items,
   isOnline,
   isLoading,
-  query,
-  onSearch,
   onSelectItem,
 }: SidebarKeepLocalProps) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Header */}
+  if (!isOnline) {
+    return (
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "8px 12px",
-          borderBottom: "1px solid var(--color-border)",
-        }}
+        className="px-3 py-6 text-center text-sm"
+        style={{ color: "var(--color-text-secondary)" }}
       >
-        <span
+        Server offline
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div
+        className="px-3 py-6 text-center text-sm"
+        style={{ color: "var(--color-text-secondary)" }}
+      >
+        Loading...
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div
+        className="px-3 py-6 text-center text-sm"
+        style={{ color: "var(--color-text-secondary)" }}
+      >
+        No articles found
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => onSelectItem(item)}
+          disabled={!item.contentAvailable}
+          className={item.contentAvailable ? "interactive-item" : ""}
           style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            backgroundColor: isOnline ? "#22c55e" : "#ef4444",
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--color-text-primary)",
-            letterSpacing: "0.02em",
+            display: "block",
+            width: "100%",
+            padding: "6px 12px",
+            border: "none",
+            backgroundColor: "transparent",
+            cursor: item.contentAvailable ? "pointer" : "default",
+            textAlign: "left",
+            opacity: item.contentAvailable ? 1 : 0.5,
           }}
         >
-          keep-local
-        </span>
-      </div>
-
-      {/* Search */}
-      {isOnline && (
-        <div style={{ padding: "8px 12px" }}>
-          <input
-            type="text"
-            placeholder="Search articles..."
-            value={query}
-            onChange={(e) => onSearch(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "6px 8px",
-              fontSize: 13,
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: "transparent",
-              color: "var(--color-text-primary)",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-      )}
-
-      {/* Content area */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        {!isOnline && (
           <div
-            style={{
-              padding: "24px 12px",
-              textAlign: "center",
-              color: "var(--color-text-secondary)",
-              fontSize: 13,
-            }}
+            className="text-sm font-medium truncate"
+            style={{ color: "var(--color-text-primary)", marginBottom: 2 }}
           >
-            Server offline
+            {item.title || "Untitled"}
           </div>
-        )}
-
-        {isOnline && isLoading && (
           <div
-            style={{
-              padding: "24px 12px",
-              textAlign: "center",
-              color: "var(--color-text-secondary)",
-              fontSize: 13,
-            }}
+            className="flex gap-2"
+            style={{ fontSize: 11, color: "var(--color-text-secondary)" }}
           >
-            Loading...
+            {item.author && <span>{item.author}</span>}
+            {item.domain && <span>{item.domain}</span>}
+            {item.wordCount > 0 && (
+              <span>{item.wordCount.toLocaleString()} words</span>
+            )}
+            {!item.contentAvailable && <span>No content</span>}
           </div>
-        )}
-
-        {isOnline && !isLoading && items.length === 0 && (
-          <div
-            style={{
-              padding: "24px 12px",
-              textAlign: "center",
-              color: "var(--color-text-secondary)",
-              fontSize: 13,
-            }}
-          >
-            No articles found
-          </div>
-        )}
-
-        {isOnline &&
-          !isLoading &&
-          items.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onSelectItem(item)}
-              disabled={!item.contentAvailable}
-              className={item.contentAvailable ? "interactive-item" : ""}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "8px 12px",
-                border: "none",
-                borderBottom: "1px solid var(--color-border)",
-                backgroundColor: "transparent",
-                cursor: item.contentAvailable ? "pointer" : "default",
-                textAlign: "left",
-                opacity: item.contentAvailable ? 1 : 0.5,
-                borderRadius: 0,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--color-text-primary)",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  marginBottom: 2,
-                }}
-              >
-                {item.title || "Untitled"}
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--color-text-secondary)",
-                  display: "flex",
-                  gap: 8,
-                }}
-              >
-                {item.author && <span>{item.author}</span>}
-                {item.domain && <span>{item.domain}</span>}
-                {item.wordCount > 0 && (
-                  <span>{item.wordCount.toLocaleString()} words</span>
-                )}
-                {!item.contentAvailable && <span>No content</span>}
-              </div>
-            </button>
-          ))}
-      </div>
+        </button>
+      ))}
     </div>
   );
 }
