@@ -231,6 +231,7 @@ export function HighlightThread({
       style={isMobile ? {
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "translateY(0)" : "translateY(100%)",
+        transformOrigin: "bottom center",
         transition: isVisible
           ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
           : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
@@ -239,6 +240,7 @@ export function HighlightThread({
         left: Math.max(8, left),
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "scale(1)" : "scale(0.97)",
+        transformOrigin: "left top",
         transition: isVisible
           ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
           : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",

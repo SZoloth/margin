@@ -18,6 +18,7 @@ export function FloatingToolbar({
   const [isMounted, setIsMounted] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [isFlipped, setIsFlipped] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const updatePosition = useCallback(() => {
@@ -50,9 +51,12 @@ export function FloatingToolbar({
     const centerX = (from.left + to.right) / 2;
     // Position above selection, but flip below if it would go off-screen
     let top = from.top - toolbarHeight - 8;
+    let flipped = false;
     if (top < 8) {
       top = to.bottom + 8;
+      flipped = true;
     }
+    setIsFlipped(flipped);
     const left = Math.max(
       8,
       Math.min(centerX - toolbarWidth / 2, window.innerWidth - toolbarWidth - 8),
@@ -112,6 +116,7 @@ export function FloatingToolbar({
         backgroundColor: "var(--color-page)",
         borderRadius: "var(--radius-lg)",
         opacity: isVisible ? 1 : 0,
+        transformOrigin: isFlipped ? "center top" : "center bottom",
         transform: isVisible ? "translateY(0) scale(1)" : "translateY(4px) scale(0.97)",
         transition: isVisible
           ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
@@ -139,7 +144,7 @@ export function FloatingToolbar({
           <path
             d="M10.5 2.5L15 7L7 15H2.5V10.5L10.5 2.5Z"
             stroke="currentColor"
-            strokeWidth="1.3"
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -159,7 +164,7 @@ export function FloatingToolbar({
         className="toolbar-btn"
         aria-label="Add note"
       >
-        <HugeiconsIcon icon={Comment01Icon} size={18} color="currentColor" strokeWidth={1.3} />
+        <HugeiconsIcon icon={Comment01Icon} size={18} color="currentColor" strokeWidth={1.5} />
       </button>
     </div>,
     document.body,
