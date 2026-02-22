@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FolderOpenIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
@@ -14,6 +14,7 @@ interface SidebarProps {
   fileResults: FileResult[];
   isSearching: boolean;
   onOpenFilePath: (path: string) => void;
+  onRenameFile?: (doc: Document, newName: string) => void;
 }
 
 export function Sidebar({
@@ -26,6 +27,7 @@ export function Sidebar({
   fileResults,
   isSearching,
   onOpenFilePath,
+  onRenameFile,
 }: SidebarProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [inputValue, setInputValue] = useState(searchQuery);
@@ -62,6 +64,19 @@ export function Sidebar({
   };
 
   const showDropdown = isFocused && inputValue.trim().length > 0;
+
+  const duplicateTitles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const doc of recentDocs) {
+      const title = doc.title ?? "Untitled";
+      counts.set(title, (counts.get(title) ?? 0) + 1);
+    }
+    const dupes = new Set<string>();
+    for (const [title, count] of counts) {
+      if (count > 1) dupes.add(title);
+    }
+    return dupes;
+  }, [recentDocs]);
 
   return (
     <div className="flex flex-col px-4 py-5">
@@ -187,11 +202,30 @@ export function Sidebar({
           <div className="flex flex-col gap-0.5">
             {recentDocs.map((doc) => {
               const isActive = currentDoc?.id === doc.id;
+              const title = doc.title ?? "Untitled";
+              const needsDisambiguation = duplicateTitles.has(title) && doc.file_path;
+              let parentFolder = "";
+              if (needsDisambiguation && doc.file_path) {
+                const parts = doc.file_path.split("/");
+                const dirPath = parts.slice(0, -1).join("/");
+                const homePrefix = dirPath.match(/^\/Users\/[^/]+/)?.[0];
+                parentFolder = homePrefix ? dirPath.replace(homePrefix, "~") : dirPath;
+              }
               return (
                 <button
                   key={doc.id}
                   onClick={() => onSelectRecentDoc(doc)}
-                  className="interactive-item flex items-center gap-2 px-3 py-1.5 text-sm truncate text-left"
+                  onContextMenu={(e) => {
+                    if (doc.source !== "file" || !doc.file_path || !onRenameFile) return;
+                    e.preventDefault();
+                    const segments = doc.file_path.split("/");
+                    const currentFilename = segments[segments.length - 1] ?? "";
+                    const newName = window.prompt("Rename file:", currentFilename);
+                    if (newName && newName !== currentFilename) {
+                      onRenameFile(doc, newName);
+                    }
+                  }}
+                  className="interactive-item flex items-start gap-2 px-3 py-1.5 text-sm text-left"
                   style={{
                     color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
                     backgroundColor: isActive ? "var(--active-bg)" : "transparent",
@@ -206,12 +240,21 @@ export function Sidebar({
                       fontSize: 11,
                       opacity: 0.5,
                       flexShrink: 0,
+                      marginTop: 2,
                     }}
                   >
                     {doc.source === "keep-local" ? "KL" : "F"}
                   </span>
-                  <span className="truncate">
-                    {doc.title ?? "Untitled"}
+                  <span className="truncate min-w-0">
+                    <span className="block truncate">{title}</span>
+                    {parentFolder && (
+                      <span
+                        className="block truncate"
+                        style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
+                      >
+                        {parentFolder}
+                      </span>
+                    )}
                   </span>
                 </button>
               );

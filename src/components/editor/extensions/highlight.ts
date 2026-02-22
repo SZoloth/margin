@@ -43,7 +43,7 @@ export const MultiColorHighlight = Highlight.extend({
               // Shift+click: delete highlight
               window.dispatchEvent(
                 new CustomEvent("margin:highlight-delete", {
-                  detail: { text },
+                  detail: { text, element: mark },
                 }),
               );
             } else {

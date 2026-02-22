@@ -21,6 +21,7 @@ interface AppShellProps {
   hasAnnotations?: boolean;
   onExport?: () => void;
   onOpenFilePath: (path: string) => void;
+  onRenameFile?: (doc: Document, newName: string) => void;
 }
 
 export function AppShell({
@@ -36,6 +37,7 @@ export function AppShell({
   hasAnnotations,
   onExport,
   onOpenFilePath,
+  onRenameFile,
 }: AppShellProps) {
   const title = currentDoc?.title ?? "Untitled";
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
@@ -108,6 +110,7 @@ export function AppShell({
             fileResults={search.fileResults}
             isSearching={search.isSearching}
             onOpenFilePath={(path) => { onOpenFilePath(path); closeSidebar(); }}
+            onRenameFile={onRenameFile}
           />
         </div>
 

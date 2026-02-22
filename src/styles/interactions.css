@@ -1,0 +1,33 @@
+/* Shared interaction classes — replaces inline onMouseEnter/Leave handlers */
+
+/* Sidebar rows, search results, list items */
+.interactive-item {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.interactive-item:hover {
+  background-color: var(--hover-bg);
+}
+
+.interactive-item:active {
+  background-color: var(--active-bg);
+  transform: scale(0.97);
+}
+
+/* Small action buttons (cancel, save, edit, delete) */
+.btn-sm {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.btn-sm:hover {
+  background-color: var(--hover-bg);
+}
+
+.btn-sm:active {
+  background-color: var(--active-bg);
+  transform: scale(0.95);
+}

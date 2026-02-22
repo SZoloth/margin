@@ -20,7 +20,7 @@ function posToLineNumber(editor: Editor, pos: number): number {
   }
 }
 
-function posToLineRange(editor: Editor, from: number, to: number): string {
+export function posToLineRange(editor: Editor, from: number, to: number): string {
   const startLine = posToLineNumber(editor, from);
   const endLine = posToLineNumber(editor, to);
 
@@ -34,6 +34,66 @@ function quoteText(text: string): string {
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
+}
+
+export function getExtendedContext(
+  editor: Editor,
+  fromPos: number,
+  toPos: number,
+): string | null {
+  try {
+    const doc = editor.state.doc;
+
+    // Resolve the block-level ancestor containing the highlight range
+    const $from = doc.resolve(fromPos);
+    const $to = doc.resolve(toPos);
+
+    // Walk up to find the deepest block ancestor that contains both endpoints
+    let blockStart = fromPos;
+    let blockEnd = toPos;
+
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const node = $from.node(depth);
+      if (node.isBlock) {
+        const start = $from.start(depth);
+        const end = $from.end(depth);
+        // Check if the to position is also within this block
+        if (end >= toPos) {
+          blockStart = start;
+          blockEnd = end;
+          break;
+        }
+      }
+    }
+
+    // If the to position is in a different block, extend to cover it
+    if (blockEnd < toPos) {
+      for (let depth = $to.depth; depth > 0; depth--) {
+        const node = $to.node(depth);
+        if (node.isBlock) {
+          blockEnd = Math.max(blockEnd, $to.end(depth));
+          break;
+        }
+      }
+    }
+
+    const text = doc.textBetween(blockStart, blockEnd, "\n");
+    if (text.length > 0) return text;
+  } catch {
+    // Fall through to character-window fallback
+  }
+
+  // Fallback: 250-char window on either side
+  try {
+    const doc = editor.state.doc;
+    const docSize = doc.content.size;
+    const start = Math.max(0, fromPos - 250);
+    const end = Math.min(docSize, toPos + 250);
+    const text = doc.textBetween(start, end, "\n");
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function formatAnnotationsMarkdown(

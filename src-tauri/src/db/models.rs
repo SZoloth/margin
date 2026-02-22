@@ -84,3 +84,15 @@ impl MarginNote {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrectionInput {
+    pub highlight_id: String,
+    pub original_text: String,
+    pub prefix_context: Option<String>,
+    pub suffix_context: Option<String>,
+    pub extended_context: Option<String>,
+    pub notes: Vec<String>,
+    pub highlight_color: String,
+    pub line_range: Option<String>,
+}
+

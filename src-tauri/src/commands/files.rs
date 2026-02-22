@@ -1,3 +1,5 @@
+use crate::db::migrations::get_db;
+use crate::db::models::Document;
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
@@ -58,6 +60,75 @@ pub async fn list_markdown_files(dir: String) -> Result<Vec<FileEntry>, String> 
     });
 
     Ok(entries)
+}
+
+#[tauri::command]
+pub async fn rename_file(old_path: String, new_name: String) -> Result<Document, String> {
+    let new_name = new_name.trim().to_string();
+    if new_name.is_empty() {
+        return Err("File name cannot be empty".to_string());
+    }
+    if new_name.contains('/') || new_name.contains('\\') {
+        return Err("File name cannot contain path separators".to_string());
+    }
+
+    // Ensure .md extension
+    let new_name = if new_name.ends_with(".md") || new_name.ends_with(".markdown") {
+        new_name
+    } else {
+        format!("{}.md", new_name)
+    };
+
+    let old = Path::new(&old_path);
+    let parent = old
+        .parent()
+        .ok_or_else(|| "Cannot determine parent directory".to_string())?;
+    let new_path = parent.join(&new_name);
+
+    if new_path.exists() {
+        return Err(format!("A file named '{}' already exists", new_name));
+    }
+    if !old.exists() {
+        return Err(format!("Source file does not exist: {}", old_path));
+    }
+
+    // Rename on disk
+    fs::rename(&old_path, &new_path)
+        .map_err(|e| format!("Failed to rename file: {}", e))?;
+
+    let new_path_str = new_path.to_string_lossy().to_string();
+    let new_title = new_name
+        .strip_suffix(".md")
+        .or_else(|| new_name.strip_suffix(".markdown"))
+        .unwrap_or(&new_name)
+        .to_string();
+
+    // Update database — roll back the file rename if DB fails
+    let conn = get_db().map_err(|e| {
+        let _ = fs::rename(&new_path, &old_path);
+        format!("Failed to open database (file rename rolled back): {}", e)
+    })?;
+    conn.execute(
+        "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3",
+        rusqlite::params![new_path_str, new_title, old_path],
+    )
+    .map_err(|e| {
+        let _ = fs::rename(&new_path, &old_path);
+        format!("Failed to update database (file rename rolled back): {}", e)
+    })?;
+
+    // Return the updated document
+    let doc = conn
+        .query_row(
+            "SELECT id, source, file_path, keep_local_id, title, author, url,
+                    word_count, last_opened_at, created_at
+             FROM documents WHERE file_path = ?1",
+            rusqlite::params![new_path_str],
+            |row| Document::from_row(row),
+        )
+        .map_err(|e| format!("Failed to fetch updated document: {}", e))?;
+
+    Ok(doc)
 }
 
 fn collect_markdown_entries(dir: &Path) -> Result<Vec<FileEntry>, String> {

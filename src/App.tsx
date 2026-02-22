@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { Editor } from "@tiptap/core";
-import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
 import { Reader } from "@/components/editor/Reader";
@@ -13,12 +12,64 @@ import { useKeepLocal } from "@/hooks/useKeepLocal";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSearch } from "@/hooks/useSearch";
 import { createAnchor } from "@/lib/text-anchoring";
-import { formatAnnotationsMarkdown } from "@/lib/export-annotations";
-import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
+import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
+import { readFile, drainPendingOpenFiles, persistCorrections } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
-import type { Highlight, MarginNote } from "@/types/annotations";
+
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
+import type { CorrectionInput } from "@/types/annotations";
+
+/**
+ * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
+ * Unlike flat-string indexOf, this accounts for block node boundaries that add
+ * positional offsets not present in the text content.
+ */
+function findTextInDoc(
+  doc: import("@tiptap/pm/model").Node,
+  search: string,
+): { from: number; to: number } | null {
+  // Collect text segments with their TipTap start positions
+  const segments: Array<{ text: string; pos: number }> = [];
+  doc.descendants((node, pos) => {
+    if (node.isText && node.text) {
+      segments.push({ text: node.text, pos });
+    }
+  });
+
+  if (segments.length === 0) return null;
+
+  // Build a flat string and a mapping from flat offset → TipTap position
+  let flat = "";
+  const offsetToPos: Array<{ flatStart: number; tiptapStart: number; length: number }> = [];
+  for (const seg of segments) {
+    offsetToPos.push({ flatStart: flat.length, tiptapStart: seg.pos, length: seg.text.length });
+    flat += seg.text;
+  }
+
+  const idx = flat.indexOf(search);
+  if (idx === -1) return null;
+
+  const fromFlat = idx;
+  const toFlat = idx + search.length;
+
+  // Convert flat offsets to TipTap positions
+  let from = -1;
+  let to = -1;
+  for (const map of offsetToPos) {
+    const segEnd = map.flatStart + map.length;
+    if (from === -1 && fromFlat >= map.flatStart && fromFlat < segEnd) {
+      from = map.tiptapStart + (fromFlat - map.flatStart);
+    }
+    if (toFlat >= map.flatStart && toFlat <= segEnd) {
+      to = map.tiptapStart + (toFlat - map.flatStart);
+      break;
+    }
+  }
+
+  if (from === -1 || to === -1) return null;
+  return { from, to };
+}
 
 export default function App() {
   const doc = useDocument();
@@ -49,12 +100,72 @@ export default function App() {
     }
   }, [doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // File watcher: reload content on external changes
-  // Use ref to avoid recreating the callback (which would cause useFileWatcher to re-subscribe)
+  // Refs to avoid stale closures in callbacks
   const currentDocRef = useRef(doc.currentDoc);
   currentDocRef.current = doc.currentDoc;
+  const highlightsRef = useRef(annotations.highlights);
+  highlightsRef.current = annotations.highlights;
+  const marginNotesRef = useRef(annotations.marginNotes);
+  marginNotesRef.current = annotations.marginNotes;
   const setContentExternalRef = useRef(doc.setContentExternal);
   setContentExternalRef.current = doc.setContentExternal;
+  const isRestoringMarksRef = useRef(false);
+
+  // Restore highlight marks in the editor when annotations load for a document.
+  // Marks are ephemeral TipTap state — they're lost when the editor content resets.
+  // This re-applies them from the persisted annotation data.
+  const lastRestoredDocId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editor || !annotations.isLoaded || !doc.currentDoc) return;
+    if (lastRestoredDocId.current === doc.currentDoc.id) return;
+    lastRestoredDocId.current = doc.currentDoc.id;
+
+    if (annotations.highlights.length === 0) return;
+
+    const { state } = editor;
+    const { tr } = state;
+    const markType = state.schema.marks.highlight;
+    if (!markType) return;
+
+    for (const h of annotations.highlights) {
+      // Try stored TipTap positions first — works when document hasn't changed
+      try {
+        const textAtPos = state.doc.textBetween(h.from_pos, h.to_pos, "\n");
+        if (textAtPos === h.text_content) {
+          tr.addMark(h.from_pos, h.to_pos, markType.create({ color: h.color }));
+          continue;
+        }
+      } catch {
+        // Positions out of range — document changed
+      }
+
+      // Fall back to doc-tree search for correct TipTap positions
+      const found = findTextInDoc(state.doc, h.text_content);
+      if (found) {
+        try {
+          tr.addMark(found.from, found.to, markType.create({ color: h.color }));
+        } catch {
+          // Position out of range — skip
+        }
+      }
+    }
+
+    if (tr.steps.length > 0) {
+      tr.setMeta("addToHistory", false);
+      isRestoringMarksRef.current = true;
+      try {
+        editor.view.dispatch(tr);
+      } finally {
+        isRestoringMarksRef.current = false;
+      }
+    }
+  }, [editor, annotations.isLoaded, annotations.highlights, doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Wrap onUpdate to suppress dirty state during mark restoration
+  const handleEditorUpdate = useCallback((md: string) => {
+    if (isRestoringMarksRef.current) return;
+    doc.setContent(md);
+  }, [doc.setContent]);
 
   const handleFileChanged = useCallback(async (path: string) => {
     const currentDoc = currentDocRef.current;
@@ -89,12 +200,20 @@ export default function App() {
     return () => { void unlisten.then((fn) => fn()); };
   }, []);
 
+  // Find the highlight record that matches a clicked mark element.
+  // Matches by text content — stored positions may be stale after edits.
+  const findHighlightAtElement = useCallback((element: HTMLElement) => {
+    const text = element.textContent ?? "";
+    return annotations.highlights.find((h) => h.text_content === text) ?? null;
+  }, [annotations.highlights]);
+
   // Handle highlight click → open thread popover
   useEffect(() => {
     const handleHighlightClick = (e: Event) => {
-      const { text, element } = (e as CustomEvent).detail;
-      const match = annotations.highlights.find((h) => h.text_content === text);
-      if (match && element) {
+      const { element } = (e as CustomEvent).detail;
+      if (!element) return;
+      const match = findHighlightAtElement(element as HTMLElement);
+      if (match) {
         setAnchorRect((element as HTMLElement).getBoundingClientRect());
         setFocusHighlightId(match.id);
         setAutoFocusNew(false);
@@ -102,30 +221,48 @@ export default function App() {
     };
 
     const handleHighlightDelete = async (e: Event) => {
-      const { text } = (e as CustomEvent).detail;
-      const match = annotations.highlights.find((h) => h.text_content === text);
-      if (!match || !editor) return;
+      const { element } = (e as CustomEvent).detail;
+      if (!element || !editor) return;
+      const el = element as HTMLElement;
+      const match = findHighlightAtElement(el);
+      if (!match) return;
 
-      // Remove from database
+      // Capture actual mark positions from DOM before async delete
+      let markFrom: number;
+      let markTo: number;
+      try {
+        markFrom = editor.view.posAtDOM(el, 0);
+        markTo = markFrom + (el.textContent?.length ?? 0);
+      } catch {
+        // Element detached — fall back to doc tree walk
+        markFrom = -1;
+        markTo = -1;
+      }
+
       await annotations.deleteHighlight(match.id);
 
       // Remove the mark from the editor
       const { state } = editor;
       const { tr } = state;
-      let removed = false;
-      state.doc.descendants((node, pos) => {
-        if (removed) return false;
-        node.marks.forEach((mark) => {
-          if (mark.type.name === "highlight") {
-            const nodeText = node.text ?? "";
-            if (nodeText === text || text.includes(nodeText)) {
-              tr.removeMark(pos, pos + node.nodeSize, mark.type);
-              removed = true;
-            }
+      const markType = state.schema.marks.highlight;
+      if (!markType) return;
+
+      if (markFrom >= 0 && markTo >= 0) {
+        tr.removeMark(markFrom, markTo, markType);
+      } else {
+        // Fallback: walk doc tree to find the mark by text + color
+        state.doc.descendants((node, pos) => {
+          if (!node.isText) return;
+          const hlMark = node.marks.find(
+            (m) => m.type.name === "highlight" && m.attrs.color === match.color,
+          );
+          if (hlMark && node.text === match.text_content) {
+            tr.removeMark(pos, pos + node.nodeSize, hlMark);
           }
         });
-      });
-      if (removed) {
+      }
+
+      if (tr.steps.length > 0) {
         editor.view.dispatch(tr);
       }
     };
@@ -136,7 +273,7 @@ export default function App() {
       window.removeEventListener("margin:highlight-click", handleHighlightClick);
       window.removeEventListener("margin:highlight-delete", handleHighlightDelete);
     };
-  }, [annotations.highlights, editor]);
+  }, [editor, annotations.highlights, findHighlightAtElement]);
 
   const handleDeleteHighlight = useCallback(async (id: string) => {
     if (!editor) return;
@@ -144,25 +281,28 @@ export default function App() {
     const highlight = annotations.highlights.find((h) => h.id === id);
     await annotations.deleteHighlight(id);
 
-    // Close the thread popover
     setFocusHighlightId(null);
     setAnchorRect(null);
 
-    // Remove marks from editor
-    if (highlight && editor) {
+    if (highlight) {
+      // Walk doc tree to find and remove marks matching this highlight
       const { state } = editor;
       const { tr } = state;
-      state.doc.descendants((node, pos) => {
-        node.marks.forEach((mark) => {
-          if (mark.type.name === "highlight") {
-            const nodeText = node.text ?? "";
-            if (nodeText === highlight.text_content || highlight.text_content.includes(nodeText)) {
-              tr.removeMark(pos, pos + node.nodeSize, mark.type);
-            }
+      const markType = state.schema.marks.highlight;
+      if (markType) {
+        state.doc.descendants((node, pos) => {
+          if (!node.isText) return;
+          const hlMark = node.marks.find(
+            (m) => m.type.name === "highlight" && m.attrs.color === highlight.color,
+          );
+          if (hlMark && node.text === highlight.text_content) {
+            tr.removeMark(pos, pos + node.nodeSize, hlMark);
           }
         });
-      });
-      editor.view.dispatch(tr);
+        if (tr.steps.length > 0) {
+          editor.view.dispatch(tr);
+        }
+      }
     }
   }, [editor, annotations]);
 
@@ -255,22 +395,59 @@ export default function App() {
   const handleExportAnnotations = useCallback(
     async () => {
       if (!editor || !doc.currentDoc) return;
-      const documentId = doc.currentDoc.id;
 
-      // Fetch fresh data directly from the DB to avoid stale React state
-      const [freshHighlights, freshNotes] = await Promise.all([
-        invoke<Highlight[]>("get_highlights", { documentId }),
-        invoke<MarginNote[]>("get_margin_notes", { documentId }),
-      ]);
-
+      // Read latest annotation state via refs to avoid both stale closures
+      // and race conditions with in-flight DB writes
       const markdown = await formatAnnotationsMarkdown({
         document: doc.currentDoc,
         editor,
-        highlights: freshHighlights,
-        marginNotes: freshNotes,
+        highlights: highlightsRef.current,
+        marginNotes: marginNotesRef.current,
       });
 
       await writeText(markdown);
+
+      // Persist corrections (fire-and-forget — don't block clipboard feedback)
+      const highlights = highlightsRef.current;
+      const marginNotes = marginNotesRef.current;
+      const currentDoc = doc.currentDoc;
+
+      if (currentDoc && highlights.length > 0 && marginNotes.length > 0) {
+        const notesByHighlight = new Map<string, string[]>();
+        for (const note of marginNotes) {
+          const existing = notesByHighlight.get(note.highlight_id) ?? [];
+          existing.push(note.content);
+          notesByHighlight.set(note.highlight_id, existing);
+        }
+
+        const correctionInputs: CorrectionInput[] = [];
+        for (const h of highlights) {
+          const notes = notesByHighlight.get(h.id);
+          if (!notes || notes.length === 0) continue;
+
+          correctionInputs.push({
+            highlight_id: h.id,
+            original_text: h.text_content,
+            prefix_context: h.prefix_context,
+            suffix_context: h.suffix_context,
+            extended_context: getExtendedContext(editor, h.from_pos, h.to_pos),
+            notes,
+            highlight_color: h.color,
+          });
+        }
+
+        if (correctionInputs.length > 0) {
+          const today = new Date().toISOString().slice(0, 10);
+          persistCorrections(
+            correctionInputs,
+            currentDoc.id,
+            currentDoc.title ?? null,
+            currentDoc.source,
+            currentDoc.file_path ?? null,
+            today,
+          ).catch((err) => console.error("Failed to persist corrections:", err));
+        }
+      }
     },
     [editor, doc.currentDoc],
   );
@@ -339,10 +516,17 @@ export default function App() {
       hasAnnotations={annotations.isLoaded && annotations.highlights.length > 0}
       onExport={() => setShowExportPopover(true)}
       onOpenFilePath={doc.openFilePath}
+      onRenameFile={async (targetDoc, newName) => {
+        try {
+          await doc.renameDocFile(targetDoc, newName);
+        } catch (err) {
+          // Error already logged in the hook
+        }
+      }}
     >
       <Reader
         content={doc.content}
-        onUpdate={doc.setContent}
+        onUpdate={handleEditorUpdate}
         isLoading={doc.isLoading}
         onEditorReady={handleEditorReady}
       />

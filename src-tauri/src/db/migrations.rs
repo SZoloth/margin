@@ -64,6 +64,31 @@ pub fn init_db() -> Result<(), Box<dyn std::error::Error>> {
         CREATE INDEX IF NOT EXISTS idx_highlights_document ON highlights(document_id);
         CREATE INDEX IF NOT EXISTS idx_margin_notes_highlight ON margin_notes(highlight_id);
 
+        CREATE TABLE IF NOT EXISTS corrections (
+            id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL UNIQUE,
+            document_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            original_text TEXT NOT NULL,
+            prefix_context TEXT,
+            suffix_context TEXT,
+            extended_context TEXT,
+            notes_json TEXT NOT NULL,
+            document_title TEXT,
+            document_source TEXT NOT NULL,
+            document_path TEXT,
+            category TEXT,
+            highlight_color TEXT NOT NULL,
+            line_range TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+            FOREIGN KEY (highlight_id) REFERENCES highlights(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
+        CREATE INDEX IF NOT EXISTS idx_corrections_session ON corrections(session_id);
+
         DROP TABLE IF EXISTS comments;
         DROP TABLE IF EXISTS comment_threads;",
     )?;

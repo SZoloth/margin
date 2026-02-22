@@ -18,3 +18,14 @@ export interface MarginNote {
   created_at: number;
   updated_at: number;
 }
+
+export interface CorrectionInput {
+  highlight_id: string;
+  original_text: string;
+  prefix_context: string | null;
+  suffix_context: string | null;
+  extended_context: string | null;
+  notes: string[];
+  highlight_color: string;
+  line_range: string | null;
+}

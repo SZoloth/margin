@@ -6,6 +6,7 @@ import {
   saveFile as saveFileCommand,
   upsertDocument,
   getRecentDocuments,
+  renameFile,
 } from "@/lib/tauri-commands";
 
 function basename(filePath: string): string {
@@ -34,6 +35,7 @@ export interface UseDocumentReturn {
   openRecentDocument: (doc: Document) => Promise<void>;
   openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
   saveCurrentFile: () => Promise<void>;
+  renameDocFile: (doc: Document, newName: string) => Promise<void>;
   setContent: (newContent: string) => void;
   setContentExternal: (newContent: string) => void;
 }
@@ -218,6 +220,22 @@ export function useDocument(): UseDocumentReturn {
     }
   }, [refreshRecentDocs]);
 
+  const renameDocFile = useCallback(async (targetDoc: Document, newName: string) => {
+    if (!targetDoc.file_path) return;
+    try {
+      const updated = await renameFile(targetDoc.file_path, newName);
+      // If renaming the currently open document, update local state
+      if (currentDoc?.id === targetDoc.id) {
+        setCurrentDoc(updated);
+        setFilePath(updated.file_path);
+      }
+      refreshRecentDocs();
+    } catch (err) {
+      console.error("Failed to rename file:", err);
+      throw err;
+    }
+  }, [currentDoc, refreshRecentDocs]);
+
   const saveCurrentFile = useCallback(async () => {
     if (!filePath || !isDirty) return;
 
@@ -271,6 +289,7 @@ export function useDocument(): UseDocumentReturn {
     openRecentDocument,
     openKeepLocalArticle,
     saveCurrentFile,
+    renameDocFile,
     setContent,
     setContentExternal,
   };

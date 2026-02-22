@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Document, FileEntry } from "@/types/document";
+import type { CorrectionInput } from "@/types/annotations";
 
 export async function openFileDialog(): Promise<string | null> {
   return invoke<string | null>("open_file_dialog");
@@ -25,6 +26,28 @@ export async function upsertDocument(doc: Document): Promise<Document> {
   return invoke<Document>("upsert_document", { doc });
 }
 
+export async function renameFile(oldPath: string, newName: string): Promise<Document> {
+  return invoke<Document>("rename_file", { oldPath, newName });
+}
+
 export async function drainPendingOpenFiles(): Promise<string[]> {
   return invoke<string[]>("drain_pending_open_files");
+}
+
+export async function persistCorrections(
+  corrections: CorrectionInput[],
+  documentId: string,
+  documentTitle: string | null,
+  documentSource: string,
+  documentPath: string | null,
+  exportDate: string,
+): Promise<string> {
+  return invoke<string>("persist_corrections", {
+    corrections,
+    documentId,
+    documentTitle,
+    documentSource,
+    documentPath,
+    exportDate,
+  });
 }
