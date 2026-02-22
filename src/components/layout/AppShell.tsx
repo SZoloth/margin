@@ -23,6 +23,7 @@ interface AppShellProps {
   onExport?: () => void;
   onOpenFilePath: (path: string, newTab: boolean) => void;
   onRenameFile?: (doc: Document, newName: string) => void;
+  tocElement?: React.ReactNode;
   // Tab props
   tabs: Tab[];
   activeTabId: string | null;
@@ -46,6 +47,7 @@ export function AppShell({
   onExport,
   onOpenFilePath,
   onRenameFile,
+  tocElement,
   tabs,
   activeTabId,
   onSelectTab,
@@ -277,7 +279,11 @@ export function AppShell({
               </div>
             </div>
           ) : (
-            children
+            <div className="reader-grid">
+              <div className="toc-column">{tocElement}</div>
+              <div className="reader-content-column">{children}</div>
+              <div />
+            </div>
           )}
         </div>
       </div>

@@ -12,6 +12,8 @@ import { useKeepLocal } from "@/hooks/useKeepLocal";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSearch } from "@/hooks/useSearch";
 import { useTabs } from "@/hooks/useTabs";
+import { useTableOfContents } from "@/hooks/useTableOfContents";
+import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
@@ -79,6 +81,7 @@ export default function App() {
   const keepLocal = useKeepLocal();
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
+  const toc = useTableOfContents(editor);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -655,6 +658,15 @@ export default function App() {
       onCloseTab={tabsHook.closeTab}
       onReorderTabs={tabsHook.reorderTabs}
       onNewTab={doc.openFile}
+      tocElement={
+        doc.currentDoc && toc.headings.length > 0 ? (
+          <TableOfContents
+            headings={toc.headings}
+            activeHeadingId={toc.activeHeadingId}
+            onScrollToHeading={toc.scrollToHeading}
+          />
+        ) : undefined
+      }
     >
       <Reader
         content={doc.content}

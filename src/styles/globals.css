@@ -4,6 +4,7 @@
 @import "./annotations.css";
 @import "./interactions.css";
 @import "./tabs.css";
+@import "./toc.css";
 
 @theme {
   --color-highlight-yellow: #fef3c7;

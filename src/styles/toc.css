@@ -1,0 +1,159 @@
+/* Reader grid — wraps content when a document is open */
+.reader-grid {
+  display: grid;
+  grid-template-columns: 1fr min(65ch, 100%) 1fr;
+  min-height: 100%;
+}
+
+.reader-content-column {
+  min-width: 0;
+}
+
+/* TOC column — left gutter */
+.toc-column {
+  min-width: 0;
+}
+
+/* TOC nav */
+.toc {
+  position: sticky;
+  top: 3rem;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+  scrollbar-width: none;
+  margin-left: auto;
+  padding: 0 1rem 0 1.5rem;
+}
+
+.toc::-webkit-scrollbar {
+  display: none;
+}
+
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toc li {
+  margin: 0;
+}
+
+.toc li[data-level="2"] {
+  padding-left: 0.75rem;
+}
+
+.toc button {
+  all: unset;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  cursor: pointer;
+  padding: 3px 0;
+  box-sizing: border-box;
+  color: var(--color-text-secondary);
+  transition: color 120ms ease;
+  border-radius: 3px;
+}
+
+.toc button:hover {
+  color: var(--color-text-primary);
+}
+
+.toc button.toc-active {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* Full mode — text labels (≥1200px, default) */
+.toc-label {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.toc-dot {
+  display: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.4;
+  flex-shrink: 0;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.toc button.toc-active .toc-dot {
+  opacity: 1;
+  transform: scale(1.6);
+}
+
+/* Collapsed mode — dots only (<1200px) */
+@media (max-width: 1199px) {
+  .toc {
+    padding: 0 0.75rem 0 0;
+  }
+
+  .toc-label {
+    display: none;
+  }
+
+  .toc-dot {
+    display: block;
+  }
+
+  .toc li[data-level="2"] {
+    padding-left: 0;
+  }
+
+  .toc li[data-level="2"] .toc-dot {
+    width: 4px;
+    height: 4px;
+  }
+
+  /* Tooltip on hover */
+  .toc button {
+    position: relative;
+  }
+
+  .toc button::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    right: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.7rem;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--color-text-primary);
+    background-color: var(--color-sidebar);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
+    z-index: 10;
+  }
+
+  .toc button:hover::before {
+    opacity: 1;
+  }
+}
+
+/* Hidden on mobile (<768px) */
+@media (max-width: 767px) {
+  .toc-column {
+    display: none;
+  }
+}
