@@ -145,7 +145,7 @@ export function FloatingToolbar({
           />
           <path
             d="M2 16.5H16"
-            stroke="#EAB308"
+            stroke="var(--color-accent)"
             strokeWidth="2.5"
             strokeLinecap="round"
           />

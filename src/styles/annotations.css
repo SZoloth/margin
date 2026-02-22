@@ -153,15 +153,15 @@
 }
 
 .note-action-btn--delete {
-  color: rgb(248 113 113);
+  color: var(--color-danger-text);
 }
 
 .note-action-btn--delete:hover {
-  background-color: rgba(239, 68, 68, 0.15);
+  background-color: color-mix(in srgb, var(--color-danger) 15%, transparent);
 }
 
 .note-action-btn--delete:active {
-  background-color: rgba(239, 68, 68, 0.25);
+  background-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
 }
 
 /* Dark mode — thread */

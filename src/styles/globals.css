@@ -29,6 +29,13 @@
   --hover-bg: rgba(0, 0, 0, 0.05);
   --active-bg: rgba(0, 0, 0, 0.08);
 
+  /* Semantic colors */
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-danger-text: #dc2626;
+  --color-warning: #eab308;
+  --color-accent: #eab308;
+
   /* Easing system */
   --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
@@ -49,6 +56,13 @@
 
     --hover-bg: rgba(255, 255, 255, 0.07);
     --active-bg: rgba(255, 255, 255, 0.12);
+
+    /* Semantic colors */
+    --color-success: #4ade80;
+    --color-danger: #f87171;
+    --color-danger-text: #f87171;
+    --color-warning: #facc15;
+    --color-accent: #facc15;
   }
 }
 

@@ -258,7 +258,7 @@ export function Sidebar({
               width: 6,
               height: 6,
               borderRadius: "50%",
-              backgroundColor: keepLocalIsOnline ? "#22c55e" : "#ef4444",
+              backgroundColor: keepLocalIsOnline ? "var(--color-success)" : "var(--color-danger)",
               flexShrink: 0,
             }}
           />
