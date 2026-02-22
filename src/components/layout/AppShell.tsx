@@ -244,6 +244,7 @@ export function AppShell({
       <div className="flex flex-1 flex-col h-full" style={{ minWidth: 0 }}>
         {/* Title bar */}
         <div
+          data-tauri-drag-region
           className="flex items-center gap-2 px-6 py-3 flex-shrink-0 border-b select-none"
           style={{
             borderColor: "var(--color-border)",
