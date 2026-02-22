@@ -51,6 +51,9 @@ export function Sidebar({
   const [inputValue, setInputValue] = useState(searchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Sync input value when the active tab's query changes externally
   useEffect(() => {
@@ -292,19 +295,36 @@ export function Sidebar({
                     const homePrefix = dirPath.match(/^\/Users\/[^/]+/)?.[0];
                     parentFolder = homePrefix ? dirPath.replace(homePrefix, "~") : dirPath;
                   }
+                  const isRenaming = renamingDocId === doc.id;
+
+                  const commitRename = () => {
+                    const trimmed = renameValue.trim();
+                    if (trimmed && doc.file_path) {
+                      const segments = doc.file_path.split("/");
+                      const currentFilename = segments[segments.length - 1] ?? "";
+                      if (trimmed !== currentFilename && onRenameFile) {
+                        onRenameFile(doc, trimmed);
+                      }
+                    }
+                    setRenamingDocId(null);
+                  };
+
                   return (
                     <button
                       key={doc.id}
-                      onClick={(e) => onSelectRecentDoc(doc, e.metaKey)}
+                      onClick={(e) => {
+                        if (isRenaming) return;
+                        onSelectRecentDoc(doc, e.metaKey);
+                      }}
                       onContextMenu={(e) => {
                         if (doc.source !== "file" || !doc.file_path || !onRenameFile) return;
                         e.preventDefault();
                         const segments = doc.file_path.split("/");
                         const currentFilename = segments[segments.length - 1] ?? "";
-                        const newName = window.prompt("Rename file:", currentFilename);
-                        if (newName && newName !== currentFilename) {
-                          onRenameFile(doc, newName);
-                        }
+                        setRenameValue(currentFilename);
+                        setRenamingDocId(doc.id);
+                        // Focus the input after it mounts
+                        requestAnimationFrame(() => renameInputRef.current?.select());
                       }}
                       className="interactive-item flex items-start gap-2 px-3 py-1.5 text-sm text-left"
                       style={{
@@ -326,17 +346,37 @@ export function Sidebar({
                       >
                         {doc.source === "keep-local" ? "KL" : "F"}
                       </span>
-                      <span className="truncate min-w-0">
-                        <span className="block truncate">{title}</span>
-                        {parentFolder && (
-                          <span
-                            className="block truncate"
-                            style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
-                          >
-                            {parentFolder}
-                          </span>
-                        )}
-                      </span>
+                      {isRenaming ? (
+                        <input
+                          ref={renameInputRef}
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                            if (e.key === "Escape") { e.stopPropagation(); setRenamingDocId(null); }
+                          }}
+                          onBlur={commitRename}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-sm bg-transparent outline-none min-w-0 flex-1"
+                          style={{
+                            color: "var(--color-text-primary)",
+                            borderBottom: "1px solid var(--color-text-secondary)",
+                            padding: "0 0 1px 0",
+                          }}
+                        />
+                      ) : (
+                        <span className="truncate min-w-0">
+                          <span className="block truncate">{title}</span>
+                          {parentFolder && (
+                            <span
+                              className="block truncate"
+                              style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
+                            >
+                              {parentFolder}
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
