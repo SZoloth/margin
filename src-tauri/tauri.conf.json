@@ -34,7 +34,14 @@
     ],
     "macOS": {
       "minimumSystemVersion": "10.15"
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdown", "mkd"],
+        "mimeType": "text/markdown",
+        "rank": "Default"
+      }
+    ]
   },
   "plugins": {}
 }
