@@ -98,7 +98,7 @@
   font-size: 13px;
   font-style: italic;
   line-height: 1.5;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
 }
 
 .thread-message-actions {
