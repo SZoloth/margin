@@ -166,7 +166,7 @@ export function Sidebar({
               aria-label="Open file"
               title="Open file (⌘O)"
             >
-              <HugeiconsIcon icon={FolderOpenIcon} size={15} color="currentColor" strokeWidth={1.5} />
+              <HugeiconsIcon icon={FolderOpenIcon} size={14} color="currentColor" strokeWidth={2} />
             </button>
           )}
         </div>

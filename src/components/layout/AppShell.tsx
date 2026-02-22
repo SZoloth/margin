@@ -138,19 +138,16 @@ export function AppShell({
   const backdrop = useAnimatedPresence(isMobile && sidebarOpen, 200);
   const hasContent = currentDoc !== null;
 
-  // Tab crossfade: replay CSS animation when activeTabId changes (without remounting)
-  const readerGridRef = useRef<HTMLDivElement>(null);
+  // Tab crossfade: brief opacity dip when switching tabs
+  const [tabFadeVisible, setTabFadeVisible] = useState(true);
   const prevTabIdRef = useRef(activeTabId);
   useEffect(() => {
     if (activeTabId && activeTabId !== prevTabIdRef.current) {
       prevTabIdRef.current = activeTabId;
-      const el = readerGridRef.current;
-      if (el) {
-        el.classList.remove("tab-content-animate");
-        // Force reflow to restart the animation
-        void el.offsetWidth;
-        el.classList.add("tab-content-animate");
-      }
+      setTabFadeVisible(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setTabFadeVisible(true));
+      });
     }
   }, [activeTabId]);
 
@@ -283,7 +280,7 @@ export function AppShell({
               aria-label="Export annotations"
               title="Export annotations (⌘⇧E)"
             >
-              <HugeiconsIcon icon={Download01Icon} size={16} color="currentColor" strokeWidth={1.5} />
+              <HugeiconsIcon icon={Download01Icon} size={18} color="currentColor" strokeWidth={1.5} />
             </button>
           )}
         </div>
@@ -305,7 +302,15 @@ export function AppShell({
               </div>
             </div>
           ) : (
-            <div ref={readerGridRef} className="reader-grid">
+            <div
+              className="reader-grid"
+              style={{
+                opacity: tabFadeVisible ? 1 : 0,
+                transition: tabFadeVisible
+                  ? `opacity var(--duration-normal) var(--ease-entrance)`
+                  : "none",
+              }}
+            >
               <div className="toc-column">{tocElement}</div>
               <div className="reader-content-column">{children}</div>
               <div />

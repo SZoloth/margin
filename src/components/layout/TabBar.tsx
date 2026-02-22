@@ -85,7 +85,7 @@ export function TabBar({
                 }}
                 aria-label={`Close ${tab.title}`}
               >
-                <HugeiconsIcon icon={Cancel01Icon} size={12} color="currentColor" strokeWidth={2} />
+                <HugeiconsIcon icon={Cancel01Icon} size={14} color="currentColor" strokeWidth={2} />
               </button>
             </div>
           );
