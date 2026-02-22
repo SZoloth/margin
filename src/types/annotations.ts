@@ -27,5 +27,4 @@ export interface CorrectionInput {
   extended_context: string | null;
   notes: string[];
   highlight_color: string;
-  line_range: string | null;
 }

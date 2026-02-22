@@ -79,7 +79,6 @@ pub fn init_db() -> Result<(), Box<dyn std::error::Error>> {
             document_path TEXT,
             category TEXT,
             highlight_color TEXT NOT NULL,
-            line_range TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,

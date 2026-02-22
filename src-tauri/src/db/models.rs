@@ -93,6 +93,5 @@ pub struct CorrectionInput {
     pub extended_context: Option<String>,
     pub notes: Vec<String>,
     pub highlight_color: String,
-    pub line_range: Option<String>,
 }
 

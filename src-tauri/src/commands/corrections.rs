@@ -46,8 +46,8 @@ pub async fn persist_corrections(
                 (id, highlight_id, document_id, session_id, original_text,
                  prefix_context, suffix_context, extended_context, notes_json,
                  document_title, document_source, document_path, category,
-                 highlight_color, line_range, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                 highlight_color, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
              ON CONFLICT(highlight_id) DO UPDATE SET
                 session_id = excluded.session_id,
                 original_text = excluded.original_text,
@@ -59,7 +59,6 @@ pub async fn persist_corrections(
                 document_source = excluded.document_source,
                 document_path = excluded.document_path,
                 highlight_color = excluded.highlight_color,
-                line_range = excluded.line_range,
                 updated_at = excluded.updated_at",
             rusqlite::params![
                 id,
@@ -76,7 +75,6 @@ pub async fn persist_corrections(
                 document_path,
                 Option::<String>::None, // category
                 input.highlight_color,
-                input.line_range,
                 now,
                 now,
             ],
@@ -97,7 +95,6 @@ pub async fn persist_corrections(
             "document_source": document_source,
             "document_path": document_path,
             "highlight_color": input.highlight_color,
-            "line_range": input.line_range,
             "exported_at": now,
         });
 

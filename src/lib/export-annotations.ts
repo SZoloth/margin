@@ -20,7 +20,7 @@ function posToLineNumber(editor: Editor, pos: number): number {
   }
 }
 
-export function posToLineRange(editor: Editor, from: number, to: number): string {
+function posToLineRange(editor: Editor, from: number, to: number): string {
   const startLine = posToLineNumber(editor, from);
   const endLine = posToLineNumber(editor, to);
 
