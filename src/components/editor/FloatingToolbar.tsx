@@ -4,9 +4,17 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Comment01Icon } from "@hugeicons/core-free-icons";
 import type { Editor } from "@tiptap/core";
 
+const HIGHLIGHT_COLORS = [
+  { name: "yellow", css: "var(--color-highlight-yellow)" },
+  { name: "green", css: "var(--color-highlight-green)" },
+  { name: "blue", css: "var(--color-highlight-blue)" },
+  { name: "pink", css: "var(--color-highlight-pink)" },
+  { name: "orange", css: "var(--color-highlight-orange)" },
+] as const;
+
 interface FloatingToolbarProps {
   editor: Editor | null;
-  onHighlight: () => void;
+  onHighlight: (color: string) => void;
   onNote: () => void;
 }
 
@@ -127,35 +135,38 @@ export function FloatingToolbar({
         e.preventDefault();
       }}
     >
-      {/* Highlight — custom SVG with yellow accent line */}
-      <button
-        type="button"
-        onClick={onHighlight}
-        className="toolbar-btn"
-        aria-label="Highlight"
-      >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 18 18"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
+      {/* Color picker circles */}
+      {HIGHLIGHT_COLORS.map((c) => (
+        <button
+          key={c.name}
+          type="button"
+          onClick={() => onHighlight(c.name)}
+          className="toolbar-color-btn"
+          aria-label={`Highlight ${c.name}`}
         >
-          <path
-            d="M10.5 2.5L15 7L7 15H2.5V10.5L10.5 2.5Z"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <span
+            style={{
+              display: "block",
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              backgroundColor: c.css,
+              border: "1.5px solid var(--color-border)",
+            }}
           />
-          <path
-            d="M2 16.5H16"
-            stroke="var(--color-accent)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
+        </button>
+      ))}
+
+      {/* Divider */}
+      <div
+        style={{
+          width: 1,
+          height: 18,
+          backgroundColor: "var(--color-border)",
+          margin: "0 2px",
+          flexShrink: 0,
+        }}
+      />
 
       {/* Note */}
       <button
