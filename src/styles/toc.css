@@ -156,6 +156,12 @@
   }
 }
 
+/* Right margin column */
+.margin-column {
+  position: relative;
+  min-width: 0;
+}
+
 /* Hidden on mobile (<768px) */
 @media (max-width: 767px) {
   .toc-column {

@@ -25,6 +25,7 @@ interface AppShellProps {
   onOpenFilePath: (path: string, newTab: boolean) => void;
   onRenameFile?: (doc: Document, newName: string) => void;
   tocElement?: React.ReactNode;
+  marginIndicators?: React.ReactNode;
   // Tab props
   tabs: Tab[];
   activeTabId: string | null;
@@ -49,6 +50,7 @@ export function AppShell({
   onOpenFilePath,
   onRenameFile,
   tocElement,
+  marginIndicators,
   tabs,
   activeTabId,
   onSelectTab,
@@ -179,6 +181,7 @@ export function AppShell({
           width: sidebarWidth,
           backgroundColor: "var(--color-sidebar)",
           borderColor: "var(--color-border)",
+          willChange: "transform",
           transform: sidebarOpen ? "translateX(0)" : `translateX(-${sidebarWidth}px)`,
           transition: sidebarOpen
             ? "transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
@@ -289,15 +292,54 @@ export function AppShell({
         <div className="flex-1 overflow-y-auto" data-scroll-container>
           {!hasContent ? (
             <div
-              className="flex h-full items-center justify-center"
+              className="flex h-full items-center justify-center empty-state-entrance"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              <div className="text-center" style={{ maxWidth: 280 }}>
-                <p className="text-lg" style={{ fontFamily: "'Newsreader', Georgia, serif", fontStyle: "italic", letterSpacing: "-0.01em" }}>
+              <div className="text-center" style={{ maxWidth: 320 }}>
+                <p
+                  className="text-base"
+                  style={{
+                    fontFamily: "'Newsreader', Georgia, serif",
+                    fontStyle: "italic",
+                    letterSpacing: "-0.01em",
+                    lineHeight: 1.6,
+                    opacity: 0.5,
+                  }}
+                >
+                  &ldquo;We have books inside our books.&rdquo;
+                </p>
+                <p
+                  className="mt-1"
+                  style={{
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                    fontSize: "0.6875rem",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    opacity: 0.35,
+                  }}
+                >
+                  Edgar Allan Poe, Marginalia
+                </p>
+                <p
+                  className="mt-6"
+                  style={{
+                    fontFamily: "'Newsreader', Georgia, serif",
+                    fontStyle: "italic",
+                    fontSize: "1rem",
+                    letterSpacing: "-0.01em",
+                  }}
+                >
                   Open a file or select an article to start reading
                 </p>
-                <p className="mt-2 opacity-60" style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: "0.8125rem", letterSpacing: "0.01em" }}>
-                  Cmd+O to open a file
+                <p
+                  className="mt-2 opacity-50"
+                  style={{
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                    fontSize: "0.8125rem",
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd> to open a file
                 </p>
               </div>
             </div>
@@ -313,7 +355,7 @@ export function AppShell({
             >
               <div className="toc-column">{tocElement}</div>
               <div className="reader-content-column">{children}</div>
-              <div />
+              <div className="margin-column">{marginIndicators}</div>
             </div>
           )}
         </div>
