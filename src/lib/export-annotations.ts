@@ -166,8 +166,16 @@ export async function formatAnnotationsMarkdown(
   return lines.join("\n");
 }
 
+function normalizeTimestamp(timestamp: number): number {
+  if (!Number.isFinite(timestamp)) return Date.now();
+  // Heuristic: treat 10-digit seconds as seconds, 13-digit as millis.
+  if (timestamp > 0 && timestamp < 1_000_000_000_000) return timestamp * 1000;
+  return timestamp;
+}
+
 function formatDate(timestamp: number): string {
-  const d = new Date(timestamp);
+  const d = new Date(normalizeTimestamp(timestamp));
+  if (Number.isNaN(d.getTime())) return "Unknown date";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -176,16 +184,45 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max - 1) + "\u2026";
 }
 
-export function formatStyleMemory(corrections: CorrectionRecord[]): string {
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function safeSnippet(text: string, max: number): string {
+  return truncate(oneLine(text), max);
+}
+
+export function formatStyleMemory(
+  corrections: CorrectionRecord[],
+  opts?: { totalCount?: number; maxItems?: number; maxPerDoc?: number },
+): string {
   if (corrections.length === 0) return "";
 
-  const uniqueDocs = new Set(corrections.map((c) => c.documentId));
+  const maxItems = opts?.maxItems ?? 200;
+  const maxPerDoc = opts?.maxPerDoc ?? 30;
+  const totalCount = opts?.totalCount ?? corrections.length;
+
+  const sorted = [...corrections].sort((a, b) => {
+    const byTime = (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    if (byTime !== 0) return byTime;
+    return (a.documentId ?? "").localeCompare(b.documentId ?? "");
+  });
+
+  const limited = sorted.slice(0, Math.max(1, Math.min(maxItems, sorted.length)));
+  const uniqueDocs = new Set(limited.map((c) => c.documentId));
   const lines: string[] = [];
 
   lines.push("# Writing preferences (from Margin)");
-  lines.push(
-    `${corrections.length} correction${corrections.length === 1 ? "" : "s"} across ${uniqueDocs.size} document${uniqueDocs.size === 1 ? "" : "s"}`,
-  );
+  const showing = limited.length;
+  if (totalCount > showing) {
+    lines.push(
+      `${totalCount} correction${totalCount === 1 ? "" : "s"} total — showing latest ${showing} from ${uniqueDocs.size} document${uniqueDocs.size === 1 ? "" : "s"}`,
+    );
+  } else {
+    lines.push(
+      `${showing} correction${showing === 1 ? "" : "s"} across ${uniqueDocs.size} document${uniqueDocs.size === 1 ? "" : "s"}`,
+    );
+  }
   lines.push("");
   lines.push("Apply these editing patterns when writing for me:");
 
@@ -193,7 +230,7 @@ export function formatStyleMemory(corrections: CorrectionRecord[]): string {
   const groups: { docId: string; title: string | null; date: number; items: CorrectionRecord[] }[] = [];
   const groupMap = new Map<string, (typeof groups)[number]>();
 
-  for (const c of corrections) {
+  for (const c of limited) {
     let group = groupMap.get(c.documentId);
     if (!group) {
       group = { docId: c.documentId, title: c.documentTitle, date: c.createdAt, items: [] };
@@ -204,13 +241,15 @@ export function formatStyleMemory(corrections: CorrectionRecord[]): string {
   }
 
   for (const group of groups) {
-    const title = group.title ?? "Untitled";
+    const title = safeSnippet(group.title ?? "Untitled", 80).replaceAll("\"", "'");
     lines.push("");
     lines.push(`## From "${title}" (${formatDate(group.date)}):`);
-    for (const c of group.items) {
-      const original = truncate(c.originalText, 80);
-      const note = c.notes.length > 0 ? c.notes.join("; ") : "flagged";
-      lines.push(`- "${original}" \u2192 "${note}" [${c.highlightColor}]`);
+    const items = group.items.slice(0, maxPerDoc);
+    for (const c of items) {
+      const original = safeSnippet(c.originalText, 120);
+      const note = safeSnippet(c.notes.length > 0 ? c.notes.join("; ") : "flagged", 160);
+      const color = safeSnippet(c.highlightColor || "unknown", 24);
+      lines.push(`- ${original} \u2192 ${note} [${color}]`);
     }
   }
 

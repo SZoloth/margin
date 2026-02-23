@@ -61,6 +61,13 @@ export async function persistCorrections(
   });
 }
 
-export async function getAllCorrections(): Promise<CorrectionRecord[]> {
-  return invoke<CorrectionRecord[]>("get_all_corrections");
+export async function getAllCorrections(limit?: number): Promise<CorrectionRecord[]> {
+  return invoke<CorrectionRecord[]>(
+    "get_all_corrections",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function getCorrectionsCount(): Promise<number> {
+  return invoke<number>("get_corrections_count");
 }

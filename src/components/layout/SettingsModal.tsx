@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Settings } from "@/hooks/useSettings";
-import { getAllCorrections } from "@/lib/tauri-commands";
+import { getAllCorrections, getCorrectionsCount } from "@/lib/tauri-commands";
 import { formatStyleMemory } from "@/lib/export-annotations";
 
 interface SettingsModalProps {
@@ -199,23 +199,53 @@ function SectionHeader({ title }: { title: string }) {
 function StyleMemoryRow() {
   const [correctionCount, setCorrectionCount] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    getAllCorrections()
-      .then((records) => setCorrectionCount(records.length))
-      .catch(() => setCorrectionCount(0));
+    let cancelled = false;
+    getCorrectionsCount()
+      .then((count) => {
+        if (!cancelled) setCorrectionCount(count);
+      })
+      .catch(() => {
+        if (!cancelled) setCorrectionCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleCopy = useCallback(async () => {
     try {
-      const corrections = await getAllCorrections();
-      const text = formatStyleMemory(corrections);
+      const [countRes, correctionsRes] = await Promise.allSettled([
+        getCorrectionsCount(),
+        getAllCorrections(200),
+      ]);
+
+      if (correctionsRes.status !== "fulfilled") return;
+      const corrections = correctionsRes.value;
+      const totalCount =
+        countRes.status === "fulfilled" ? countRes.value : corrections.length;
+
+      const text = formatStyleMemory(corrections, { totalCount });
+      if (!text) return;
       await writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      if (copiedTimeoutRef.current !== null) {
+        window.clearTimeout(copiedTimeoutRef.current);
+      }
+      copiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
     } catch {
       // clipboard write failed silently
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current !== null) {
+        window.clearTimeout(copiedTimeoutRef.current);
+      }
+    };
   }, []);
 
   const count = correctionCount ?? 0;

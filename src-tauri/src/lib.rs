@@ -10,7 +10,7 @@ pub struct PendingOpenFiles(pub Mutex<Vec<String>>);
 
 #[tauri::command]
 fn drain_pending_open_files(state: tauri::State<'_, PendingOpenFiles>) -> Vec<String> {
-    let mut pending = state.0.lock().unwrap();
+    let mut pending = state.0.lock().unwrap_or_else(|e| e.into_inner());
     pending.drain(..).collect()
 }
 
@@ -48,6 +48,7 @@ pub fn run() {
             commands::search::search_files_on_disk,
             commands::corrections::persist_corrections,
             commands::corrections::get_all_corrections,
+            commands::corrections::get_corrections_count,
             commands::tabs::get_open_tabs,
             commands::tabs::save_open_tabs,
             watcher::watch_file,
@@ -71,10 +72,15 @@ pub fn run() {
                         // Try emitting to the frontend (works if webview is ready)
                         let emitted = app_handle.emit("open-file", &path_string).is_ok();
 
-                        // Also queue it in case the frontend isn't ready yet
-                        if let Some(state) = app_handle.try_state::<PendingOpenFiles>() {
-                            let mut pending = state.0.lock().unwrap();
-                            pending.push(path_string);
+                        // Only queue if we couldn't emit (e.g. frontend not ready yet).
+                        if !emitted {
+                            if let Some(state) = app_handle.try_state::<PendingOpenFiles>() {
+                                let mut pending =
+                                    state.0.lock().unwrap_or_else(|e| e.into_inner());
+                                if !pending.contains(&path_string) {
+                                    pending.push(path_string);
+                                }
+                            }
                         }
                     }
                 }
