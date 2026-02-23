@@ -1,16 +1,20 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { ExportResult } from "@/types/export";
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;
   onExport: () => Promise<ExportResult>;
   onClose: () => void;
+  persistCorrections: boolean;
+  onOpenSettings: () => void;
 }
 
 export function ExportAnnotationsPopover({
   isOpen,
   onExport,
   onClose,
+  persistCorrections,
+  onOpenSettings,
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -36,25 +40,32 @@ export function ExportAnnotationsPopover({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  const handleExport = useCallback(async () => {
-    setExporting(true);
-    try {
-      const res = await onExport();
-      setResult(res);
-    } catch (err) {
-      console.error("Export failed:", err);
-      setResult({ highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" });
-    } finally {
-      setExporting(false);
-    }
-  }, [onExport]);
+  const onExportRef = useRef(onExport);
+  onExportRef.current = onExport;
 
-  // Auto-export when popover opens
+  // Auto-export when popover opens. Uses ref for onExport to avoid
+  // re-triggering when the parent callback identity changes. Cancellation
+  // flag guards against state updates after StrictMode cleanup.
   useEffect(() => {
-    if (isOpen && !result && !exporting) {
-      void handleExport();
-    }
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isOpen) return;
+
+    let cancelled = false;
+
+    (async () => {
+      setExporting(true);
+      try {
+        const res = await onExportRef.current();
+        if (!cancelled) setResult(res);
+      } catch (err) {
+        console.error("Export failed:", err);
+        if (!cancelled) setResult({ highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" });
+      } finally {
+        if (!cancelled) setExporting(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -192,6 +203,53 @@ export function ExportAnnotationsPopover({
                 }}
               >
                 Corrections saved to {result.correctionsFile}
+              </div>
+            )}
+
+            {/* Save failed hint */}
+            {persistCorrections && !result.correctionsSaved && result.noteCount > 0 && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--color-text-tertiary)",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                Could not save feedback locally
+              </div>
+            )}
+
+            {/* Prompt to enable local save */}
+            {!persistCorrections && result.noteCount > 0 && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--color-text-tertiary)",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                Want to save feedback locally?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenSettings();
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "var(--color-accent, #4a9)",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: 2,
+                  }}
+                >
+                  Turn on in Settings
+                </button>
               </div>
             )}
           </div>

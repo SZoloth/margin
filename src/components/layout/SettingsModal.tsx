@@ -371,6 +371,26 @@ export function SettingsModal({
             ))}
           </div>
         </SettingRow>
+        <div
+          style={{
+            height: 1,
+            backgroundColor: "var(--color-border)",
+            margin: "8px 0",
+          }}
+        />
+
+        {/* Export section */}
+        <SectionHeader title="Export" />
+
+        <SettingRow
+          label="Save feedback locally"
+          description="Store highlights and notes in local database when exporting"
+        >
+          <ToggleSwitch
+            checked={settings.persistCorrections}
+            onChange={(v) => setSetting("persistCorrections", v)}
+          />
+        </SettingRow>
       </div>
     </div>
   );

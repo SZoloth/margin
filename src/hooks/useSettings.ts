@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 export interface Settings {
   theme: "light" | "dark" | "system";
   autosave: boolean;
+  persistCorrections: boolean;
   fontSize: "small" | "default" | "large" | "xl";
   lineSpacing: "compact" | "default" | "relaxed";
   readerWidth: "narrow" | "default" | "wide";
@@ -12,6 +13,7 @@ export interface Settings {
 const DEFAULTS: Settings = {
   theme: "system",
   autosave: false,
+  persistCorrections: false,
   fontSize: "default",
   lineSpacing: "default",
   readerWidth: "default",

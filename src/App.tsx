@@ -267,6 +267,8 @@ export default function App() {
   highlightsRef.current = annotations.highlights;
   const marginNotesRef = useRef(annotations.marginNotes);
   marginNotesRef.current = annotations.marginNotes;
+  const persistCorrectionsRef = useRef(settings.persistCorrections);
+  persistCorrectionsRef.current = settings.persistCorrections;
   const setContentExternalRef = useRef(doc.setContentExternal);
   setContentExternalRef.current = doc.setContentExternal;
   const isRestoringMarksRef = useRef(false);
@@ -604,7 +606,7 @@ export default function App() {
       let correctionsSaved = false;
       let correctionsFile = "";
 
-      if (highlights.length > 0 && marginNotes.length > 0) {
+      if (persistCorrectionsRef.current && highlights.length > 0 && marginNotes.length > 0) {
         const notesByHighlight = new Map<string, string[]>();
         for (const note of marginNotes) {
           const existing = notesByHighlight.get(note.highlight_id) ?? [];
@@ -822,6 +824,8 @@ export default function App() {
         isOpen={showExportPopover}
         onExport={handleExportAnnotations}
         onClose={() => setShowExportPopover(false)}
+        persistCorrections={settings.persistCorrections}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <UndoToast action={undoAction} />
