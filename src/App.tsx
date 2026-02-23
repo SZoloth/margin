@@ -826,6 +826,112 @@ export default function App() {
 
       <UndoToast action={undoAction} />
 
+      {/* Unsaved changes dialog */}
+      {tabsHook.pendingCloseTabId && (() => {
+        const tab = tabsHook.tabs.find((t) => t.id === tabsHook.pendingCloseTabId);
+        if (!tab) return null;
+        return (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+          >
+            <div
+              onClick={tabsHook.cancelCloseTab}
+              style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.3)" }}
+            />
+            <div
+              role="dialog"
+              aria-label="Unsaved changes"
+              style={{
+                position: "relative",
+                backgroundColor: "var(--color-page)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-lg)",
+                padding: "20px 24px",
+                minWidth: "min(340px, calc(100vw - 32px))",
+                maxWidth: "min(400px, calc(100vw - 32px))",
+                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+              }}
+            >
+              <button
+                onClick={tabsHook.cancelCloseTab}
+                aria-label="Close"
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--color-text-secondary)",
+                  fontSize: 18,
+                  lineHeight: 1,
+                  padding: "2px 6px",
+                  borderRadius: "var(--radius-sm)",
+                }}
+              >
+                ×
+              </button>
+              <div style={{ marginBottom: 16 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--color-text-primary)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Unsaved changes
+                </div>
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  "{tab.title}" has unsaved changes.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 13,
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--color-border)",
+                    background: "none",
+                    color: "var(--color-text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close without saving
+                </button>
+                <button
+                  onClick={async () => {
+                    await doc.saveCurrentFile();
+                    tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!);
+                  }}
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 13,
+                    borderRadius: "var(--radius-md)",
+                    border: "none",
+                    backgroundColor: "var(--color-accent)",
+                    color: "white",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                >
+                  Save and close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <SettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}

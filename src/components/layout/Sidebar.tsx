@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FolderOpenIcon, Search01Icon, Settings01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
+import type { Tab } from "@/types/tab";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { FileResult } from "@/hooks/useSearch";
 import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
@@ -19,6 +20,7 @@ interface SidebarProps {
   isSearching: boolean;
   onOpenFilePath: (path: string, newTab: boolean) => void;
   onRenameFile?: (doc: Document, newName: string) => void;
+  tabs: Tab[];
   // Keep-local props
   keepLocalItems: KeepLocalItem[];
   keepLocalIsOnline: boolean;
@@ -40,6 +42,7 @@ export function Sidebar({
   isSearching,
   onOpenFilePath,
   onRenameFile,
+  tabs,
   keepLocalItems,
   keepLocalIsOnline,
   keepLocalIsLoading,
@@ -133,6 +136,14 @@ export function Sidebar({
       debouncedKeepLocalSearch(value);
     }
   };
+
+  const openDocIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const tab of tabs) {
+      if (tab.documentId) ids.add(tab.documentId);
+    }
+    return ids;
+  }, [tabs]);
 
   const duplicateTitles = useMemo(() => {
     const counts = new Map<string, number>();
@@ -439,16 +450,19 @@ export function Sidebar({
                               }}
                               title={doc.file_path ?? doc.title ?? "Untitled"}
                             >
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  opacity: 0.5,
-                                  flexShrink: 0,
-                                  marginTop: 2,
-                                }}
-                              >
-                                {doc.source === "keep-local" ? "KL" : "F"}
-                              </span>
+                              {openDocIds.has(doc.id) && (
+                                <span
+                                  style={{
+                                    width: 5,
+                                    height: 5,
+                                    borderRadius: "50%",
+                                    backgroundColor: "var(--color-text-secondary)",
+                                    flexShrink: 0,
+                                    marginTop: 6,
+                                    opacity: 0.7,
+                                  }}
+                                />
+                              )}
                               {isRenaming ? (
                                 <input
                                   ref={renameInputRef}
