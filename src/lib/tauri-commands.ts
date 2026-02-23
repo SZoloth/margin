@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Document, FileEntry } from "@/types/document";
-import type { CorrectionInput } from "@/types/annotations";
+import type { CorrectionInput, CorrectionRecord } from "@/types/annotations";
 import type { PersistedTab } from "@/types/tab";
 
 export async function openFileDialog(): Promise<string | null> {
@@ -59,4 +59,8 @@ export async function persistCorrections(
     documentPath,
     exportDate,
   });
+}
+
+export async function getAllCorrections(): Promise<CorrectionRecord[]> {
+  return invoke<CorrectionRecord[]>("get_all_corrections");
 }

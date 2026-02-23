@@ -28,3 +28,12 @@ export interface CorrectionInput {
   notes: string[];
   highlight_color: string;
 }
+
+export interface CorrectionRecord {
+  originalText: string;
+  notes: string[];
+  highlightColor: string;
+  documentTitle: string | null;
+  documentId: string;
+  createdAt: number;
+}

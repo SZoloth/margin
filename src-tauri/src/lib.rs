@@ -47,6 +47,7 @@ pub fn run() {
             commands::search::remove_document_index,
             commands::search::search_files_on_disk,
             commands::corrections::persist_corrections,
+            commands::corrections::get_all_corrections,
             commands::tabs::get_open_tabs,
             commands::tabs::save_open_tabs,
             watcher::watch_file,

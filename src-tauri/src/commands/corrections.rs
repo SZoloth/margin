@@ -5,6 +5,59 @@ use std::io::Write;
 use std::time::SystemTime;
 use uuid::Uuid;
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrectionRecord {
+    pub original_text: String,
+    pub notes: Vec<String>,
+    pub highlight_color: String,
+    pub document_title: Option<String>,
+    pub document_id: String,
+    pub created_at: i64,
+}
+
+#[tauri::command]
+pub async fn get_all_corrections() -> Result<Vec<CorrectionRecord>, String> {
+    let conn = get_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at
+             FROM corrections
+             ORDER BY created_at DESC
+             LIMIT 50",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            let original_text: String = row.get(0)?;
+            let notes_json: String = row.get(1)?;
+            let highlight_color: String = row.get(2)?;
+            let document_title: Option<String> = row.get(3)?;
+            let document_id: String = row.get(4)?;
+            let created_at: i64 = row.get(5)?;
+
+            let notes: Vec<String> =
+                serde_json::from_str(&notes_json).unwrap_or_default();
+
+            Ok(CorrectionRecord {
+                original_text,
+                notes,
+                highlight_color,
+                document_title,
+                document_id,
+                created_at,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut records = Vec::new();
+    for row in rows {
+        records.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(records)
+}
+
 fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

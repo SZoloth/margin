@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import type { Highlight, MarginNote } from "@/types/annotations";
+import type { Highlight, MarginNote, CorrectionRecord } from "@/types/annotations";
 import type { Document } from "@/types/document";
 
 interface ExportParams {
@@ -163,5 +163,58 @@ export async function formatAnnotationsMarkdown(
   }
 
   lines.push("");
+  return lines.join("\n");
+}
+
+function formatDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max - 1) + "\u2026";
+}
+
+export function formatStyleMemory(corrections: CorrectionRecord[]): string {
+  if (corrections.length === 0) return "";
+
+  const uniqueDocs = new Set(corrections.map((c) => c.documentId));
+  const lines: string[] = [];
+
+  lines.push("# Writing preferences (from Margin)");
+  lines.push(
+    `${corrections.length} correction${corrections.length === 1 ? "" : "s"} across ${uniqueDocs.size} document${uniqueDocs.size === 1 ? "" : "s"}`,
+  );
+  lines.push("");
+  lines.push("Apply these editing patterns when writing for me:");
+
+  // Group by documentId, preserving order of first appearance
+  const groups: { docId: string; title: string | null; date: number; items: CorrectionRecord[] }[] = [];
+  const groupMap = new Map<string, (typeof groups)[number]>();
+
+  for (const c of corrections) {
+    let group = groupMap.get(c.documentId);
+    if (!group) {
+      group = { docId: c.documentId, title: c.documentTitle, date: c.createdAt, items: [] };
+      groupMap.set(c.documentId, group);
+      groups.push(group);
+    }
+    group.items.push(c);
+  }
+
+  for (const group of groups) {
+    const title = group.title ?? "Untitled";
+    lines.push("");
+    lines.push(`## From "${title}" (${formatDate(group.date)}):`);
+    for (const c of group.items) {
+      const original = truncate(c.originalText, 80);
+      const note = c.notes.length > 0 ? c.notes.join("; ") : "flagged";
+      lines.push(`- "${original}" \u2192 "${note}" [${c.highlightColor}]`);
+    }
+  }
+
+  lines.push("");
+  lines.push("Apply these patterns consistently in all future writing.");
   return lines.join("\n");
 }

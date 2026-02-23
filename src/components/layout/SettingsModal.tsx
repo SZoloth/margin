@@ -1,5 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Settings } from "@/hooks/useSettings";
+import { getAllCorrections } from "@/lib/tauri-commands";
+import { formatStyleMemory } from "@/lib/export-annotations";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -190,6 +193,63 @@ function SectionHeader({ title }: { title: string }) {
     >
       {title}
     </div>
+  );
+}
+
+function StyleMemoryRow() {
+  const [correctionCount, setCorrectionCount] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    getAllCorrections()
+      .then((records) => setCorrectionCount(records.length))
+      .catch(() => setCorrectionCount(0));
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      const corrections = await getAllCorrections();
+      const text = formatStyleMemory(corrections);
+      await writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard write failed silently
+    }
+  }, []);
+
+  const count = correctionCount ?? 0;
+  const hasCorrections = count > 0;
+  const description = hasCorrections
+    ? `${count} correction${count === 1 ? "" : "s"} \u2014 copy as AI prompt`
+    : "No corrections yet \u2014 export annotations first";
+
+  return (
+    <SettingRow label="Style Memory" description={description}>
+      <button
+        type="button"
+        disabled={!hasCorrections}
+        onClick={handleCopy}
+        style={{
+          padding: "5px 14px",
+          fontSize: 12,
+          fontWeight: 500,
+          fontFamily: "'Inter', system-ui, sans-serif",
+          color: hasCorrections
+            ? "var(--color-text-primary)"
+            : "var(--color-text-secondary)",
+          backgroundColor: "var(--hover-bg)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-sm)",
+          cursor: hasCorrections ? "pointer" : "default",
+          opacity: hasCorrections ? 1 : 0.5,
+          transition: "all 150ms ease",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </SettingRow>
   );
 }
 
@@ -391,6 +451,8 @@ export function SettingsModal({
             onChange={(v) => setSetting("persistCorrections", v)}
           />
         </SettingRow>
+
+        <StyleMemoryRow />
       </div>
     </div>
   );
