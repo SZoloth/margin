@@ -23,6 +23,9 @@ import { listen } from "@tauri-apps/api/event";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
 import type { CorrectionInput } from "@/types/annotations";
+import { UndoToast } from "@/components/ui/UndoToast";
+import { MarginIndicators } from "@/components/editor/MarginIndicators";
+import type { UndoAction } from "@/components/ui/UndoToast";
 
 /**
  * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
@@ -86,6 +89,8 @@ export default function App() {
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
+  const undoIdRef = useRef(0);
 
   // Snapshot function for useTabs — captures current active tab state
   const snapshotFn = useCallback((): SnapshotData => {
@@ -417,30 +422,69 @@ export default function App() {
     if (!editor) return;
 
     const highlight = annotations.highlights.find((h) => h.id === id);
+    if (!highlight) return;
+
+    // Delete immediately
     await annotations.deleteHighlight(id);
 
     setFocusHighlightId(null);
     setAnchorRect(null);
 
-    if (highlight) {
-      const { state } = editor;
-      const { tr } = state;
-      const markType = state.schema.marks.highlight;
-      if (markType) {
-        state.doc.descendants((node, pos) => {
-          if (!node.isText) return;
-          const hlMark = node.marks.find(
-            (m) => m.type.name === "highlight" && m.attrs.color === highlight.color,
-          );
-          if (hlMark && node.text === highlight.text_content) {
-            tr.removeMark(pos, pos + node.nodeSize, hlMark);
-          }
-        });
-        if (tr.steps.length > 0) {
-          editor.view.dispatch(tr);
+    // Remove mark from editor
+    const { state } = editor;
+    const { tr } = state;
+    const markType = state.schema.marks.highlight;
+    if (markType) {
+      state.doc.descendants((node, pos) => {
+        if (!node.isText) return;
+        const hlMark = node.marks.find(
+          (m) => m.type.name === "highlight" && m.attrs.color === highlight.color,
+        );
+        if (hlMark && node.text === highlight.text_content) {
+          tr.removeMark(pos, pos + node.nodeSize, hlMark);
         }
+      });
+      if (tr.steps.length > 0) {
+        editor.view.dispatch(tr);
       }
     }
+
+    // Show undo toast
+    const actionId = String(++undoIdRef.current);
+    setUndoAction({
+      id: actionId,
+      message: "Highlight deleted",
+      onUndo: async () => {
+        // Re-create the highlight
+        try {
+          const restored = await annotations.createHighlight({
+            documentId: highlight.document_id,
+            color: highlight.color,
+            textContent: highlight.text_content,
+            fromPos: highlight.from_pos,
+            toPos: highlight.to_pos,
+            prefixContext: highlight.prefix_context,
+            suffixContext: highlight.suffix_context,
+          });
+          // Re-apply mark in editor
+          if (markType) {
+            const restoreTr = editor.state.tr;
+            restoreTr.addMark(
+              highlight.from_pos,
+              highlight.to_pos,
+              markType.create({ color: highlight.color }),
+            );
+            editor.view.dispatch(restoreTr);
+          }
+          // Re-open the thread
+          setFocusHighlightId(restored.id);
+        } catch (err) {
+          console.error("Failed to undo highlight delete:", err);
+        }
+        setUndoAction(null);
+      },
+      onCommit: () => setUndoAction(null),
+    });
   }, [editor, annotations]);
 
   const handleEditorReady = useCallback((ed: Editor) => {
@@ -692,6 +736,20 @@ export default function App() {
           />
         ) : undefined
       }
+      marginIndicators={
+        editor && annotations.isLoaded ? (
+          <MarginIndicators
+            editor={editor}
+            highlights={annotations.highlights}
+            marginNotes={annotations.marginNotes}
+            onClickHighlight={(highlightId, rect) => {
+              setFocusHighlightId(highlightId);
+              setAnchorRect(rect);
+              setAutoFocusNew(false);
+            }}
+          />
+        ) : undefined
+      }
     >
       <Reader
         content={doc.content}
@@ -734,6 +792,8 @@ export default function App() {
         onExport={handleExportAnnotations}
         onClose={() => setShowExportPopover(false)}
       />
+
+      <UndoToast action={undoAction} />
     </AppShell>
   );
 }
