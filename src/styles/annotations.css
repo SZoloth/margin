@@ -29,7 +29,7 @@
   border: 1px solid var(--color-border);
   background-color: var(--color-page);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-lg);
   transition: opacity var(--duration-normal) var(--ease-entrance), transform var(--duration-normal) var(--ease-entrance);
   display: flex;
   flex-direction: column;
@@ -168,7 +168,7 @@
 /* Dark mode — thread */
 @media (prefers-color-scheme: dark) {
   .thread-popover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-lg);
   }
 }
 

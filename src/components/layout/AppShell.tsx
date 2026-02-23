@@ -183,7 +183,7 @@ export function AppShell({
           transition: sidebarOpen
             ? "transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
             : "transform 150ms cubic-bezier(0.4, 0, 1, 1)",
-          ...(isMobile ? { boxShadow: sidebarOpen ? "4px 0 12px rgba(0,0,0,0.15)" : "none" } : {}),
+          ...(isMobile ? { boxShadow: sidebarOpen ? "var(--shadow-lg)" : "none" } : {}),
         }}
       >
         <div className="flex flex-col flex-1 min-w-0 border-r" style={{ borderColor: "var(--color-border)" }}>
