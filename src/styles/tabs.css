@@ -80,8 +80,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   border: none;
   background: none;
   color: var(--color-text-secondary);
@@ -115,8 +115,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   margin: 4px;
   border: none;
   background: none;

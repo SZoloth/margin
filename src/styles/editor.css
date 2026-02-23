@@ -101,7 +101,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  padding: 8px;
+  min-width: 36px;
+  min-height: 36px;
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   background-color: transparent;
@@ -120,6 +122,34 @@
 }
 
 .toolbar-btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
+}
+
+/* Color picker dot in floating toolbar */
+.toolbar-color-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
+}
+
+.toolbar-color-btn:hover {
+  background-color: var(--hover-bg);
+}
+
+.toolbar-color-btn:active {
+  background-color: var(--active-bg);
+  transform: scale(0.92);
+}
+
+.toolbar-color-btn:focus-visible {
   outline: 2px solid var(--color-text-secondary);
   outline-offset: -1px;
 }
