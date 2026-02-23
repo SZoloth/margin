@@ -7,11 +7,11 @@
 @import "./toc.css";
 
 @theme {
-  --color-highlight-yellow: #fef3c7;
-  --color-highlight-green: #d1fae5;
-  --color-highlight-blue: #dbeafe;
-  --color-highlight-pink: #fce7f3;
-  --color-highlight-orange: #ffedd5;
+  --color-highlight-yellow: #fef0c3;
+  --color-highlight-green: #d4f0d8;
+  --color-highlight-blue: #d6e8f5;
+  --color-highlight-pink: #f8dfe8;
+  --color-highlight-orange: #fde4c8;
 }
 
 /* Light theme (default) */
