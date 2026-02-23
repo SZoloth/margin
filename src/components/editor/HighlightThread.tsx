@@ -144,9 +144,11 @@ export function HighlightThread({
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousFocusRef = useRef<Element | null>(null);
 
-  // Animate in
+  // Save previous focus and animate in
   useEffect(() => {
+    previousFocusRef.current = document.activeElement;
     requestAnimationFrame(() => setIsVisible(true));
   }, []);
 
@@ -162,6 +164,10 @@ export function HighlightThread({
     setIsClosing(true);
     setIsVisible(false);
     closeTimerRef.current = setTimeout(() => {
+      // Restore focus to previously focused element
+      if (previousFocusRef.current instanceof HTMLElement) {
+        previousFocusRef.current.focus();
+      }
       onClose();
     }, 200);
   }, [isClosing, onClose]);
@@ -199,6 +205,39 @@ export function HighlightThread({
     };
   }, [handleClose]);
 
+  // Focus trap — keep Tab cycling within the popover
+  useEffect(() => {
+    const popover = popoverRef.current;
+    if (!popover) return;
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusable = popover.querySelectorAll<HTMLElement>(
+        'button, textarea, input, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0] as HTMLElement | undefined;
+      const last = focusable[focusable.length - 1] as HTMLElement | undefined;
+      if (!first || !last) return;
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    popover.addEventListener("keydown", handleTab);
+    return () => popover.removeEventListener("keydown", handleTab);
+  }, []);
+
   const handleAddNote = useCallback(() => {
     const trimmed = newNoteValue.trim();
     if (!trimmed) return;
@@ -227,6 +266,9 @@ export function HighlightThread({
   return createPortal(
     <div
       ref={popoverRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Highlight notes"
       className={`thread-popover ${isMobile ? "thread-popover--mobile" : ""}`}
       style={isMobile ? {
         opacity: isVisible ? 1 : 0,
