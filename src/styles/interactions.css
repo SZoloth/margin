@@ -53,6 +53,19 @@
   outline-offset: -2px;
 }
 
+/* Transition utilities — reusable entrance/exit patterns */
+.transition-entrance {
+  transition: opacity var(--duration-normal) var(--ease-entrance), transform var(--duration-normal) var(--ease-entrance);
+}
+
+.transition-exit {
+  transition: opacity var(--duration-fast) var(--ease-exit), transform var(--duration-fast) var(--ease-exit);
+}
+
+.transition-fade {
+  transition: opacity var(--duration-normal) var(--ease-entrance);
+}
+
 /* Sidebar resize handle */
 *:hover > .resize-handle-line {
   opacity: 0.4 !important;
