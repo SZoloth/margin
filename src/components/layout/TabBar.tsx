@@ -51,11 +51,34 @@ export function TabBar({
     setDropIndex(null);
   }, []);
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const activeIndex = tabs.findIndex((t) => t.id === activeTabId);
+    if (activeIndex === -1) return;
+
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      const next = tabs[(activeIndex + 1) % tabs.length];
+      if (next) onSelectTab(next.id);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      const prev = tabs[(activeIndex - 1 + tabs.length) % tabs.length];
+      if (prev) onSelectTab(prev.id);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      const first = tabs[0];
+      if (first) onSelectTab(first.id);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      const last = tabs[tabs.length - 1];
+      if (last) onSelectTab(last.id);
+    }
+  }, [tabs, activeTabId, onSelectTab]);
+
   if (tabs.length === 0) return null;
 
   return (
     <div className="tab-bar" ref={scrollRef}>
-      <div className="tab-bar-inner">
+      <div className="tab-bar-inner" role="tablist" aria-label="Open documents">
         {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;
           const isDragging = index === dragIndex;
@@ -64,8 +87,18 @@ export function TabBar({
           return (
             <div
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
               className={`tab-item${isActive ? " tab-active" : ""}${isDragging ? " tab-dragging" : ""}${isDropTarget ? " tab-drop-target" : ""}`}
               onClick={() => onSelectTab(tab.id)}
+              onKeyDown={handleKeyDown}
+              onAuxClick={(e) => {
+                if (e.button === 1) {
+                  e.preventDefault();
+                  onCloseTab(tab.id);
+                }
+              }}
               draggable
               onDragStart={(e) => handleDragStart(e, index)}
               onDragOver={(e) => handleDragOver(e, index)}
@@ -79,6 +112,7 @@ export function TabBar({
               <button
                 type="button"
                 className="tab-close"
+                tabIndex={-1}
                 onClick={(e) => {
                   e.stopPropagation();
                   onCloseTab(tab.id);
