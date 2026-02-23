@@ -145,6 +145,38 @@ export function Sidebar({
     return dupes;
   }, [recentDocs]);
 
+  const temporalGroups = useMemo(() => {
+    if (recentDocs.length === 0) return [];
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 7);
+
+    const groups: { label: string; docs: typeof recentDocs }[] = [
+      { label: "Today", docs: [] },
+      { label: "Yesterday", docs: [] },
+      { label: "This week", docs: [] },
+      { label: "Older", docs: [] },
+    ];
+
+    for (const doc of recentDocs) {
+      const t = doc.last_opened_at;
+      if (t >= todayStart.getTime()) {
+        groups[0]!.docs.push(doc);
+      } else if (t >= yesterdayStart.getTime()) {
+        groups[1]!.docs.push(doc);
+      } else if (t >= weekStart.getTime()) {
+        groups[2]!.docs.push(doc);
+      } else {
+        groups[3]!.docs.push(doc);
+      }
+    }
+
+    return groups.filter((g) => g.docs.length > 0);
+  }, [recentDocs]);
+
   return (
     <div className="flex flex-col h-full">
       {/* App header */}
@@ -315,12 +347,6 @@ export function Sidebar({
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         {activeTab === "files" ? (
           <div>
-            <h2
-              className="text-xs font-semibold uppercase tracking-wider mb-3 px-3"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              Recent
-            </h2>
             {recentDocs.length === 0 ? (
               <div
                 className="px-3 text-sm italic"
@@ -329,101 +355,122 @@ export function Sidebar({
                 No recent documents
               </div>
             ) : (
-              <div className="flex flex-col gap-0.5">
-                {recentDocs.map((doc) => {
-                  const isActive = currentDoc?.id === doc.id;
-                  const title = doc.title ?? "Untitled";
-                  const needsDisambiguation = duplicateTitles.has(title) && doc.file_path;
-                  let parentFolder = "";
-                  if (needsDisambiguation && doc.file_path) {
-                    const parts = doc.file_path.split("/");
-                    const dirPath = parts.slice(0, -1).join("/");
-                    const homePrefix = dirPath.match(/^\/Users\/[^/]+/)?.[0];
-                    parentFolder = homePrefix ? dirPath.replace(homePrefix, "~") : dirPath;
+              <div className="flex flex-col gap-4">
+                {temporalGroups.map((group) => {
+                  let runningIndex = 0;
+                  // Calculate offset for stagger: sum of docs in prior groups
+                  for (const g of temporalGroups) {
+                    if (g === group) break;
+                    runningIndex += g.docs.length;
                   }
-                  const isRenaming = renamingDocId === doc.id;
-
-                  const commitRename = () => {
-                    const trimmed = renameValue.trim();
-                    if (trimmed && doc.file_path) {
-                      const segments = doc.file_path.split("/");
-                      const currentFilename = segments[segments.length - 1] ?? "";
-                      if (trimmed !== currentFilename && onRenameFile) {
-                        onRenameFile(doc, trimmed);
-                      }
-                    }
-                    setRenamingDocId(null);
-                  };
-
                   return (
-                    <button
-                      key={doc.id}
-                      onClick={(e) => {
-                        if (isRenaming) return;
-                        onSelectRecentDoc(doc, e.metaKey);
-                      }}
-                      onContextMenu={(e) => {
-                        if (doc.source !== "file" || !doc.file_path || !onRenameFile) return;
-                        e.preventDefault();
-                        const segments = doc.file_path.split("/");
-                        const currentFilename = segments[segments.length - 1] ?? "";
-                        setRenameValue(currentFilename);
-                        setRenamingDocId(doc.id);
-                        // Focus the input after it mounts
-                        requestAnimationFrame(() => renameInputRef.current?.select());
-                      }}
-                      className="interactive-item flex items-start gap-2 px-3 py-1.5 text-sm text-left"
-                      style={{
-                        color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                        backgroundColor: isActive ? "var(--active-bg)" : "transparent",
-                        fontWeight: isActive ? 500 : 400,
-                        border: "none",
-                        width: "100%",
-                      }}
-                      title={doc.file_path ?? doc.title ?? "Untitled"}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          opacity: 0.5,
-                          flexShrink: 0,
-                          marginTop: 2,
-                        }}
+                    <div key={group.label}>
+                      <h2
+                        className="text-xs font-semibold uppercase tracking-wider mb-2 px-3"
+                        style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}
                       >
-                        {doc.source === "keep-local" ? "KL" : "F"}
-                      </span>
-                      {isRenaming ? (
-                        <input
-                          ref={renameInputRef}
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); commitRename(); }
-                            if (e.key === "Escape") { e.stopPropagation(); setRenamingDocId(null); }
-                          }}
-                          onBlur={commitRename}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-sm bg-transparent outline-none min-w-0 flex-1"
-                          style={{
-                            color: "var(--color-text-primary)",
-                            borderBottom: "1px solid var(--color-text-secondary)",
-                            padding: "0 0 1px 0",
-                          }}
-                        />
-                      ) : (
-                        <span className="truncate min-w-0">
-                          <span className="block truncate">{title}</span>
-                          {parentFolder && (
-                            <span
-                              className="block truncate"
-                              style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
+                        {group.label}
+                      </h2>
+                      <div className="flex flex-col gap-0.5">
+                        {group.docs.map((doc, groupDocIndex) => {
+                          const docIndex = runningIndex + groupDocIndex;
+                          const isActive = currentDoc?.id === doc.id;
+                          const title = doc.title ?? "Untitled";
+                          const needsDisambiguation = duplicateTitles.has(title) && doc.file_path;
+                          let parentFolder = "";
+                          if (needsDisambiguation && doc.file_path) {
+                            const parts = doc.file_path.split("/");
+                            const dirPath = parts.slice(0, -1).join("/");
+                            const homePrefix = dirPath.match(/^\/Users\/[^/]+/)?.[0];
+                            parentFolder = homePrefix ? dirPath.replace(homePrefix, "~") : dirPath;
+                          }
+                          const isRenaming = renamingDocId === doc.id;
+
+                          const commitRename = () => {
+                            const trimmed = renameValue.trim();
+                            if (trimmed && doc.file_path) {
+                              const segments = doc.file_path.split("/");
+                              const currentFilename = segments[segments.length - 1] ?? "";
+                              if (trimmed !== currentFilename && onRenameFile) {
+                                onRenameFile(doc, trimmed);
+                              }
+                            }
+                            setRenamingDocId(null);
+                          };
+
+                          return (
+                            <button
+                              key={doc.id}
+                              onClick={(e) => {
+                                if (isRenaming) return;
+                                onSelectRecentDoc(doc, e.metaKey);
+                              }}
+                              onContextMenu={(e) => {
+                                if (doc.source !== "file" || !doc.file_path || !onRenameFile) return;
+                                e.preventDefault();
+                                const segments = doc.file_path.split("/");
+                                const currentFilename = segments[segments.length - 1] ?? "";
+                                setRenameValue(currentFilename);
+                                setRenamingDocId(doc.id);
+                                requestAnimationFrame(() => renameInputRef.current?.select());
+                              }}
+                              className="interactive-item sidebar-list-item flex items-start gap-2 px-3 py-1.5 text-sm text-left"
+                              style={{
+                                color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                                backgroundColor: isActive ? "var(--active-bg)" : "transparent",
+                                fontWeight: isActive ? 500 : 400,
+                                border: "none",
+                                width: "100%",
+                                animationDelay: `${docIndex * 25}ms`,
+                              }}
+                              title={doc.file_path ?? doc.title ?? "Untitled"}
                             >
-                              {parentFolder}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </button>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  opacity: 0.5,
+                                  flexShrink: 0,
+                                  marginTop: 2,
+                                }}
+                              >
+                                {doc.source === "keep-local" ? "KL" : "F"}
+                              </span>
+                              {isRenaming ? (
+                                <input
+                                  ref={renameInputRef}
+                                  value={renameValue}
+                                  onChange={(e) => setRenameValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                                    if (e.key === "Escape") { e.stopPropagation(); setRenamingDocId(null); }
+                                  }}
+                                  onBlur={commitRename}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-sm bg-transparent outline-none min-w-0 flex-1"
+                                  style={{
+                                    color: "var(--color-text-primary)",
+                                    borderBottom: "1px solid var(--color-text-secondary)",
+                                    padding: "0 0 1px 0",
+                                  }}
+                                />
+                              ) : (
+                                <span className="truncate min-w-0">
+                                  <span className="block truncate">{title}</span>
+                                  {parentFolder && (
+                                    <span
+                                      className="block truncate"
+                                      style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
+                                    >
+                                      {parentFolder}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
