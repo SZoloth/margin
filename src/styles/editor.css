@@ -60,35 +60,33 @@
 }
 
 /* Dark mode highlights — slightly more saturated */
-@media (prefers-color-scheme: dark) {
-  .tiptap ::selection {
-    background: rgba(66, 133, 244, 0.35);
-  }
+:root[data-theme="dark"] .tiptap ::selection {
+  background: rgba(66, 133, 244, 0.35);
+}
 
-  .tiptap mark[data-color="yellow"],
-  .tiptap mark.highlight--yellow {
-    background-color: rgba(245, 190, 30, 0.28);
-  }
+:root[data-theme="dark"] .tiptap mark[data-color="yellow"],
+:root[data-theme="dark"] .tiptap mark.highlight--yellow {
+  background-color: rgba(245, 190, 30, 0.28);
+}
 
-  .tiptap mark[data-color="green"],
-  .tiptap mark.highlight--green {
-    background-color: rgba(72, 190, 100, 0.22);
-  }
+:root[data-theme="dark"] .tiptap mark[data-color="green"],
+:root[data-theme="dark"] .tiptap mark.highlight--green {
+  background-color: rgba(72, 190, 100, 0.22);
+}
 
-  .tiptap mark[data-color="blue"],
-  .tiptap mark.highlight--blue {
-    background-color: rgba(90, 150, 220, 0.22);
-  }
+:root[data-theme="dark"] .tiptap mark[data-color="blue"],
+:root[data-theme="dark"] .tiptap mark.highlight--blue {
+  background-color: rgba(90, 150, 220, 0.22);
+}
 
-  .tiptap mark[data-color="pink"],
-  .tiptap mark.highlight--pink {
-    background-color: rgba(220, 90, 150, 0.22);
-  }
+:root[data-theme="dark"] .tiptap mark[data-color="pink"],
+:root[data-theme="dark"] .tiptap mark.highlight--pink {
+  background-color: rgba(220, 90, 150, 0.22);
+}
 
-  .tiptap mark[data-color="orange"],
-  .tiptap mark.highlight--orange {
-    background-color: rgba(240, 130, 40, 0.25);
-  }
+:root[data-theme="dark"] .tiptap mark[data-color="orange"],
+:root[data-theme="dark"] .tiptap mark.highlight--orange {
+  background-color: rgba(240, 130, 40, 0.25);
 }
 
 /* Smooth highlight color transitions */
@@ -164,10 +162,8 @@
   filter: brightness(0.95);
 }
 
-@media (prefers-color-scheme: dark) {
-  .tiptap mark[data-color]:hover {
-    filter: brightness(1.15);
-  }
+:root[data-theme="dark"] .tiptap mark[data-color]:hover {
+  filter: brightness(1.15);
 }
 
 /* Hamburger toggle button */

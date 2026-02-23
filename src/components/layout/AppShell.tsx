@@ -12,6 +12,7 @@ import type { useSearch } from "@/hooks/useSearch";
 
 interface AppShellProps {
   children: React.ReactNode;
+  onOpenSettings: () => void;
   currentDoc: Document | null;
   recentDocs: Document[];
   onOpenFile: () => void;
@@ -37,6 +38,7 @@ interface AppShellProps {
 
 export function AppShell({
   children,
+  onOpenSettings,
   currentDoc,
   recentDocs,
   onOpenFile,
@@ -207,6 +209,7 @@ export function AppShell({
           keepLocalQuery={keepLocal.query}
           onKeepLocalSearch={keepLocal.search}
           onSelectKeepLocalItem={(item, newTab) => { onSelectKeepLocalItem(item, newTab); closeSidebar(); }}
+          onOpenSettings={onOpenSettings}
         />
         </div>
 

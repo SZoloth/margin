@@ -7,39 +7,39 @@
 @import "./toc.css";
 
 @theme {
-  --color-highlight-yellow: #fef0c3;
-  --color-highlight-green: #d4f0d8;
-  --color-highlight-blue: #d6e8f5;
-  --color-highlight-pink: #f8dfe8;
-  --color-highlight-orange: #fde4c8;
+  --color-highlight-yellow: #f5edd2;
+  --color-highlight-green: #dce8d5;
+  --color-highlight-blue: #d8e2eb;
+  --color-highlight-pink: #ecdde3;
+  --color-highlight-orange: #f0e2cf;
 }
 
-/* Light theme (default) */
+/* Light theme (default) — Tufte-inspired warm cream */
 :root {
-  --color-page: #faf8f5;
-  --color-sidebar: #f2efe9;
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #4a4a4a;
-  --color-border: #e5e2dc;
+  --color-page: #fffff8;
+  --color-sidebar: #f7f5ed;
+  --color-text-primary: #1a1714;
+  --color-text-secondary: #6b6560;
+  --color-border: #dfdbd3;
 
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
 
-  --hover-bg: rgba(0, 0, 0, 0.05);
-  --active-bg: rgba(0, 0, 0, 0.08);
+  --hover-bg: rgba(0, 0, 0, 0.04);
+  --active-bg: rgba(0, 0, 0, 0.07);
 
   /* Semantic colors */
   --color-success: #22c55e;
   --color-danger: #ef4444;
   --color-danger-text: #dc2626;
   --color-warning: #eab308;
-  --color-accent: #eab308;
+  --color-accent: #b5972f;
 
-  /* Elevation */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  /* Elevation — barely there */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.09);
 
   /* Easing system */
   --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
@@ -51,29 +51,27 @@
 }
 
 /* Dark theme */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-page: #1C1B19;
-    --color-sidebar: #24231F;
-    --color-text-primary: #E5E5E5;
-    --color-text-secondary: #A1A1A1;
-    --color-border: #36342E;
+:root[data-theme="dark"] {
+  --color-page: #1C1B19;
+  --color-sidebar: #24231F;
+  --color-text-primary: #E5E5E5;
+  --color-text-secondary: #A1A1A1;
+  --color-border: #36342E;
 
-    --hover-bg: rgba(255, 255, 255, 0.07);
-    --active-bg: rgba(255, 255, 255, 0.12);
+  --hover-bg: rgba(255, 255, 255, 0.07);
+  --active-bg: rgba(255, 255, 255, 0.12);
 
-    /* Elevation — higher opacity for dark mode */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Elevation — higher opacity for dark mode */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
 
-    /* Semantic colors */
-    --color-success: #4ade80;
-    --color-danger: #f87171;
-    --color-danger-text: #f87171;
-    --color-warning: #facc15;
-    --color-accent: #facc15;
-  }
+  /* Semantic colors */
+  --color-success: #4ade80;
+  --color-danger: #f87171;
+  --color-danger-text: #f87171;
+  --color-warning: #facc15;
+  --color-accent: #facc15;
 }
 
 body {

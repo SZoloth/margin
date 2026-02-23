@@ -49,6 +49,10 @@ No test framework is configured.
 - **Styling:** CSS variables for theming (light/dark via `prefers-color-scheme`), Tailwind v4, custom CSS in `src/styles/`. Highlight colors defined as CSS custom properties in `globals.css`.
 - **Editor:** TipTap with custom extensions in `src/components/editor/extensions/` (MultiColorHighlight, MarginNote).
 
+## Build & Verification
+
+This is a Tauri app (Rust backend + React/TypeScript frontend). After making Rust changes, always run `cargo check` before proceeding. After TypeScript changes, run the TypeScript compiler to catch type errors. Do not assume the first implementation compiles cleanly.
+
 ## Issue tracking
 
 This project uses `bd` (beads) for issue tracking. See AGENTS.md for the full workflow. Key commands: `bd ready`, `bd show <id>`, `bd close <id>`, `bd sync`.

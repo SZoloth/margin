@@ -13,6 +13,8 @@ import { useFileWatcher } from "@/hooks/useFileWatcher";
 import { useSearch } from "@/hooks/useSearch";
 import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
+import { useSettings } from "@/hooks/useSettings";
+import { SettingsModal } from "@/components/layout/SettingsModal";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
@@ -23,6 +25,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
 import type { CorrectionInput } from "@/types/annotations";
+import type { ExportResult } from "@/types/export";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
 import type { UndoAction } from "@/components/ui/UndoToast";
@@ -79,12 +82,14 @@ function findTextInDoc(
 }
 
 export default function App() {
-  const doc = useDocument();
+  const { settings, setSetting } = useSettings();
+  const doc = useDocument(settings.autosave);
   const annotations = useAnnotations();
   const keepLocal = useKeepLocal();
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
+  const [showSettings, setShowSettings] = useState(false);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -492,7 +497,8 @@ export default function App() {
   }, []);
 
   const handleHighlight = useCallback(
-    async (color: string = "yellow") => {
+    async (color?: string) => {
+      const resolvedColor = color ?? settings.defaultHighlightColor;
       if (!editor || !doc.currentDoc) return;
       const { from, to } = editor.state.selection;
       if (from === to) return;
@@ -501,12 +507,12 @@ export default function App() {
       const selectedText = editor.state.doc.textBetween(from, to, "\n");
       const anchor = createAnchor(fullText, from, to);
 
-      editor.chain().focus().setHighlight({ color }).run();
+      editor.chain().focus().setHighlight({ color: resolvedColor }).run();
 
       try {
         await annotations.createHighlight({
           documentId: doc.currentDoc.id,
-          color,
+          color: resolvedColor,
           textContent: selectedText,
           fromPos: from,
           toPos: to,
@@ -517,7 +523,7 @@ export default function App() {
         console.error("Failed to save highlight:", err, "documentId:", doc.currentDoc.id);
       }
     },
-    [editor, doc.currentDoc, annotations],
+    [editor, doc.currentDoc, annotations, settings.defaultHighlightColor],
   );
 
   const handleNote = useCallback(async () => {
@@ -529,12 +535,12 @@ export default function App() {
     const selectedText = editor.state.doc.textBetween(from, to, "\n");
     const anchor = createAnchor(fullText, from, to);
 
-    editor.chain().focus().setHighlight({ color: "yellow" }).run();
+    editor.chain().focus().setHighlight({ color: settings.defaultHighlightColor }).run();
 
     try {
       const highlight = await annotations.createHighlight({
         documentId: doc.currentDoc.id,
-        color: "yellow",
+        color: settings.defaultHighlightColor,
         textContent: selectedText,
         fromPos: from,
         toPos: to,
@@ -573,23 +579,32 @@ export default function App() {
   }, [doc.currentDoc, annotations.isLoaded]);
 
   const handleExportAnnotations = useCallback(
-    async () => {
-      if (!editor || !doc.currentDoc) return;
-
-      const markdown = await formatAnnotationsMarkdown({
-        document: doc.currentDoc,
-        editor,
-        highlights: highlightsRef.current,
-        marginNotes: marginNotesRef.current,
-      });
-
-      await writeText(markdown);
+    async (): Promise<ExportResult> => {
+      if (!editor || !doc.currentDoc) {
+        return { highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" };
+      }
 
       const highlights = highlightsRef.current;
       const marginNotes = marginNotesRef.current;
       const currentDoc = doc.currentDoc;
 
-      if (currentDoc && highlights.length > 0 && marginNotes.length > 0) {
+      const markdown = await formatAnnotationsMarkdown({
+        document: currentDoc,
+        editor,
+        highlights,
+        marginNotes,
+      });
+
+      await writeText(markdown);
+
+      const snippets = highlights.slice(0, 3).map((h) =>
+        h.text_content.length > 60 ? h.text_content.slice(0, 57) + "..." : h.text_content,
+      );
+
+      let correctionsSaved = false;
+      let correctionsFile = "";
+
+      if (highlights.length > 0 && marginNotes.length > 0) {
         const notesByHighlight = new Map<string, string[]>();
         for (const note of marginNotes) {
           const existing = notesByHighlight.get(note.highlight_id) ?? [];
@@ -615,17 +630,31 @@ export default function App() {
 
         if (correctionInputs.length > 0) {
           const today = new Date().toISOString().slice(0, 10);
+          correctionsFile = `corrections-${today}.jsonl`;
           const { persistCorrections } = await import("@/lib/tauri-commands");
-          persistCorrections(
-            correctionInputs,
-            currentDoc.id,
-            currentDoc.title ?? null,
-            currentDoc.source,
-            currentDoc.file_path ?? null,
-            today,
-          ).catch((err) => console.error("Failed to persist corrections:", err));
+          try {
+            await persistCorrections(
+              correctionInputs,
+              currentDoc.id,
+              currentDoc.title ?? null,
+              currentDoc.source,
+              currentDoc.file_path ?? null,
+              today,
+            );
+            correctionsSaved = true;
+          } catch (err) {
+            console.error("Failed to persist corrections:", err);
+          }
         }
       }
+
+      return {
+        highlightCount: highlights.length,
+        noteCount: marginNotes.length,
+        snippets,
+        correctionsSaved,
+        correctionsFile,
+      };
     },
     [editor, doc.currentDoc],
   );
@@ -699,6 +728,7 @@ export default function App() {
 
   return (
     <AppShell
+      onOpenSettings={() => setShowSettings(true)}
       currentDoc={doc.currentDoc}
       recentDocs={doc.recentDocs}
       onOpenFile={doc.openFile}
@@ -762,6 +792,7 @@ export default function App() {
         editor={editor}
         onHighlight={handleHighlight}
         onNote={handleNote}
+        defaultColor={settings.defaultHighlightColor}
       />
 
       {focusHighlightId && annotations.isLoaded && (() => {
@@ -772,9 +803,9 @@ export default function App() {
           <HighlightThread
             highlight={highlight}
             notes={notes}
-            onAddNote={annotations.createMarginNote}
-            onUpdateNote={annotations.updateMarginNote}
-            onDeleteNote={annotations.deleteMarginNote}
+            onAddNote={(...args) => { const p = annotations.createMarginNote(...args); doc.triggerAutosave(); return p; }}
+            onUpdateNote={(...args) => { const p = annotations.updateMarginNote(...args); doc.triggerAutosave(); return p; }}
+            onDeleteNote={(...args) => { const p = annotations.deleteMarginNote(...args); doc.triggerAutosave(); return p; }}
             onDeleteHighlight={handleDeleteHighlight}
             onClose={() => {
               setFocusHighlightId(null);
@@ -794,6 +825,13 @@ export default function App() {
       />
 
       <UndoToast action={undoAction} />
+
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        settings={settings}
+        setSetting={setSetting}
+      />
     </AppShell>
   );
 }

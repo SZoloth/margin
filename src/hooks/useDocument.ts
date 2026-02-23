@@ -39,9 +39,10 @@ export interface UseDocumentReturn {
   setContent: (newContent: string) => void;
   setContentExternal: (newContent: string) => void;
   restoreFromCache: (doc: Document | null, content: string, filePath: string | null, isDirty: boolean) => void;
+  triggerAutosave: () => void;
 }
 
-export function useDocument(): UseDocumentReturn {
+export function useDocument(autosaveEnabled = false): UseDocumentReturn {
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   const [content, setContentState] = useState<string>("");
@@ -78,11 +79,31 @@ export function useDocument(): UseDocumentReturn {
       .catch(console.error);
   }, []);
 
+  // Autosave: debounced 2s after edit
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveCurrentFileRef = useRef<(() => Promise<void>) | undefined>(undefined);
+
+  const scheduleAutosave = useCallback(() => {
+    if (!autosaveEnabled) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveCurrentFileRef.current?.();
+    }, 2000);
+  }, [autosaveEnabled]);
+
+  // Clean up autosave timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, []);
+
   // User edit — marks dirty
   const setContent = useCallback((newContent: string) => {
     setContentState(newContent);
     setIsDirty(true);
-  }, []);
+    scheduleAutosave();
+  }, [scheduleAutosave]);
 
   // External update (file watcher) — does NOT mark dirty
   const setContentExternal = useCallback((newContent: string) => {
@@ -259,6 +280,14 @@ export function useDocument(): UseDocumentReturn {
     }
   }, [filePath, isDirty, content, currentDoc, refreshRecentDocs]);
 
+  // Keep saveCurrentFileRef in sync
+  saveCurrentFileRef.current = saveCurrentFile;
+
+  // Trigger autosave from external sources (e.g. margin note edits)
+  const triggerAutosave = useCallback(() => {
+    scheduleAutosave();
+  }, [scheduleAutosave]);
+
   const restoreFromCache = useCallback((
     cachedDoc: Document | null,
     cachedContent: string,
@@ -302,5 +331,6 @@ export function useDocument(): UseDocumentReturn {
     setContent,
     setContentExternal,
     restoreFromCache,
+    triggerAutosave,
   };
 }

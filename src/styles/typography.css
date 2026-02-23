@@ -1,10 +1,10 @@
 .reader-content {
-  max-width: 65ch;
+  max-width: var(--reader-max-width, 65ch);
   margin: 0 auto;
   padding: 3rem 1.5rem 6rem;
   font-family: 'Newsreader', 'Georgia', serif;
-  font-size: 1.125rem;
-  line-height: 1.72;
+  font-size: var(--reader-font-size, 1.125rem);
+  line-height: var(--reader-line-height, 1.72);
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
 }

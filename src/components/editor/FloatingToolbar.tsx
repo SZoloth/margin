@@ -14,14 +14,16 @@ const HIGHLIGHT_COLORS = [
 
 interface FloatingToolbarProps {
   editor: Editor | null;
-  onHighlight: (color: string) => void;
+  onHighlight: (color?: string) => void;
   onNote: () => void;
+  defaultColor?: string;
 }
 
 export function FloatingToolbar({
   editor,
   onHighlight,
   onNote,
+  defaultColor = "yellow",
 }: FloatingToolbarProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -135,8 +137,10 @@ export function FloatingToolbar({
         e.preventDefault();
       }}
     >
-      {/* Color picker circles */}
-      {HIGHLIGHT_COLORS.map((c) => (
+      {/* Color picker circles — default color first */}
+      {[...HIGHLIGHT_COLORS].sort((a, b) =>
+        a.name === defaultColor ? -1 : b.name === defaultColor ? 1 : 0
+      ).map((c) => (
         <button
           key={c.name}
           type="button"
@@ -151,7 +155,9 @@ export function FloatingToolbar({
               height: 16,
               borderRadius: "50%",
               backgroundColor: c.css,
-              border: "1.5px solid var(--color-border)",
+              border: c.name === defaultColor
+                ? "2px solid var(--color-text-secondary)"
+                : "1.5px solid var(--color-border)",
             }}
           />
         </button>

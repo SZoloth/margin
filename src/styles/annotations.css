@@ -40,10 +40,8 @@
 }
 
 /* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .margin-note-indicator::after {
-    background-color: rgba(250, 204, 21, 0.7);
-  }
+:root[data-theme="dark"] .margin-note-indicator::after {
+  background-color: rgba(250, 204, 21, 0.7);
 }
 
 /* ─── Thread popover ─── */
@@ -191,10 +189,8 @@
 }
 
 /* Dark mode — thread */
-@media (prefers-color-scheme: dark) {
-  .thread-popover {
-    box-shadow: var(--shadow-lg);
-  }
+:root[data-theme="dark"] .thread-popover {
+  box-shadow: var(--shadow-lg);
 }
 
 /* Mobile — thread as bottom sheet */

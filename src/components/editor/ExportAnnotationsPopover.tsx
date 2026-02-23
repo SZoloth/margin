@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
+import type { ExportResult } from "@/types/export";
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;
-  onExport: () => Promise<void>;
+  onExport: () => Promise<ExportResult>;
   onClose: () => void;
 }
 
@@ -11,11 +12,15 @@ export function ExportAnnotationsPopover({
   onExport,
   onClose,
 }: ExportAnnotationsPopoverProps) {
-  const [copied, setCopied] = useState(false);
+  const [result, setResult] = useState<ExportResult | null>(null);
+  const [exporting, setExporting] = useState(false);
 
-  // Reset copied state when popover opens
+  // Reset state when popover opens
   useEffect(() => {
-    if (isOpen) setCopied(false);
+    if (isOpen) {
+      setResult(null);
+      setExporting(false);
+    }
   }, [isOpen]);
 
   // Escape to close
@@ -31,24 +36,22 @@ export function ExportAnnotationsPopover({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  const handleExport = useCallback(
-    async () => {
-      try {
-        await onExport();
-        setCopied(true);
-        setTimeout(() => onClose(), 1200);
-      } catch (err) {
-        console.error("Export failed:", err);
-        setCopied(true);
-        setTimeout(() => onClose(), 1200);
-      }
-    },
-    [onExport, onClose],
-  );
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const res = await onExport();
+      setResult(res);
+    } catch (err) {
+      console.error("Export failed:", err);
+      setResult({ highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" });
+    } finally {
+      setExporting(false);
+    }
+  }, [onExport]);
 
-  // Auto-export when popover opens (no scope choice needed anymore)
+  // Auto-export when popover opens
   useEffect(() => {
-    if (isOpen && !copied) {
+    if (isOpen && !result && !exporting) {
       void handleExport();
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -86,21 +89,113 @@ export function ExportAnnotationsPopover({
           border: "1px solid var(--color-border)",
           borderRadius: "var(--radius-lg)",
           padding: "20px 24px",
-          minWidth: "min(280px, calc(100vw - 32px))",
+          minWidth: "min(320px, calc(100vw - 32px))",
+          maxWidth: "min(400px, calc(100vw - 32px))",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
         }}
       >
-        <div
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          aria-label="Close"
           style={{
-            textAlign: "center",
-            color: "var(--color-text-primary)",
-            fontSize: 14,
-            fontWeight: 500,
-            padding: "8px 0",
+            position: "absolute",
+            top: 12,
+            right: 12,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--color-text-secondary)",
+            fontSize: 18,
+            lineHeight: 1,
+            padding: "2px 6px",
+            borderRadius: "var(--radius-sm)",
           }}
         >
-          {copied ? "Copied to clipboard" : "Exporting..."}
-        </div>
+          ×
+        </button>
+
+        {exporting ? (
+          <div
+            style={{
+              textAlign: "center",
+              color: "var(--color-text-primary)",
+              fontSize: 14,
+              fontWeight: 500,
+              padding: "8px 0",
+            }}
+          >
+            Exporting...
+          </div>
+        ) : result ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--color-text-primary)",
+                fontSize: 14,
+                fontWeight: 500,
+              }}
+            >
+              <span style={{ color: "var(--color-accent, #4a9)" }}>✓</span>
+              Copied to clipboard
+            </div>
+
+            {/* Stats */}
+            <div
+              style={{
+                color: "var(--color-text-secondary)",
+                fontSize: 13,
+              }}
+            >
+              {result.highlightCount} {result.highlightCount === 1 ? "annotation" : "annotations"}
+              {result.noteCount > 0 && (
+                <> · {result.noteCount} {result.noteCount === 1 ? "note" : "notes"}</>
+              )}
+            </div>
+
+            {/* Snippets */}
+            {result.snippets.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {result.snippets.map((snippet, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      borderLeft: "2px solid var(--color-border)",
+                      paddingLeft: 10,
+                      fontSize: 12,
+                      color: "var(--color-text-secondary)",
+                      lineHeight: 1.5,
+                      fontStyle: "italic",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {snippet}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Corrections save location */}
+            {result.correctionsSaved && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--color-text-tertiary)",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                Corrections saved to {result.correctionsFile}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
