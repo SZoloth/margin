@@ -10,6 +10,33 @@ fn now_millis() -> i64 {
         .as_millis() as i64
 }
 
+fn touch_document(conn: &rusqlite::Connection, document_id: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE documents SET last_opened_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_millis(), document_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn document_id_for_highlight(conn: &rusqlite::Connection, highlight_id: &str) -> Result<String, String> {
+    conn.query_row(
+        "SELECT document_id FROM highlights WHERE id = ?1",
+        rusqlite::params![highlight_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn document_id_for_margin_note(conn: &rusqlite::Connection, note_id: &str) -> Result<String, String> {
+    conn.query_row(
+        "SELECT h.document_id FROM margin_notes mn JOIN highlights h ON mn.highlight_id = h.id WHERE mn.id = ?1",
+        rusqlite::params![note_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
 // === Highlights ===
 
 #[tauri::command]
@@ -45,6 +72,8 @@ pub async fn create_highlight(
         ],
     )
     .map_err(|e| e.to_string())?;
+
+    touch_document(&conn, &document_id)?;
 
     Ok(Highlight {
         id,
@@ -101,8 +130,12 @@ pub async fn update_highlight_color(id: String, color: String) -> Result<(), Str
 pub async fn delete_highlight(id: String) -> Result<(), String> {
     let conn = get_db()?;
 
+    let doc_id = document_id_for_highlight(&conn, &id)?;
+
     conn.execute("DELETE FROM highlights WHERE id = ?1", rusqlite::params![id])
         .map_err(|e| e.to_string())?;
+
+    touch_document(&conn, &doc_id)?;
 
     Ok(())
 }
@@ -124,6 +157,9 @@ pub async fn create_margin_note(
         rusqlite::params![id, highlight_id, content, now, now],
     )
     .map_err(|e| e.to_string())?;
+
+    let doc_id = document_id_for_highlight(&conn, &highlight_id)?;
+    touch_document(&conn, &doc_id)?;
 
     Ok(MarginNote {
         id,
@@ -162,11 +198,15 @@ pub async fn update_margin_note(id: String, content: String) -> Result<(), Strin
     let conn = get_db()?;
     let now = now_millis();
 
+    let doc_id = document_id_for_margin_note(&conn, &id)?;
+
     conn.execute(
         "UPDATE margin_notes SET content = ?1, updated_at = ?2 WHERE id = ?3",
         rusqlite::params![content, now, id],
     )
     .map_err(|e| e.to_string())?;
+
+    touch_document(&conn, &doc_id)?;
 
     Ok(())
 }
@@ -175,11 +215,15 @@ pub async fn update_margin_note(id: String, content: String) -> Result<(), Strin
 pub async fn delete_margin_note(id: String) -> Result<(), String> {
     let conn = get_db()?;
 
+    let doc_id = document_id_for_margin_note(&conn, &id)?;
+
     conn.execute(
         "DELETE FROM margin_notes WHERE id = ?1",
         rusqlite::params![id],
     )
     .map_err(|e| e.to_string())?;
+
+    touch_document(&conn, &doc_id)?;
 
     Ok(())
 }

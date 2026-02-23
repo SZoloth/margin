@@ -84,7 +84,7 @@ function findTextInDoc(
 export default function App() {
   const { settings, setSetting } = useSettings();
   const doc = useDocument(settings.autosave);
-  const annotations = useAnnotations();
+  const annotations = useAnnotations(doc.refreshRecentDocs);
   const keepLocal = useKeepLocal();
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);

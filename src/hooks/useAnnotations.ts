@@ -30,7 +30,7 @@ export interface UseAnnotationsReturn {
   restoreFromCache: (highlights: Highlight[], marginNotes: MarginNote[]) => void;
 }
 
-export function useAnnotations(): UseAnnotationsReturn {
+export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [marginNotes, setMarginNotes] = useState<MarginNote[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -66,16 +66,18 @@ export function useAnnotations(): UseAnnotationsReturn {
         suffixContext: params.suffixContext,
       });
       setHighlights((prev) => [...prev, highlight]);
+      onMutate?.();
       return highlight;
     },
-    [],
+    [onMutate],
   );
 
   const deleteHighlight = useCallback(async (id: string) => {
     await invoke("delete_highlight", { id });
     setHighlights((prev) => prev.filter((h) => h.id !== id));
     setMarginNotes((prev) => prev.filter((n) => n.highlight_id !== id));
-  }, []);
+    onMutate?.();
+  }, [onMutate]);
 
   const createMarginNote = useCallback(
     async (highlightId: string, content: string): Promise<MarginNote> => {
@@ -84,9 +86,10 @@ export function useAnnotations(): UseAnnotationsReturn {
         content,
       });
       setMarginNotes((prev) => [...prev, note]);
+      onMutate?.();
       return note;
     },
-    [],
+    [onMutate],
   );
 
   const updateMarginNote = useCallback(
@@ -97,14 +100,16 @@ export function useAnnotations(): UseAnnotationsReturn {
           n.id === id ? { ...n, content, updated_at: Date.now() } : n,
         ),
       );
+      onMutate?.();
     },
-    [],
+    [onMutate],
   );
 
   const deleteMarginNote = useCallback(async (id: string) => {
     await invoke("delete_margin_note", { id });
     setMarginNotes((prev) => prev.filter((n) => n.id !== id));
-  }, []);
+    onMutate?.();
+  }, [onMutate]);
 
   const restoreFromCache = useCallback((cachedHighlights: Highlight[], cachedMarginNotes: MarginNote[]) => {
     setHighlights(cachedHighlights);

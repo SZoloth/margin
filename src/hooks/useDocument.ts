@@ -35,6 +35,7 @@ export interface UseDocumentReturn {
   openRecentDocument: (doc: Document) => Promise<void>;
   openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
   saveCurrentFile: () => Promise<void>;
+  refreshRecentDocs: () => void;
   renameDocFile: (doc: Document, newName: string) => Promise<void>;
   setContent: (newContent: string) => void;
   setContentExternal: (newContent: string) => void;
@@ -63,16 +64,21 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
   }, []);
   // Track keep-local doc IDs so we can reuse them
   const keepLocalDocMapRef = useRef<Map<string, Document>>(new Map());
+  // Track docs by file path so we can preserve last_opened_at on re-open
+  const fileDocMapRef = useRef<Map<string, Document>>(new Map());
 
   // Load recent documents on mount
   useEffect(() => {
     getRecentDocuments(20)
       .then((docs) => {
         setRecentDocs(docs);
-        // Populate keep-local doc map from recent docs
+        // Populate lookup maps from recent docs
         for (const d of docs) {
           if (d.source === "keep-local" && d.keep_local_id) {
             keepLocalDocMapRef.current.set(d.keep_local_id, d);
+          }
+          if (d.file_path) {
+            fileDocMapRef.current.set(d.file_path, d);
           }
         }
       })
@@ -123,9 +129,12 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
       const fileContent = await readFile(selectedPath);
       const title = basename(selectedPath);
       const now = Date.now();
+      const existing = currentDoc?.file_path === selectedPath
+        ? currentDoc
+        : fileDocMapRef.current.get(selectedPath);
 
       const doc: Document = {
-        id: currentDoc?.file_path === selectedPath ? currentDoc.id : crypto.randomUUID(),
+        id: existing?.id ?? crypto.randomUUID(),
         source: "file",
         file_path: selectedPath,
         keep_local_id: null,
@@ -133,8 +142,8 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
         author: null,
         url: null,
         word_count: countWords(fileContent),
-        last_opened_at: now,
-        created_at: currentDoc?.file_path === selectedPath ? currentDoc.created_at : now,
+        last_opened_at: existing?.last_opened_at ?? now,
+        created_at: existing?.created_at ?? now,
       };
 
       const saved = await upsertDocument(doc);
@@ -157,9 +166,12 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
       const fileContent = await readFile(path);
       const title = basename(path);
       const now = Date.now();
+      const existing = currentDoc?.file_path === path
+        ? currentDoc
+        : fileDocMapRef.current.get(path);
 
       const doc: Document = {
-        id: currentDoc?.file_path === path ? currentDoc.id : crypto.randomUUID(),
+        id: existing?.id ?? crypto.randomUUID(),
         source: "file",
         file_path: path,
         keep_local_id: null,
@@ -167,8 +179,8 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
         author: null,
         url: null,
         word_count: countWords(fileContent),
-        last_opened_at: now,
-        created_at: currentDoc?.file_path === path ? currentDoc.created_at : now,
+        last_opened_at: existing?.last_opened_at ?? now,
+        created_at: existing?.created_at ?? now,
       };
 
       const saved = await upsertDocument(doc);
@@ -193,11 +205,9 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
       try {
         setIsLoading(true);
         const fileContent = await readFile(recentDoc.file_path);
-        const now = Date.now();
         const updated: Document = {
           ...recentDoc,
           word_count: countWords(fileContent),
-          last_opened_at: now,
         };
         const saved = await upsertDocument(updated);
         setFilePath(recentDoc.file_path);
@@ -222,7 +232,7 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
         : null;
 
       const finalDoc: Document = existingDoc
-        ? { ...existingDoc, last_opened_at: Date.now(), word_count: docRecord.word_count }
+        ? { ...existingDoc, word_count: docRecord.word_count }
         : docRecord;
 
       const saved = await upsertDocument(finalDoc);
@@ -334,6 +344,7 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
     openRecentDocument,
     openKeepLocalArticle,
     saveCurrentFile,
+    refreshRecentDocs,
     renameDocFile,
     setContent,
     setContentExternal,
