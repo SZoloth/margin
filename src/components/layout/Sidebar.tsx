@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FolderOpenIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
@@ -51,6 +51,7 @@ export function Sidebar({
   const [inputValue, setInputValue] = useState(searchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [activeResultIndex, setActiveResultIndex] = useState(-1);
   const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +79,14 @@ export function Sidebar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const showDropdown = activeTab === "files" && isFocused && inputValue.trim().length > 0;
+
+  const keepLocalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedKeepLocalSearch = useCallback((value: string) => {
+    if (keepLocalDebounceRef.current) clearTimeout(keepLocalDebounceRef.current);
+    keepLocalDebounceRef.current = setTimeout(() => onKeepLocalSearch(value), 150);
+  }, [onKeepLocalSearch]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setInputValue("");
@@ -86,24 +95,42 @@ export function Sidebar({
       } else {
         onKeepLocalSearch("");
       }
+      setActiveResultIndex(-1);
       inputRef.current?.blur();
       setIsFocused(false);
+    } else if (e.key === "ArrowDown" && showDropdown) {
+      e.preventDefault();
+      setActiveResultIndex((i) => Math.min(i + 1, fileResults.length - 1));
+    } else if (e.key === "ArrowUp" && showDropdown) {
+      e.preventDefault();
+      setActiveResultIndex((i) => Math.max(i - 1, -1));
     } else if (e.key === "Enter" && activeTab === "files") {
-      onSearch(inputValue);
+      if (activeResultIndex >= 0 && activeResultIndex < fileResults.length) {
+        e.preventDefault();
+        const file = fileResults[activeResultIndex];
+        if (file) {
+          onOpenFilePath(file.path, e.metaKey);
+          setIsFocused(false);
+          setInputValue("");
+          onSearch("");
+          setActiveResultIndex(-1);
+        }
+      } else {
+        onSearch(inputValue);
+      }
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
+    setActiveResultIndex(-1);
     if (activeTab === "files") {
       onSearch(value);
     } else {
-      onKeepLocalSearch(value);
+      debouncedKeepLocalSearch(value);
     }
   };
-
-  const showDropdown = activeTab === "files" && isFocused && inputValue.trim().length > 0;
 
   const duplicateTitles = useMemo(() => {
     const counts = new Map<string, number>();
@@ -150,6 +177,11 @@ export function Sidebar({
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-expanded={showDropdown}
+            aria-controls="search-listbox"
+            aria-activedescendant={activeResultIndex >= 0 ? `search-option-${activeResultIndex}` : undefined}
+            aria-autocomplete="list"
             placeholder={activeTab === "files" ? "Search files..." : "Search articles..."}
             value={inputValue}
             onChange={handleChange}
@@ -174,6 +206,9 @@ export function Sidebar({
         {/* Search dropdown (files tab only) */}
         {showDropdown && (
           <div
+            id="search-listbox"
+            role="listbox"
+            aria-label="Search results"
             className="absolute left-4 right-4 top-full mt-1 border shadow-lg overflow-hidden z-50"
             style={{
               borderColor: "var(--color-border)",
@@ -193,20 +228,29 @@ export function Sidebar({
                 No results
               </div>
             )}
-            {fileResults.map((file) => {
+            {fileResults.map((file, index) => {
               const parts = file.path.split("/");
               const parentDir = parts.length > 2 ? parts[parts.length - 2] : "";
+              const isActive = index === activeResultIndex;
               return (
                 <button
                   key={file.path}
+                  id={`search-option-${index}`}
+                  role="option"
+                  aria-selected={isActive}
                   onClick={(e) => {
                     onOpenFilePath(file.path, e.metaKey);
                     setIsFocused(false);
                     setInputValue("");
                     onSearch("");
+                    setActiveResultIndex(-1);
                   }}
                   className="interactive-item w-full text-left px-3 py-2"
-                  style={{ color: "var(--color-text-primary)", borderRadius: 0 }}
+                  style={{
+                    color: "var(--color-text-primary)",
+                    borderRadius: 0,
+                    backgroundColor: isActive ? "var(--active-bg)" : undefined,
+                  }}
                 >
                   <div className="text-sm font-medium truncate">{file.filename}</div>
                   {parentDir && (
