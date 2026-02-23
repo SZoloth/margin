@@ -259,7 +259,14 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
   }, [currentDoc, refreshRecentDocs]);
 
   const saveCurrentFile = useCallback(async () => {
-    if (!filePath || !isDirty) return;
+    if (!isDirty) return;
+
+    // Keep-local articles have no file path — annotations are already in SQLite,
+    // so just clear the dirty flag.
+    if (!filePath) {
+      setIsDirty(false);
+      return;
+    }
 
     try {
       await saveFileCommand(filePath, content);

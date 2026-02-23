@@ -210,6 +210,7 @@ export function AppShell({
           onKeepLocalSearch={keepLocal.search}
           onSelectKeepLocalItem={(item, newTab) => { onSelectKeepLocalItem(item, newTab); closeSidebar(); }}
           onOpenSettings={onOpenSettings}
+          tabs={tabs}
         />
         </div>
 

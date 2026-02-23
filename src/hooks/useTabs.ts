@@ -18,10 +18,13 @@ export interface SnapshotData {
 export interface UseTabsReturn {
   tabs: Tab[];
   activeTabId: string | null;
+  pendingCloseTabId: string | null;
   openTab: (doc: Document, content: string, filePath: string | null) => void;
   openInActiveTab: (doc: Document, content: string, filePath: string | null) => void;
   switchTab: (id: string) => void;
   closeTab: (id: string) => void;
+  forceCloseTab: (id: string) => void;
+  cancelCloseTab: () => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   getCachedTab: (id: string) => TabCache | undefined;
   snapshotActive: () => void;
@@ -260,22 +263,16 @@ export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
     setActiveTabId(id);
   }, [snapshotActive]);
 
-  const closeTab = useCallback((id: string) => {
-    const tab = tabs.find((t) => t.id === id);
-    if (!tab) return;
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
 
-    if (tab.isDirty) {
-      const confirmed = window.confirm(`"${tab.title}" has unsaved changes. Close anyway?`);
-      if (!confirmed) return;
-    }
-
+  const forceCloseTab = useCallback((id: string) => {
+    setPendingCloseTabId(null);
     tabCaches.current.delete(id);
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === id);
       const next = prev.filter((t) => t.id !== id).map((t, i) => ({ ...t, order: i }));
 
       if (id === activeTabId) {
-        // Activate a neighbor
         const newActive = next.length > 0
           ? next[Math.min(idx, next.length - 1)]
           : null;
@@ -287,7 +284,23 @@ export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
 
       return next;
     });
-  }, [tabs, activeTabId, persistTabs]);
+  }, [activeTabId, persistTabs]);
+
+  const closeTab = useCallback((id: string) => {
+    const tab = tabs.find((t) => t.id === id);
+    if (!tab) return;
+
+    if (tab.isDirty) {
+      setPendingCloseTabId(id);
+      return;
+    }
+
+    forceCloseTab(id);
+  }, [tabs, forceCloseTab]);
+
+  const cancelCloseTab = useCallback(() => {
+    setPendingCloseTabId(null);
+  }, []);
 
   const reorderTabs = useCallback((fromIndex: number, toIndex: number) => {
     setTabs((prev) => {
@@ -363,10 +376,13 @@ export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
   return {
     tabs,
     activeTabId,
+    pendingCloseTabId,
     openTab,
     openInActiveTab,
     switchTab,
     closeTab,
+    forceCloseTab,
+    cancelCloseTab,
     reorderTabs,
     getCachedTab,
     snapshotActive,
