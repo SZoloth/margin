@@ -60,6 +60,13 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
     const currentMd = editor.storage.markdown.getMarkdown() as string;
     if (currentMd === content) return;
 
+    // If the only difference is that the editor has mark HTML (e.g. <mark ...>)
+    // from programmatic highlight restoration, skip the setContent call —
+    // it would wipe those marks and lose data-highlight-id attributes.
+    const stripMarks = (s: string) =>
+      s.replace(/<\/?mark[^>]*>/g, "");
+    if (stripMarks(currentMd) === stripMarks(content)) return;
+
     isExternalUpdate.current = true;
     editor.commands.setContent(content);
     isExternalUpdate.current = false;
