@@ -45,8 +45,6 @@ struct ExportService {
         lines.append("")
         lines.append("_Exported from Margin — \(dateStr) — \(items.count) annotations_")
 
-        // Each annotation
-        let textLines = fullText.components(separatedBy: "\n")
         for highlight in items {
             lines.append("")
             lines.append("---")

@@ -28,13 +28,14 @@ struct CorrectionStore {
     func getAllCorrections(limit: Int = 200) throws -> [CorrectionRecord] {
         try db.reader.read { database in
             let rows = try Row.fetchAll(database, sql: """
-                SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at
+                SELECT id, original_text, notes_json, highlight_color, document_title, document_id, created_at
                 FROM corrections
                 ORDER BY created_at DESC
                 LIMIT ?
             """, arguments: [limit])
 
             return rows.compactMap { row -> CorrectionRecord? in
+                let id: String = row["id"]
                 let originalText: String = row["original_text"]
                 let notesJson: String = row["notes_json"]
                 let highlightColor: String = row["highlight_color"]
@@ -48,7 +49,7 @@ struct CorrectionStore {
                 )) ?? []
 
                 return CorrectionRecord(
-                    id: UUID().uuidString,
+                    id: id,
                     originalText: originalText,
                     notes: notes,
                     highlightColor: highlightColor,
@@ -147,17 +148,10 @@ struct CorrectionStore {
         )
         let filePath = dir.appendingPathComponent("corrections-\(safeDate).jsonl")
 
-        guard let handle = try? FileHandle(forWritingTo: filePath) else {
-            // Try to create the file
+        if !FileManager.default.fileExists(atPath: filePath.path) {
             FileManager.default.createFile(atPath: filePath.path, contents: nil)
-            guard let handle = try? FileHandle(forWritingTo: filePath) else { return }
-            handle.seekToEndOfFile()
-            writeRecords(to: handle, corrections: corrections, documentId: documentId,
-                        documentTitle: documentTitle, documentSource: documentSource,
-                        documentPath: documentPath, sessionId: sessionId, now: now)
-            handle.closeFile()
-            return
         }
+        guard let handle = try? FileHandle(forWritingTo: filePath) else { return }
 
         handle.seekToEndOfFile()
         writeRecords(to: handle, corrections: corrections, documentId: documentId,

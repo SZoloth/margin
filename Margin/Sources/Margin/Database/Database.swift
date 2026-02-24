@@ -22,13 +22,7 @@ final class DatabaseManager {
     func initialize() throws {
         var config = Configuration()
         config.foreignKeysEnabled = true
-        config.prepareDatabase { db in
-            db.trace { print("SQL: \($0)") }
-        }
-
-        // Remove trace in production
         config.prepareDatabase = { db in
-            // WAL mode for concurrent reads
             try db.execute(sql: "PRAGMA journal_mode=WAL")
         }
 

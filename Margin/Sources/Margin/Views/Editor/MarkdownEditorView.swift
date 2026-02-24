@@ -16,9 +16,7 @@ struct MarkdownEditorView: View {
                     onContentChange: { newContent in
                         appState.updateContent(newContent)
                     },
-                    onSelectionChange: { range in
-                        // Selection tracking for floating toolbar
-                    },
+                    onSelectionChange: { _ in },
                     onHighlightClick: { highlightId in
                         appState.focusHighlightId = highlightId
                     }
@@ -30,12 +28,10 @@ struct MarkdownEditorView: View {
             .frame(maxWidth: .infinity)
         }
         .overlay(alignment: .topTrailing) {
-            // Floating toolbar appears on text selection
             FloatingToolbarView()
                 .environmentObject(appState)
         }
         .overlay {
-            // Highlight thread popover
             if let highlightId = appState.focusHighlightId,
                let highlight = appState.highlights.first(where: { $0.id == highlightId }) {
                 HighlightThreadView(
@@ -312,7 +308,7 @@ class MarkdownAttributedStringVisitor {
                 ]
             ))
         } else if let list = markup as? UnorderedList {
-            for (index, item) in list.listItems.enumerated() {
+            for item in list.listItems {
                 let bullet = "•  "
                 let style = NSMutableParagraphStyle()
                 style.headIndent = 24
@@ -431,17 +427,9 @@ class MarkdownAttributedStringVisitor {
         } else if markup is LineBreak {
             return NSAttributedString(string: "\n", attributes: baseAttributes)
         } else {
-            // Fallback: render children
             let result = NSMutableAttributedString()
             for child in markup.children {
                 result.append(visitInline(child, baseAttributes: baseAttributes))
-            }
-            if result.length == 0, let plainText = markup as? any Markup {
-                // Try to get plain text representation
-                let range = plainText.range
-                if let range {
-                    // This is a generic node; just render as text
-                }
             }
             return result
         }
