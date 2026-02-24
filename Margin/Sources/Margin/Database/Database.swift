@@ -22,7 +22,7 @@ final class DatabaseManager {
     func initialize() throws {
         var config = Configuration()
         config.foreignKeysEnabled = true
-        config.prepareDatabase = { db in
+        config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA journal_mode=WAL")
         }
 

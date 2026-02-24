@@ -10,7 +10,7 @@ final class AppState: ObservableObject {
     let fileService = FileService()
     let fileWatcher = FileWatcher()
     let keepLocal = KeepLocalService()
-    let settings = AppSettings()
+    var settings = AppSettings()
     private let documentStore = DocumentStore()
     private let annotationStore = AnnotationStore()
     private let searchStore = SearchStore()
@@ -228,7 +228,7 @@ final class AppState: ObservableObject {
             let newTitle = basename(newPath)
 
             // Update database
-            try DatabaseManager.shared.writer.write { database in
+            try await DatabaseManager.shared.writer.write { database in
                 try database.execute(
                     sql: "UPDATE documents SET file_path = ?, title = ? WHERE file_path = ?",
                     arguments: [newPath, newTitle, oldPath]
