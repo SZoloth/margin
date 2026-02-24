@@ -199,15 +199,15 @@ final class AppState: ObservableObject {
     func saveCurrentFile() async {
         guard isDirty else { return }
 
-        // Keep-local articles have no file path — just clear dirty
+        // Keep-local articles have no file path — keep dirty so unsaved-changes guard triggers
         guard let path = filePath else {
-            isDirty = false
             return
         }
 
         do {
             try fileService.saveFile(path: path, content: content)
             isDirty = false
+            syncDirtyToActiveTab()
 
             if var doc = currentDoc {
                 doc.wordCount = countWords(content)
@@ -251,6 +251,7 @@ final class AppState: ObservableObject {
     func updateContent(_ newContent: String) {
         content = newContent
         isDirty = true
+        syncDirtyToActiveTab()
         scheduleAutosave()
     }
 
@@ -259,6 +260,7 @@ final class AppState: ObservableObject {
         self.content = content
         self.filePath = filePath
         self.isDirty = false
+        syncDirtyToActiveTab()
     }
 
     private func scheduleAutosave() {
@@ -584,5 +586,12 @@ final class AppState: ObservableObject {
 
     func notesForHighlight(_ highlightId: String) -> [MarginNote] {
         marginNotes.filter { $0.highlightId == highlightId }
+    }
+
+    /// Keep the active TabItem.isDirty in sync with global isDirty.
+    private func syncDirtyToActiveTab() {
+        guard let tabId = activeTabId,
+              let idx = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[idx].isDirty = isDirty
     }
 }
