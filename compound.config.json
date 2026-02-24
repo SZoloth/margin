@@ -1,0 +1,8 @@
+{
+  "reportsDir": "./reports",
+  "outputDir": "./scripts/compound",
+  "qualityChecks": ["cd Margin && swift build 2>&1"],
+  "maxIterations": 25,
+  "branchPrefix": "compound/",
+  "analyzeCommand": ""
+}

@@ -1,0 +1,23 @@
+## Codebase Patterns
+- GRDB 6.29: use `config.prepareDatabase { }` (method call, not property assignment)
+- GRDB 6.29: `writer.write` is async in async context — needs `await`
+- NSAttributedString custom attribute keys: use `NSAttributedString.Key("name")` for tagging
+- SwiftUI @Published on ObservableObject: properties bound via $binding must be var, not let
+- FTS5: `rank` is a valid hidden column in MATCH queries, but user input needs quoting
+- mdfind: predicate strings need escaping — single quotes and backslashes are dangerous
+
+---
+
+## 2026-02-24 08:50 - T-001 through T-006
+- All 6 critical fixes implemented in a single commit (f41cc0e)
+- T-001: Added `syncDirtyToActiveTab()` helper, called from updateContent, setDocument, saveCurrentFile
+- T-002: Removed `isDirty = false` when filePath is nil — early return preserves dirty state
+- T-003: Replaced `[String: Any]` dict + JSONSerialization with Codable `JSONLRecord` struct + JSONEncoder
+- T-004: Added query sanitization (escape backslash, single quote, strip wildcards) before mdfind interpolation
+- T-005: Used custom `marginHighlight` attribute key to tag annotation ranges, only remove those (not code block backgrounds)
+- T-006: Wrapped FTS5 user query in double quotes to prevent syntax errors from special characters
+- **Learnings:**
+  - NSColor Set comparison is unreliable for component-based colors — use a tag attribute instead
+  - JSONSerialization silently fails on Optional values cast to Any — always prefer Codable
+  - FTS5 rank column IS valid in SELECT when MATCH is used, but the query string itself needs protection
+---

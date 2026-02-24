@@ -1,213 +1,81 @@
 {
-  "project": "Margin Design System — Phases 1-4 Remaining",
-  "branchName": "compound/design-quick-wins",
-  "description": "16 remaining design swarm issues across all phases",
+  "project": "Margin Swift Rebuild",
+  "branchName": "compound/swift-critical-fixes",
+  "description": "Fix 6 critical data-loss, crash, and security issues in the Swift rebuild",
   "tasks": [
     {
-      "id": "T-009",
-      "title": "Tab bar ARIA pattern — role=tablist, keyboard nav",
-      "description": "Tab items are div with onClick — no keyboard access, no role=tab, no aria-selected. Implement WAI-ARIA Tabs pattern: role=tablist on container, role=tab on items, aria-selected, arrow-key navigation. Beads: personal-ajr",
+      "id": "T-001",
+      "title": "Fix tab dirty flag sync to prevent silent data loss on tab close",
+      "description": "AppState.isDirty is updated on content changes but never synced to the active TabItem.isDirty. closeTab checks tab.isDirty (always false) so the unsaved-changes dialog never triggers. Sync isDirty to the active tab whenever it changes.",
       "acceptanceCriteria": [
-        "File `src/components/layout/TabBar.tsx` contains `role=\"tablist\"`",
-        "File `src/components/layout/TabBar.tsx` contains `role=\"tab\"`",
-        "File `src/components/layout/TabBar.tsx` contains `aria-selected`",
-        "File `src/components/layout/TabBar.tsx` contains `onKeyDown`",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
+        "Run `cd Margin && swift build` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` contains code that sets the active tab's isDirty when global isDirty changes",
+        "File `Margin/Sources/Margin/Models/TabItem.swift` has isDirty as a mutable var"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Bundled with T-015 middle-click"
+      "notes": ""
     },
     {
-      "id": "T-010",
-      "title": "Thread popover dialog semantics + focus trap",
-      "description": "HighlightThread has no role=dialog, no aria-label, no focus trap. Add role=dialog, aria-modal=true, aria-label, and trap focus within the popover while open. Restore focus on close. Beads: personal-w1e",
+      "id": "T-002",
+      "title": "Fix keep-local article save to not silently discard edits",
+      "description": "saveCurrentFile() clears isDirty and returns when filePath is nil (keep-local articles). This makes the user think their edits were saved. Instead, do NOT clear isDirty when there's no file path, so the unsaved-changes guard still triggers on tab close.",
       "acceptanceCriteria": [
-        "File `src/components/editor/HighlightThread.tsx` contains `role=\"dialog\"`",
-        "File `src/components/editor/HighlightThread.tsx` contains `aria-modal`",
-        "File `src/components/editor/HighlightThread.tsx` contains focus trap logic",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
+        "Run `cd Margin && swift build` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` does NOT clear isDirty when filePath is nil in saveCurrentFile"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Implemented"
+      "notes": ""
     },
     {
-      "id": "T-011",
-      "title": "Touch target pass — min 36px interactive elements",
-      "description": "Tab close (18px), tab new (28px), toolbar buttons (~30px), note action buttons all below minimums. Bump min sizes: tab-close to 28px, tab-new to 36px, toolbar-btn to 36px, note-action-btn min-height 28px. Beads: personal-gsp",
+      "id": "T-003",
+      "title": "Fix JSONL correction export to not silently drop records",
+      "description": "CorrectionStore JSONL export uses String? as Any which causes JSONSerialization to fail. try? swallows the error. Fix by using proper nil handling and let errors propagate.",
       "acceptanceCriteria": [
-        "File `src/styles/tabs.css` `.tab-close` has width/height >= 28",
-        "File `src/styles/tabs.css` `.tab-new` has width/height >= 36",
-        "File `src/styles/editor.css` `.toolbar-btn` has min dimensions >= 36",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
+        "Run `cd Margin && swift build` - exits with code 0",
+        "File `Margin/Sources/Margin/Database/CorrectionStore.swift` does not contain `as Any` for optional String fields in the JSONL export section",
+        "File `Margin/Sources/Margin/Database/CorrectionStore.swift` does not use `try?` for JSON serialization in the JSONL section"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Implemented"
+      "notes": ""
     },
     {
-      "id": "T-012",
-      "title": "Highlight color picker in FloatingToolbar",
-      "description": "5 highlight colors defined in CSS but only yellow used. Add 5 color circles to FloatingToolbar that pass selected color to onHighlight. Update App.tsx handleHighlight and handleNote to accept color param. Beads: personal-69d",
+      "id": "T-004",
+      "title": "Fix mdfind query injection by escaping user input",
+      "description": "SearchStore.searchFilesOnDisk interpolates user query directly into mdfind predicate string. Single quotes, backslashes, and special chars can break or inject commands. Escape the query before interpolation.",
       "acceptanceCriteria": [
-        "File `src/components/editor/FloatingToolbar.tsx` renders 5 color option elements",
-        "File `src/App.tsx` handleHighlight accepts and uses a color parameter",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
+        "Run `cd Margin && swift build` - exits with code 0",
+        "File `Margin/Sources/Margin/Database/SearchStore.swift` escapes or sanitizes the query string before passing to mdfind"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Implemented"
+      "notes": ""
     },
     {
-      "id": "T-013",
-      "title": "Create elevation tokens (shadow-sm/md/lg)",
-      "description": "Thread popover, toolbar, and dropdown each use different ad-hoc shadows. Define --shadow-sm, --shadow-md, --shadow-lg in globals.css with dark mode variants. Replace inline shadows. Beads: personal-dym",
+      "id": "T-005",
+      "title": "Fix highlight reapply to preserve code block backgrounds",
+      "description": "MarkdownEditorView.applyHighlights removes ALL .backgroundColor attributes from the full text range, which destroys code block formatting. Instead, only remove backgrounds matching known highlight colors.",
       "acceptanceCriteria": [
-        "File `src/styles/globals.css` contains `--shadow-sm`",
-        "File `src/styles/globals.css` contains `--shadow-md`",
-        "File `src/styles/globals.css` contains `--shadow-lg`",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
+        "Run `cd Margin && swift build` - exits with code 0",
+        "File `Margin/Sources/Margin/Views/Editor/MarkdownEditorView.swift` does not remove .backgroundColor from the entire text range indiscriminately"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Implemented"
+      "notes": ""
     },
     {
-      "id": "T-014",
-      "title": "Extract inline transition styles to CSS classes",
-      "description": "~15 inline style={{transition:...}} duplicate easing tokens. Extract to CSS utility classes (.transition-entrance, .transition-exit) referencing var(--ease-*) and var(--duration-*). Beads: personal-gzc",
+      "id": "T-006",
+      "title": "Fix FTS5 search query rank syntax",
+      "description": "SearchStore.searchDocuments references rank as a regular column. In FTS5, rank is available for ORDER BY but not as a selected column in the standard way. Fix the SQL query.",
       "acceptanceCriteria": [
-        "File `src/styles/interactions.css` contains transition utility classes",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
+        "Run `cd Margin && swift build` - exits with code 0",
+        "File `Margin/Sources/Margin/Database/SearchStore.swift` uses valid FTS5 rank syntax in the search query"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-015",
-      "title": "Middle-click to close tabs",
-      "description": "Standard browser convention missing. Add onAuxClick handler to tab items checking button === 1. Beads: personal-zpe",
-      "acceptanceCriteria": [
-        "File `src/components/layout/TabBar.tsx` contains `onAuxClick`",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-016",
-      "title": "Debounce sidebar search input",
-      "description": "Sidebar.tsx fires onSearch on every keystroke. The file search hook already debounces IPC, but the keep-local search does not. Add debounce in Sidebar handleChange for the articles tab. Beads: personal-0iq",
-      "acceptanceCriteria": [
-        "File `src/components/layout/Sidebar.tsx` articles search uses debounce or setTimeout",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-017",
-      "title": "Keyboard-navigable search dropdown",
-      "description": "Search dropdown has no role=listbox, no arrow-key navigation. Add role=listbox on dropdown, role=option on items, aria-activedescendant, arrow up/down/enter keyboard handling. Beads: personal-zge",
-      "acceptanceCriteria": [
-        "File `src/components/layout/Sidebar.tsx` search dropdown contains `role=\"listbox\"`",
-        "File `src/components/layout/Sidebar.tsx` search items contain `role=\"option\"`",
-        "File `src/components/layout/Sidebar.tsx` contains arrow key handling for search results",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-018",
-      "title": "Undo toast for destructive actions",
-      "description": "Delete highlight, delete note are single-click permanent. Add a simple toast component: optimistically remove from UI, show 'Deleted — Undo' toast for 5 seconds, commit delete after timeout or dismiss. Beads: personal-8kv",
-      "acceptanceCriteria": [
-        "A toast component exists in src/components/",
-        "File `src/App.tsx` or hooks use the toast for delete actions",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-019",
-      "title": "Use right gutter for margin note indicators",
-      "description": "The right grid column is empty. Add small dot indicators in the right gutter at the vertical position of each highlight that has notes. Click to open thread. Beads: personal-mjn",
-      "acceptanceCriteria": [
-        "Reader grid right column contains annotation indicators",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-020",
-      "title": "Interruptible sidebar animation",
-      "description": "CSS transition on sidebar transform queues on rapid toggle. Use will-change: transform and ensure transition responds to mid-animation state changes. Beads: personal-d9r",
-      "acceptanceCriteria": [
-        "Sidebar animation handles rapid toggle without stutter",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-021",
-      "title": "Warm the highlight palette",
-      "description": "Light-mode highlights use cold Tailwind pastels. Shift toward warm tones matching the page (yellow→amber, blue→warm teal). Adjust dark-mode opacities per hue for perceptual balance. Beads: personal-880",
-      "acceptanceCriteria": [
-        "File `src/styles/globals.css` highlight color tokens are updated to warmer values",
-        "File `src/styles/editor.css` dark mode highlight opacities are adjusted per hue",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-022",
-      "title": "Empty state brand moment",
-      "description": "Empty state is functional but forgettable. Add a literary quote about marginalia, warmer Newsreader italic, subtle entrance animation. Beads: personal-ebs",
-      "acceptanceCriteria": [
-        "File `src/components/layout/AppShell.tsx` empty state has a literary quote",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-023",
-      "title": "Staggered list entrance on sidebar items",
-      "description": "Sidebar list items appear all at once. Add 20-30ms stagger delay via CSS animation-delay using inline style based on index. Beads: personal-xrq",
-      "acceptanceCriteria": [
-        "File `src/components/layout/Sidebar.tsx` applies staggered animation delay to list items",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "Implemented"
-    },
-    {
-      "id": "T-024",
-      "title": "Temporal grouping in sidebar doc list",
-      "description": "Single RECENT heading with flat list. Add date-based groups: Today, Yesterday, This Week, Older based on document updated_at timestamp. Beads: personal-z20",
-      "acceptanceCriteria": [
-        "File `src/components/layout/Sidebar.tsx` groups documents by time period",
-        "Run `pnpm tsc --noEmit` - exits with code 0"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "Implemented"
+      "notes": ""
     }
   ]
 }
