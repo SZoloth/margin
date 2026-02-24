@@ -280,7 +280,70 @@ export default function App() {
     if (lastRestoredDocId.current === doc.currentDoc.id) return;
     lastRestoredDocId.current = doc.currentDoc.id;
 
-    if (annotations.highlights.length === 0) return;
+    // If DB has no highlights but the editor DOM has <mark> tags (from HTML baked
+    // into the file), re-create DB records so clicks and notes work again.
+    if (annotations.highlights.length === 0) {
+      // Wait for DOM to render before checking for orphan marks
+      requestAnimationFrame(() => {
+        const domMarks = editor.view.dom.querySelectorAll("mark[data-color]");
+        if (domMarks.length === 0) return;
+        const recoverOrphans = async () => {
+          const docId = doc.currentDoc!.id;
+          const { state: s } = editor;
+          const markT = s.schema.marks.highlight;
+          if (!markT) return;
+          const { tr: recoverTr } = s;
+          const fullText = s.doc.textBetween(0, s.doc.content.size, "\n");
+
+          for (const domMark of domMarks) {
+            const el = domMark as HTMLElement;
+            const text = el.textContent ?? "";
+            if (!text) continue;
+            const color = el.dataset.color ?? "yellow";
+
+            let from: number;
+            let to: number;
+            try {
+              from = editor.view.posAtDOM(el, 0);
+              to = from + text.length;
+            } catch {
+              continue;
+            }
+
+            const prefix = fullText.substring(Math.max(0, from - 50), from);
+            const suffix = fullText.substring(to, Math.min(fullText.length, to + 50));
+
+            try {
+              const highlight = await annotations.createHighlight({
+                documentId: docId,
+                color,
+                textContent: text,
+                fromPos: from,
+                toPos: to,
+                prefixContext: prefix,
+                suffixContext: suffix,
+              });
+              // Stamp the mark with the new ID
+              recoverTr.addMark(from, to, markT.create({ color, highlightId: highlight.id }));
+            } catch (err) {
+              console.error("Failed to recover orphan highlight:", err);
+            }
+          }
+
+          if (recoverTr.steps.length > 0) {
+            recoverTr.setMeta("addToHistory", false);
+            isRestoringMarksRef.current = true;
+            try {
+              editor.view.dispatch(recoverTr);
+            } finally {
+              isRestoringMarksRef.current = false;
+            }
+          }
+        };
+        void recoverOrphans();
+      });
+      return;
+    }
 
     const { state } = editor;
     const { tr } = state;
@@ -316,6 +379,7 @@ export default function App() {
       } finally {
         isRestoringMarksRef.current = false;
       }
+
     }
   }, [editor, annotations.isLoaded, annotations.highlights, doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -356,20 +420,36 @@ export default function App() {
     return () => { void unlisten.then((fn) => fn()); };
   }, []);
 
+  // Resolve a highlight from event detail: prefer ID, fall back to text-matching
+  const resolveHighlight = useCallback((detail: { highlightId?: string; text?: string }) => {
+    if (detail.highlightId) {
+      return highlightsRef.current.find((h) => h.id === detail.highlightId) ?? null;
+    }
+    if (detail.text) {
+      return highlightsRef.current.find((h) => h.text_content === detail.text) ?? null;
+    }
+    return null;
+  }, []);
+
   // Handle highlight click → open thread popover
   useEffect(() => {
     const handleHighlightClick = (e: Event) => {
-      const { element, highlightId } = (e as CustomEvent).detail;
-      if (!element || !highlightId) return;
-      setAnchorRect((element as HTMLElement).getBoundingClientRect());
-      setFocusHighlightId(highlightId);
-      setAutoFocusNew(false);
+      const { element, highlightId, text } = (e as CustomEvent).detail;
+      if (!element) return;
+      const match = resolveHighlight({ highlightId, text });
+      if (match) {
+        setAnchorRect((element as HTMLElement).getBoundingClientRect());
+        setFocusHighlightId(match.id);
+        setAutoFocusNew(false);
+      }
     };
 
     const handleHighlightDelete = async (e: Event) => {
-      const { element, highlightId } = (e as CustomEvent).detail;
-      if (!element || !highlightId || !editor) return;
+      const { element, highlightId, text } = (e as CustomEvent).detail;
+      if (!element || !editor) return;
       const el = element as HTMLElement;
+      const match = resolveHighlight({ highlightId, text });
+      if (!match) return;
 
       let markFrom: number;
       let markTo: number;
@@ -381,7 +461,7 @@ export default function App() {
         markTo = -1;
       }
 
-      await annotations.deleteHighlight(highlightId);
+      await annotations.deleteHighlight(match.id);
 
       const { state } = editor;
       const { tr } = state;
@@ -394,7 +474,7 @@ export default function App() {
         state.doc.descendants((node, pos) => {
           if (!node.isText) return;
           const hlMark = node.marks.find(
-            (m) => m.type.name === "highlight" && m.attrs.highlightId === highlightId,
+            (m) => m.type.name === "highlight" && m.attrs.highlightId === match.id,
           );
           if (hlMark) {
             tr.removeMark(pos, pos + node.nodeSize, hlMark);
@@ -413,7 +493,7 @@ export default function App() {
       window.removeEventListener("margin:highlight-click", handleHighlightClick);
       window.removeEventListener("margin:highlight-delete", handleHighlightDelete);
     };
-  }, [editor, annotations]);
+  }, [editor, annotations, resolveHighlight]);
 
   const handleDeleteHighlight = useCallback(async (id: string) => {
     if (!editor) return;
