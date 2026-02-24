@@ -1,5 +1,4 @@
 import SwiftUI
-import Markdown
 
 /// SwiftUI wrapper around a native NSTextView for rendering and editing markdown
 /// with multi-color highlight support.
@@ -7,29 +6,39 @@ struct MarkdownEditorView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                MarkdownTextView(
-                    content: $appState.content,
-                    highlights: appState.highlights,
-                    settings: appState.settings,
-                    onContentChange: { newContent in
-                        appState.updateContent(newContent)
-                    },
-                    onSelectionChange: { _ in },
-                    onHighlightClick: { highlightId in
-                        appState.focusHighlightId = highlightId
-                    }
-                )
-                .frame(maxWidth: appState.settings.readerWidth.points)
-                .padding(.horizontal, 40)
-                .padding(.vertical, 32)
+        MarkdownTextView(
+            content: $appState.content,
+            highlights: appState.highlights,
+            settings: appState.settings,
+            onContentChange: { newContent in
+                appState.updateContent(newContent)
+            },
+            onSelectionChange: { range, rect, text in
+                appState.clearEditorSelection = false
+                if range.length > 0 {
+                    appState.selectionRange = range
+                    appState.selectionRect = rect
+                    appState.selectionText = text
+                } else {
+                    appState.selectionRange = nil
+                    appState.selectionRect = .zero
+                    appState.selectionText = ""
+                }
+            },
+            onHighlightClick: { highlightId in
+                appState.focusHighlightId = highlightId
+            },
+            scrollToOffset: appState.scrollToOffset,
+            clearSelection: appState.clearEditorSelection
+        )
+        .frame(maxWidth: appState.settings.readerWidth.points)
+        .padding(.horizontal, 40)
+        .frame(maxWidth: .infinity)
+        .overlay {
+            if appState.selectionRange != nil, !appState.selectionText.isEmpty {
+                FloatingToolbarView()
+                    .environmentObject(appState)
             }
-            .frame(maxWidth: .infinity)
-        }
-        .overlay(alignment: .topTrailing) {
-            FloatingToolbarView()
-                .environmentObject(appState)
         }
         .overlay {
             if let highlightId = appState.focusHighlightId,
@@ -41,17 +50,25 @@ struct MarkdownEditorView: View {
                 .environmentObject(appState)
             }
         }
+        .overlay(alignment: .bottom) {
+            UndoToastView()
+                .environmentObject(appState)
+        }
     }
 }
 
 /// NSViewRepresentable wrapping NSTextView for rich markdown editing with highlights.
+/// Uses regex-based syntax highlighting that preserves raw markdown text,
+/// so textView.string always returns the original markdown (no data corruption on save).
 struct MarkdownTextView: NSViewRepresentable {
     @Binding var content: String
     let highlights: [Highlight]
     let settings: AppSettings
     var onContentChange: (String) -> Void
-    var onSelectionChange: (NSRange) -> Void
+    var onSelectionChange: (NSRange, CGRect, String) -> Void
     var onHighlightClick: (String) -> Void
+    var scrollToOffset: Int?
+    var clearSelection: Bool
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -65,7 +82,7 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.usesRuler = false
         textView.isAutomaticQuoteSubstitutionEnabled = true
         textView.isAutomaticDashSubstitutionEnabled = true
-        textView.textContainerInset = NSSize(width: 0, height: 16)
+        textView.textContainerInset = NSSize(width: 0, height: 32)
         textView.textContainer?.lineFragmentPadding = 0
         textView.backgroundColor = .clear
 
@@ -90,9 +107,10 @@ struct MarkdownTextView: NSViewRepresentable {
             context.coordinator.isUpdatingFromSwift = true
             let selectedRange = textView.selectedRange()
             setAttributedContent(textView: textView, content: content)
-            // Restore selection
+            // Restore selection (use UTF-16 length for safety)
+            let nsLen = (textView.string as NSString).length
             let safeRange = NSRange(
-                location: min(selectedRange.location, textView.string.count),
+                location: min(selectedRange.location, nsLen),
                 length: 0
             )
             textView.setSelectedRange(safeRange)
@@ -101,6 +119,26 @@ struct MarkdownTextView: NSViewRepresentable {
 
         // Re-apply highlights
         applyHighlights(textView: textView)
+
+        // Scroll to offset if requested (consume once)
+        if let offset = scrollToOffset,
+           offset != context.coordinator.lastScrolledOffset,
+           offset < (textView.string as NSString).length {
+            let range = NSRange(location: offset, length: 0)
+            textView.scrollRangeToVisible(range)
+            context.coordinator.lastScrolledOffset = offset
+        } else if scrollToOffset == nil {
+            context.coordinator.lastScrolledOffset = nil
+        }
+
+        // Clear native selection when requested (after highlight creation)
+        if clearSelection {
+            let pos = textView.selectedRange().location
+            textView.setSelectedRange(NSRange(location: pos, length: 0))
+            DispatchQueue.main.async {
+                self.onSelectionChange(NSRange(location: pos, length: 0), .zero, "")
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -110,6 +148,7 @@ struct MarkdownTextView: NSViewRepresentable {
     private func defaultAttributes() -> [NSAttributedString.Key: Any] {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = settings.fontSize.cgFloat * (settings.lineSpacing.multiplier - 1.0)
+        paragraphStyle.paragraphSpacing = settings.fontSize.cgFloat * 0.6
 
         return [
             .font: NSFont(name: "Georgia", size: settings.fontSize.cgFloat)
@@ -120,22 +159,191 @@ struct MarkdownTextView: NSViewRepresentable {
     }
 
     private func setAttributedContent(textView: NSTextView, content: String) {
-        let attributed = renderMarkdownToAttributedString(content)
+        let attributed = renderMarkdownSyntaxHighlighted(content)
         textView.textStorage?.setAttributedString(attributed)
     }
 
-    /// Convert markdown string to NSAttributedString with proper styling.
-    private func renderMarkdownToAttributedString(_ markdown: String) -> NSAttributedString {
-        let document = Markdown.Document(parsing: markdown)
-        let visitor = MarkdownAttributedStringVisitor(
-            fontSize: settings.fontSize.cgFloat,
-            lineSpacing: settings.lineSpacing.multiplier
-        )
-        return visitor.visit(document)
+    // MARK: - Syntax-Highlighted Markdown Renderer
+    //
+    // Preserves raw markdown text (textView.string == original markdown).
+    // Applies visual styles via attributes; syntax characters (# ** * ` > etc.) are dimmed.
+
+    private func renderMarkdownSyntaxHighlighted(_ markdown: String) -> NSAttributedString {
+        let result = NSMutableAttributedString(string: markdown, attributes: defaultAttributes())
+        let nsText = markdown as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        guard fullRange.length > 0 else { return result }
+
+        let syntaxColor = NSColor.tertiaryLabelColor
+        let fontSize = settings.fontSize.cgFloat
+
+        // --- Block-level styles (line by line) ---
+        var lineStart = 0
+        for line in markdown.components(separatedBy: "\n") {
+            let lineLen = (line as NSString).length
+            let lineRange = NSRange(location: lineStart, length: lineLen)
+
+            if let (level, prefixLen) = headingMatch(line) {
+                let scales: [CGFloat] = [0, 1.8, 1.4, 1.2, 1.1, 1.05, 1.0]
+                let scale = level <= 6 ? scales[level] : 1.0
+                let headingFont = NSFont.systemFont(ofSize: fontSize * scale, weight: .semibold)
+                let style = NSMutableParagraphStyle()
+                style.paragraphSpacing = fontSize * 0.4
+                if level > 1 { style.paragraphSpacingBefore = fontSize * 0.8 }
+                result.addAttribute(.font, value: headingFont, range: lineRange)
+                result.addAttribute(.paragraphStyle, value: style, range: lineRange)
+                if prefixLen > 0, prefixLen <= lineLen {
+                    result.addAttribute(.foregroundColor, value: syntaxColor,
+                        range: NSRange(location: lineStart, length: prefixLen))
+                }
+            } else if line.hasPrefix("> ") {
+                let style = NSMutableParagraphStyle()
+                style.headIndent = 24
+                style.firstLineHeadIndent = 24
+                style.paragraphSpacing = fontSize * 0.4
+                result.addAttribute(.paragraphStyle, value: style, range: lineRange)
+                if let italicFont = NSFont(name: "Georgia-Italic", size: fontSize) {
+                    result.addAttribute(.font, value: italicFont, range: lineRange)
+                }
+                result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: lineRange)
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: lineStart, length: min(2, lineLen)))
+            } else if line == "---" || line == "***" || line == "___" {
+                result.addAttribute(.foregroundColor, value: NSColor.separatorColor, range: lineRange)
+            } else if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ ") {
+                let style = NSMutableParagraphStyle()
+                style.headIndent = 24
+                style.firstLineHeadIndent = 8
+                style.paragraphSpacing = fontSize * 0.2
+                result.addAttribute(.paragraphStyle, value: style, range: lineRange)
+            } else if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                let style = NSMutableParagraphStyle()
+                style.headIndent = 28
+                style.firstLineHeadIndent = 8
+                style.paragraphSpacing = fontSize * 0.2
+                result.addAttribute(.paragraphStyle, value: style, range: lineRange)
+            } else if line.hasPrefix("    ") || line.hasPrefix("\t") {
+                // Indented code block
+                let codeFont = NSFont.monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
+                result.addAttribute(.font, value: codeFont, range: lineRange)
+                result.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: lineRange)
+                result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: lineRange)
+            }
+
+            lineStart += lineLen + 1 // +1 for the \n separator
+        }
+
+        // --- Code blocks (```...```) ---
+        if let fenceRegex = try? NSRegularExpression(pattern: "```[^\\n]*\\n[\\s\\S]*?```") {
+            for match in fenceRegex.matches(in: markdown, range: fullRange) {
+                let codeFont = NSFont.monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
+                result.addAttribute(.font, value: codeFont, range: match.range)
+                result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: match.range)
+                result.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: match.range)
+            }
+        }
+
+        // --- Inline styles ---
+
+        // Inline code: `text`
+        if let regex = try? NSRegularExpression(pattern: "(?<!`)`(?!`)([^`\\n]+?)`(?!`)") {
+            for match in regex.matches(in: markdown, range: fullRange) {
+                let codeFont = NSFont.monospacedSystemFont(ofSize: fontSize * 0.9, weight: .regular)
+                result.addAttribute(.font, value: codeFont, range: match.range)
+                result.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: match.range)
+                // Dim backticks
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: match.range.location, length: 1))
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: match.range.location + match.range.length - 1, length: 1))
+            }
+        }
+
+        // Bold: **text**
+        if let regex = try? NSRegularExpression(pattern: "\\*\\*(.+?)\\*\\*") {
+            for match in regex.matches(in: markdown, range: fullRange) {
+                let contentRange = match.range(at: 1)
+                if let base = result.attribute(.font, at: contentRange.location, effectiveRange: nil) as? NSFont {
+                    let bold = NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask)
+                    result.addAttribute(.font, value: bold, range: contentRange)
+                }
+                // Dim ** delimiters
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: match.range.location, length: 2))
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: match.range.location + match.range.length - 2, length: 2))
+            }
+        }
+
+        // Italic: *text* (not inside bold **)
+        if let regex = try? NSRegularExpression(pattern: "(?<!\\*)\\*([^*]+)\\*(?!\\*)") {
+            for match in regex.matches(in: markdown, range: fullRange) {
+                let contentRange = match.range(at: 1)
+                if let base = result.attribute(.font, at: contentRange.location, effectiveRange: nil) as? NSFont {
+                    let italic = NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask)
+                    result.addAttribute(.font, value: italic, range: contentRange)
+                }
+                // Dim * delimiters
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: match.range.location, length: 1))
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: match.range.location + match.range.length - 1, length: 1))
+            }
+        }
+
+        // Links: [text](url)
+        if let regex = try? NSRegularExpression(pattern: "\\[([^\\]]+)\\]\\(([^)]+)\\)") {
+            for match in regex.matches(in: markdown, range: fullRange) {
+                let textRange = match.range(at: 1)
+                let urlRange = match.range(at: 2)
+                result.addAttribute(.foregroundColor, value: NSColor.linkColor, range: textRange)
+                let urlStr = nsText.substring(with: urlRange)
+                if let url = URL(string: urlStr) {
+                    result.addAttribute(.link, value: url, range: textRange)
+                }
+                // Dim all syntax around the link text: [, ](url)
+                result.addAttribute(.foregroundColor, value: syntaxColor,
+                    range: NSRange(location: match.range.location, length: 1))
+                let afterText = textRange.location + textRange.length
+                let trailingLen = match.range.location + match.range.length - afterText
+                if trailingLen > 0 {
+                    result.addAttribute(.foregroundColor, value: syntaxColor,
+                        range: NSRange(location: afterText, length: trailingLen))
+                }
+            }
+        }
+
+        // Images: ![alt](url) — dim everything, show alt text in italic
+        if let regex = try? NSRegularExpression(pattern: "!\\[([^\\]]*)\\]\\(([^)]+)\\)") {
+            for match in regex.matches(in: markdown, range: fullRange) {
+                result.addAttribute(.foregroundColor, value: syntaxColor, range: match.range)
+                let altRange = match.range(at: 1)
+                if altRange.length > 0 {
+                    result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: altRange)
+                    if let base = result.attribute(.font, at: altRange.location, effectiveRange: nil) as? NSFont {
+                        result.addAttribute(.font, value: NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask), range: altRange)
+                    }
+                }
+            }
+        }
+
+        return result
+    }
+
+    private func headingMatch(_ line: String) -> (level: Int, prefixLength: Int)? {
+        var level = 0
+        for ch in line {
+            if ch == "#" { level += 1 }
+            else if ch == " " && level > 0 && level <= 6 { return (level, level + 1) }
+            else { return nil }
+        }
+        return nil
     }
 
     /// Custom attribute key to tag ranges as annotation highlights (vs code block backgrounds).
     private static let highlightTagKey = NSAttributedString.Key("marginHighlight")
+    /// Custom attribute key storing the highlight ID for click hit-testing.
+    static let highlightIdKey = NSAttributedString.Key("marginHighlightId")
 
     /// Apply highlight backgrounds from the stored highlights.
     private func applyHighlights(textView: NSTextView) {
@@ -149,6 +357,7 @@ struct MarkdownTextView: NSViewRepresentable {
             if value != nil {
                 storage.removeAttribute(.backgroundColor, range: range)
                 storage.removeAttribute(Self.highlightTagKey, range: range)
+                storage.removeAttribute(Self.highlightIdKey, range: range)
             }
         }
 
@@ -165,6 +374,7 @@ struct MarkdownTextView: NSViewRepresentable {
                         ?? HighlightColor.yellow.nsColor
                     storage.addAttribute(.backgroundColor, value: color, range: range)
                     storage.addAttribute(Self.highlightTagKey, value: true, range: range)
+                    storage.addAttribute(Self.highlightIdKey, value: highlight.id, range: range)
                     continue
                 }
             }
@@ -176,6 +386,7 @@ struct MarkdownTextView: NSViewRepresentable {
                     ?? HighlightColor.yellow.nsColor
                 storage.addAttribute(.backgroundColor, value: color, range: searchRange)
                 storage.addAttribute(Self.highlightTagKey, value: true, range: searchRange)
+                storage.addAttribute(Self.highlightIdKey, value: highlight.id, range: searchRange)
             }
         }
 
@@ -185,6 +396,7 @@ struct MarkdownTextView: NSViewRepresentable {
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MarkdownTextView
         var isUpdatingFromSwift = false
+        var lastScrolledOffset: Int?
 
         init(_ parent: MarkdownTextView) {
             self.parent = parent
@@ -198,250 +410,36 @@ struct MarkdownTextView: NSViewRepresentable {
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            parent.onSelectionChange(textView.selectedRange())
-        }
-    }
-}
+            let range = textView.selectedRange()
 
-// MARK: - Markdown → NSAttributedString Visitor
+            if range.length > 0,
+               let layoutManager = textView.layoutManager,
+               let textContainer = textView.textContainer {
+                let glyphRange = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+                let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+                let containerOrigin = textView.textContainerOrigin
+                let textViewRect = rect.offsetBy(dx: containerOrigin.x, dy: containerOrigin.y)
+                // Convert from NSTextView document coords to window coords
+                let windowRect = textView.convert(textViewRect, to: nil)
+                let selectedText = (textView.string as NSString).substring(with: range)
+                parent.onSelectionChange(range, windowRect, selectedText)
+            } else {
+                parent.onSelectionChange(range, .zero, "")
 
-/// Walks the swift-markdown AST and produces an NSAttributedString.
-class MarkdownAttributedStringVisitor {
-    let fontSize: CGFloat
-    let lineSpacing: CGFloat
-
-    init(fontSize: CGFloat, lineSpacing: CGFloat) {
-        self.fontSize = fontSize
-        self.lineSpacing = lineSpacing
-    }
-
-    func visit(_ document: Markdown.Document) -> NSAttributedString {
-        let result = NSMutableAttributedString()
-        for child in document.children {
-            result.append(visitBlock(child))
-        }
-        return result
-    }
-
-    private var bodyFont: NSFont {
-        NSFont(name: "Georgia", size: fontSize)
-            ?? NSFont.systemFont(ofSize: fontSize)
-    }
-
-    private var bodyParagraphStyle: NSParagraphStyle {
-        let style = NSMutableParagraphStyle()
-        style.lineSpacing = fontSize * (lineSpacing - 1.0)
-        style.paragraphSpacing = fontSize * 0.6
-        return style
-    }
-
-    private func visitBlock(_ markup: any Markup) -> NSAttributedString {
-        let result = NSMutableAttributedString()
-
-        if let heading = markup as? Heading {
-            let size: CGFloat
-            switch heading.level {
-            case 1: size = fontSize * 1.8
-            case 2: size = fontSize * 1.4
-            case 3: size = fontSize * 1.2
-            default: size = fontSize * 1.1
-            }
-
-            let style = NSMutableParagraphStyle()
-            style.paragraphSpacing = fontSize * 0.4
-            style.paragraphSpacingBefore = heading.level == 1 ? 0 : fontSize * 0.8
-
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: size, weight: .semibold),
-                .foregroundColor: NSColor.textColor,
-                .paragraphStyle: style,
-            ]
-
-            for child in heading.children {
-                result.append(visitInline(child, baseAttributes: attrs))
-            }
-            result.append(NSAttributedString(string: "\n"))
-        } else if let para = markup as? Paragraph {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: bodyFont,
-                .foregroundColor: NSColor.textColor,
-                .paragraphStyle: bodyParagraphStyle,
-            ]
-            for child in para.children {
-                result.append(visitInline(child, baseAttributes: attrs))
-            }
-            result.append(NSAttributedString(string: "\n"))
-        } else if let blockquote = markup as? BlockQuote {
-            let style = NSMutableParagraphStyle()
-            style.headIndent = 24
-            style.firstLineHeadIndent = 24
-            style.paragraphSpacing = fontSize * 0.4
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont(name: "Georgia-Italic", size: fontSize) ?? bodyFont,
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: style,
-            ]
-            for child in blockquote.children {
-                if let para = child as? Paragraph {
-                    for inline in para.children {
-                        result.append(visitInline(inline, baseAttributes: attrs))
-                    }
-                } else {
-                    result.append(visitBlock(child))
-                }
-            }
-            result.append(NSAttributedString(string: "\n"))
-        } else if markup is ThematicBreak {
-            let style = NSMutableParagraphStyle()
-            style.paragraphSpacingBefore = fontSize * 0.5
-            style.paragraphSpacing = fontSize * 0.5
-            result.append(NSAttributedString(
-                string: "───\n",
-                attributes: [
-                    .foregroundColor: NSColor.separatorColor,
-                    .font: NSFont.systemFont(ofSize: fontSize * 0.8),
-                    .paragraphStyle: style,
-                ]
-            ))
-        } else if let codeBlock = markup as? CodeBlock {
-            let style = NSMutableParagraphStyle()
-            style.headIndent = 16
-            style.firstLineHeadIndent = 16
-            style.paragraphSpacing = fontSize * 0.4
-            result.append(NSAttributedString(
-                string: (codeBlock.code) + "\n",
-                attributes: [
-                    .font: NSFont.monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular),
-                    .foregroundColor: NSColor.secondaryLabelColor,
-                    .backgroundColor: NSColor.quaternaryLabelColor,
-                    .paragraphStyle: style,
-                ]
-            ))
-        } else if let list = markup as? UnorderedList {
-            for item in list.listItems {
-                let bullet = "•  "
-                let style = NSMutableParagraphStyle()
-                style.headIndent = 24
-                style.firstLineHeadIndent = 8
-                style.paragraphSpacing = fontSize * 0.2
-
-                let itemStr = NSMutableAttributedString(string: bullet, attributes: [
-                    .font: bodyFont,
-                    .foregroundColor: NSColor.textColor,
-                    .paragraphStyle: style,
-                ])
-                for child in item.children {
-                    if let para = child as? Paragraph {
-                        let attrs: [NSAttributedString.Key: Any] = [
-                            .font: bodyFont,
-                            .foregroundColor: NSColor.textColor,
-                            .paragraphStyle: style,
-                        ]
-                        for inline in para.children {
-                            itemStr.append(visitInline(inline, baseAttributes: attrs))
-                        }
+                // Click on highlight: check if the caret is inside a highlighted range
+                let length = (textView.string as NSString).length
+                if range.length == 0, let storage = textView.textStorage {
+                    let checkPos = range.location < length ? range.location : max(0, range.location - 1)
+                    if checkPos < length,
+                       let highlightId = storage.attribute(
+                           MarkdownTextView.highlightIdKey,
+                           at: checkPos,
+                           effectiveRange: nil
+                       ) as? String {
+                        parent.onHighlightClick(highlightId)
                     }
                 }
-                itemStr.append(NSAttributedString(string: "\n"))
-                result.append(itemStr)
             }
-        } else if let list = markup as? OrderedList {
-            for (index, item) in list.listItems.enumerated() {
-                let number = "\(index + 1).  "
-                let style = NSMutableParagraphStyle()
-                style.headIndent = 28
-                style.firstLineHeadIndent = 8
-                style.paragraphSpacing = fontSize * 0.2
-
-                let itemStr = NSMutableAttributedString(string: number, attributes: [
-                    .font: bodyFont,
-                    .foregroundColor: NSColor.textColor,
-                    .paragraphStyle: style,
-                ])
-                for child in item.children {
-                    if let para = child as? Paragraph {
-                        let attrs: [NSAttributedString.Key: Any] = [
-                            .font: bodyFont,
-                            .foregroundColor: NSColor.textColor,
-                            .paragraphStyle: style,
-                        ]
-                        for inline in para.children {
-                            itemStr.append(visitInline(inline, baseAttributes: attrs))
-                        }
-                    }
-                }
-                itemStr.append(NSAttributedString(string: "\n"))
-                result.append(itemStr)
-            }
-        } else {
-            // Generic fallback for other block types
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: bodyFont,
-                .foregroundColor: NSColor.textColor,
-                .paragraphStyle: bodyParagraphStyle,
-            ]
-            for child in markup.children {
-                if child.childCount > 0 {
-                    result.append(visitBlock(child))
-                } else {
-                    result.append(visitInline(child, baseAttributes: attrs))
-                }
-            }
-        }
-
-        return result
-    }
-
-    private func visitInline(_ markup: any Markup, baseAttributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
-        if let text = markup as? Markdown.Text {
-            return NSAttributedString(string: text.string, attributes: baseAttributes)
-        } else if let strong = markup as? Strong {
-            var attrs = baseAttributes
-            if let font = attrs[.font] as? NSFont {
-                attrs[.font] = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
-            }
-            let result = NSMutableAttributedString()
-            for child in strong.children {
-                result.append(visitInline(child, baseAttributes: attrs))
-            }
-            return result
-        } else if let emphasis = markup as? Emphasis {
-            var attrs = baseAttributes
-            if let font = attrs[.font] as? NSFont {
-                attrs[.font] = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
-            }
-            let result = NSMutableAttributedString()
-            for child in emphasis.children {
-                result.append(visitInline(child, baseAttributes: attrs))
-            }
-            return result
-        } else if let code = markup as? InlineCode {
-            var attrs = baseAttributes
-            let size = (attrs[.font] as? NSFont)?.pointSize ?? fontSize
-            attrs[.font] = NSFont.monospacedSystemFont(ofSize: size * 0.9, weight: .regular)
-            attrs[.backgroundColor] = NSColor.quaternaryLabelColor
-            return NSAttributedString(string: code.code, attributes: attrs)
-        } else if let link = markup as? Markdown.Link {
-            var attrs = baseAttributes
-            attrs[.foregroundColor] = NSColor.linkColor
-            if let url = link.destination {
-                attrs[.link] = URL(string: url)
-            }
-            let result = NSMutableAttributedString()
-            for child in link.children {
-                result.append(visitInline(child, baseAttributes: attrs))
-            }
-            return result
-        } else if markup is SoftBreak {
-            return NSAttributedString(string: " ", attributes: baseAttributes)
-        } else if markup is LineBreak {
-            return NSAttributedString(string: "\n", attributes: baseAttributes)
-        } else {
-            let result = NSMutableAttributedString()
-            for child in markup.children {
-                result.append(visitInline(child, baseAttributes: baseAttributes))
-            }
-            return result
         }
     }
 }

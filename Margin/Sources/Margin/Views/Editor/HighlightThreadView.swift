@@ -17,6 +17,7 @@ struct HighlightThreadView: View {
                 .onTapGesture {
                     appState.focusHighlightId = nil
                 }
+                .accessibilityHidden(true)
 
             // The popover itself
             VStack(alignment: .leading, spacing: 0) {
@@ -102,6 +103,8 @@ struct HighlightThreadView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.15), radius: 16, y: 4)
             .padding(20)
+            .accessibilityAddTraits(.isModal)
+            .accessibilityLabel("Notes for highlight")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

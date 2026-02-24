@@ -1,10 +1,12 @@
 import SwiftUI
 
 /// Root view — sidebar + tab bar + reader pane.
-struct ContentView: View {
+public struct ContentView: View {
     @EnvironmentObject var appState: AppState
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         NavigationSplitView(columnVisibility: .constant(
             appState.sidebarOpen ? .doubleColumn : .detailOnly
         )) {

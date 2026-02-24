@@ -74,20 +74,22 @@ struct ExportService {
 
     // MARK: - Helpers
 
-    private func posToLineNumber(fullText: String, pos: Int) -> Int {
-        let index = fullText.index(fullText.startIndex, offsetBy: min(pos, fullText.count))
-        let prefix = fullText[fullText.startIndex..<index]
+    func posToLineNumber(fullText: String, pos: Int) -> Int {
+        // Highlight positions are UTF-16 offsets (from NSRange), so use NSString
+        let nsText = fullText as NSString
+        let clampedPos = min(pos, nsText.length)
+        let prefix = nsText.substring(to: clampedPos)
         return prefix.components(separatedBy: "\n").count
     }
 
-    private func posToLineRange(fullText: String, from: Int, to: Int) -> String {
+    func posToLineRange(fullText: String, from: Int, to: Int) -> String {
         let startLine = posToLineNumber(fullText: fullText, pos: from)
         let endLine = posToLineNumber(fullText: fullText, pos: to)
         if startLine == endLine { return "Line \(startLine)" }
         return "Lines \(startLine)-\(endLine)"
     }
 
-    private func quoteText(_ text: String) -> String {
+    func quoteText(_ text: String) -> String {
         text.components(separatedBy: "\n")
             .map { "> \($0)" }
             .joined(separator: "\n")

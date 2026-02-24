@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// Settings panel with theme, typography, and behavior controls.
-struct SettingsView: View {
+public struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {

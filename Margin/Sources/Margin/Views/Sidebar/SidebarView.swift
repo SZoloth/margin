@@ -3,6 +3,7 @@ import SwiftUI
 enum SidebarTab: String, CaseIterable {
     case files = "Files"
     case articles = "Articles"
+    case contents = "Contents"
 }
 
 struct SidebarView: View {
@@ -45,6 +46,7 @@ struct SidebarView: View {
                 )
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
+                .accessibilityLabel(activeTab == .files ? "Search files" : "Search articles")
                 .onChange(of: searchText) { _, newValue in
                     if activeTab == .files {
                         appState.search(newValue)
@@ -105,11 +107,15 @@ struct SidebarView: View {
 
             // Content
             ScrollView {
-                if activeTab == .files {
+                switch activeTab {
+                case .files:
                     FilesSidebarContent()
                         .environmentObject(appState)
-                } else {
+                case .articles:
                     ArticlesSidebarContent()
+                        .environmentObject(appState)
+                case .contents:
+                    TableOfContentsView()
                         .environmentObject(appState)
                 }
             }

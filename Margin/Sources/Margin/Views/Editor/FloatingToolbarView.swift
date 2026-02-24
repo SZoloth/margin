@@ -1,12 +1,75 @@
 import SwiftUI
 
-/// Placeholder — floating toolbar positioning requires NSTextView selection rect
-/// integration via the Coordinator. Renders nothing until wired up.
+/// Floating toolbar that appears above text selection for highlight creation.
+/// Selection rect is in window coordinates; we convert to local overlay coords.
 struct FloatingToolbarView: View {
     @EnvironmentObject var appState: AppState
+    @State private var isVisible = false
 
     var body: some View {
-        EmptyView()
+        GeometryReader { geometry in
+            let toolbarWidth: CGFloat = 210
+            let toolbarHeight: CGFloat = 40
+            // Convert window coords to local overlay coords
+            let overlayFrame = geometry.frame(in: .global)
+            let selRect = appState.selectionRect
+            let localRect = CGRect(
+                x: selRect.origin.x - overlayFrame.origin.x,
+                y: selRect.origin.y - overlayFrame.origin.y,
+                width: selRect.width,
+                height: selRect.height
+            )
+            let centerX = localRect.midX
+            let clampedX = max(8, min(centerX - toolbarWidth / 2, geometry.size.width - toolbarWidth - 8))
+            let aboveY = localRect.minY - toolbarHeight - 8
+            let belowY = localRect.maxY + 8
+            let y = aboveY > 40 ? aboveY : belowY
+
+            HighlightToolbar(
+                onHighlight: { color in
+                    createHighlightFromSelection(color: color)
+                },
+                onNote: {
+                    createHighlightFromSelection(color: appState.settings.defaultHighlightColor, openNote: true)
+                }
+            )
+            .environmentObject(appState)
+            .position(x: clampedX + toolbarWidth / 2, y: y + toolbarHeight / 2)
+            .opacity(isVisible ? 1 : 0)
+            .scaleEffect(isVisible ? 1 : 0.97)
+            .offset(y: isVisible ? 0 : 4)
+            .animation(.easeOut(duration: 0.15), value: isVisible)
+        }
+        .allowsHitTesting(true)
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
+    }
+
+    private func createHighlightFromSelection(color: HighlightColor, openNote: Bool = false) {
+        guard let range = appState.selectionRange, !appState.selectionText.isEmpty else { return }
+        let text = appState.selectionText
+        let from = range.location
+        let to = range.location + range.length
+
+        // Clear selection state first to dismiss toolbar
+        appState.selectionRange = nil
+        appState.selectionText = ""
+        appState.selectionRect = .zero
+        // Also tell the editor to clear its native selection
+        appState.clearEditorSelection = true
+
+        Task {
+            if let highlight = await appState.createHighlight(
+                color: color.rawValue,
+                textContent: text,
+                fromPos: from,
+                toPos: to
+            ) {
+                if openNote {
+                    appState.focusHighlightId = highlight.id
+                }
+            }
+        }
     }
 }
 
@@ -45,7 +108,7 @@ struct HighlightToolbar: View {
                         }
                 }
                 .buttonStyle(.plain)
-                .help("Highlight \(color.displayName)")
+                .accessibilityLabel("Highlight \(color.displayName)")
             }
 
             Divider()
@@ -59,7 +122,7 @@ struct HighlightToolbar: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Add Note")
+            .accessibilityLabel("Add Note")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

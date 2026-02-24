@@ -21,3 +21,69 @@
   - JSONSerialization silently fails on Optional values cast to Any — always prefer Codable
   - FTS5 rank column IS valid in SELECT when MATCH is used, but the query string itself needs protection
 ---
+
+## 2026-02-24 — NEW PRD: Swift Feature Parity
+- Previous PRD (swift-critical-fixes) complete: 6/6 tasks passed
+- New PRD: 13 tasks to close 25% feature gap with Tauri
+- Dependency chain: dead code → debouncing → TextAnchoring → floating toolbar → hit-testing → UI features → polish
+- Critical insight: users CANNOT create highlights in Swift — FloatingToolbar is EmptyView
+- Reference implementation: all features exist in Tauri codebase (src/)
+---
+
+## 2026-02-24 — T-001 through T-013: ALL COMPLETE
+- T-001: Dead code cleanup — removed listMarkdownFiles, FileEntry, collectMarkdownEntries, directoryNotFound, document_tags migration
+- T-002: Search debouncing — 150ms Task.sleep with cancellation
+- T-003: File watcher debouncing — 200ms DispatchWorkItem coalescing
+- T-004: TextAnchoring.createAnchor wired at highlight creation — simplified createHighlight signature (removed manual prefix/suffix params)
+- T-005: TextAnchoring.resolveAnchor on document load — re-anchors all highlights, updates positions in DB
+- T-006: Floating toolbar selection tracking — Coordinator computes selection rect via layoutManager.boundingRect
+- T-007: Floating toolbar highlight creation — 5 color circles + Add Note, wired to createHighlight, updateHighlightColor added to AppState
+- T-008: Highlight click hit-testing — marginHighlightId attribute stored per range, click detection in textViewDidChangeSelection
+- T-009: Tab drag reorder — onDrag/onDrop with TabDropDelegate, visual feedback via opacity
+- T-010: Table of contents — heading extraction (debounced 300ms), TOC sidebar tab, scroll-to-heading via scrollRangeToVisible
+- T-011: Undo toast — 5s auto-dismiss, re-creates highlight+notes on undo, commits pending before new action
+- T-012: CorrectionStore wired to export (respects persistCorrections setting), FTS5 merged with Spotlight in search
+- T-013: Keyboard accessibility — tab bar labels/traits, sidebar search label, floating toolbar labels, undo toast announcement, modal trait on thread view
+- **Learnings:**
+  - SwiftUI type checker chokes on deeply chained modifiers in ForEach — extract into helper functions
+  - AccessibilityTraits ternary requires explicit typing: `isActive ? .isSelected : AccessibilityTraits()`
+  - `.accessibilityRole(.tab)` doesn't exist in SwiftUI — use labels + traits instead
+  - GeometryReader overlay positioning works for floating toolbar — convert NSTextView coords via textContainerOrigin
+  - scrollRangeToVisible on NSTextView works well for TOC navigation when triggered via SwiftUI binding
+
+## 2026-02-24 — QA PASS: 10 issues found and fixed
+- **HIGH**: FileWatcher thread-safety — moved to serial DispatchQueue, cancel debounceWork in unwatch(), re-watch on rename/delete
+- **HIGH**: FloatingToolbar coordinate space mismatch — convert to window coords in Coordinator, use GeometryReader .global frame in overlay
+- **MEDIUM**: Search task stale results race — added second Task.isCancelled guard before writing results
+- **MEDIUM**: Toolbar reappears after highlight creation — added clearEditorSelection flag to programmatically clear NSTextView selection
+- **MEDIUM**: UndoToast animation not resetting — added .id(undo.id) to force view re-creation
+- **MEDIUM**: scrollToOffset re-fires on every updateNSView — added lastScrolledOffset to Coordinator for consumption-based scroll
+- **LOW**: selectionRect not cleared on deselect — now set to .zero
+- **LOW**: Click at document-end misses last-char highlight — check location-1 as fallback
+- **LOW**: draggedTabId not cleared on drag cancel — defer { draggedTabId = nil } in performDrop
+- **LOW**: Silent try? on position persistence — replaced with do/catch + print
+- **LOW**: TOC task race — added Task.isCancelled guard
+- Audit sources: 2 parallel Claude Opus agents + Codex
+
+## 2026-02-24 — Codex Review: 4 additional fixes
+- **CRITICAL**: TextAnchoring bounds checking — added clamping in createAnchor to prevent crash on out-of-bounds from/to
+- **CRITICAL**: TextAnchoring UTF-16 consistency — resolveAnchor now uses (string as NSString).length instead of String.count for offset calculations
+- **CRITICAL**: Undo stale offsets — capture content snapshot at deletion time, validate content hasn't changed before re-creating highlight
+- **HIGH**: FileWatcher full thread safety — moved all state mutations into queue.sync{}, renamed to _unwatch/_startWatching private methods; re-watch on rename now also fires onFileChanged callback
+- **MEDIUM**: TOC offsets — use (line as NSString).length for UTF-16 consistency with NSTextView
+- **Learnings:**
+  - NSString.length (UTF-16) vs String.count (grapheme clusters) is a pervasive correctness hazard — always use NSString when computing offsets for NSTextView
+  - Undo closures that capture offsets must also capture a content snapshot to detect stale state
+  - DispatchSource event handlers run on their queue, but callers (watch/unwatch) run on main — queue.sync is required
+- **Pre-existing issues — ALL FIXED:**
+  - Nested ScrollView wrapping NSScrollView → removed outer SwiftUI ScrollView; NSTextView.scrollableTextView() handles its own scrolling
+  - renderMarkdownToAttributedString drops syntax → replaced AST-based visitor with regex-based syntax highlighter that preserves raw markdown text; textView.string now returns original markdown
+  - AppSettings not @Published → forward AppSettings.objectWillChange to AppState via Combine sink
+  - ExportService UTF-16 line numbering → use NSString.substring(to:) for UTF-16 offset consistency
+  - Process.waitUntilExit on main actor → search uses Task.detached(priority: .userInitiated) for mdfind + FTS5 work
+  - swift-markdown dependency removed from Package.swift (only GRDB remains)
+- **Learnings:**
+  - AST-based markdown rendering loses syntax on textView.string → regex-based syntax highlighting is the correct approach for editable markdown views
+  - @AppStorage on ObservableObject doesn't propagate through parent objects — need explicit Combine forwarding
+  - @MainActor Tasks inherit main actor context — use Task.detached for CPU-bound or blocking subprocess work
+---

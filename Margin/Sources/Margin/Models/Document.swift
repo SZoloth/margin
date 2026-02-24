@@ -1,19 +1,19 @@
 import Foundation
 import GRDB
 
-struct Document: Identifiable, Codable, Equatable, FetchableRecord, PersistableRecord {
-    static let databaseTableName = "documents"
+public struct Document: Identifiable, Codable, Equatable, FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "documents"
 
-    var id: String
-    var source: String  // "file" or "keep-local"
-    var filePath: String?
-    var keepLocalId: String?
-    var title: String?
-    var author: String?
-    var url: String?
-    var wordCount: Int64
-    var lastOpenedAt: Int64
-    var createdAt: Int64
+    public var id: String
+    public var source: String  // "file" or "keep-local"
+    public var filePath: String?
+    public var keepLocalId: String?
+    public var title: String?
+    public var author: String?
+    public var url: String?
+    public var wordCount: Int64
+    public var lastOpenedAt: Int64
+    public var createdAt: Int64
 
     enum CodingKeys: String, CodingKey, ColumnExpression {
         case id
@@ -28,8 +28,8 @@ struct Document: Identifiable, Codable, Equatable, FetchableRecord, PersistableR
         case createdAt = "created_at"
     }
 
-    var isFile: Bool { source == "file" }
-    var isKeepLocal: Bool { source == "keep-local" }
+    public var isFile: Bool { source == "file" }
+    public var isKeepLocal: Bool { source == "keep-local" }
 
-    var displayTitle: String { title ?? "Untitled" }
+    public var displayTitle: String { title ?? "Untitled" }
 }

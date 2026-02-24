@@ -1,16 +1,16 @@
 {
-  "project": "Margin Swift Rebuild",
-  "branchName": "compound/swift-critical-fixes",
-  "description": "Fix 6 critical data-loss, crash, and security issues in the Swift rebuild",
+  "project": "Margin Swift Feature Parity",
+  "branchName": "compound/swift-feature-parity",
+  "description": "Close the 25% feature gap between Swift rebuild and Tauri reference implementation",
   "tasks": [
     {
       "id": "T-001",
-      "title": "Fix tab dirty flag sync to prevent silent data loss on tab close",
-      "description": "AppState.isDirty is updated on content changes but never synced to the active TabItem.isDirty. closeTab checks tab.isDirty (always false) so the unsaved-changes dialog never triggers. Sync isDirty to the active tab whenever it changes.",
+      "title": "Remove dead code (document_tags, listMarkdownFiles, unused stubs)",
+      "description": "Clean up ~900 LOC of confirmed dead code to reduce noise. Remove: document_tags table from migration (no model/store/UI), FileService.listMarkdownFiles() (no caller), any other confirmed unused paths. KEEP: CorrectionStore (wired in T-012), TextAnchoring (wired in T-004/T-005), AnnotationStore.updateHighlightColor (wired in T-007).",
       "acceptanceCriteria": [
-        "Run `cd Margin && swift build` - exits with code 0",
-        "File `Margin/Sources/Margin/AppState.swift` contains code that sets the active tab's isDirty when global isDirty changes",
-        "File `Margin/Sources/Margin/Models/TabItem.swift` has isDirty as a mutable var"
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/Services/FileService.swift` does NOT contain `func listMarkdownFiles`",
+        "File `Margin/Sources/Margin/Database/CorrectionStore.swift` still exists (not deleted)"
       ],
       "priority": 1,
       "passes": true,
@@ -18,11 +18,12 @@
     },
     {
       "id": "T-002",
-      "title": "Fix keep-local article save to not silently discard edits",
-      "description": "saveCurrentFile() clears isDirty and returns when filePath is nil (keep-local articles). This makes the user think their edits were saved. Instead, do NOT clear isDirty when there's no file path, so the unsaved-changes guard still triggers on tab close.",
+      "title": "Add 150ms search debouncing with Task cancellation",
+      "description": "AppState.search() currently fires a Spotlight query on every keystroke. Add debouncing: cancel previous search Task, wait 150ms via Task.sleep, then execute. Empty query clears results immediately. Reference: src/hooks/useSearch.ts.",
       "acceptanceCriteria": [
-        "Run `cd Margin && swift build` - exits with code 0",
-        "File `Margin/Sources/Margin/AppState.swift` does NOT clear isDirty when filePath is nil in saveCurrentFile"
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` contains `Task.sleep` or equivalent debounce in the search method",
+        "File `Margin/Sources/Margin/AppState.swift` contains task cancellation logic before starting new search"
       ],
       "priority": 2,
       "passes": true,
@@ -30,12 +31,11 @@
     },
     {
       "id": "T-003",
-      "title": "Fix JSONL correction export to not silently drop records",
-      "description": "CorrectionStore JSONL export uses String? as Any which causes JSONSerialization to fail. try? swallows the error. Fix by using proper nil handling and let errors propagate.",
+      "title": "Add 200ms file watcher debouncing with DispatchWorkItem",
+      "description": "FileWatcher DispatchSource events can fire rapidly for a single save. Add coalescing: on event, schedule reload after 200ms; cancel and reschedule if another event arrives within the window. Use DispatchWorkItem for cancellable delayed execution.",
       "acceptanceCriteria": [
-        "Run `cd Margin && swift build` - exits with code 0",
-        "File `Margin/Sources/Margin/Database/CorrectionStore.swift` does not contain `as Any` for optional String fields in the JSONL export section",
-        "File `Margin/Sources/Margin/Database/CorrectionStore.swift` does not use `try?` for JSON serialization in the JSONL section"
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/Services/FileWatcher.swift` contains debounce/coalescing logic with a delay of at least 100ms"
       ],
       "priority": 3,
       "passes": true,
@@ -43,11 +43,12 @@
     },
     {
       "id": "T-004",
-      "title": "Fix mdfind query injection by escaping user input",
-      "description": "SearchStore.searchFilesOnDisk interpolates user query directly into mdfind predicate string. Single quotes, backslashes, and special chars can break or inject commands. Escape the query before interpolation.",
+      "title": "Wire TextAnchoring.createAnchor at highlight creation time",
+      "description": "When AppState.createHighlight() is called, extract full document plain text from self.content, call TextAnchoring.createAnchor(text:fullText:from:to:) to get prefix/suffix context (30 chars each), pass to AnnotationStore.createHighlight(). The Highlight model and store already support prefix_context/suffix_context columns. Reference: src/lib/text-anchoring.ts createAnchor().",
       "acceptanceCriteria": [
-        "Run `cd Margin && swift build` - exits with code 0",
-        "File `Margin/Sources/Margin/Database/SearchStore.swift` escapes or sanitizes the query string before passing to mdfind"
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` contains a call to `TextAnchoring.createAnchor` or `createAnchor` within the createHighlight method",
+        "File `Margin/Sources/Margin/AppState.swift` passes prefix and suffix context to the annotation store when creating highlights"
       ],
       "priority": 4,
       "passes": true,
@@ -55,11 +56,12 @@
     },
     {
       "id": "T-005",
-      "title": "Fix highlight reapply to preserve code block backgrounds",
-      "description": "MarkdownEditorView.applyHighlights removes ALL .backgroundColor attributes from the full text range, which destroys code block formatting. Instead, only remove backgrounds matching known highlight colors.",
+      "title": "Wire TextAnchoring.resolveAnchor on document load",
+      "description": "When loading annotations for a document (in loadAnnotations or setDocument flow), run TextAnchoring.resolveAnchor for each highlight against the current document content. If positions have shifted, update the highlight's from/to in the database via AnnotationStore. Handle orphaned highlights gracefully — keep them at original position but log confidence level. Reference: src/lib/text-anchoring.ts resolveAnchor() 4-tier fallback.",
       "acceptanceCriteria": [
-        "Run `cd Margin && swift build` - exits with code 0",
-        "File `Margin/Sources/Margin/Views/Editor/MarkdownEditorView.swift` does not remove .backgroundColor from the entire text range indiscriminately"
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` contains a call to `TextAnchoring.resolveAnchor` or `resolveAnchor` in the annotation loading flow",
+        "File `Margin/Sources/Margin/AppState.swift` updates highlight positions when resolveAnchor returns shifted offsets"
       ],
       "priority": 5,
       "passes": true,
@@ -67,13 +69,106 @@
     },
     {
       "id": "T-006",
-      "title": "Fix FTS5 search query rank syntax",
-      "description": "SearchStore.searchDocuments references rank as a regular column. In FTS5, rank is available for ORDER BY but not as a selected column in the standard way. Fix the SQL query.",
+      "title": "Floating toolbar: selection tracking and positioning",
+      "description": "In MarkdownEditorView Coordinator, implement textViewDidChangeSelection to detect non-empty text selections. Compute selection rect using NSLayoutManager.boundingRect(forGlyphRange:in:). Convert coordinates to SwiftUI space. Pass selection state (isVisible, rect) up to a @Binding or callback so FloatingToolbarView can position itself. Animate in with opacity + translateY(4px), animate out on selection collapse. Position above selection, flip below if near top edge. Reference: src/components/editor/FloatingToolbar.tsx updatePosition().",
       "acceptanceCriteria": [
-        "Run `cd Margin && swift build` - exits with code 0",
-        "File `Margin/Sources/Margin/Database/SearchStore.swift` uses valid FTS5 rank syntax in the search query"
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/Views/Editor/MarkdownEditorView.swift` contains `boundingRect` or equivalent layout manager call for selection geometry",
+        "File `Margin/Sources/Margin/Views/Editor/FloatingToolbarView.swift` does NOT return `EmptyView()`"
       ],
       "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "T-007",
+      "title": "Floating toolbar: highlight creation with color picker",
+      "description": "Replace EmptyView in FloatingToolbarView with actual HighlightToolbar content: 5 color circles (yellow, green, blue, pink, orange) that create a highlight with that color, plus an 'Add note' button that creates highlight + opens note thread. Wire to AppState.createHighlight() (which now calls TextAnchoring via T-004). Ensure clicking toolbar does not collapse text selection. Also wire AnnotationStore.updateHighlightColor() to AppState for color changes on existing highlights. Reference: src/components/editor/FloatingToolbar.tsx.",
+      "acceptanceCriteria": [
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/Views/Editor/FloatingToolbarView.swift` contains at least 5 color-related button or circle views",
+        "File `Margin/Sources/Margin/Views/Editor/FloatingToolbarView.swift` contains a call or action that triggers highlight creation",
+        "File `Margin/Sources/Margin/AppState.swift` contains a method that wraps `updateHighlightColor`"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "T-008",
+      "title": "Highlight click hit-testing to open note threads",
+      "description": "In MarkdownEditorView Coordinator, detect clicks on highlighted text ranges. On mouseDown, check if the clicked character position has the custom marginHighlight attribute (added by applyHighlights). If yes, extract the highlight ID and call onHighlightClick(highlightId) to open the HighlightThreadView. The callback already exists and is wired to set appState.focusHighlightId — it just needs the click detection. Reference: TipTap MultiColorHighlight extension.",
+      "acceptanceCriteria": [
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/Views/Editor/MarkdownEditorView.swift` contains click/mouseDown handling that checks for highlight attributes at the clicked position",
+        "File `Margin/Sources/Margin/Views/Editor/MarkdownEditorView.swift` calls `onHighlightClick` with a highlight ID when a highlighted range is clicked"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "T-009",
+      "title": "Tab drag reorder with visual feedback",
+      "description": "Add drag gesture to TabBarItem in TabBarView. Use .onDrag/.onDrop with NSItemProvider carrying the tab index as UTF8 plain text. On drop, call AppState.reorderTabs(from:to:) which already exists and works. Add visual feedback: opacity reduction on dragged tab, insertion indicator at drop position. Also add middle-click to close tab. Reference: src/components/layout/TabBar.tsx drag handlers.",
+      "acceptanceCriteria": [
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/Views/TabBar/TabBarView.swift` contains `.onDrag` or `draggable` modifier",
+        "File `Margin/Sources/Margin/Views/TabBar/TabBarView.swift` contains `.onDrop` or `dropDestination` modifier"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "T-010",
+      "title": "Table of contents: heading extraction, display, and active tracking",
+      "description": "Parse H1 and H2 headings from document content on load and content change (debounced 300ms). Store as [TOCEntry] with id, text, level, character offset. Display in sidebar or as a popover — tappable items that call scrollRangeToVisible on the editor. Track active heading based on scroll position. Reference: src/hooks/useTableOfContents.ts and src/components/layout/TableOfContents.tsx.",
+      "acceptanceCriteria": [
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` contains a `headings` or `tableOfContents` published property",
+        "A file in `Margin/Sources/Margin/Views/` contains a TOC or TableOfContents view that displays heading items"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "T-011",
+      "title": "Undo toast for highlight deletion with 5s auto-dismiss",
+      "description": "Add @Published var pendingUndo: UndoAction? to AppState. When deleting a highlight: delete from DB immediately (optimistic), capture all data for re-creation, show toast. Auto-dismiss after 5 seconds (commit). Undo button re-creates highlight with original data. If new undo arrives while one is pending, commit the pending one first. Display as a bottom banner with slide-up animation. Reference: src/components/ui/UndoToast.tsx.",
+      "acceptanceCriteria": [
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` contains `pendingUndo` or `undoAction` published property",
+        "A file in `Margin/Sources/Margin/Views/` contains an UndoToast or undo banner view with a 5-second timer"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "T-012",
+      "title": "Wire CorrectionStore to export and FTS5 to search",
+      "description": "Two small wirings: (1) In AppState.exportAnnotations(), call CorrectionStore.persistCorrections() when AppSettings.persistCorrections is true, return actual correctionsSaved/correctionsFile values. (2) In AppState.search(), also call SearchStore.searchDocuments() (FTS5) alongside Spotlight results, merge/deduplicate by document path.",
+      "acceptanceCriteria": [
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/AppState.swift` contains a call to `persistCorrections` or `correctionStore` in the export method",
+        "File `Margin/Sources/Margin/AppState.swift` contains a call to `searchDocuments` (FTS5) in the search method"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "T-013",
+      "title": "Keyboard accessibility pass across all interactive elements",
+      "description": "Add accessibility patterns matching Tauri's ARIA implementation: Tab bar — accessibilityRole(.tabList/.tab), isSelected trait, arrow key navigation. Sidebar search — combobox equivalent. Floating toolbar — accessibilityLabel on color buttons. Undo toast — accessibility announcement on appear. Note thread modal — isModal trait. Reference: TabBar.tsx role=tablist, Sidebar.tsx role=combobox, UndoToast.tsx role=status.",
+      "acceptanceCriteria": [
+        "Run `cd Margin && swift build 2>&1` - exits with code 0",
+        "File `Margin/Sources/Margin/Views/TabBar/TabBarView.swift` contains `accessibilityRole` or `accessibility` modifiers",
+        "File `Margin/Sources/Margin/Views/Editor/FloatingToolbarView.swift` contains `accessibilityLabel` modifiers"
+      ],
+      "priority": 13,
       "passes": true,
       "notes": ""
     }

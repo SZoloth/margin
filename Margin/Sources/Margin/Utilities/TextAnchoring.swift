@@ -24,13 +24,19 @@ struct AnchorResult {
 /// Extract anchoring context from the current document for a selection.
 func createAnchor(fullText: String, from: Int, to: Int) -> TextAnchor {
     let nsText = fullText as NSString
-    let text = nsText.substring(with: NSRange(location: from, length: to - from))
-    let prefixStart = max(0, from - 30)
-    let suffixEnd = min(nsText.length, to + 30)
-    let prefix = nsText.substring(with: NSRange(location: prefixStart, length: from - prefixStart))
-    let suffix = nsText.substring(with: NSRange(location: to, length: suffixEnd - to))
+    // Validate bounds (UTF-16 units) to prevent crash
+    let clampedFrom = max(0, min(from, nsText.length))
+    let clampedTo = max(clampedFrom, min(to, nsText.length))
+    guard clampedTo > clampedFrom else {
+        return TextAnchor(text: "", prefix: "", suffix: "", from: clampedFrom, to: clampedTo)
+    }
+    let text = nsText.substring(with: NSRange(location: clampedFrom, length: clampedTo - clampedFrom))
+    let prefixStart = max(0, clampedFrom - 30)
+    let suffixEnd = min(nsText.length, clampedTo + 30)
+    let prefix = nsText.substring(with: NSRange(location: prefixStart, length: clampedFrom - prefixStart))
+    let suffix = nsText.substring(with: NSRange(location: clampedTo, length: suffixEnd - clampedTo))
 
-    return TextAnchor(text: text, prefix: prefix, suffix: suffix, from: from, to: to)
+    return TextAnchor(text: text, prefix: prefix, suffix: suffix, from: clampedFrom, to: clampedTo)
 }
 
 /// Re-anchor a text anchor in potentially-changed document content.
@@ -43,16 +49,20 @@ func createAnchor(fullText: String, from: Int, to: Int) -> TextAnchor {
 func resolveAnchor(fullText: String, anchor: TextAnchor) -> AnchorResult {
     let nsText = fullText as NSString
 
+    // Use UTF-16 lengths consistently (NSString operates in UTF-16)
+    let anchorTextLen = (anchor.text as NSString).length
+    let anchorPrefixLen = (anchor.prefix as NSString).length
+
     // 1. Try exact position match
-    if anchor.from + anchor.text.count <= nsText.length {
+    if anchor.from >= 0, anchor.from + anchorTextLen <= nsText.length {
         let atOriginal = nsText.substring(with: NSRange(
             location: anchor.from,
-            length: anchor.text.count
+            length: anchorTextLen
         ))
         if atOriginal == anchor.text {
             return AnchorResult(
                 from: anchor.from,
-                to: anchor.from + anchor.text.count,
+                to: anchor.from + anchorTextLen,
                 confidence: .exact
             )
         }
@@ -62,10 +72,10 @@ func resolveAnchor(fullText: String, anchor: TextAnchor) -> AnchorResult {
     let contextPattern = anchor.prefix + anchor.text + anchor.suffix
     let contextRange = nsText.range(of: contextPattern)
     if contextRange.location != NSNotFound {
-        let newFrom = contextRange.location + anchor.prefix.count
+        let newFrom = contextRange.location + anchorPrefixLen
         return AnchorResult(
             from: newFrom,
-            to: newFrom + anchor.text.count,
+            to: newFrom + anchorTextLen,
             confidence: .exact
         )
     }
@@ -122,7 +132,7 @@ func resolveAnchor(fullText: String, anchor: TextAnchor) -> AnchorResult {
         let best = matches.max(by: { $0.score < $1.score })!
         return AnchorResult(
             from: best.index,
-            to: best.index + anchor.text.count,
+            to: best.index + anchorTextLen,
             confidence: .fuzzy
         )
     }
