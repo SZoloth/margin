@@ -56,10 +56,20 @@ pub async fn upsert_document(mut doc: Document) -> Result<Document, String> {
     }
 
     conn.execute(
-        "INSERT OR REPLACE INTO documents
+        "INSERT INTO documents
             (id, source, file_path, keep_local_id, title, author, url,
              word_count, last_opened_at, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT(id) DO UPDATE SET
+            source = excluded.source,
+            file_path = excluded.file_path,
+            keep_local_id = excluded.keep_local_id,
+            title = excluded.title,
+            author = excluded.author,
+            url = excluded.url,
+            word_count = excluded.word_count,
+            last_opened_at = excluded.last_opened_at,
+            created_at = excluded.created_at",
         rusqlite::params![
             doc.id,
             doc.source,
