@@ -42,21 +42,23 @@ export function MarginIndicators({
     const newPositions: IndicatorPosition[] = [];
 
     for (const h of highlightsWithNotes) {
-      const marks = editor.view.dom.querySelectorAll("mark[data-color]");
-      for (const mark of marks) {
-        if (mark.textContent === h.text_content) {
-          const markRect = mark.getBoundingClientRect();
-          const top = markRect.top - containerRect.top + scrollTop;
-          const noteCount = marginNotes.filter((n) => n.highlight_id === h.id).length;
-          newPositions.push({
-            highlightId: h.id,
-            top,
-            noteCount,
-            color: h.color,
-          });
-          break;
-        }
-      }
+      // Prefer ID-based lookup; fall back to text matching for orphan marks
+      const mark =
+        editor.view.dom.querySelector(`mark[data-highlight-id="${h.id}"]`) ??
+        Array.from(editor.view.dom.querySelectorAll("mark[data-color]")).find(
+          (m) => m.textContent === h.text_content,
+        );
+      if (!mark) continue;
+
+      const markRect = mark.getBoundingClientRect();
+      const top = markRect.top - containerRect.top + scrollTop;
+      const noteCount = marginNotes.filter((n) => n.highlight_id === h.id).length;
+      newPositions.push({
+        highlightId: h.id,
+        top,
+        noteCount,
+        color: h.color,
+      });
     }
 
     setPositions(newPositions);
@@ -95,13 +97,15 @@ export function MarginIndicators({
           className="margin-indicator-dot"
           style={{ top: pos.top }}
           onClick={() => {
-            const marks = editor?.view.dom.querySelectorAll("mark[data-color]");
-            if (!marks) return;
-            for (const mark of marks) {
-              if (mark.textContent === highlights.find((h) => h.id === pos.highlightId)?.text_content) {
-                onClickHighlight(pos.highlightId, mark.getBoundingClientRect());
-                break;
-              }
+            if (!editor) return;
+            // Prefer ID-based lookup; fall back to text matching for orphan marks
+            const mark =
+              editor.view.dom.querySelector(`mark[data-highlight-id="${pos.highlightId}"]`) ??
+              Array.from(editor.view.dom.querySelectorAll("mark[data-color]")).find(
+                (m) => m.textContent === highlights.find((h) => h.id === pos.highlightId)?.text_content,
+              );
+            if (mark) {
+              onClickHighlight(pos.highlightId, mark.getBoundingClientRect());
             }
           }}
           aria-label={`${pos.noteCount} note${pos.noteCount !== 1 ? "s" : ""}`}

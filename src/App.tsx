@@ -263,10 +263,14 @@ export default function App() {
   // Refs to avoid stale closures in callbacks
   const currentDocRef = useRef(doc.currentDoc);
   currentDocRef.current = doc.currentDoc;
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
   const highlightsRef = useRef(annotations.highlights);
   highlightsRef.current = annotations.highlights;
   const marginNotesRef = useRef(annotations.marginNotes);
   marginNotesRef.current = annotations.marginNotes;
+  const annotationsRef = useRef(annotations);
+  annotationsRef.current = annotations;
   const persistCorrectionsRef = useRef(settings.persistCorrections);
   persistCorrectionsRef.current = settings.persistCorrections;
   const setContentExternalRef = useRef(doc.setContentExternal);
@@ -275,6 +279,8 @@ export default function App() {
 
   // Restore highlight marks in the editor when annotations load for a document.
   const lastRestoredDocId = useRef<string | null>(null);
+  // Track docs where orphan recovery has already run to prevent duplicates on tab revisit
+  const recoveredDocIds = useRef(new Set<string>());
   useEffect(() => {
     if (!editor || !annotations.isLoaded || !doc.currentDoc) return;
     if (lastRestoredDocId.current === doc.currentDoc.id) return;
@@ -283,6 +289,9 @@ export default function App() {
     // If DB has no highlights but the editor DOM has <mark> tags (from HTML baked
     // into the file), re-create DB records so clicks and notes work again.
     if (annotations.highlights.length === 0) {
+      // Guard against re-entry on tab switch — only recover orphans once per doc
+      if (recoveredDocIds.current.has(doc.currentDoc.id)) return;
+      recoveredDocIds.current.add(doc.currentDoc.id);
       // Wait for DOM to render before checking for orphan marks
       requestAnimationFrame(() => {
         const domMarks = editor.view.dom.querySelectorAll("mark[data-color]");
@@ -532,9 +541,10 @@ export default function App() {
       id: actionId,
       message: "Highlight deleted",
       onUndo: async () => {
-        // Re-create the highlight
+        // Re-create the highlight — use refs to avoid stale closures
         try {
-          const restored = await annotations.createHighlight({
+          const currentEditor = editorRef.current;
+          const restored = await annotationsRef.current.createHighlight({
             documentId: highlight.document_id,
             color: highlight.color,
             textContent: highlight.text_content,
@@ -544,14 +554,17 @@ export default function App() {
             suffixContext: highlight.suffix_context,
           });
           // Re-apply mark in editor
-          if (markType) {
-            const restoreTr = editor.state.tr;
-            restoreTr.addMark(
-              highlight.from_pos,
-              highlight.to_pos,
-              markType.create({ color: highlight.color, highlightId: restored.id }),
-            );
-            editor.view.dispatch(restoreTr);
+          if (currentEditor) {
+            const restoreMarkType = currentEditor.state.schema.marks.highlight;
+            if (restoreMarkType) {
+              const restoreTr = currentEditor.state.tr;
+              restoreTr.addMark(
+                highlight.from_pos,
+                highlight.to_pos,
+                restoreMarkType.create({ color: highlight.color, highlightId: restored.id }),
+              );
+              currentEditor.view.dispatch(restoreTr);
+            }
           }
           // Re-open the thread
           setFocusHighlightId(restored.id);

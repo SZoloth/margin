@@ -92,6 +92,10 @@ pub fn index_document(document_id: String, title: String, content: String) -> Re
 
 #[tauri::command]
 pub fn search_documents(query: String, limit: Option<i32>) -> Result<Vec<SearchResult>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
     let conn = get_db()?;
     ensure_fts_table(&conn)?;
 

@@ -43,10 +43,12 @@ pub async fn get_open_tabs() -> Result<Vec<PersistedTab>, String> {
 pub async fn save_open_tabs(tabs: Vec<PersistedTab>) -> Result<(), String> {
     let conn = get_db()?;
 
-    conn.execute("DELETE FROM open_tabs", [])
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+
+    tx.execute("DELETE FROM open_tabs", [])
         .map_err(|e| e.to_string())?;
 
-    let mut stmt = conn
+    let mut stmt = tx
         .prepare(
             "INSERT INTO open_tabs (id, document_id, tab_order, is_active, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -63,6 +65,9 @@ pub async fn save_open_tabs(tabs: Vec<PersistedTab>) -> Result<(), String> {
         ])
         .map_err(|e| e.to_string())?;
     }
+
+    drop(stmt);
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(())
 }

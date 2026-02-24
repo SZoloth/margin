@@ -279,7 +279,9 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
     }
 
     try {
-      await saveFileCommand(filePath, content);
+      // Strip any <mark> tags that TipTap's serializer may leak into markdown
+      const clean = content.replace(/<\/?mark[^>]*>/g, "");
+      await saveFileCommand(filePath, clean);
       setIsDirty(false);
 
       if (currentDoc) {

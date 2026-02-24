@@ -123,6 +123,9 @@ pub async fn update_highlight_color(id: String, color: String) -> Result<(), Str
     )
     .map_err(|e| e.to_string())?;
 
+    let doc_id = document_id_for_highlight(&conn, &id)?;
+    touch_document(&conn, &doc_id)?;
+
     Ok(())
 }
 
