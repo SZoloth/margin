@@ -160,6 +160,22 @@ struct CorrectionStore {
         handle.closeFile()
     }
 
+    private struct JSONLRecord: Encodable {
+        let highlight_id: String
+        let session_id: String
+        let original_text: String
+        let prefix_context: String?
+        let suffix_context: String?
+        let extended_context: String?
+        let notes: [String]
+        let document_id: String
+        let document_title: String?
+        let document_source: String
+        let document_path: String?
+        let highlight_color: String
+        let exported_at: Int64
+    }
+
     private func writeRecords(
         to handle: FileHandle,
         corrections: [CorrectionInput],
@@ -174,28 +190,28 @@ struct CorrectionStore {
         encoder.outputFormatting = .sortedKeys
 
         for input in corrections {
-            let record: [String: Any] = [
-                "highlight_id": input.highlightId,
-                "session_id": sessionId,
-                "original_text": input.originalText,
-                "prefix_context": input.prefixContext as Any,
-                "suffix_context": input.suffixContext as Any,
-                "extended_context": input.extendedContext as Any,
-                "notes": input.notes,
-                "document_id": documentId,
-                "document_title": documentTitle as Any,
-                "document_source": documentSource,
-                "document_path": documentPath as Any,
-                "highlight_color": input.highlightColor,
-                "exported_at": now,
-            ]
+            let record = JSONLRecord(
+                highlight_id: input.highlightId,
+                session_id: sessionId,
+                original_text: input.originalText,
+                prefix_context: input.prefixContext,
+                suffix_context: input.suffixContext,
+                extended_context: input.extendedContext,
+                notes: input.notes,
+                document_id: documentId,
+                document_title: documentTitle,
+                document_source: documentSource,
+                document_path: documentPath,
+                highlight_color: input.highlightColor,
+                exported_at: now
+            )
 
-            if let data = try? JSONSerialization.data(withJSONObject: record),
-               var line = String(data: data, encoding: .utf8) {
-                line += "\n"
-                if let lineData = line.data(using: .utf8) {
-                    handle.write(lineData)
-                }
+            do {
+                var data = try encoder.encode(record)
+                data.append(contentsOf: "\n".utf8)
+                handle.write(data)
+            } catch {
+                print("Failed to encode correction record: \(error)")
             }
         }
     }

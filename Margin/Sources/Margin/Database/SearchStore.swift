@@ -35,6 +35,10 @@ struct SearchStore {
     func searchDocuments(query: String, limit: Int = 20) throws -> [SearchResult] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
 
+        // Escape FTS5 special characters to prevent query syntax errors
+        let sanitized = query
+            .replacingOccurrences(of: "\"", with: "\"\"")
+
         return try db.reader.read { database in
             let rows = try Row.fetchAll(database, sql: """
                 SELECT document_id, title,
@@ -44,7 +48,7 @@ struct SearchStore {
                 WHERE documents_fts MATCH ?
                 ORDER BY rank
                 LIMIT ?
-            """, arguments: [query, limit])
+            """, arguments: ["\"\(sanitized)\"", limit])
 
             return rows.map { row in
                 SearchResult(
@@ -71,9 +75,15 @@ struct SearchStore {
     func searchFilesOnDisk(query: String, limit: Int = 20) -> [FileSearchResult] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
 
+        // Escape special characters to prevent mdfind predicate injection
+        let sanitized = query
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "*", with: "")
+
         let mdfindQuery = """
             (kMDItemFSName == '*.md' || kMDItemFSName == '*.markdown') && \
-            (kMDItemDisplayName == '*\(query)*'cdw || kMDItemTextContent == '*\(query)*'cdw)
+            (kMDItemDisplayName == '*\(sanitized)*'cdw || kMDItemTextContent == '*\(sanitized)*'cdw)
         """
 
         let process = Process()

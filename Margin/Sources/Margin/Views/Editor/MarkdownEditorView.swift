@@ -134,15 +134,23 @@ struct MarkdownTextView: NSViewRepresentable {
         return visitor.visit(document)
     }
 
+    /// Custom attribute key to tag ranges as annotation highlights (vs code block backgrounds).
+    private static let highlightTagKey = NSAttributedString.Key("marginHighlight")
+
     /// Apply highlight backgrounds from the stored highlights.
     private func applyHighlights(textView: NSTextView) {
         guard let storage = textView.textStorage else { return }
         let fullText = textView.string as NSString
         let fullLength = fullText.length
 
-        // Remove all existing highlight backgrounds first
+        // Only remove backgrounds on ranges we previously tagged as annotation highlights
         storage.beginEditing()
-        storage.removeAttribute(.backgroundColor, range: NSRange(location: 0, length: fullLength))
+        storage.enumerateAttribute(Self.highlightTagKey, in: NSRange(location: 0, length: fullLength)) { value, range, _ in
+            if value != nil {
+                storage.removeAttribute(.backgroundColor, range: range)
+                storage.removeAttribute(Self.highlightTagKey, range: range)
+            }
+        }
 
         for highlight in highlights {
             // Try exact position first
@@ -156,6 +164,7 @@ struct MarkdownTextView: NSViewRepresentable {
                     let color = HighlightColor(rawValue: highlight.color)?.nsColor
                         ?? HighlightColor.yellow.nsColor
                     storage.addAttribute(.backgroundColor, value: color, range: range)
+                    storage.addAttribute(Self.highlightTagKey, value: true, range: range)
                     continue
                 }
             }
@@ -166,6 +175,7 @@ struct MarkdownTextView: NSViewRepresentable {
                 let color = HighlightColor(rawValue: highlight.color)?.nsColor
                     ?? HighlightColor.yellow.nsColor
                 storage.addAttribute(.backgroundColor, value: color, range: searchRange)
+                storage.addAttribute(Self.highlightTagKey, value: true, range: searchRange)
             }
         }
 
