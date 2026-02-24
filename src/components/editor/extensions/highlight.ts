@@ -44,19 +44,20 @@ export const MultiColorHighlight = Highlight.extend({
             if (!mark) return false;
 
             const highlightId = (mark as HTMLElement).dataset.highlightId;
+            const text = mark.textContent ?? "";
 
             if (event.shiftKey) {
               // Shift+click: delete highlight
               window.dispatchEvent(
                 new CustomEvent("margin:highlight-delete", {
-                  detail: { highlightId, element: mark },
+                  detail: { highlightId, text, element: mark },
                 }),
               );
             } else {
               // Click: open thread popover
               window.dispatchEvent(
                 new CustomEvent("margin:highlight-click", {
-                  detail: { highlightId, element: mark },
+                  detail: { highlightId, text, element: mark },
                 }),
               );
             }
