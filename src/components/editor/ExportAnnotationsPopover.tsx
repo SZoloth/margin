@@ -6,7 +6,6 @@ interface ExportAnnotationsPopoverProps {
   onExport: () => Promise<ExportResult>;
   onClose: () => void;
   persistCorrections: boolean;
-  onOpenSettings: () => void;
 }
 
 export function ExportAnnotationsPopover({
@@ -14,7 +13,6 @@ export function ExportAnnotationsPopover({
   onExport,
   onClose,
   persistCorrections,
-  onOpenSettings,
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -220,38 +218,6 @@ export function ExportAnnotationsPopover({
               </div>
             )}
 
-            {/* Prompt to enable local save */}
-            {!persistCorrections && result.noteCount > 0 && (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "var(--color-text-tertiary)",
-                  borderTop: "1px solid var(--color-border)",
-                  paddingTop: 10,
-                }}
-              >
-                Want to save feedback locally?{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onOpenSettings();
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    color: "var(--color-accent, #4a9)",
-                    fontSize: 12,
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    textUnderlineOffset: 2,
-                  }}
-                >
-                  Turn on in Settings
-                </button>
-              </div>
-            )}
           </div>
         ) : null}
       </div>

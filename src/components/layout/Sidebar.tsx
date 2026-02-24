@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { FolderOpenIcon, Search01Icon, Settings01Icon } from "@hugeicons/core-free-icons";
+import { FolderOpenIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
 import type { KeepLocalItem } from "@/types/keep-local";
@@ -28,7 +28,6 @@ interface SidebarProps {
   keepLocalQuery: string;
   onKeepLocalSearch: (q: string) => void;
   onSelectKeepLocalItem: (item: KeepLocalItem, newTab: boolean) => void;
-  onOpenSettings?: () => void;
 }
 
 export function Sidebar({
@@ -49,7 +48,6 @@ export function Sidebar({
   keepLocalQuery,
   onKeepLocalSearch,
   onSelectKeepLocalItem,
-  onOpenSettings,
 }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>("files");
   const [isFocused, setIsFocused] = useState(false);
@@ -200,18 +198,6 @@ export function Sidebar({
         >
           Margin
         </h1>
-        {onOpenSettings && (
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="toolbar-hamburger p-1"
-            style={{ color: "var(--color-text-secondary)" }}
-            aria-label="Settings"
-            title="Settings"
-          >
-            <HugeiconsIcon icon={Settings01Icon} size={16} color="currentColor" strokeWidth={1.5} />
-          </button>
-        )}
       </div>
 
       {/* Search + Open File row */}

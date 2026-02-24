@@ -14,7 +14,6 @@ import { useSearch } from "@/hooks/useSearch";
 import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
-import { SettingsModal } from "@/components/layout/SettingsModal";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
@@ -82,14 +81,13 @@ function findTextInDoc(
 }
 
 export default function App() {
-  const { settings, setSetting } = useSettings();
+  const { settings } = useSettings();
   const doc = useDocument(settings.autosave);
   const annotations = useAnnotations(doc.refreshRecentDocs);
   const keepLocal = useKeepLocal();
   const search = useSearch();
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
-  const [showSettings, setShowSettings] = useState(false);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -828,7 +826,6 @@ export default function App() {
 
   return (
     <AppShell
-      onOpenSettings={() => setShowSettings(true)}
       currentDoc={doc.currentDoc}
       recentDocs={doc.recentDocs}
       onOpenFile={doc.openFile}
@@ -923,7 +920,6 @@ export default function App() {
         onExport={handleExportAnnotations}
         onClose={() => setShowExportPopover(false)}
         persistCorrections={settings.persistCorrections}
-        onOpenSettings={() => setShowSettings(true)}
       />
 
       <UndoToast action={undoAction} />
@@ -1034,12 +1030,6 @@ export default function App() {
         );
       })()}
 
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        settings={settings}
-        setSetting={setSetting}
-      />
     </AppShell>
   );
 }
