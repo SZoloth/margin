@@ -23,6 +23,12 @@ export const MultiColorHighlight = Highlight.extend({
           class: `highlight--${attributes.color}`,
         }),
       },
+      highlightId: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.dataset.highlightId ?? null,
+        renderHTML: (attributes: Record<string, string | null>) =>
+          attributes.highlightId ? { "data-highlight-id": attributes.highlightId } : {},
+      },
     };
   },
 
@@ -37,20 +43,20 @@ export const MultiColorHighlight = Highlight.extend({
             const mark = target.closest("mark[data-color]");
             if (!mark) return false;
 
-            const text = mark.textContent ?? "";
+            const highlightId = (mark as HTMLElement).dataset.highlightId;
 
             if (event.shiftKey) {
               // Shift+click: delete highlight
               window.dispatchEvent(
                 new CustomEvent("margin:highlight-delete", {
-                  detail: { text, element: mark },
+                  detail: { highlightId, element: mark },
                 }),
               );
             } else {
               // Click: open thread popover
               window.dispatchEvent(
                 new CustomEvent("margin:highlight-click", {
-                  detail: { text, element: mark },
+                  detail: { highlightId, element: mark },
                 }),
               );
             }

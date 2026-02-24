@@ -291,7 +291,7 @@ export default function App() {
       try {
         const textAtPos = state.doc.textBetween(h.from_pos, h.to_pos, "\n");
         if (textAtPos === h.text_content) {
-          tr.addMark(h.from_pos, h.to_pos, markType.create({ color: h.color }));
+          tr.addMark(h.from_pos, h.to_pos, markType.create({ color: h.color, highlightId: h.id }));
           continue;
         }
       } catch {
@@ -301,7 +301,7 @@ export default function App() {
       const found = findTextInDoc(state.doc, h.text_content);
       if (found) {
         try {
-          tr.addMark(found.from, found.to, markType.create({ color: h.color }));
+          tr.addMark(found.from, found.to, markType.create({ color: h.color, highlightId: h.id }));
         } catch {
           // Position out of range
         }
@@ -356,30 +356,20 @@ export default function App() {
     return () => { void unlisten.then((fn) => fn()); };
   }, []);
 
-  const findHighlightAtElement = useCallback((element: HTMLElement) => {
-    const text = element.textContent ?? "";
-    return annotations.highlights.find((h) => h.text_content === text) ?? null;
-  }, [annotations.highlights]);
-
   // Handle highlight click → open thread popover
   useEffect(() => {
     const handleHighlightClick = (e: Event) => {
-      const { element } = (e as CustomEvent).detail;
-      if (!element) return;
-      const match = findHighlightAtElement(element as HTMLElement);
-      if (match) {
-        setAnchorRect((element as HTMLElement).getBoundingClientRect());
-        setFocusHighlightId(match.id);
-        setAutoFocusNew(false);
-      }
+      const { element, highlightId } = (e as CustomEvent).detail;
+      if (!element || !highlightId) return;
+      setAnchorRect((element as HTMLElement).getBoundingClientRect());
+      setFocusHighlightId(highlightId);
+      setAutoFocusNew(false);
     };
 
     const handleHighlightDelete = async (e: Event) => {
-      const { element } = (e as CustomEvent).detail;
-      if (!element || !editor) return;
+      const { element, highlightId } = (e as CustomEvent).detail;
+      if (!element || !highlightId || !editor) return;
       const el = element as HTMLElement;
-      const match = findHighlightAtElement(el);
-      if (!match) return;
 
       let markFrom: number;
       let markTo: number;
@@ -391,7 +381,7 @@ export default function App() {
         markTo = -1;
       }
 
-      await annotations.deleteHighlight(match.id);
+      await annotations.deleteHighlight(highlightId);
 
       const { state } = editor;
       const { tr } = state;
@@ -404,9 +394,9 @@ export default function App() {
         state.doc.descendants((node, pos) => {
           if (!node.isText) return;
           const hlMark = node.marks.find(
-            (m) => m.type.name === "highlight" && m.attrs.color === match.color,
+            (m) => m.type.name === "highlight" && m.attrs.highlightId === highlightId,
           );
-          if (hlMark && node.text === match.text_content) {
+          if (hlMark) {
             tr.removeMark(pos, pos + node.nodeSize, hlMark);
           }
         });
@@ -423,7 +413,7 @@ export default function App() {
       window.removeEventListener("margin:highlight-click", handleHighlightClick);
       window.removeEventListener("margin:highlight-delete", handleHighlightDelete);
     };
-  }, [editor, annotations.highlights, findHighlightAtElement]);
+  }, [editor, annotations]);
 
   const handleDeleteHighlight = useCallback(async (id: string) => {
     if (!editor) return;
@@ -445,9 +435,9 @@ export default function App() {
       state.doc.descendants((node, pos) => {
         if (!node.isText) return;
         const hlMark = node.marks.find(
-          (m) => m.type.name === "highlight" && m.attrs.color === highlight.color,
+          (m) => m.type.name === "highlight" && m.attrs.highlightId === id,
         );
-        if (hlMark && node.text === highlight.text_content) {
+        if (hlMark) {
           tr.removeMark(pos, pos + node.nodeSize, hlMark);
         }
       });
@@ -479,7 +469,7 @@ export default function App() {
             restoreTr.addMark(
               highlight.from_pos,
               highlight.to_pos,
-              markType.create({ color: highlight.color }),
+              markType.create({ color: highlight.color, highlightId: restored.id }),
             );
             editor.view.dispatch(restoreTr);
           }
@@ -509,10 +499,8 @@ export default function App() {
       const selectedText = editor.state.doc.textBetween(from, to, "\n");
       const anchor = createAnchor(fullText, from, to);
 
-      editor.chain().focus().setHighlight({ color: resolvedColor }).run();
-
       try {
-        await annotations.createHighlight({
+        const highlight = await annotations.createHighlight({
           documentId: doc.currentDoc.id,
           color: resolvedColor,
           textContent: selectedText,
@@ -521,6 +509,16 @@ export default function App() {
           prefixContext: anchor.prefix,
           suffixContext: anchor.suffix,
         });
+
+        const markType = editor.state.schema.marks.highlight;
+        if (markType) {
+          const tr = editor.state.tr.addMark(
+            from, to,
+            markType.create({ color: resolvedColor, highlightId: highlight.id }),
+          );
+          tr.setMeta("addToHistory", false);
+          editor.view.dispatch(tr);
+        }
       } catch (err) {
         console.error("Failed to save highlight:", err, "documentId:", doc.currentDoc.id);
       }
@@ -537,8 +535,6 @@ export default function App() {
     const selectedText = editor.state.doc.textBetween(from, to, "\n");
     const anchor = createAnchor(fullText, from, to);
 
-    editor.chain().focus().setHighlight({ color: settings.defaultHighlightColor }).run();
-
     try {
       const highlight = await annotations.createHighlight({
         documentId: doc.currentDoc.id,
@@ -550,13 +546,22 @@ export default function App() {
         suffixContext: anchor.suffix,
       });
 
+      const markType = editor.state.schema.marks.highlight;
+      if (markType) {
+        const tr = editor.state.tr.addMark(
+          from, to,
+          markType.create({ color: settings.defaultHighlightColor, highlightId: highlight.id }),
+        );
+        tr.setMeta("addToHistory", false);
+        editor.view.dispatch(tr);
+      }
+
       requestAnimationFrame(() => {
-        const marks = editor.view.dom.querySelectorAll("mark[data-color]");
-        for (const mark of marks) {
-          if (mark.textContent === selectedText) {
-            setAnchorRect(mark.getBoundingClientRect());
-            break;
-          }
+        const mark = editor.view.dom.querySelector(
+          `mark[data-highlight-id="${highlight.id}"]`,
+        );
+        if (mark) {
+          setAnchorRect(mark.getBoundingClientRect());
         }
         setFocusHighlightId(highlight.id);
         setAutoFocusNew(true);
