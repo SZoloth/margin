@@ -153,30 +153,35 @@ struct MarkdownTextView: NSViewRepresentable {
         }
 
         for highlight in highlights {
-            // Try exact position first
-            let from = Int(highlight.fromPos)
-            let to = Int(highlight.toPos)
-
-            if from >= 0, to <= fullLength, from < to {
-                let range = NSRange(location: from, length: to - from)
-                let textAtPos = fullText.substring(with: range)
-                if textAtPos == highlight.textContent {
-                    let color = HighlightColor(rawValue: highlight.color)?.nsColor
-                        ?? HighlightColor.yellow.nsColor
-                    storage.addAttribute(.backgroundColor, value: color, range: range)
-                    storage.addAttribute(Self.highlightTagKey, value: true, range: range)
-                    continue
+            // Reconstruct anchor from stored highlight fields
+            let headingPath: [String] = {
+                guard let json = highlight.anchorHeadingPath,
+                      let data = json.data(using: .utf8),
+                      let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+                    return []
                 }
-            }
+                return decoded
+            }()
 
-            // Fallback: search for the text
-            let searchRange = fullText.range(of: highlight.textContent)
-            if searchRange.location != NSNotFound {
-                let color = HighlightColor(rawValue: highlight.color)?.nsColor
-                    ?? HighlightColor.yellow.nsColor
-                storage.addAttribute(.backgroundColor, value: color, range: searchRange)
-                storage.addAttribute(Self.highlightTagKey, value: true, range: searchRange)
-            }
+            let anchor = TextAnchor(
+                text: highlight.textContent,
+                prefix: highlight.prefixContext ?? "",
+                suffix: highlight.suffixContext ?? "",
+                from: Int(highlight.fromPos),
+                to: Int(highlight.toPos),
+                headingPath: headingPath
+            )
+
+            let result = resolveAnchor(fullText: fullText as String, anchor: anchor)
+            guard result.confidence != .orphaned else { continue }
+
+            let range = NSRange(location: result.from, length: result.to - result.from)
+            guard range.location >= 0, NSMaxRange(range) <= fullLength else { continue }
+
+            let color = HighlightColor(rawValue: highlight.color)?.nsColor
+                ?? HighlightColor.yellow.nsColor
+            storage.addAttribute(.backgroundColor, value: color, range: range)
+            storage.addAttribute(Self.highlightTagKey, value: true, range: range)
         }
 
         storage.endEditing()
