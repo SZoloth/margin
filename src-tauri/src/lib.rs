@@ -5,6 +5,8 @@ pub mod watcher;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
+use commands::keep_local::HttpClient;
+
 /// Stores file paths received before the frontend is ready.
 pub struct PendingOpenFiles(pub Mutex<Vec<String>>);
 
@@ -20,6 +22,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .manage(HttpClient(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .expect("failed to build HTTP client"),
+        ))
         .manage(Mutex::new(watcher::FileWatcher::new()))
         .manage(PendingOpenFiles(Mutex::new(Vec::new())))
         .invoke_handler(tauri::generate_handler![

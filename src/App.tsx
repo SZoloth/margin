@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import type { Editor } from "@tiptap/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
-import { Reader } from "@/components/editor/Reader";
+
+const Reader = lazy(() => import("@/components/editor/Reader"));
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
@@ -881,12 +882,14 @@ export default function App() {
         ) : undefined
       }
     >
-      <Reader
-        content={doc.content}
-        onUpdate={handleEditorUpdate}
-        isLoading={doc.isLoading}
-        onEditorReady={handleEditorReady}
-      />
+      <Suspense fallback={<div className="reader-content" style={{ opacity: 0.3 }} />}>
+        <Reader
+          content={doc.content}
+          onUpdate={handleEditorUpdate}
+          isLoading={doc.isLoading}
+          onEditorReady={handleEditorReady}
+        />
+      </Suspense>
 
       <FloatingToolbar
         editor={editor}

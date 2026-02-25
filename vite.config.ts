@@ -12,6 +12,22 @@ export default defineConfig(async () => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          tiptap: [
+            "@tiptap/core",
+            "@tiptap/react",
+            "@tiptap/starter-kit",
+            "@tiptap/extension-highlight",
+            "@tiptap/extension-typography",
+            "tiptap-markdown",
+          ],
+        },
+      },
+    },
+  },
   clearScreen: false,
   server: {
     port: 1420,

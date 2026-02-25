@@ -1,6 +1,6 @@
 [package]
 name = "margin"
-version = "0.3.4"
+version = "0.4.0"
 description = "A local markdown reader and editor"
 authors = ["Sam Zoloth"]
 edition = "2021"
@@ -20,12 +20,11 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
-reqwest = { version = "0.12", features = ["blocking", "json"] }
+reqwest = { version = "0.12", features = ["json"] }
 notify = { version = "7", features = ["macos_fsevent"] }
 tauri-plugin-clipboard-manager = "2.3.2"

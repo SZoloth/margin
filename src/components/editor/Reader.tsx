@@ -82,3 +82,5 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
 
   return <EditorContent editor={editor} />;
 }
+
+export default Reader;

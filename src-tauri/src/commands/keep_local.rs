@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 const BASE_URL: &str = "http://127.0.0.1:8787";
+
+/// Shared HTTP client managed by Tauri state.
+pub struct HttpClient(pub reqwest::Client);
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,33 +47,30 @@ pub struct KeepLocalListResult {
 }
 
 #[tauri::command]
-pub fn keep_local_health() -> Result<KeepLocalHealth, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(3))
-        .build()
-        .map_err(|e| e.to_string())?;
-
+pub async fn keep_local_health(client: State<'_, HttpClient>) -> Result<KeepLocalHealth, String> {
     let resp = client
+        .0
         .get(format!("{BASE_URL}/api/health"))
         .send()
+        .await
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
 
+    resp.error_for_status_ref()
+        .map_err(|e| format!("keep-local health check failed: {e}"))?;
+
     resp.json::<KeepLocalHealth>()
+        .await
         .map_err(|e| format!("Failed to parse health response: {e}"))
 }
 
 #[tauri::command]
-pub fn keep_local_list_items(
+pub async fn keep_local_list_items(
+    client: State<'_, HttpClient>,
     limit: Option<i32>,
     offset: Option<i32>,
     query: Option<String>,
     status: Option<String>,
 ) -> Result<KeepLocalListResult, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-
     let mut url = format!("{BASE_URL}/api/items");
     let mut params: Vec<String> = Vec::new();
 
@@ -95,12 +96,18 @@ pub fn keep_local_list_items(
     }
 
     let resp = client
+        .0
         .get(&url)
         .send()
+        .await
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
+
+    resp.error_for_status_ref()
+        .map_err(|e| format!("keep-local list failed (HTTP error): {e}"))?;
 
     let data: ItemsResponse = resp
         .json()
+        .await
         .map_err(|e| format!("Failed to parse items response: {e}"))?;
 
     Ok(KeepLocalListResult {
@@ -110,36 +117,41 @@ pub fn keep_local_list_items(
 }
 
 #[tauri::command]
-pub fn keep_local_get_item(item_id: String) -> Result<KeepLocalItem, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-
+pub async fn keep_local_get_item(
+    client: State<'_, HttpClient>,
+    item_id: String,
+) -> Result<KeepLocalItem, String> {
     let resp = client
+        .0
         .get(format!("{BASE_URL}/api/items/{item_id}?content=0"))
         .send()
+        .await
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
 
+    resp.error_for_status_ref()
+        .map_err(|e| format!("keep-local get item failed (HTTP error): {e}"))?;
+
     resp.json::<KeepLocalItem>()
+        .await
         .map_err(|e| format!("Failed to parse item response: {e}"))
 }
 
 #[tauri::command]
-pub fn keep_local_get_content(item_id: String) -> Result<String, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-
+pub async fn keep_local_get_content(
+    client: State<'_, HttpClient>,
+    item_id: String,
+) -> Result<String, String> {
     let resp = client
+        .0
         .get(format!("{BASE_URL}/api/items/{item_id}/content"))
         .send()
+        .await
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
 
     let status = resp.status();
     let body = resp
         .text()
+        .await
         .map_err(|e| format!("Failed to read content response: {e}"))?;
 
     if !status.is_success() {
