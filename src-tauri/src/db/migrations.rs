@@ -102,6 +102,9 @@ pub fn init_db() -> Result<(), Box<dyn std::error::Error>> {
     // Migration: rebuild corrections table without foreign keys and backfill from JSONL
     migrate_corrections_drop_fks(&conn)?;
 
+    // Migration: add writing_type column to corrections
+    migrate_corrections_add_writing_type(&conn)?;
+
     Ok(())
 }
 
@@ -291,7 +294,8 @@ mod tests {
             category TEXT,
             highlight_color TEXT NOT NULL,
             created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
+            updated_at INTEGER NOT NULL,
+            writing_type TEXT
         );"
     }
 
@@ -430,6 +434,96 @@ mod tests {
         backfill_corrections_from_dir(&conn, &nonexistent);
         assert_eq!(count(&conn), 0);
     }
+
+    #[test]
+    fn migrate_adds_writing_type_column() {
+        // Start with a table WITHOUT writing_type
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE corrections (
+                id TEXT PRIMARY KEY,
+                highlight_id TEXT NOT NULL UNIQUE,
+                document_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                original_text TEXT NOT NULL,
+                prefix_context TEXT,
+                suffix_context TEXT,
+                extended_context TEXT,
+                notes_json TEXT NOT NULL,
+                document_title TEXT,
+                document_source TEXT NOT NULL,
+                document_path TEXT,
+                category TEXT,
+                highlight_color TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );",
+        )
+        .unwrap();
+
+        // Insert a row before migration
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id1', 'h1', 'd1', 's1', 'text', '[]', 'file', 'yellow', 1000, 1000)",
+            [],
+        )
+        .unwrap();
+
+        // Run migration
+        migrate_corrections_add_writing_type(&conn).unwrap();
+
+        // Existing row should have NULL writing_type
+        let wt: Option<String> = conn
+            .query_row(
+                "SELECT writing_type FROM corrections WHERE id = 'id1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(wt, None);
+
+        // Should be able to insert with writing_type
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at, writing_type)
+             VALUES ('id2', 'h2', 'd1', 's1', 'text2', '[]', 'file', 'yellow', 2000, 2000, 'email')",
+            [],
+        )
+        .unwrap();
+
+        let wt2: Option<String> = conn
+            .query_row(
+                "SELECT writing_type FROM corrections WHERE id = 'id2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(wt2, Some("email".to_string()));
+
+        // Running migration again is idempotent
+        migrate_corrections_add_writing_type(&conn).unwrap();
+    }
+}
+
+/// Adds a `writing_type` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_writing_type(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if column already exists
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "writing_type")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE corrections ADD COLUMN writing_type TEXT;
+             CREATE INDEX IF NOT EXISTS idx_corrections_writing_type ON corrections(writing_type);",
+        )?;
+    }
+
+    Ok(())
 }
 
 pub fn get_db() -> Result<Connection, String> {

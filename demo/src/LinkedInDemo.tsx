@@ -15,8 +15,8 @@ export const LinkedInDemo: React.FC = () => {
         position: "relative",
       }}
     >
-      {/* Background music — "Standard Jazz Bars" by Jason Shaw (audionautix.com, CC BY 3.0) */}
-      <Audio src={staticFile("background-music.mp3")} volume={0.3} />
+      {/* Background music — "Okey Dokey Smokey" by Jason Shaw (audionautix.com, CC BY 3.0) */}
+      <Audio src={staticFile("background-music.mp3")} volume={0.3} loop />
       {SCENES.map((scene) => {
         if (scene.id === "intro") {
           return (

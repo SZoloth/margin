@@ -27,6 +27,7 @@ export interface CorrectionInput {
   extended_context: string | null;
   notes: string[];
   highlight_color: string;
+  writing_type: string | null;
 }
 
 export interface CorrectionRecord {
@@ -36,4 +37,23 @@ export interface CorrectionRecord {
   documentTitle: string | null;
   documentId: string;
   createdAt: number;
+  writingType: string | null;
+}
+
+export interface CorrectionDetail {
+  highlightId: string;
+  originalText: string;
+  notes: string[];
+  extendedContext: string | null;
+  highlightColor: string;
+  writingType: string | null;
+  documentTitle: string | null;
+  createdAt: number;
+}
+
+export interface DocumentCorrections {
+  documentId: string;
+  documentTitle: string | null;
+  documentPath: string | null;
+  corrections: CorrectionDetail[];
 }

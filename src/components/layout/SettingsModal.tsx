@@ -10,6 +10,7 @@ interface SettingsModalProps {
   onClose: () => void;
   settings: Settings;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
+  onOpenCorrections: () => void;
 }
 
 const FONT_SIZE_OPTIONS: { value: Settings["fontSize"]; label: string }[] = [
@@ -197,7 +198,7 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function StyleMemoryRow() {
+function StyleMemoryRow({ onOpenCorrections }: { onOpenCorrections: () => void }) {
   const [correctionCount, setCorrectionCount] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<number | null>(null);
@@ -257,29 +258,52 @@ function StyleMemoryRow() {
 
   return (
     <SettingRow label="Style Memory" description={description}>
-      <button
-        type="button"
-        disabled={!hasCorrections}
-        onClick={handleCopy}
-        style={{
-          padding: "5px 14px",
-          fontSize: 12,
-          fontWeight: 500,
-          fontFamily: "'Inter', system-ui, sans-serif",
-          color: hasCorrections
-            ? "var(--color-text-primary)"
-            : "var(--color-text-secondary)",
-          backgroundColor: "var(--hover-bg)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-sm)",
-          cursor: hasCorrections ? "pointer" : "default",
-          opacity: hasCorrections ? 1 : 0.5,
-          transition: "all 150ms ease",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {copied ? "Copied" : "Copy"}
-      </button>
+      <div style={{ display: "flex", gap: 6 }}>
+        {hasCorrections && (
+          <button
+            type="button"
+            onClick={onOpenCorrections}
+            style={{
+              padding: "5px 14px",
+              fontSize: 12,
+              fontWeight: 500,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              color: "var(--color-text-primary)",
+              backgroundColor: "var(--hover-bg)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+              transition: "all 150ms ease",
+              whiteSpace: "nowrap",
+            }}
+          >
+            View all
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={!hasCorrections}
+          onClick={handleCopy}
+          style={{
+            padding: "5px 14px",
+            fontSize: 12,
+            fontWeight: 500,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            color: hasCorrections
+              ? "var(--color-text-primary)"
+              : "var(--color-text-secondary)",
+            backgroundColor: "var(--hover-bg)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-sm)",
+            cursor: hasCorrections ? "pointer" : "default",
+            opacity: hasCorrections ? 1 : 0.5,
+            transition: "all 150ms ease",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
     </SettingRow>
   );
 }
@@ -289,6 +313,7 @@ export function SettingsModal({
   onClose,
   settings,
   setSetting,
+  onOpenCorrections,
 }: SettingsModalProps) {
   const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
 
@@ -492,7 +517,10 @@ export function SettingsModal({
           />
         </SettingRow>
 
-        <StyleMemoryRow />
+        <StyleMemoryRow onOpenCorrections={() => {
+          onClose();
+          onOpenCorrections();
+        }} />
       </div>
     </div>
   );

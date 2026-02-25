@@ -7,3 +7,8 @@ target/
 .claude/
 playground/
 tsconfig.tsbuildinfo
+.env
+.env.*
+*.p8
+*.p12
+*.pem

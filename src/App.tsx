@@ -16,6 +16,7 @@ import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
 import { SettingsModal } from "@/components/layout/SettingsModal";
+import { CorrectionsPanel } from "@/components/corrections/CorrectionsPanel";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
@@ -93,6 +94,7 @@ export default function App() {
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
   const [showExportPopover, setShowExportPopover] = useState(false);
+  const [showCorrectionsPanel, setShowCorrectionsPanel] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
@@ -693,7 +695,7 @@ export default function App() {
   }, [doc.currentDoc, annotations.isLoaded]);
 
   const handleExportAnnotations = useCallback(
-    async (): Promise<ExportResult> => {
+    async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
         return { highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" };
       }
@@ -739,6 +741,7 @@ export default function App() {
             extended_context: getExtendedContext(editor, h.from_pos, h.to_pos),
             notes,
             highlight_color: h.color,
+            writing_type: writingType,
           });
         }
 
@@ -938,6 +941,7 @@ export default function App() {
         onExport={handleExportAnnotations}
         onClose={() => setShowExportPopover(false)}
         persistCorrections={settings.persistCorrections}
+        hasMarginNotes={annotations.marginNotes.length > 0}
         onOpenSettings={() => setShowSettings(true)}
       />
 
@@ -1065,6 +1069,12 @@ export default function App() {
         onClose={() => setShowSettings(false)}
         settings={settings}
         setSetting={setSetting}
+        onOpenCorrections={() => setShowCorrectionsPanel(true)}
+      />
+
+      <CorrectionsPanel
+        isOpen={showCorrectionsPanel}
+        onClose={() => setShowCorrectionsPanel(false)}
       />
     </AppShell>
   );

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Document, FileEntry } from "@/types/document";
-import type { CorrectionInput, CorrectionRecord } from "@/types/annotations";
+import type { CorrectionInput, CorrectionRecord, DocumentCorrections } from "@/types/annotations";
 import type { PersistedTab } from "@/types/tab";
 
 export async function openFileDialog(): Promise<string | null> {
@@ -70,4 +70,26 @@ export async function getAllCorrections(limit?: number): Promise<CorrectionRecor
 
 export async function getCorrectionsCount(): Promise<number> {
   return invoke<number>("get_corrections_count");
+}
+
+export async function getCorrectionsByDocument(limit?: number): Promise<DocumentCorrections[]> {
+  return invoke<DocumentCorrections[]>(
+    "get_corrections_by_document",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function updateCorrectionWritingType(highlightId: string, writingType: string): Promise<void> {
+  return invoke<void>("update_correction_writing_type", { highlightId, writingType });
+}
+
+export async function deleteCorrection(highlightId: string): Promise<void> {
+  return invoke<void>("delete_correction", { highlightId });
+}
+
+export async function exportCorrectionsJson(path?: string): Promise<number> {
+  return invoke<number>(
+    "export_corrections_json",
+    path === undefined ? {} : { path },
+  );
 }

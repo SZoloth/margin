@@ -10,6 +10,7 @@ function correction(overrides: Partial<CorrectionRecord> = {}): CorrectionRecord
     documentTitle: "Test Doc",
     documentId: "doc-1",
     createdAt: 1700000000000,
+    writingType: null,
     ...overrides,
   };
 }
@@ -87,5 +88,18 @@ describe("formatStyleMemory", () => {
     ]);
     expect(result).toContain("Untitled");
     expect(result).toContain("flagged"); // empty notes fallback
+  });
+
+  it("includes writingType field in correction records", () => {
+    const withType = correction({ writingType: "email" });
+    expect(withType.writingType).toBe("email");
+
+    const withoutType = correction({ writingType: null });
+    expect(withoutType.writingType).toBeNull();
+
+    // formatStyleMemory still works with writingType present
+    const result = formatStyleMemory([withType, withoutType]);
+    expect(result).toContain("# Writing preferences (from Margin)");
+    expect(result).toContain("2 corrections");
   });
 });
