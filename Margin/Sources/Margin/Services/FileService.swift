@@ -61,53 +61,6 @@ struct FileService {
         return newURL.path
     }
 
-    /// List all markdown files recursively under a directory.
-    func listMarkdownFiles(dir: String) throws -> [FileEntry] {
-        let rootURL = URL(fileURLWithPath: dir)
-        guard FileManager.default.fileExists(atPath: dir) else {
-            throw FileServiceError.directoryNotFound(dir)
-        }
-        return try collectMarkdownEntries(dir: rootURL)
-            .sorted { a, b in
-                if a.isDir != b.isDir { return a.isDir && !b.isDir }
-                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-            }
-    }
-
-    private func collectMarkdownEntries(dir: URL) throws -> [FileEntry] {
-        var results: [FileEntry] = []
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: dir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )
-
-        for url in contents {
-            let name = url.lastPathComponent
-            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-
-            if isDir {
-                let children = try collectMarkdownEntries(dir: url)
-                if !children.isEmpty {
-                    results.append(FileEntry(name: name, path: url.path, isDir: true))
-                    results.append(contentsOf: children)
-                }
-            } else {
-                let ext = url.pathExtension.lowercased()
-                if ext == "md" || ext == "markdown" {
-                    results.append(FileEntry(name: name, path: url.path, isDir: false))
-                }
-            }
-        }
-        return results
-    }
-}
-
-struct FileEntry: Identifiable {
-    let id = UUID()
-    let name: String
-    let path: String
-    let isDir: Bool
 }
 
 enum FileServiceError: LocalizedError {
@@ -115,7 +68,6 @@ enum FileServiceError: LocalizedError {
     case invalidName
     case alreadyExists(String)
     case sourceNotFound(String)
-    case directoryNotFound(String)
 
     var errorDescription: String? {
         switch self {
@@ -123,7 +75,6 @@ enum FileServiceError: LocalizedError {
         case .invalidName: return "File name cannot contain path separators"
         case .alreadyExists(let name): return "A file named '\(name)' already exists"
         case .sourceNotFound(let path): return "Source file does not exist: \(path)"
-        case .directoryNotFound(let dir): return "'\(dir)' is not a directory"
         }
     }
 }

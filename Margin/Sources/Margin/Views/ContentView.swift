@@ -1,10 +1,12 @@
 import SwiftUI
 
 /// Root view — sidebar + tab bar + reader pane.
-struct ContentView: View {
+public struct ContentView: View {
     @EnvironmentObject var appState: AppState
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         NavigationSplitView(columnVisibility: .constant(
             appState.sidebarOpen ? .doubleColumn : .detailOnly
         )) {
@@ -29,17 +31,6 @@ struct ContentView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        appState.sidebarOpen.toggle()
-                    }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                }
-                .help("Toggle Sidebar")
-            }
-
             ToolbarItem(placement: .primaryAction) {
                 if !appState.highlights.isEmpty {
                     Button {

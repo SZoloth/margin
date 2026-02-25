@@ -5,20 +5,21 @@ import Combine
 /// Central application state — replaces all React hooks from the Tauri version.
 /// Owns document, annotation, tab, and search state.
 @MainActor
-final class AppState: ObservableObject {
+public final class AppState: ObservableObject {
     // MARK: - Services
     let fileService = FileService()
     let fileWatcher = FileWatcher()
     let keepLocal = KeepLocalService()
-    var settings = AppSettings()
+    public var settings = AppSettings()
     private let documentStore = DocumentStore()
     private let annotationStore = AnnotationStore()
     private let searchStore = SearchStore()
     private let tabStore = TabStore()
     private let exportService = ExportService()
+    private let correctionStore = CorrectionStore()
 
     // MARK: - Document State
-    @Published var currentDoc: Document?
+    @Published public var currentDoc: Document?
     @Published var recentDocs: [Document] = []
     @Published var content: String = ""
     @Published var filePath: String?
@@ -26,7 +27,7 @@ final class AppState: ObservableObject {
     @Published var isLoading = false
 
     // MARK: - Annotation State
-    @Published var highlights: [Highlight] = []
+    @Published public var highlights: [Highlight] = []
     @Published var marginNotes: [MarginNote] = []
     @Published var annotationsLoaded = false
 
@@ -40,9 +41,13 @@ final class AppState: ObservableObject {
     @Published var fileResults: [FileSearchResult] = []
     @Published var isSearching = false
 
+    // MARK: - Highlight Positions (scroll bridge for margin rail)
+    @Published var visibleHighlightPositions: [String: HighlightPosition] = [:]
+
     // MARK: - UI State
     @Published var focusHighlightId: String?
-    @Published var showExportPopover = false
+    @Published var focusHighlightRect: CGRect = .zero
+    @Published public var showExportPopover = false
     @Published var showSettings = false
     @Published var sidebarOpen = true
 
@@ -55,6 +60,25 @@ final class AppState: ObservableObject {
         let pendingPath: String
         let pendingContent: String
     }
+
+    // MARK: - Selection State (for floating toolbar)
+    @Published public var selectionRange: NSRange?
+    @Published var selectionRect: CGRect = .zero
+    @Published var selectionText: String = ""
+    @Published var clearEditorSelection = false
+
+    // MARK: - Table of Contents
+    @Published var headings: [TOCEntry] = []
+    @Published var scrollToOffset: Int?
+    private var tocTask: Task<Void, Never>?
+
+    // MARK: - Undo State
+    @Published var pendingUndo: UndoAction?
+    private var undoTimer: Timer?
+
+    // MARK: - Error State
+    @Published var errorMessage: String?
+    private var errorTimer: Timer?
 
     // MARK: - Tab Cache
     private var tabCache: [String: TabSnapshot] = [:]
@@ -73,20 +97,33 @@ final class AppState: ObservableObject {
     // MARK: - Autosave
     private var autosaveTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    private var searchTask: Task<Void, Never>?
+
+    public init() {}
 
     // MARK: - Diff Normalization
     private var lastSavedContent: String = ""
 
     // MARK: - Initialize
 
-    func initialize() {
-        do {
-            try DatabaseManager.shared.initialize()
-            loadRecentDocs()
-            restoreTabs()
-        } catch {
-            print("Failed to initialize database: \(error)")
+    public func initialize() {
+        Task.detached {
+            do {
+                try DatabaseManager.shared.initialize()
+            } catch {
+                print("Failed to initialize database: \(error)")
+                return
+            }
+            await MainActor.run {
+                self.loadRecentDocs()
+                self.restoreTabs()
+            }
         }
+
+        // Forward AppSettings changes so SwiftUI views re-render when settings change
+        settings.objectWillChange.sink { [weak self] in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
 
         // Set up file watcher callback
         fileWatcher.onFileChanged = { [weak self] path in
@@ -114,7 +151,7 @@ final class AppState: ObservableObject {
 
     // MARK: - Document Operations
 
-    func openFile() {
+    public func openFile() {
         guard let path = fileService.openFileDialog() else { return }
         Task { await openFilePath(path) }
     }
@@ -151,7 +188,7 @@ final class AppState: ObservableObject {
             loadRecentDocs()
             fileWatcher.watch(path: path)
         } catch {
-            print("Failed to open file: \(error)")
+            showError("Couldn't open file")
         }
     }
 
@@ -180,7 +217,7 @@ final class AppState: ObservableObject {
                 loadRecentDocs()
                 fileWatcher.watch(path: path)
             } catch {
-                print("Failed to open recent file: \(error)")
+                showError("Couldn't open file")
             }
         }
     }
@@ -213,11 +250,11 @@ final class AppState: ObservableObject {
             loadRecentDocs()
             fileWatcher.unwatch()
         } catch {
-            print("Failed to open keep-local article: \(error)")
+            showError("Couldn't open article")
         }
     }
 
-    func saveCurrentFile() async {
+    public func saveCurrentFile() async {
         guard isDirty else { return }
 
         // Keep-local articles have no file path — keep dirty so unsaved-changes guard triggers
@@ -258,7 +295,7 @@ final class AppState: ObservableObject {
                 loadRecentDocs()
             }
         } catch {
-            print("Failed to save file: \(error)")
+            showError("Couldn't save file")
         }
     }
 
@@ -283,7 +320,7 @@ final class AppState: ObservableObject {
             }
             loadRecentDocs()
         } catch {
-            print("Failed to rename file: \(error)")
+            showError("Couldn't rename file")
         }
     }
 
@@ -296,6 +333,7 @@ final class AppState: ObservableObject {
         if isDirty {
             scheduleAutosave()
         }
+        extractHeadings()
     }
 
     private func setDocument(_ doc: Document, content: String, filePath: String?) {
@@ -305,6 +343,7 @@ final class AppState: ObservableObject {
         self.isDirty = false
         self.lastSavedContent = content
         syncDirtyToActiveTab()
+        extractHeadings()
     }
 
     private func scheduleAutosave() {
@@ -322,11 +361,43 @@ final class AppState: ObservableObject {
     func loadAnnotations(for documentId: String) {
         annotationsLoaded = false
         do {
-            highlights = try annotationStore.getHighlights(documentId: documentId)
+            var loaded = try annotationStore.getHighlights(documentId: documentId)
+
+            // Re-anchor highlights against current document content
+            if !content.isEmpty {
+                for i in loaded.indices {
+                    let h = loaded[i]
+                    let anchor = TextAnchor(
+                        text: h.textContent,
+                        prefix: h.prefixContext ?? "",
+                        suffix: h.suffixContext ?? "",
+                        from: Int(h.fromPos),
+                        to: Int(h.toPos)
+                    )
+                    let result = resolveAnchor(fullText: content, anchor: anchor)
+                    if result.from != Int(h.fromPos) || result.to != Int(h.toPos) {
+                        if result.confidence != .orphaned {
+                            loaded[i].fromPos = Int64(result.from)
+                            loaded[i].toPos = Int64(result.to)
+                            do {
+                                try annotationStore.updateHighlightPosition(
+                                    id: h.id,
+                                    fromPos: Int64(result.from),
+                                    toPos: Int64(result.to)
+                                )
+                            } catch {
+                                print("Failed to persist re-anchored position for \(h.id): \(error)")
+                            }
+                        }
+                    }
+                }
+            }
+
+            highlights = loaded
             marginNotes = try annotationStore.getMarginNotes(documentId: documentId)
             annotationsLoaded = true
         } catch {
-            print("Failed to load annotations: \(error)")
+            showError("Couldn't load annotations")
         }
     }
 
@@ -334,9 +405,7 @@ final class AppState: ObservableObject {
         color: String,
         textContent: String,
         fromPos: Int,
-        toPos: Int,
-        prefixContext: String?,
-        suffixContext: String?
+        toPos: Int
     ) async -> Highlight? {
         guard let docId = currentDoc?.id else { return nil }
 
@@ -356,28 +425,150 @@ final class AppState: ObservableObject {
                 textContent: textContent,
                 fromPos: Int64(fromPos),
                 toPos: Int64(toPos),
-                prefixContext: prefixContext,
-                suffixContext: suffixContext,
+                prefixContext: anchor.prefix,
+                suffixContext: anchor.suffix,
                 anchorHeadingPath: headingPathJSON
             )
             highlights.append(highlight)
             loadRecentDocs()
             return highlight
         } catch {
-            print("Failed to create highlight: \(error)")
+            showError("Couldn't save highlight")
             return nil
         }
     }
 
+    func updateHighlightColor(id: String, color: String) async {
+        do {
+            try annotationStore.updateHighlightColor(id: id, color: color)
+            if let idx = highlights.firstIndex(where: { $0.id == id }) {
+                highlights[idx].color = color
+            }
+        } catch {
+            showError("Couldn't update highlight")
+        }
+    }
+
     func deleteHighlight(_ id: String) async {
+        guard let highlight = highlights.first(where: { $0.id == id }) else { return }
+        let savedNotes = marginNotes.filter { $0.highlightId == id }
+
         do {
             try annotationStore.deleteHighlight(id: id)
             highlights.removeAll { $0.id == id }
             marginNotes.removeAll { $0.highlightId == id }
             focusHighlightId = nil
             loadRecentDocs()
+
+            // Commit any pending undo before setting a new one
+            commitPendingUndo()
+
+            // Capture content snapshot to validate offsets haven't drifted
+            let contentSnapshot = self.content
+
+            pendingUndo = UndoAction(
+                message: "Highlight deleted",
+                onUndo: { [weak self] in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        // Validate content hasn't changed — stale offsets could crash createAnchor
+                        let fromPos = Int(highlight.fromPos)
+                        let toPos = Int(highlight.toPos)
+                        let nsContent = self.content as NSString
+                        guard self.content == contentSnapshot,
+                              fromPos >= 0, toPos > fromPos,
+                              toPos <= nsContent.length else {
+                            print("Undo skipped: content changed since deletion")
+                            return
+                        }
+                        if let restored = await self.createHighlight(
+                            color: highlight.color,
+                            textContent: highlight.textContent,
+                            fromPos: fromPos,
+                            toPos: toPos
+                        ) {
+                            for note in savedNotes {
+                                _ = await self.createMarginNote(
+                                    highlightId: restored.id,
+                                    content: note.content
+                                )
+                            }
+                        }
+                    }
+                }
+            )
+
+            undoTimer?.invalidate()
+            undoTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.dismissUndoToast()
+                }
+            }
         } catch {
-            print("Failed to delete highlight: \(error)")
+            showError("Couldn't delete highlight")
+        }
+    }
+
+    func performUndo() {
+        guard let undo = pendingUndo else { return }
+        undoTimer?.invalidate()
+        undo.onUndo()
+        pendingUndo = nil
+    }
+
+    func commitPendingUndo() {
+        undoTimer?.invalidate()
+        pendingUndo = nil
+    }
+
+    /// Animate the undo toast out before clearing state.
+    func dismissUndoToast() {
+        undoTimer?.invalidate()
+        // Give the view time to animate out by setting nil after a brief delay
+        // The view's onDisappear handles the visual transition
+        pendingUndo = nil
+    }
+
+    // MARK: - Error Toast
+
+    func showError(_ message: String) {
+        errorMessage = message
+        errorTimer?.invalidate()
+        errorTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.errorMessage = nil
+            }
+        }
+    }
+
+    // MARK: - Highlight from Selection (shared for toolbar + keyboard shortcuts)
+
+    public func createHighlightFromCurrentSelection(color: HighlightColor, openNote: Bool = false) {
+        guard let range = selectionRange, !selectionText.isEmpty else { return }
+        let text = selectionText
+        let from = range.location
+        let to = range.location + range.length
+        // Capture selection rect before clearing — needed for note thread positioning
+        let savedRect = selectionRect
+
+        // Clear selection state
+        selectionRange = nil
+        selectionText = ""
+        selectionRect = .zero
+        clearEditorSelection = true
+
+        Task {
+            if let highlight = await createHighlight(
+                color: color.rawValue,
+                textContent: text,
+                fromPos: from,
+                toPos: to
+            ) {
+                if openNote {
+                    focusHighlightRect = savedRect
+                    focusHighlightId = highlight.id
+                }
+            }
         }
     }
 
@@ -391,7 +582,7 @@ final class AppState: ObservableObject {
             scheduleAutosave()
             return note
         } catch {
-            print("Failed to create margin note: \(error)")
+            showError("Couldn't save note")
             return nil
         }
     }
@@ -405,7 +596,7 @@ final class AppState: ObservableObject {
             }
             scheduleAutosave()
         } catch {
-            print("Failed to update margin note: \(error)")
+            showError("Couldn't update note")
         }
     }
 
@@ -415,7 +606,7 @@ final class AppState: ObservableObject {
             marginNotes.removeAll { $0.id == id }
             scheduleAutosave()
         } catch {
-            print("Failed to delete margin note: \(error)")
+            showError("Couldn't delete note")
         }
     }
 
@@ -537,6 +728,7 @@ final class AppState: ObservableObject {
         marginNotes = snapshot.marginNotes
         annotationsLoaded = snapshot.annotationsLoaded
         focusHighlightId = nil
+        visibleHighlightPositions = [:]
 
         if let path = snapshot.filePath {
             fileWatcher.watch(path: path)
@@ -583,15 +775,42 @@ final class AppState: ObservableObject {
 
     func search(_ query: String) {
         searchQuery = query
+        searchTask?.cancel()
+
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             fileResults = []
             isSearching = false
             return
         }
+
         isSearching = true
-        // Spotlight search runs synchronously but is fast
-        fileResults = searchStore.searchFilesOnDisk(query: query)
-        isSearching = false
+        let capturedRecentDocs = recentDocs
+        let store = searchStore
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard !Task.isCancelled else { return }
+
+            // Run Spotlight (mdfind) and FTS5 off main actor to avoid blocking UI
+            let (spotlightResults, ftsResults) = await Task.detached(priority: .userInitiated) {
+                let spotlight = store.searchFilesOnDisk(query: query)
+                let fts = (try? store.searchDocuments(query: query)) ?? []
+                return (spotlight, fts)
+            }.value
+
+            guard !Task.isCancelled else { return }
+
+            // Merge FTS results as file results (deduplicate by path)
+            let spotlightPaths = Set(spotlightResults.map(\.path))
+            let ftsAsFiles = ftsResults.compactMap { result -> FileSearchResult? in
+                guard let doc = capturedRecentDocs.first(where: { $0.id == result.documentId }),
+                      let path = doc.filePath,
+                      !spotlightPaths.contains(path) else { return nil }
+                return FileSearchResult(id: path, path: path, filename: doc.displayTitle)
+            }
+
+            fileResults = spotlightResults + ftsAsFiles
+            isSearching = false
+        }
     }
 
     private func indexDocument(_ doc: Document, content: String) {
@@ -626,12 +845,46 @@ final class AppState: ObservableObject {
                 : h.textContent
         }
 
+        var correctionsSaved = false
+        var correctionsFile = ""
+
+        if settings.persistCorrections {
+            let corrections = highlights.map { h in
+                CorrectionInput(
+                    highlightId: h.id,
+                    originalText: h.textContent,
+                    prefixContext: h.prefixContext,
+                    suffixContext: h.suffixContext,
+                    extendedContext: nil,
+                    notes: marginNotes.filter { $0.highlightId == h.id }.map(\.content),
+                    highlightColor: h.color
+                )
+            }
+
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let exportDate = dateFormatter.string(from: Date())
+
+            if let sessionId = try? correctionStore.persistCorrections(
+                corrections: corrections,
+                documentId: doc.id,
+                documentTitle: doc.title,
+                documentSource: doc.source,
+                documentPath: doc.filePath,
+                exportDate: exportDate
+            ) {
+                correctionsSaved = true
+                correctionsFile = "~/.margin/corrections/corrections-\(exportDate).jsonl"
+                _ = sessionId
+            }
+        }
+
         return ExportService.ExportResult(
             highlightCount: highlights.count,
             noteCount: marginNotes.count,
             snippets: Array(snippets),
-            correctionsSaved: false,
-            correctionsFile: ""
+            correctionsSaved: correctionsSaved,
+            correctionsFile: correctionsFile
         )
     }
 
@@ -651,4 +904,69 @@ final class AppState: ObservableObject {
               let idx = tabs.firstIndex(where: { $0.id == tabId }) else { return }
         tabs[idx].isDirty = isDirty
     }
+
+    // MARK: - Table of Contents
+
+    func extractHeadings() {
+        tocTask?.cancel()
+        tocTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            let entries = parseHeadings(from: content)
+            guard !Task.isCancelled else { return }
+            headings = entries
+        }
+    }
+}
+
+struct TOCEntry: Identifiable, Equatable {
+    let id: String
+    let text: String
+    let level: Int
+    let offset: Int
+}
+
+/// Parse H1 and H2 headings from markdown content, returning entries with UTF-16 offsets.
+func parseHeadings(from content: String) -> [TOCEntry] {
+    var entries: [TOCEntry] = []
+    var charOffset = 0
+
+    for line in content.components(separatedBy: "\n") {
+        if line.hasPrefix("## "), !line.hasPrefix("### ") {
+            let text = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty {
+                entries.append(TOCEntry(
+                    id: "heading-\(entries.count)",
+                    text: text,
+                    level: 2,
+                    offset: charOffset
+                ))
+            }
+        } else if line.hasPrefix("# "), !line.hasPrefix("## ") {
+            let text = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty {
+                entries.append(TOCEntry(
+                    id: "heading-\(entries.count)",
+                    text: text,
+                    level: 1,
+                    offset: charOffset
+                ))
+            }
+        }
+        charOffset += (line as NSString).length + 1
+    }
+
+    return entries
+}
+
+struct HighlightPosition: Equatable {
+    let highlightId: String
+    let viewportY: CGFloat   // SwiftUI global Y coordinate
+    let height: CGFloat
+}
+
+struct UndoAction {
+    let id = UUID().uuidString
+    let message: String
+    let onUndo: () -> Void
 }

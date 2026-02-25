@@ -7,7 +7,7 @@ struct TextAnchor {
     let suffix: String   // ~30 chars after
     let from: Int
     let to: Int
-    let headingPath: [String]
+    var headingPath: [String] = []
 }
 
 enum AnchorConfidence {
@@ -49,14 +49,20 @@ private let whitespaceCollapseRegex: NSRegularExpression = {
 /// Extract anchoring context from the current document for a selection.
 func createAnchor(fullText: String, from: Int, to: Int) -> TextAnchor {
     let nsText = fullText as NSString
-    let text = nsText.substring(with: NSRange(location: from, length: to - from))
-    let prefixStart = max(0, from - 30)
-    let suffixEnd = min(nsText.length, to + 30)
-    let prefix = nsText.substring(with: NSRange(location: prefixStart, length: from - prefixStart))
-    let suffix = nsText.substring(with: NSRange(location: to, length: suffixEnd - to))
-    let headingPath = extractHeadingPath(fullText: fullText, from: from)
+    // Validate bounds (UTF-16 units) to prevent crash
+    let clampedFrom = max(0, min(from, nsText.length))
+    let clampedTo = max(clampedFrom, min(to, nsText.length))
+    guard clampedTo > clampedFrom else {
+        return TextAnchor(text: "", prefix: "", suffix: "", from: clampedFrom, to: clampedTo)
+    }
+    let text = nsText.substring(with: NSRange(location: clampedFrom, length: clampedTo - clampedFrom))
+    let prefixStart = max(0, clampedFrom - 30)
+    let suffixEnd = min(nsText.length, clampedTo + 30)
+    let prefix = nsText.substring(with: NSRange(location: prefixStart, length: clampedFrom - prefixStart))
+    let suffix = nsText.substring(with: NSRange(location: clampedTo, length: suffixEnd - clampedTo))
+    let headingPath = extractHeadingPath(fullText: fullText, from: clampedFrom)
 
-    return TextAnchor(text: text, prefix: prefix, suffix: suffix, from: from, to: to, headingPath: headingPath)
+    return TextAnchor(text: text, prefix: prefix, suffix: suffix, from: clampedFrom, to: clampedTo, headingPath: headingPath)
 }
 
 /// Re-anchor a text anchor in potentially-changed document content.
@@ -69,12 +75,22 @@ func createAnchor(fullText: String, from: Int, to: Int) -> TextAnchor {
 func resolveAnchor(fullText: String, anchor: TextAnchor) -> AnchorResult {
     let nsText = fullText as NSString
 
+    // Use UTF-16 lengths consistently (NSString operates in UTF-16)
+    let anchorTextLen = (anchor.text as NSString).length
+    let anchorPrefixLen = (anchor.prefix as NSString).length
+
     // 1. Try exact position match
-    if anchor.from >= 0, anchor.from + anchor.text.count <= nsText.length {
-        let range = NSRange(location: anchor.from, length: anchor.text.count)
-        let atOriginal = nsText.substring(with: range)
+    if anchor.from >= 0, anchor.from + anchorTextLen <= nsText.length {
+        let atOriginal = nsText.substring(with: NSRange(
+            location: anchor.from,
+            length: anchorTextLen
+        ))
         if atOriginal == anchor.text {
-            return AnchorResult(from: anchor.from, to: anchor.from + anchor.text.count, confidence: .exact)
+            return AnchorResult(
+                from: anchor.from,
+                to: anchor.from + anchorTextLen,
+                confidence: .exact
+            )
         }
     }
 
@@ -82,8 +98,12 @@ func resolveAnchor(fullText: String, anchor: TextAnchor) -> AnchorResult {
     let contextPattern = anchor.prefix + anchor.text + anchor.suffix
     let contextRange = nsText.range(of: contextPattern)
     if contextRange.location != NSNotFound {
-        let newFrom = contextRange.location + anchor.prefix.count
-        return AnchorResult(from: newFrom, to: newFrom + anchor.text.count, confidence: .exact)
+        let newFrom = contextRange.location + anchorPrefixLen
+        return AnchorResult(
+            from: newFrom,
+            to: newFrom + anchorTextLen,
+            confidence: .exact
+        )
     }
 
     // 3. Find ALL occurrences, score each with weighted multi-signal approach
@@ -92,7 +112,7 @@ func resolveAnchor(fullText: String, anchor: TextAnchor) -> AnchorResult {
     if !candidates.isEmpty {
         let best = scoreCandidates(nsText: nsText, candidates: candidates, anchor: anchor)
         if let best {
-            return AnchorResult(from: best, to: best + anchor.text.count, confidence: .fuzzy)
+            return AnchorResult(from: best, to: best + anchorTextLen, confidence: .fuzzy)
         }
     }
 
@@ -104,10 +124,9 @@ func resolveAnchor(fullText: String, anchor: TextAnchor) -> AnchorResult {
         let normalizedCandidates = findAllOccurrences(nsText: nsNormalized, text: normalizedSearch)
 
         if !normalizedCandidates.isEmpty {
-            // Map normalized positions back approximately
             let best = scoreCandidates(nsText: nsNormalized, candidates: normalizedCandidates, anchor: anchor)
             if let best {
-                return AnchorResult(from: best, to: best + normalizedSearch.count, confidence: .fuzzy)
+                return AnchorResult(from: best, to: best + (normalizedSearch as NSString).length, confidence: .fuzzy)
             }
         }
     }

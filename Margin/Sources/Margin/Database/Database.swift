@@ -42,7 +42,12 @@ final class DatabaseManager {
 
     private func migrate() throws {
         guard let pool = dbPool else { return }
+        let migrator = Self.migrator()
+        try migrator.migrate(pool)
+    }
 
+    /// Shared migrator for production and test use (in-memory databases).
+    static func migrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         migrator.registerMigration("v1_create_tables") { db in
@@ -57,15 +62,6 @@ final class DatabaseManager {
                 t.column("word_count", .integer).defaults(to: 0)
                 t.column("last_opened_at", .integer).notNull()
                 t.column("created_at", .integer).notNull()
-            }
-
-            try db.create(table: "document_tags", ifNotExists: true) { t in
-                t.column("id", .text).primaryKey()
-                t.column("document_id", .text).notNull()
-                    .references("documents", onDelete: .cascade)
-                t.column("tag", .text).notNull()
-                t.column("created_at", .integer).notNull()
-                t.uniqueKey(["document_id", "tag"])
             }
 
             try db.create(table: "highlights", ifNotExists: true) { t in
@@ -159,6 +155,6 @@ final class DatabaseManager {
             try db.execute(sql: "ALTER TABLE highlights ADD COLUMN anchor_heading_path TEXT")
         }
 
-        try migrator.migrate(pool)
+        return migrator
     }
 }

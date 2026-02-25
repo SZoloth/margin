@@ -1,109 +1,216 @@
 import SwiftUI
 
-/// Popover for viewing and adding margin notes on a highlight.
+/// Anchored popover for viewing and adding margin notes on a highlight.
+/// Positioned near the highlight text, not centered on screen.
 struct HighlightThreadView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     let highlight: Highlight
     let notes: [MarginNote]
 
     @State private var newNoteText = ""
     @FocusState private var isNewNoteFocused: Bool
+    @State private var isVisible = false
+    @State private var isDismissing = false
+    @State private var eventMonitor: Any?
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Scrim behind
-            Color.black.opacity(0.15)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    appState.focusHighlightId = nil
-                }
+        GeometryReader { geometry in
+            let overlayFrame = geometry.frame(in: .global)
+            let overlayWidth = geometry.size.width
+            let overlayHeight = geometry.size.height
+            let highlightRect = appState.focusHighlightRect
+            let readerWidth = appState.settings.readerWidth.points
 
-            // The popover itself
-            VStack(alignment: .leading, spacing: 0) {
-                // Header
-                HStack {
-                    Text("Notes")
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    Button("Remove") {
-                        Task { await appState.deleteHighlight(highlight.id) }
-                    }
-                    .font(.system(size: 12))
-                    .foregroundStyle(.red)
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+            // Convert highlight SwiftUI `.global` coords to overlay-local coords
+            let localRect = CGRect(
+                x: highlightRect.origin.x - overlayFrame.origin.x,
+                y: highlightRect.origin.y - overlayFrame.origin.y,
+                width: highlightRect.width,
+                height: highlightRect.height
+            )
 
-                Divider()
+            // Available right margin from reader text edge
+            let readerRightEdge = (overlayWidth + readerWidth) / 2
+            let rightMarginSpace = overlayWidth - readerRightEdge
+            let useMarginLayout = rightMarginSpace >= 220
 
-                // Highlight excerpt
-                Text(highlight.textContent)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        HighlightColor(rawValue: highlight.color)?.swiftUIColor.opacity(0.3)
-                            ?? Color.yellow.opacity(0.3)
-                    )
+            let popoverWidth: CGFloat = useMarginLayout
+                ? min(280, rightMarginSpace - Spacing.sm)
+                : 300
 
-                Divider()
+            // Margin layout: right of reader, aligned with highlight Y
+            // Fallback layout: below/above highlight, centered on it
+            let belowY = localRect.maxY + Spacing.sm
+            let aboveY = localRect.minY - 260 - Spacing.sm
+            let useBelow = belowY + 260 < overlayHeight
 
-                // Existing notes
-                if !notes.isEmpty {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(notes) { note in
-                                NoteRow(note: note)
-                                    .environmentObject(appState)
+            let xOffset = useMarginLayout
+                ? readerRightEdge + Spacing.sm
+                : max(Spacing.sm, min(localRect.midX - popoverWidth / 2, overlayWidth - popoverWidth - Spacing.sm))
 
-                                if note.id != notes.last?.id {
-                                    Divider().padding(.leading, 16)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 200)
+            let yOffset = useMarginLayout
+                ? max(Spacing.sm, min(localRect.minY, overlayHeight - 280))
+                : (useBelow ? belowY : max(Spacing.sm, aboveY))
 
-                    Divider()
-                }
+            let scaleAnchor: UnitPoint = useMarginLayout ? .topLeading : .top
 
-                // New note input
-                VStack(spacing: 6) {
-                    TextField("Add a note...", text: $newNoteText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .lineLimit(1...5)
-                        .focused($isNewNoteFocused)
-                        .onSubmit {
-                            if NSApp.currentEvent?.modifierFlags.contains(.command) == true {
-                                addNote()
-                            }
-                        }
-
-                    if !newNoteText.trimmingCharacters(in: .whitespaces).isEmpty {
-                        HStack {
-                            Spacer()
-                            Button("Save") {
-                                addNote()
-                            }
-                            .font(.system(size: 12, weight: .medium))
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(12)
-            }
-            .frame(width: 300)
-            .background(.background)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.15), radius: 16, y: 4)
-            .padding(20)
+            popoverContent
+                .frame(width: popoverWidth)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
+                .elevationShadow(Elevation.popover)
+                .offset(
+                    x: xOffset,
+                    y: yOffset + (isVisible ? 0 : 4)
+                )
+                .opacity(isVisible ? 1 : 0)
+                .scaleEffect(isVisible ? 1 : 0.97, anchor: scaleAnchor)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            if reduceMotion {
+                isVisible = true
+            } else {
+                withAnimation(.easeOut(duration: AnimationDuration.normal)) {
+                    isVisible = true
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + AnimationDuration.slow) {
+                isNewNoteFocused = true
+            }
+
+            // Click-outside dismiss via event monitor.
+            // Exempt: NSTextView (coordinator handles), SwiftUI hosting views (popover content).
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+                guard let window = event.window,
+                      let contentView = window.contentView else { return event }
+                let localPoint = contentView.convert(event.locationInWindow, from: nil)
+                if let hitView = contentView.hitTest(localPoint) {
+                    var view: NSView? = hitView
+                    while let v = view {
+                        // NSTextView clicks handled by the coordinator
+                        if v is NSTextView { return event }
+                        // SwiftUI hosting views are the popover's own content
+                        let typeName = String(describing: type(of: v))
+                        if typeName.contains("NSHostingView") || typeName.contains("_NSHostingView") {
+                            return event
+                        }
+                        view = v.superview
+                    }
+                    // Click was outside both editor and popover — dismiss
+                    dismiss()
+                }
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                eventMonitor = nil
+            }
+        }
+        .onExitCommand { dismiss() }
+        .accessibilityAddTraits(.isModal)
+        .accessibilityLabel("Notes for highlight")
+    }
+
+    private var popoverContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("Notes")
+                    .font(Typography.headingSemibold)
+                Spacer()
+                Button("Remove") {
+                    Task { await appState.deleteHighlight(highlight.id) }
+                }
+                .font(Typography.captionMedium)
+                .foregroundStyle(.red)
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, Spacing.lg - 2)
+            .padding(.vertical, Spacing.md - 2)
+
+            Divider()
+
+            // Highlight excerpt
+            Text(highlight.textContent)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .padding(.horizontal, Spacing.lg - 2)
+                .padding(.vertical, Spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    HighlightColor(rawValue: highlight.color)?.swiftUIColor.opacity(0.2)
+                        ?? Color.yellow.opacity(0.2)
+                )
+
+            Divider()
+
+            // Existing notes
+            if !notes.isEmpty {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(notes) { note in
+                            NoteRow(note: note)
+                                .environmentObject(appState)
+
+                            if note.id != notes.last?.id {
+                                Divider().padding(.leading, Spacing.lg - 2)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 160)
+
+                Divider()
+            }
+
+            // New note input
+            VStack(spacing: Spacing.sm - 2) {
+                TextField("Add a note...", text: $newNoteText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(Typography.body)
+                    .lineLimit(1...5)
+                    .focused($isNewNoteFocused)
+                    .onSubmit {
+                        if NSApp.currentEvent?.modifierFlags.contains(.command) == true {
+                            addNote()
+                        }
+                    }
+
+                if !newNoteText.trimmingCharacters(in: .whitespaces).isEmpty {
+                    HStack {
+                        Spacer()
+                        Button("Save") {
+                            addNote()
+                        }
+                        .font(Typography.captionMedium)
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(Spacing.md)
+        }
+    }
+
+    private func dismiss() {
+        guard !isDismissing else { return }
+        isDismissing = true
+
+        if reduceMotion {
+            isVisible = false
+            appState.focusHighlightId = nil
+        } else {
+            withAnimation(.easeOut(duration: AnimationDuration.fast)) {
+                isVisible = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + AnimationDuration.fast + 0.01) {
+                appState.focusHighlightId = nil
+            }
+        }
     }
 
     private func addNote() {
@@ -124,22 +231,22 @@ struct NoteRow: View {
     @State private var editText = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             // Timestamp
             Text(timeAgo(note.createdAt))
-                .font(.system(size: 11))
+                .font(Typography.caption)
                 .foregroundStyle(.tertiary)
 
             if isEditing {
                 TextField("Note", text: $editText, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(Typography.body)
                     .lineLimit(1...5)
                     .onSubmit {
                         saveEdit()
                     }
 
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     Button("Cancel") {
                         isEditing = false
                     }
@@ -149,14 +256,14 @@ struct NoteRow: View {
                     Button("Save") {
                         saveEdit()
                     }
-                    .font(.system(size: 12, weight: .medium))
+                    .font(Typography.captionMedium)
                     .buttonStyle(.plain)
                 }
             } else {
                 Text(note.content)
-                    .font(.system(size: 13))
+                    .font(Typography.body)
 
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.sm) {
                     Button("Edit") {
                         editText = note.content
                         isEditing = true
@@ -175,8 +282,8 @@ struct NoteRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Spacing.lg - 2)
+        .padding(.vertical, Spacing.sm)
     }
 
     private func saveEdit() {

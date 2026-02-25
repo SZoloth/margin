@@ -1,20 +1,20 @@
 import Foundation
 import GRDB
 
-struct Highlight: Identifiable, Codable, Equatable, FetchableRecord, PersistableRecord {
-    static let databaseTableName = "highlights"
+public struct Highlight: Identifiable, Codable, Equatable, FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "highlights"
 
-    var id: String
-    var documentId: String
-    var color: String
-    var textContent: String
-    var fromPos: Int64
-    var toPos: Int64
-    var prefixContext: String?
-    var suffixContext: String?
-    var anchorHeadingPath: String?
-    var createdAt: Int64
-    var updatedAt: Int64
+    public var id: String
+    public var documentId: String
+    public var color: String
+    public var textContent: String
+    public var fromPos: Int64
+    public var toPos: Int64
+    public var prefixContext: String?
+    public var suffixContext: String?
+    public var anchorHeadingPath: String?
+    public var createdAt: Int64
+    public var updatedAt: Int64
 
     enum CodingKeys: String, CodingKey, ColumnExpression {
         case id

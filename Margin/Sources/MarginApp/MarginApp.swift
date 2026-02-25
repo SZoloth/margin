@@ -1,4 +1,5 @@
 import SwiftUI
+import MarginCore
 
 @main
 struct MarginApp: App {

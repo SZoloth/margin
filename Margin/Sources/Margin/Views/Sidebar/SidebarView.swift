@@ -15,7 +15,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             // App title
             HStack {
-                Text("Margin")
+                Text("MarginOS")
                     .font(.system(size: 18, weight: .semibold))
                     .tracking(-0.3)
                 Spacer()
@@ -45,6 +45,7 @@ struct SidebarView: View {
                 )
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
+                .accessibilityLabel(activeTab == .files ? "Search files" : "Search articles")
                 .onChange(of: searchText) { _, newValue in
                     if activeTab == .files {
                         appState.search(newValue)
@@ -105,10 +106,11 @@ struct SidebarView: View {
 
             // Content
             ScrollView {
-                if activeTab == .files {
+                switch activeTab {
+                case .files:
                     FilesSidebarContent()
                         .environmentObject(appState)
-                } else {
+                case .articles:
                     ArticlesSidebarContent()
                         .environmentObject(appState)
                 }
