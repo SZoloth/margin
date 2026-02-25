@@ -41,12 +41,25 @@ public final class AppState: ObservableObject {
     @Published var fileResults: [FileSearchResult] = []
     @Published var isSearching = false
 
+    // MARK: - Highlight Positions (scroll bridge for margin rail)
+    @Published var visibleHighlightPositions: [String: HighlightPosition] = [:]
+
     // MARK: - UI State
     @Published var focusHighlightId: String?
     @Published var focusHighlightRect: CGRect = .zero
     @Published public var showExportPopover = false
     @Published var showSettings = false
     @Published var sidebarOpen = true
+
+    // MARK: - Shrink Guard
+    @Published var shrinkGuardAlert: ShrinkGuardAlert?
+
+    struct ShrinkGuardAlert: Identifiable {
+        let id = UUID()
+        let removedPercent: Int
+        let pendingPath: String
+        let pendingContent: String
+    }
 
     // MARK: - Selection State (for floating toolbar)
     @Published public var selectionRange: NSRange?
@@ -88,6 +101,9 @@ public final class AppState: ObservableObject {
 
     public init() {}
 
+    // MARK: - Diff Normalization
+    private var lastSavedContent: String = ""
+
     // MARK: - Initialize
 
     public func initialize() {
@@ -114,7 +130,15 @@ public final class AppState: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, self.filePath == path else { return }
                 if let newContent = try? self.fileService.readFile(path: path) {
-                    self.content = newContent
+                    // External save = new baseline
+                    self.lastSavedContent = newContent
+                    // Only update and re-anchor if meaningfully different
+                    if hasMeaningfulDiff(newContent, self.content) {
+                        self.content = newContent
+                        if let docId = self.currentDoc?.id {
+                            self.loadAnnotations(for: docId)
+                        }
+                    }
                     // Don't mark dirty — this is an external change
                 }
             }
@@ -238,9 +262,29 @@ public final class AppState: ObservableObject {
             return
         }
 
+        // Shrink guard check
+        let (suspicious, removedPercent) = shouldRejectSuspiciousShrink(
+            existing: lastSavedContent,
+            incoming: content
+        )
+        if suspicious {
+            shrinkGuardAlert = ShrinkGuardAlert(
+                removedPercent: removedPercent,
+                pendingPath: path,
+                pendingContent: content
+            )
+            return
+        }
+
+        await performSave(path: path, content: content)
+    }
+
+    /// Execute the actual file write + state update. Called directly by shrink guard "Save Anyway".
+    func performSave(path: String, content: String) async {
         do {
             try fileService.saveFile(path: path, content: content)
             isDirty = false
+            lastSavedContent = content
             syncDirtyToActiveTab()
 
             if var doc = currentDoc {
@@ -284,9 +328,11 @@ public final class AppState: ObservableObject {
 
     func updateContent(_ newContent: String) {
         content = newContent
-        isDirty = true
+        isDirty = hasMeaningfulDiff(newContent, lastSavedContent)
         syncDirtyToActiveTab()
-        scheduleAutosave()
+        if isDirty {
+            scheduleAutosave()
+        }
         extractHeadings()
     }
 
@@ -295,6 +341,7 @@ public final class AppState: ObservableObject {
         self.content = content
         self.filePath = filePath
         self.isDirty = false
+        self.lastSavedContent = content
         syncDirtyToActiveTab()
         extractHeadings()
     }
@@ -361,8 +408,17 @@ public final class AppState: ObservableObject {
         toPos: Int
     ) async -> Highlight? {
         guard let docId = currentDoc?.id else { return nil }
+
+        // Extract heading path for anchor recovery
+        let anchor = createAnchor(fullText: content, from: fromPos, to: toPos)
+        let headingPathJSON: String? = {
+            guard !anchor.headingPath.isEmpty else { return nil }
+            guard let data = try? JSONEncoder().encode(anchor.headingPath),
+                  let str = String(data: data, encoding: .utf8) else { return nil }
+            return str
+        }()
+
         do {
-            let anchor = createAnchor(fullText: content, from: fromPos, to: toPos)
             let highlight = try annotationStore.createHighlight(
                 documentId: docId,
                 color: color,
@@ -370,7 +426,8 @@ public final class AppState: ObservableObject {
                 fromPos: Int64(fromPos),
                 toPos: Int64(toPos),
                 prefixContext: anchor.prefix,
-                suffixContext: anchor.suffix
+                suffixContext: anchor.suffix,
+                anchorHeadingPath: headingPathJSON
             )
             highlights.append(highlight)
             loadRecentDocs()
@@ -627,6 +684,7 @@ public final class AppState: ObservableObject {
                 content = ""
                 filePath = nil
                 isDirty = false
+                lastSavedContent = ""
                 highlights = []
                 marginNotes = []
                 annotationsLoaded = false
@@ -665,10 +723,12 @@ public final class AppState: ObservableObject {
         content = snapshot.content
         filePath = snapshot.filePath
         isDirty = snapshot.isDirty
+        lastSavedContent = snapshot.isDirty ? "" : snapshot.content
         highlights = snapshot.highlights
         marginNotes = snapshot.marginNotes
         annotationsLoaded = snapshot.annotationsLoaded
         focusHighlightId = nil
+        visibleHighlightPositions = [:]
 
         if let path = snapshot.filePath {
             fileWatcher.watch(path: path)
@@ -897,6 +957,12 @@ func parseHeadings(from content: String) -> [TOCEntry] {
     }
 
     return entries
+}
+
+struct HighlightPosition: Equatable {
+    let highlightId: String
+    let viewportY: CGFloat   // SwiftUI global Y coordinate
+    let height: CGFloat
 }
 
 struct UndoAction {

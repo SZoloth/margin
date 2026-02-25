@@ -12,6 +12,7 @@ public struct Highlight: Identifiable, Codable, Equatable, FetchableRecord, Pers
     public var toPos: Int64
     public var prefixContext: String?
     public var suffixContext: String?
+    public var anchorHeadingPath: String?
     public var createdAt: Int64
     public var updatedAt: Int64
 
@@ -24,6 +25,7 @@ public struct Highlight: Identifiable, Codable, Equatable, FetchableRecord, Pers
         case toPos = "to_pos"
         case prefixContext = "prefix_context"
         case suffixContext = "suffix_context"
+        case anchorHeadingPath = "anchor_heading_path"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -35,7 +37,8 @@ public struct Highlight: Identifiable, Codable, Equatable, FetchableRecord, Pers
         fromPos: Int64,
         toPos: Int64,
         prefixContext: String?,
-        suffixContext: String?
+        suffixContext: String?,
+        anchorHeadingPath: String? = nil
     ) -> Highlight {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         return Highlight(
@@ -47,6 +50,7 @@ public struct Highlight: Identifiable, Codable, Equatable, FetchableRecord, Pers
             toPos: toPos,
             prefixContext: prefixContext,
             suffixContext: suffixContext,
+            anchorHeadingPath: anchorHeadingPath,
             createdAt: now,
             updatedAt: now
         )

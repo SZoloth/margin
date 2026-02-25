@@ -151,6 +151,10 @@ final class DatabaseManager {
             """)
         }
 
+        migrator.registerMigration("v3_anchor_heading_path") { db in
+            try db.execute(sql: "ALTER TABLE highlights ADD COLUMN anchor_heading_path TEXT")
+        }
+
         return migrator
     }
 }

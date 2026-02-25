@@ -43,6 +43,9 @@ struct MarkdownEditorView: View {
                             appState.focusHighlightId = highlightId
                         }
                     },
+                    onScrollChange: { positions in
+                        appState.visibleHighlightPositions = positions
+                    },
                     scrollToOffset: appState.scrollToOffset,
                     clearSelection: appState.clearEditorSelection
                 )
@@ -57,6 +60,13 @@ struct MarkdownEditorView: View {
                         .frame(width: min(gutterWidth - Spacing.lg, 180))
                         .padding(.top, 32)
                         .padding(.leading, Spacing.lg)
+                }
+
+                // Right gutter margin rail
+                if gutterWidth >= MarginRail.minGutterWidth && !appState.highlights.isEmpty {
+                    MarginRailView(gutterWidth: gutterWidth)
+                        .environmentObject(appState)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
         }
@@ -151,6 +161,7 @@ struct MarkdownTextView: NSViewRepresentable {
     var onContentChange: (String) -> Void
     var onSelectionChange: (NSRange, CGRect, String) -> Void
     var onHighlightClick: (String, CGRect) -> Void
+    var onScrollChange: (([String: HighlightPosition]) -> Void)?
     var scrollToOffset: Int?
     var clearSelection: Bool
 
@@ -184,9 +195,20 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.typingAttributes = defaultAttributes()
 
         textView.delegate = context.coordinator
+        context.coordinator.scrollView = scrollView
 
         // Initial content
         setAttributedContent(textView: textView, content: content)
+
+        // Observe scroll changes for margin rail highlight positions
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        context.coordinator.scrollObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak coordinator = context.coordinator] _ in
+            coordinator?.computeHighlightPositions()
+        }
 
         return scrollView
     }
@@ -214,6 +236,9 @@ struct MarkdownTextView: NSViewRepresentable {
 
         // Re-apply highlights
         applyHighlights(textView: textView)
+
+        // Recompute highlight positions for margin rail
+        context.coordinator.computeHighlightPositions()
 
         // Scroll to offset if requested (consume once)
         if let offset = scrollToOffset,
@@ -513,42 +538,41 @@ struct MarkdownTextView: NSViewRepresentable {
         }
 
         for highlight in highlights {
-            // Try exact position first
-            let from = Int(highlight.fromPos)
-            let to = Int(highlight.toPos)
-
-            if from >= 0, to <= fullLength, from < to {
-                let range = NSRange(location: from, length: to - from)
-                let textAtPos = fullText.substring(with: range)
-                if textAtPos == highlight.textContent {
-                    let color = HighlightColor(rawValue: highlight.color)?.nsColor
-                        ?? HighlightColor.yellow.nsColor
-                    storage.addAttribute(.backgroundColor, value: color, range: range)
-                    storage.addAttribute(.foregroundColor, value: NSColor(name: nil) { appearance in
-                        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
-                            ? NSColor(white: 0.95, alpha: 1.0)
-                            : NSColor(white: 0.1, alpha: 1.0)
-                    }, range: range)
-                    storage.addAttribute(Self.highlightTagKey, value: true, range: range)
-                    storage.addAttribute(Self.highlightIdKey, value: highlight.id, range: range)
-                    continue
+            // Reconstruct anchor from stored highlight fields
+            let headingPath: [String] = {
+                guard let json = highlight.anchorHeadingPath,
+                      let data = json.data(using: .utf8),
+                      let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+                    return []
                 }
-            }
+                return decoded
+            }()
 
-            // Fallback: search for the text
-            let searchRange = fullText.range(of: highlight.textContent)
-            if searchRange.location != NSNotFound {
-                let color = HighlightColor(rawValue: highlight.color)?.nsColor
-                    ?? HighlightColor.yellow.nsColor
-                storage.addAttribute(.backgroundColor, value: color, range: searchRange)
-                storage.addAttribute(.foregroundColor, value: NSColor(name: nil) { appearance in
-                        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
-                            ? NSColor(white: 0.95, alpha: 1.0)
-                            : NSColor(white: 0.1, alpha: 1.0)
-                    }, range: searchRange)
-                storage.addAttribute(Self.highlightTagKey, value: true, range: searchRange)
-                storage.addAttribute(Self.highlightIdKey, value: highlight.id, range: searchRange)
-            }
+            let anchor = TextAnchor(
+                text: highlight.textContent,
+                prefix: highlight.prefixContext ?? "",
+                suffix: highlight.suffixContext ?? "",
+                from: Int(highlight.fromPos),
+                to: Int(highlight.toPos),
+                headingPath: headingPath
+            )
+
+            let result = resolveAnchor(fullText: fullText as String, anchor: anchor)
+            guard result.confidence != .orphaned else { continue }
+
+            let range = NSRange(location: result.from, length: result.to - result.from)
+            guard range.location >= 0, NSMaxRange(range) <= fullLength else { continue }
+
+            let color = HighlightColor(rawValue: highlight.color)?.nsColor
+                ?? HighlightColor.yellow.nsColor
+            storage.addAttribute(.backgroundColor, value: color, range: range)
+            storage.addAttribute(.foregroundColor, value: NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                    ? NSColor(white: 0.95, alpha: 1.0)
+                    : NSColor(white: 0.1, alpha: 1.0)
+            }, range: range)
+            storage.addAttribute(Self.highlightTagKey, value: true, range: range)
+            storage.addAttribute(Self.highlightIdKey, value: highlight.id, range: range)
         }
 
         storage.endEditing()
@@ -561,9 +585,83 @@ struct MarkdownTextView: NSViewRepresentable {
         var parent: MarkdownTextView
         var isUpdatingFromSwift = false
         var lastScrolledOffset: Int?
+        weak var scrollView: NSScrollView?
+        var scrollObserver: Any?
+        private var throttleWorkItem: DispatchWorkItem?
 
         init(_ parent: MarkdownTextView) {
             self.parent = parent
+        }
+
+        deinit {
+            if let observer = scrollObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            throttleWorkItem?.cancel()
+        }
+
+        /// Compute viewport positions of all visible highlights for the margin rail.
+        func computeHighlightPositions() {
+            throttleWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.doComputeHighlightPositions()
+            }
+            throttleWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(16), execute: workItem)
+        }
+
+        private func doComputeHighlightPositions() {
+            guard let scrollView = scrollView,
+                  let textView = scrollView.documentView as? NSTextView,
+                  let layoutManager = textView.layoutManager,
+                  let textContainer = textView.textContainer,
+                  let storage = textView.textStorage else {
+                parent.onScrollChange?([:])
+                return
+            }
+
+            let visibleRect = scrollView.contentView.bounds
+            let lookahead: CGFloat = 100
+            let extendedVisible = visibleRect.insetBy(dx: 0, dy: -lookahead)
+            let fullLength = (textView.string as NSString).length
+            guard fullLength > 0 else {
+                parent.onScrollChange?([:])
+                return
+            }
+
+            var positions: [String: HighlightPosition] = [:]
+
+            var searchStart = 0
+            while searchStart < fullLength {
+                var effectiveRange = NSRange(location: 0, length: 0)
+                let highlightId = storage.attribute(
+                    MarkdownTextView.highlightIdKey,
+                    at: searchStart,
+                    effectiveRange: &effectiveRange
+                ) as? String
+
+                if let highlightId = highlightId, !highlightId.isEmpty {
+                    let glyphRange = layoutManager.glyphRange(forCharacterRange: effectiveRange, actualCharacterRange: nil)
+                    let textRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+                    let containerOrigin = textView.textContainerOrigin
+                    let docRect = textRect.offsetBy(dx: containerOrigin.x, dy: containerOrigin.y)
+
+                    if docRect.intersects(extendedVisible) {
+                        let windowRect = textView.convert(docRect, to: nil)
+                        let globalRect = Self.appKitToSwiftUIGlobal(windowRect, in: textView.window)
+                        positions[highlightId] = HighlightPosition(
+                            highlightId: highlightId,
+                            viewportY: globalRect.origin.y,
+                            height: globalRect.height
+                        )
+                    }
+                }
+
+                searchStart = effectiveRange.location + effectiveRange.length
+                if searchStart <= effectiveRange.location { break }
+            }
+
+            parent.onScrollChange?(positions)
         }
 
         /// Convert an AppKit window-coordinate rect to SwiftUI `.global` coordinates.

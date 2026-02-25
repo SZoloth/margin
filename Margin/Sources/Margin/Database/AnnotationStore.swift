@@ -29,7 +29,8 @@ struct AnnotationStore {
         fromPos: Int64,
         toPos: Int64,
         prefixContext: String?,
-        suffixContext: String?
+        suffixContext: String?,
+        anchorHeadingPath: String? = nil
     ) throws -> Highlight {
         var highlight = Highlight.create(
             documentId: documentId,
@@ -38,7 +39,8 @@ struct AnnotationStore {
             fromPos: fromPos,
             toPos: toPos,
             prefixContext: prefixContext,
-            suffixContext: suffixContext
+            suffixContext: suffixContext,
+            anchorHeadingPath: anchorHeadingPath
         )
         try writer.write { database in
             try highlight.insert(database)

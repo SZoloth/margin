@@ -41,6 +41,17 @@ enum AnimationDuration {
     static let slow: Double = 0.2
 }
 
+enum MarginRail {
+    static let minGutterWidth: CGFloat = 48
+    static let pillThreshold: CGFloat = 180
+    static let cardThreshold: CGFloat = 220
+    static let dotSize: CGFloat = 8
+    static let dotHoverSize: CGFloat = 10
+    static let indicatorGap: CGFloat = 4
+    static let maxDrift: CGFloat = 60
+    static let idleOpacity: Double = 0.6
+}
+
 // MARK: - View Extensions
 
 extension View {

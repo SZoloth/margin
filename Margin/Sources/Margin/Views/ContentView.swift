@@ -72,6 +72,26 @@ public struct ContentView: View {
                 Text("\"\(tab.title)\" has unsaved changes.")
             }
         }
+        .alert("Large Content Removal", isPresented: .init(
+            get: { appState.shrinkGuardAlert != nil },
+            set: { if !$0 { appState.shrinkGuardAlert = nil } }
+        )) {
+            Button("Save Anyway", role: .destructive) {
+                if let alert = appState.shrinkGuardAlert {
+                    Task {
+                        await appState.performSave(path: alert.pendingPath, content: alert.pendingContent)
+                    }
+                }
+                appState.shrinkGuardAlert = nil
+            }
+            Button("Cancel", role: .cancel) {
+                appState.shrinkGuardAlert = nil
+            }
+        } message: {
+            if let alert = appState.shrinkGuardAlert {
+                Text("This save would remove \(alert.removedPercent)% of the document. Are you sure?")
+            }
+        }
     }
 }
 
