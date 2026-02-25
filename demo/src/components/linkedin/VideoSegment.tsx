@@ -1,4 +1,4 @@
-import { OffthreadVideo, interpolate, useCurrentFrame } from "remotion";
+import { OffthreadVideo, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { staticFile } from "remotion";
 import {
   ZOOM_REGIONS,
@@ -11,7 +11,6 @@ const OUTPUT_HEIGHT = 1080;
 
 type VideoSegmentProps = {
   sourceStart: number;
-  sourceEnd: number;
   speed: number;
   zoomFrom: string;
   zoomTo: string;
@@ -29,13 +28,13 @@ function lerpRegion(a: ZoomRegion, b: ZoomRegion, t: number): ZoomRegion {
 
 export const VideoSegment: React.FC<VideoSegmentProps> = ({
   sourceStart,
-  sourceEnd,
   speed,
   zoomFrom,
   zoomTo,
   durationInFrames,
 }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
   const regionA = ZOOM_REGIONS[zoomFrom] ?? ZOOM_REGIONS.full;
   const regionB = ZOOM_REGIONS[zoomTo] ?? ZOOM_REGIONS.full;
@@ -79,7 +78,7 @@ export const VideoSegment: React.FC<VideoSegmentProps> = ({
 
   // Playback rate applied via OffthreadVideo's playbackRate prop
   // startFrom is in frames (at 30fps)
-  const startFromFrame = Math.round(sourceStart * 30);
+  const startFromFrame = Math.round(sourceStart * fps);
 
   return (
     <div

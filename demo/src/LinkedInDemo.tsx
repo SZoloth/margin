@@ -1,20 +1,15 @@
-import { Audio, Sequence, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, Sequence, staticFile } from "remotion";
 import { SCENES, TRANSITION_FRAMES } from "./constants/linkedin-timing";
 import { VideoSegment } from "./components/linkedin/VideoSegment";
 import { TextOverlay } from "./components/linkedin/TextOverlay";
 import { Intro } from "./components/linkedin/Intro";
 import { Outro } from "./components/linkedin/Outro";
 
+const PREMOUNT = 30; // 1s premount for smooth transitions
+
 export const LinkedInDemo: React.FC = () => {
   return (
-    <div
-      style={{
-        width: 1920,
-        height: 1080,
-        backgroundColor: "#000",
-        position: "relative",
-      }}
-    >
+    <AbsoluteFill style={{ backgroundColor: "#000" }}>
       {/* Background music — "Okey Dokey Smokey" by Jason Shaw (audionautix.com, CC BY 3.0) */}
       <Audio src={staticFile("background-music.mp3")} volume={0.3} loop />
       {SCENES.map((scene) => {
@@ -24,6 +19,7 @@ export const LinkedInDemo: React.FC = () => {
               key={scene.id}
               from={scene.from}
               durationInFrames={scene.duration}
+              premountFor={PREMOUNT}
             >
               <Intro />
             </Sequence>
@@ -36,6 +32,7 @@ export const LinkedInDemo: React.FC = () => {
               key={scene.id}
               from={scene.from}
               durationInFrames={scene.duration}
+              premountFor={PREMOUNT}
             >
               <Outro />
             </Sequence>
@@ -46,12 +43,12 @@ export const LinkedInDemo: React.FC = () => {
         return (
           <Sequence
             key={scene.id}
-            from={scene.from - TRANSITION_FRAMES} // Start early for cross-fade overlap
+            from={scene.from - TRANSITION_FRAMES}
             durationInFrames={scene.duration + TRANSITION_FRAMES * 2}
+            premountFor={PREMOUNT}
           >
             <VideoSegment
               sourceStart={scene.sourceStart!}
-              sourceEnd={scene.sourceEnd!}
               speed={scene.speed}
               zoomFrom={scene.zoomFrom}
               zoomTo={scene.zoomTo}
@@ -65,6 +62,6 @@ export const LinkedInDemo: React.FC = () => {
           </Sequence>
         );
       })}
-    </div>
+    </AbsoluteFill>
   );
 };
