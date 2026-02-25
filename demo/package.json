@@ -5,7 +5,8 @@
   "scripts": {
     "studio": "remotion studio",
     "render": "remotion render MarginDemo out/margin-demo.mp4 --codec h264 --crf 18",
-    "render:webm": "remotion render MarginDemo out/margin-demo.webm --codec vp8 --crf 20"
+    "render:webm": "remotion render MarginDemo out/margin-demo.webm --codec vp8 --crf 20",
+    "render:linkedin": "remotion render LinkedInDemo out/linkedin-demo.mp4 --codec h264 --crf 18"
   },
   "dependencies": {
     "@remotion/cli": "4.0.261",

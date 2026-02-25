@@ -2,3 +2,5 @@ node_modules/
 out/
 dist/
 .cache/
+public/screen-recording.mov
+package-lock.json
