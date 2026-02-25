@@ -2,6 +2,7 @@
   "name": "margin",
   "private": true,
   "version": "0.4.2",
+  "packageManager": "pnpm@10.30.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
