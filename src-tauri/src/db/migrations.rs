@@ -156,29 +156,60 @@ fn migrate_corrections_drop_fks(conn: &Connection) -> Result<(), Box<dyn std::er
         conn.execute_batch("PRAGMA foreign_keys=ON;")?;
     }
 
-    // Backfill: import corrections from JSONL files that are not already in the DB
-    if let Some(home) = dirs::home_dir() {
-        let corrections_dir = home.join(".margin").join("corrections");
-        backfill_corrections_from_dir(conn, &corrections_dir);
+    // Backfill: import corrections from JSONL files that are not already in the DB.
+    // Only run once — check if backfill marker exists.
+    let backfilled: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM corrections WHERE session_id = '__backfilled__'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(true); // if query fails, skip backfill
+
+    if !backfilled {
+        if let Some(home) = dirs::home_dir() {
+            let corrections_dir = home.join(".margin").join("corrections");
+            let count = backfill_corrections_from_dir(conn, &corrections_dir);
+            if count > 0 {
+                // Insert a sentinel row so backfill doesn't run again
+                let _ = conn.execute(
+                    "INSERT OR IGNORE INTO corrections
+                        (id, highlight_id, document_id, session_id, original_text,
+                         notes_json, document_source, highlight_color, created_at, updated_at)
+                     VALUES ('__backfill_marker__', '__backfill_marker__', '', '__backfilled__',
+                             '', '[]', 'system', 'none', 0, 0)",
+                    [],
+                );
+            }
+        }
     }
 
     Ok(())
 }
 
 /// Import corrections from JSONL files in `dir` that are missing from the DB.
-fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) {
+/// Files are processed in sorted order (oldest first) so newer entries win on conflict.
+/// Returns the number of corrections imported.
+fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) -> usize {
     if !dir.is_dir() {
-        return;
+        return 0;
     }
     let Ok(entries) = fs::read_dir(dir) else {
-        return;
+        return 0;
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-            continue;
-        }
-        let Ok(file) = fs::File::open(&path) else {
+
+    // Sort JSONL files by name (date-based filenames → chronological order)
+    let mut paths: Vec<_> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("jsonl"))
+        .collect();
+    paths.sort();
+
+    let mut imported = 0;
+    for path in &paths {
+        let Ok(file) = fs::File::open(path) else {
+            eprintln!("backfill: failed to open {}", path.display());
             continue;
         };
         let reader = std::io::BufReader::new(file);
@@ -189,32 +220,28 @@ fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) {
                 continue;
             }
             let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+                eprintln!("backfill: skipping malformed JSON line");
                 continue;
             };
             let Some(highlight_id) = val["highlight_id"].as_str() else {
                 continue;
             };
 
-            // Skip if already in DB
-            let exists: bool = conn
-                .query_row(
-                    "SELECT COUNT(*) > 0 FROM corrections WHERE highlight_id = ?1",
-                    [highlight_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(false);
-            if exists {
-                continue;
-            }
-
             let id = uuid::Uuid::new_v4().to_string();
-            let _ = conn.execute(
-                "INSERT OR IGNORE INTO corrections
+            // Use upsert so newer JSONL entries (processed later) overwrite older ones
+            match conn.execute(
+                "INSERT INTO corrections
                     (id, highlight_id, document_id, session_id, original_text,
                      prefix_context, suffix_context, extended_context, notes_json,
                      document_title, document_source, document_path, category,
                      highlight_color, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                 ON CONFLICT(highlight_id) DO UPDATE SET
+                    original_text = excluded.original_text,
+                    notes_json = excluded.notes_json,
+                    document_title = excluded.document_title,
+                    highlight_color = excluded.highlight_color,
+                    updated_at = excluded.updated_at",
                 rusqlite::params![
                     id,
                     highlight_id,
@@ -233,9 +260,13 @@ fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) {
                     val["exported_at"].as_i64().unwrap_or(0),
                     val["exported_at"].as_i64().unwrap_or(0),
                 ],
-            );
+            ) {
+                Ok(_) => imported += 1,
+                Err(e) => eprintln!("backfill: failed to insert correction: {e}"),
+            }
         }
     }
+    imported
 }
 
 #[cfg(test)]
@@ -299,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn backfill_skips_duplicates() {
+    fn backfill_upserts_on_duplicate_highlight_id() {
         let conn = setup_db();
         // Pre-insert one correction
         conn.execute(
@@ -310,16 +341,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
         let mut f = fs::File::create(&jsonl_path).unwrap();
-        // Same highlight_id as existing
+        // Same highlight_id as existing — should upsert (update)
         writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s2","original_text":"new text","notes":["fix"],"document_source":"file","highlight_color":"yellow","exported_at":1700000000000}}"#).unwrap();
         // New highlight_id
         writeln!(f, r#"{{"highlight_id":"h2","document_id":"d1","session_id":"s2","original_text":"fresh","notes":["new"],"document_source":"file","highlight_color":"green","exported_at":1700000001000}}"#).unwrap();
         f.flush().unwrap();
 
-        backfill_corrections_from_dir(&conn, dir.path());
+        let imported = backfill_corrections_from_dir(&conn, dir.path());
 
-        assert_eq!(count(&conn), 2); // 1 existing + 1 new (h1 skipped)
-        // Original text for h1 should be unchanged
+        assert_eq!(imported, 2); // both processed (1 upsert + 1 insert)
+        assert_eq!(count(&conn), 2); // 1 updated + 1 new
+        // h1 text should be updated from JSONL
         let text: String = conn
             .query_row(
                 "SELECT original_text FROM corrections WHERE highlight_id = 'h1'",
@@ -327,7 +359,37 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(text, "old text");
+        assert_eq!(text, "new text");
+    }
+
+    #[test]
+    fn backfill_processes_files_in_sorted_order() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+
+        // Older file
+        let old_path = dir.path().join("corrections-2026-02-01.jsonl");
+        let mut f = fs::File::create(&old_path).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"old version","notes":["old"],"document_source":"file","highlight_color":"yellow","exported_at":1000}}"#).unwrap();
+        f.flush().unwrap();
+
+        // Newer file (should win on upsert)
+        let new_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&new_path).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s2","original_text":"new version","notes":["new"],"document_source":"file","highlight_color":"green","exported_at":2000}}"#).unwrap();
+        f.flush().unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 1);
+        let text: String = conn
+            .query_row(
+                "SELECT original_text FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(text, "new version"); // newer file wins
     }
 
     #[test]

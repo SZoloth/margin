@@ -51,6 +51,7 @@ pub async fn keep_local_health(client: State<'_, HttpClient>) -> Result<KeepLoca
     let resp = client
         .0
         .get(format!("{BASE_URL}/api/health"))
+        .timeout(std::time::Duration::from_secs(3))
         .send()
         .await
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
@@ -121,9 +122,10 @@ pub async fn keep_local_get_item(
     client: State<'_, HttpClient>,
     item_id: String,
 ) -> Result<KeepLocalItem, String> {
+    let safe_id = urlencoding(&item_id);
     let resp = client
         .0
-        .get(format!("{BASE_URL}/api/items/{item_id}?content=0"))
+        .get(format!("{BASE_URL}/api/items/{safe_id}?content=0"))
         .send()
         .await
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
@@ -141,9 +143,10 @@ pub async fn keep_local_get_content(
     client: State<'_, HttpClient>,
     item_id: String,
 ) -> Result<String, String> {
+    let safe_id = urlencoding(&item_id);
     let resp = client
         .0
-        .get(format!("{BASE_URL}/api/items/{item_id}/content"))
+        .get(format!("{BASE_URL}/api/items/{safe_id}/content"))
         .send()
         .await
         .map_err(|e| format!("keep-local server unreachable: {e}"))?;
