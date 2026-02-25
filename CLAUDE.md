@@ -16,7 +16,11 @@ pnpm tauri build      # Full desktop app bundle
 pnpm tsc --noEmit     # Type check without emitting
 ```
 
-No test framework is configured.
+**This is a Tauri desktop app, not a browser app.** `pnpm dev` starts the Vite dev server at localhost:1420 but only serves the frontend — no Rust backend, no SQLite, no Tauri commands. Always use `pnpm tauri dev` to run the actual app.
+
+**Frontend tests** use Vitest: `pnpm test` (single run), `pnpm test:watch` (watch mode). Test files live alongside source in `__tests__/` directories.
+
+**Backend tests** use Rust's built-in test framework: `cargo test` (from repo root or `src-tauri/`). Tests use in-memory SQLite — inner functions accept `&Connection` so they can be tested without the Tauri runtime. Covers annotations, documents, tabs, search, corrections, and migrations.
 
 ## Architecture
 

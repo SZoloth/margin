@@ -72,15 +72,16 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
     isExternalUpdate.current = false;
   }, [content, editor]);
 
-  if (isLoading) {
-    return (
-      <div className="reader-content" style={{ opacity: 0.5 }}>
-        <EditorContent editor={editor} />
-      </div>
-    );
-  }
-
-  return <EditorContent editor={editor} />;
+  return (
+    <div
+      style={{
+        opacity: isLoading ? 0.5 : 1,
+        transition: isLoading ? "none" : "opacity 200ms var(--ease-entrance)",
+      }}
+    >
+      <EditorContent editor={editor} />
+    </div>
+  );
 }
 
 export default Reader;

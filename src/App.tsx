@@ -28,6 +28,7 @@ import type { Document } from "@/types/document";
 import type { CorrectionInput } from "@/types/annotations";
 import type { ExportResult } from "@/types/export";
 import { UndoToast } from "@/components/ui/UndoToast";
+import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
 import type { UndoAction } from "@/components/ui/UndoToast";
 
@@ -97,6 +98,17 @@ export default function App() {
   const [autoFocusNew, setAutoFocusNew] = useState(false);
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const undoIdRef = useRef(0);
+  const highlightThread = useAnimatedPresence(!!focusHighlightId, 200);
+  const lastHighlightRef = useRef<{ highlight: import("@/types/annotations").Highlight; notes: import("@/types/annotations").MarginNote[]; anchorRect: DOMRect | null } | null>(null);
+
+  // Keep last valid highlight data for exit animation
+  if (focusHighlightId && annotations.isLoaded) {
+    const highlight = annotations.highlights.find((h) => h.id === focusHighlightId);
+    if (highlight) {
+      const notes = annotations.marginNotes.filter((n) => n.highlight_id === focusHighlightId);
+      lastHighlightRef.current = { highlight, notes, anchorRect };
+    }
+  }
 
   // Snapshot function for useTabs — captures current active tab state
   const snapshotFn = useCallback((): SnapshotData => {
@@ -114,6 +126,7 @@ export default function App() {
   }, [doc.currentDoc, doc.content, doc.filePath, doc.isDirty, annotations.highlights, annotations.marginNotes, annotations.isLoaded]);
 
   const tabsHook = useTabs(snapshotFn);
+  const unsavedDialog = useAnimatedPresence(!!tabsHook.pendingCloseTabId, 200);
 
   // Listen for Cmd+O from useTabs keyboard shortcut
   useEffect(() => {
@@ -898,10 +911,8 @@ export default function App() {
         defaultColor={settings.defaultHighlightColor}
       />
 
-      {focusHighlightId && annotations.isLoaded && (() => {
-        const highlight = annotations.highlights.find((h) => h.id === focusHighlightId);
-        if (!highlight) return null;
-        const notes = annotations.marginNotes.filter((n) => n.highlight_id === focusHighlightId);
+      {highlightThread.isMounted && lastHighlightRef.current && (() => {
+        const { highlight, notes, anchorRect: rect } = lastHighlightRef.current;
         return (
           <HighlightThread
             highlight={highlight}
@@ -915,8 +926,9 @@ export default function App() {
               setAnchorRect(null);
               setAutoFocusNew(false);
             }}
-            anchorRect={anchorRect}
+            anchorRect={rect}
             autoFocusNew={autoFocusNew}
+            isVisible={highlightThread.isVisible}
           />
         );
       })()}
@@ -932,7 +944,7 @@ export default function App() {
       <UndoToast action={undoAction} />
 
       {/* Unsaved changes dialog */}
-      {tabsHook.pendingCloseTabId && (() => {
+      {unsavedDialog.isMounted && (() => {
         const tab = tabsHook.tabs.find((t) => t.id === tabsHook.pendingCloseTabId);
         if (!tab) return null;
         return (
@@ -948,7 +960,13 @@ export default function App() {
           >
             <div
               onClick={tabsHook.cancelCloseTab}
-              style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.3)" }}
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: "rgba(0, 0, 0, 0.3)",
+                opacity: unsavedDialog.isVisible ? 1 : 0,
+                transition: `opacity ${unsavedDialog.isVisible ? "200ms var(--ease-entrance)" : "150ms var(--ease-exit)"}`,
+              }}
             />
             <div
               role="dialog"
@@ -962,6 +980,11 @@ export default function App() {
                 minWidth: "min(340px, calc(100vw - 32px))",
                 maxWidth: "min(400px, calc(100vw - 32px))",
                 boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+                opacity: unsavedDialog.isVisible ? 1 : 0,
+                transform: unsavedDialog.isVisible ? "scale(1) translateY(0)" : "scale(0.97) translateY(4px)",
+                transition: unsavedDialog.isVisible
+                  ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+                  : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
               }}
             >
               <button

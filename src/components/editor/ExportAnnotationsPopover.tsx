@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { ExportResult } from "@/types/export";
+import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export function ExportAnnotationsPopover({
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
   const [exporting, setExporting] = useState(false);
+  const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
 
   // Reset state when popover opens
   useEffect(() => {
@@ -67,7 +69,7 @@ export function ExportAnnotationsPopover({
     return () => { cancelled = true; };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isMounted) return null;
 
   return (
     <div
@@ -87,6 +89,8 @@ export function ExportAnnotationsPopover({
           position: "absolute",
           inset: 0,
           backgroundColor: "rgba(0, 0, 0, 0.3)",
+          opacity: isVisible ? 1 : 0,
+          transition: `opacity ${isVisible ? "200ms var(--ease-entrance)" : "150ms var(--ease-exit)"}`,
         }}
       />
 
@@ -103,6 +107,11 @@ export function ExportAnnotationsPopover({
           minWidth: "min(320px, calc(100vw - 32px))",
           maxWidth: "min(400px, calc(100vw - 32px))",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "scale(1) translateY(0)" : "scale(0.97) translateY(4px)",
+          transition: isVisible
+            ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+            : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
         }}
       >
         {/* Close button */}

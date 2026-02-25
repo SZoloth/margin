@@ -1,4 +1,5 @@
 use crate::db::migrations::get_db;
+use rusqlite::Connection;
 use std::process::Command;
 
 #[derive(serde::Serialize)]
@@ -62,19 +63,18 @@ pub fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<F
     Ok(results)
 }
 
-fn ensure_fts_table(conn: &rusqlite::Connection) -> Result<(), String> {
+fn ensure_fts_table(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(title, content, document_id UNINDEXED);",
     )
     .map_err(|e| format!("Failed to create FTS table: {e}"))
 }
 
-#[tauri::command]
-pub fn index_document(document_id: String, title: String, content: String) -> Result<(), String> {
-    let conn = get_db()?;
-    ensure_fts_table(&conn)?;
+// === Inner functions (testable with &Connection) ===
 
-    // Delete existing entry first, then insert
+fn index_document_inner(conn: &Connection, document_id: &str, title: &str, content: &str) -> Result<(), String> {
+    ensure_fts_table(conn)?;
+
     conn.execute(
         "DELETE FROM documents_fts WHERE document_id = ?1",
         rusqlite::params![document_id],
@@ -90,16 +90,8 @@ pub fn index_document(document_id: String, title: String, content: String) -> Re
     Ok(())
 }
 
-#[tauri::command]
-pub fn search_documents(query: String, limit: Option<i32>) -> Result<Vec<SearchResult>, String> {
-    if query.trim().is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let conn = get_db()?;
-    ensure_fts_table(&conn)?;
-
-    let limit = limit.unwrap_or(20);
+fn search_documents_inner(conn: &Connection, query: &str, limit: i32) -> Result<Vec<SearchResult>, String> {
+    ensure_fts_table(conn)?;
 
     let mut stmt = conn
         .prepare(
@@ -124,15 +116,12 @@ pub fn search_documents(query: String, limit: Option<i32>) -> Result<Vec<SearchR
         })
         .map_err(|e| format!("Search query failed: {e}"))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect search results: {e}"))?;
-
-    Ok(results)
+        .map_err(|e| format!("Failed to collect search results: {e}"));
+    results
 }
 
-#[tauri::command]
-pub fn remove_document_index(document_id: String) -> Result<(), String> {
-    let conn = get_db()?;
-    ensure_fts_table(&conn)?;
+fn remove_document_index_inner(conn: &Connection, document_id: &str) -> Result<(), String> {
+    ensure_fts_table(conn)?;
 
     conn.execute(
         "DELETE FROM documents_fts WHERE document_id = ?1",
@@ -141,4 +130,128 @@ pub fn remove_document_index(document_id: String) -> Result<(), String> {
     .map_err(|e| format!("Failed to remove document from index: {e}"))?;
 
     Ok(())
+}
+
+// === Tauri command handlers ===
+
+#[tauri::command]
+pub fn index_document(document_id: String, title: String, content: String) -> Result<(), String> {
+    let conn = get_db()?;
+    index_document_inner(&conn, &document_id, &title, &content)
+}
+
+#[tauri::command]
+pub fn search_documents(query: String, limit: Option<i32>) -> Result<Vec<SearchResult>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let conn = get_db()?;
+    search_documents_inner(&conn, &query, limit.unwrap_or(20))
+}
+
+#[tauri::command]
+pub fn remove_document_index(document_id: String) -> Result<(), String> {
+    let conn = get_db()?;
+    remove_document_index_inner(&conn, &document_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        ensure_fts_table(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn index_and_search_document() {
+        let conn = setup_db();
+        index_document_inner(&conn, "d1", "Rust Programming", "Learn systems programming with Rust").unwrap();
+
+        let results = search_documents_inner(&conn, "Rust", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].document_id, "d1");
+        assert_eq!(results[0].title, "Rust Programming");
+    }
+
+    #[test]
+    fn search_matches_content() {
+        let conn = setup_db();
+        index_document_inner(&conn, "d1", "Title", "The quick brown fox jumps over the lazy dog").unwrap();
+
+        let results = search_documents_inner(&conn, "fox", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].snippet.contains("fox"));
+    }
+
+    #[test]
+    fn search_no_results_for_missing_term() {
+        let conn = setup_db();
+        index_document_inner(&conn, "d1", "Title", "Some content here").unwrap();
+
+        let results = search_documents_inner(&conn, "nonexistent", 10).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn search_respects_limit() {
+        let conn = setup_db();
+        for i in 0..5 {
+            index_document_inner(&conn, &format!("d{i}"), &format!("Rust Doc {i}"), "Rust content").unwrap();
+        }
+
+        let results = search_documents_inner(&conn, "Rust", 2).unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn reindex_replaces_old_content() {
+        let conn = setup_db();
+        index_document_inner(&conn, "d1", "Old Title", "old content about cats").unwrap();
+        index_document_inner(&conn, "d1", "New Title", "new content about dogs").unwrap();
+
+        // Old content should not match
+        let results = search_documents_inner(&conn, "cats", 10).unwrap();
+        assert!(results.is_empty());
+
+        // New content should match
+        let results = search_documents_inner(&conn, "dogs", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "New Title");
+    }
+
+    #[test]
+    fn remove_document_index_removes_from_search() {
+        let conn = setup_db();
+        index_document_inner(&conn, "d1", "Title", "searchable content").unwrap();
+
+        remove_document_index_inner(&conn, "d1").unwrap();
+
+        let results = search_documents_inner(&conn, "searchable", 10).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn remove_nonexistent_index_is_ok() {
+        let conn = setup_db();
+        // Should not error
+        remove_document_index_inner(&conn, "nonexistent").unwrap();
+    }
+
+    #[test]
+    fn multiple_documents_searchable() {
+        let conn = setup_db();
+        index_document_inner(&conn, "d1", "Rust Guide", "Learn Rust programming").unwrap();
+        index_document_inner(&conn, "d2", "Python Guide", "Learn Python programming").unwrap();
+        index_document_inner(&conn, "d3", "Cooking", "How to make pasta").unwrap();
+
+        let results = search_documents_inner(&conn, "programming", 10).unwrap();
+        assert_eq!(results.len(), 2);
+
+        let results = search_documents_inner(&conn, "pasta", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].document_id, "d3");
+    }
 }

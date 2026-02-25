@@ -12,6 +12,7 @@ interface HighlightThreadProps {
   onClose: () => void;
   anchorRect: DOMRect | null;
   autoFocusNew?: boolean;
+  isVisible: boolean;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -137,40 +138,27 @@ export function HighlightThread({
   onClose,
   anchorRect,
   autoFocusNew,
+  isVisible,
 }: HighlightThreadProps) {
   const [newNoteValue, setNewNoteValue] = useState("");
-  const [isVisible, setIsVisible] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousFocusRef = useRef<Element | null>(null);
 
-  // Save previous focus and animate in
+  // Save previous focus on mount
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
-    requestAnimationFrame(() => setIsVisible(true));
-  }, []);
-
-  // Cleanup close timer
-  useEffect(() => {
     return () => {
-      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+      // Restore focus on unmount
+      if (previousFocusRef.current instanceof HTMLElement) {
+        previousFocusRef.current.focus();
+      }
     };
   }, []);
 
   const handleClose = useCallback(() => {
-    if (isClosing) return;
-    setIsClosing(true);
-    setIsVisible(false);
-    closeTimerRef.current = setTimeout(() => {
-      // Restore focus to previously focused element
-      if (previousFocusRef.current instanceof HTMLElement) {
-        previousFocusRef.current.focus();
-      }
-      onClose();
-    }, 200);
-  }, [isClosing, onClose]);
+    onClose();
+  }, [onClose]);
 
   // Auto-focus the new note textarea when opening from Note button
   useEffect(() => {
@@ -274,6 +262,7 @@ export function HighlightThread({
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "translateY(0)" : "translateY(100%)",
         transformOrigin: "bottom center",
+        pointerEvents: isVisible ? "auto" : "none",
         transition: isVisible
           ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
           : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
@@ -283,6 +272,7 @@ export function HighlightThread({
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "scale(1)" : "scale(0.97)",
         transformOrigin: "left top",
+        pointerEvents: isVisible ? "auto" : "none",
         transition: isVisible
           ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
           : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",

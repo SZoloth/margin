@@ -6,6 +6,7 @@ import type { Tab } from "@/types/tab";
 import type { KeepLocalItem } from "@/types/keep-local";
 import type { FileResult } from "@/hooks/useSearch";
 import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
+import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
 type SidebarTab = "files" | "articles";
 
@@ -66,12 +67,21 @@ export function Sidebar({
     setInputValue(activeTab === "files" ? searchQuery : keepLocalQuery);
   }, [searchQuery, keepLocalQuery, activeTab]);
 
+  // Sidebar tab content crossfade
+  const [tabContentVisible, setTabContentVisible] = useState(true);
+  const tabFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Reset input when switching tabs
   const handleTabChange = (tab: SidebarTab) => {
     if (tab === activeTab) return;
-    setActiveTab(tab);
-    setInputValue(tab === "files" ? searchQuery : keepLocalQuery);
-    setIsFocused(false);
+    if (tabFadeRef.current) clearTimeout(tabFadeRef.current);
+    setTabContentVisible(false);
+    tabFadeRef.current = setTimeout(() => {
+      setActiveTab(tab);
+      setInputValue(tab === "files" ? searchQuery : keepLocalQuery);
+      setIsFocused(false);
+      setTabContentVisible(true);
+    }, 80);
   };
 
   useEffect(() => {
@@ -85,6 +95,7 @@ export function Sidebar({
   }, []);
 
   const showDropdown = activeTab === "files" && isFocused && inputValue.trim().length > 0;
+  const dropdown = useAnimatedPresence(showDropdown, 150);
 
   const keepLocalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedKeepLocalSearch = useCallback((value: string) => {
@@ -261,7 +272,7 @@ export function Sidebar({
         </div>
 
         {/* Search dropdown (files tab only) */}
-        {showDropdown && (
+        {dropdown.isMounted && (
           <div
             id="search-listbox"
             role="listbox"
@@ -273,6 +284,11 @@ export function Sidebar({
               borderRadius: "var(--radius-md)",
               maxHeight: "min(300px, 50vh)",
               overflowY: "auto",
+              opacity: dropdown.isVisible ? 1 : 0,
+              transform: dropdown.isVisible ? "translateY(0)" : "translateY(-4px)",
+              transition: dropdown.isVisible
+                ? "opacity 150ms var(--ease-entrance), transform 150ms var(--ease-entrance)"
+                : "opacity 100ms var(--ease-exit), transform 100ms var(--ease-exit)",
             }}
           >
             {isSearching && fileResults.length === 0 && (
@@ -369,7 +385,15 @@ export function Sidebar({
       </div>
 
       {/* Tab content — scrollable */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+      <div
+        className="flex-1 overflow-y-auto px-4 pb-4"
+        style={{
+          opacity: tabContentVisible ? 1 : 0,
+          transition: tabContentVisible
+            ? "opacity 150ms var(--ease-entrance)"
+            : "opacity 80ms var(--ease-exit)",
+        }}
+      >
         {activeTab === "files" ? (
           <div>
             {recentDocs.length === 0 ? (

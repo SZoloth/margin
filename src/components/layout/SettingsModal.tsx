@@ -3,6 +3,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Settings } from "@/hooks/useSettings";
 import { getAllCorrections, getCorrectionsCount } from "@/lib/tauri-commands";
 import { formatStyleMemory } from "@/lib/export-annotations";
+import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -289,6 +290,8 @@ export function SettingsModal({
   settings,
   setSetting,
 }: SettingsModalProps) {
+  const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
+
   // Escape to close
   useEffect(() => {
     if (!isOpen) return;
@@ -302,7 +305,7 @@ export function SettingsModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isMounted) return null;
 
   return (
     <div
@@ -322,6 +325,8 @@ export function SettingsModal({
           position: "absolute",
           inset: 0,
           backgroundColor: "rgba(0, 0, 0, 0.3)",
+          opacity: isVisible ? 1 : 0,
+          transition: `opacity ${isVisible ? "200ms var(--ease-entrance)" : "150ms var(--ease-exit)"}`,
         }}
       />
 
@@ -340,6 +345,11 @@ export function SettingsModal({
           overflowY: "auto",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
           fontFamily: "'Inter', system-ui, sans-serif",
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "scale(1) translateY(0)" : "scale(0.97) translateY(4px)",
+          transition: isVisible
+            ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+            : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
         }}
       >
         {/* Header */}

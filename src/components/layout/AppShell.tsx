@@ -141,18 +141,40 @@ export function AppShell({
 
   const backdrop = useAnimatedPresence(isMobile && sidebarOpen, 200);
   const hasContent = currentDoc !== null;
+  const showExport = !!hasAnnotations && !!onExport;
+  const exportBtn = useAnimatedPresence(showExport, 150);
+  const emptyState = useAnimatedPresence(!hasContent, 300);
+  const [contentEntranceDone, setContentEntranceDone] = useState(false);
+  // Reset entrance animation when returning to empty state
+  useEffect(() => {
+    if (hasContent) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setContentEntranceDone(true);
+        });
+      });
+    } else {
+      setContentEntranceDone(false);
+    }
+  }, [hasContent]);
 
   // Tab crossfade: brief opacity dip when switching tabs
   const [tabFadeVisible, setTabFadeVisible] = useState(true);
   const prevTabIdRef = useRef(activeTabId);
+  const tabFadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (activeTabId && activeTabId !== prevTabIdRef.current) {
       prevTabIdRef.current = activeTabId;
+      if (tabFadeTimeoutRef.current) clearTimeout(tabFadeTimeoutRef.current);
       setTabFadeVisible(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setTabFadeVisible(true));
-      });
+      // Brief fade out (80ms), then fade back in
+      tabFadeTimeoutRef.current = setTimeout(() => {
+        setTabFadeVisible(true);
+      }, 80);
     }
+    return () => {
+      if (tabFadeTimeoutRef.current) clearTimeout(tabFadeTimeoutRef.current);
+    };
   }, [activeTabId]);
 
   return (
@@ -278,14 +300,23 @@ export function AppShell({
           {/* Spacer — only when no tabs */}
           {tabs.length === 0 && <div className="flex-1" />}
 
-          {hasAnnotations && onExport && (
+          {onExport && (
             <button
               type="button"
               onClick={onExport}
               className="btn-sm p-1"
-              style={{ color: "var(--color-text-secondary)" }}
+              style={{
+                color: "var(--color-text-secondary)",
+                opacity: exportBtn.isVisible ? 1 : 0,
+                transform: exportBtn.isVisible ? "scale(1)" : "scale(0.9)",
+                transition: exportBtn.isVisible
+                  ? "opacity 150ms var(--ease-entrance), transform 150ms var(--ease-entrance)"
+                  : "opacity 100ms var(--ease-exit), transform 100ms var(--ease-exit)",
+                pointerEvents: showExport ? "auto" : "none",
+              }}
               aria-label="Export annotations"
               title="Export annotations (⌘⇧E)"
+              aria-hidden={!showExport}
             >
               <HugeiconsIcon icon={Download01Icon} size={18} color="currentColor" strokeWidth={1.5} />
             </button>
@@ -293,11 +324,23 @@ export function AppShell({
         </div>
 
         {/* Scrollable reader area */}
-        <div className="flex-1 overflow-y-auto" data-scroll-container>
-          {!hasContent ? (
+        <div className="flex-1 overflow-y-auto" data-scroll-container style={{ position: "relative" }}>
+          {emptyState.isMounted && (
             <div
-              className="flex h-full items-center justify-center empty-state-entrance"
-              style={{ color: "var(--color-text-secondary)" }}
+              className={`flex h-full items-center justify-center${!hasContent ? " empty-state-entrance" : ""}`}
+              style={{
+                color: "var(--color-text-secondary)",
+                ...(hasContent ? {
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 1,
+                } : {}),
+                opacity: emptyState.isVisible ? 1 : 0,
+                transition: emptyState.isVisible
+                  ? "none"
+                  : "opacity 300ms var(--ease-exit)",
+                pointerEvents: emptyState.isVisible ? "auto" : "none",
+              }}
             >
               <div className="text-center" style={{ maxWidth: 320 }}>
                 <p
@@ -347,14 +390,15 @@ export function AppShell({
                 </p>
               </div>
             </div>
-          ) : (
+          )}
+          {hasContent && (
             <div
               className="reader-grid"
               style={{
-                opacity: tabFadeVisible ? 1 : 0,
+                opacity: (contentEntranceDone && tabFadeVisible) ? 1 : 0,
                 transition: tabFadeVisible
-                  ? `opacity var(--duration-normal) var(--ease-entrance)`
-                  : "none",
+                  ? "opacity 200ms var(--ease-entrance)"
+                  : "opacity 80ms var(--ease-exit)",
               }}
             >
               <div className="toc-column">{tocElement}</div>
