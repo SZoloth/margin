@@ -10,7 +10,7 @@ public final class AppState: ObservableObject {
     let fileService = FileService()
     let fileWatcher = FileWatcher()
     let keepLocal = KeepLocalService()
-    var settings = AppSettings()
+    public var settings = AppSettings()
     private let documentStore = DocumentStore()
     private let annotationStore = AnnotationStore()
     private let searchStore = SearchStore()
@@ -43,12 +43,13 @@ public final class AppState: ObservableObject {
 
     // MARK: - UI State
     @Published var focusHighlightId: String?
+    @Published var focusHighlightRect: CGRect = .zero
     @Published public var showExportPopover = false
     @Published var showSettings = false
     @Published var sidebarOpen = true
 
     // MARK: - Selection State (for floating toolbar)
-    @Published var selectionRange: NSRange?
+    @Published public var selectionRange: NSRange?
     @Published var selectionRect: CGRect = .zero
     @Published var selectionText: String = ""
     @Published var clearEditorSelection = false
@@ -61,6 +62,10 @@ public final class AppState: ObservableObject {
     // MARK: - Undo State
     @Published var pendingUndo: UndoAction?
     private var undoTimer: Timer?
+
+    // MARK: - Error State
+    @Published var errorMessage: String?
+    private var errorTimer: Timer?
 
     // MARK: - Tab Cache
     private var tabCache: [String: TabSnapshot] = [:]
@@ -86,12 +91,17 @@ public final class AppState: ObservableObject {
     // MARK: - Initialize
 
     public func initialize() {
-        do {
-            try DatabaseManager.shared.initialize()
-            loadRecentDocs()
-            restoreTabs()
-        } catch {
-            print("Failed to initialize database: \(error)")
+        Task.detached {
+            do {
+                try DatabaseManager.shared.initialize()
+            } catch {
+                print("Failed to initialize database: \(error)")
+                return
+            }
+            await MainActor.run {
+                self.loadRecentDocs()
+                self.restoreTabs()
+            }
         }
 
         // Forward AppSettings changes so SwiftUI views re-render when settings change
@@ -154,7 +164,7 @@ public final class AppState: ObservableObject {
             loadRecentDocs()
             fileWatcher.watch(path: path)
         } catch {
-            print("Failed to open file: \(error)")
+            showError("Couldn't open file")
         }
     }
 
@@ -183,7 +193,7 @@ public final class AppState: ObservableObject {
                 loadRecentDocs()
                 fileWatcher.watch(path: path)
             } catch {
-                print("Failed to open recent file: \(error)")
+                showError("Couldn't open file")
             }
         }
     }
@@ -216,7 +226,7 @@ public final class AppState: ObservableObject {
             loadRecentDocs()
             fileWatcher.unwatch()
         } catch {
-            print("Failed to open keep-local article: \(error)")
+            showError("Couldn't open article")
         }
     }
 
@@ -241,7 +251,7 @@ public final class AppState: ObservableObject {
                 loadRecentDocs()
             }
         } catch {
-            print("Failed to save file: \(error)")
+            showError("Couldn't save file")
         }
     }
 
@@ -266,7 +276,7 @@ public final class AppState: ObservableObject {
             }
             loadRecentDocs()
         } catch {
-            print("Failed to rename file: \(error)")
+            showError("Couldn't rename file")
         }
     }
 
@@ -340,7 +350,7 @@ public final class AppState: ObservableObject {
             marginNotes = try annotationStore.getMarginNotes(documentId: documentId)
             annotationsLoaded = true
         } catch {
-            print("Failed to load annotations: \(error)")
+            showError("Couldn't load annotations")
         }
     }
 
@@ -366,7 +376,7 @@ public final class AppState: ObservableObject {
             loadRecentDocs()
             return highlight
         } catch {
-            print("Failed to create highlight: \(error)")
+            showError("Couldn't save highlight")
             return nil
         }
     }
@@ -378,7 +388,7 @@ public final class AppState: ObservableObject {
                 highlights[idx].color = color
             }
         } catch {
-            print("Failed to update highlight color: \(error)")
+            showError("Couldn't update highlight")
         }
     }
 
@@ -434,11 +444,11 @@ public final class AppState: ObservableObject {
             undoTimer?.invalidate()
             undoTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.pendingUndo = nil
+                    self?.dismissUndoToast()
                 }
             }
         } catch {
-            print("Failed to delete highlight: \(error)")
+            showError("Couldn't delete highlight")
         }
     }
 
@@ -454,6 +464,57 @@ public final class AppState: ObservableObject {
         pendingUndo = nil
     }
 
+    /// Animate the undo toast out before clearing state.
+    func dismissUndoToast() {
+        undoTimer?.invalidate()
+        // Give the view time to animate out by setting nil after a brief delay
+        // The view's onDisappear handles the visual transition
+        pendingUndo = nil
+    }
+
+    // MARK: - Error Toast
+
+    func showError(_ message: String) {
+        errorMessage = message
+        errorTimer?.invalidate()
+        errorTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.errorMessage = nil
+            }
+        }
+    }
+
+    // MARK: - Highlight from Selection (shared for toolbar + keyboard shortcuts)
+
+    public func createHighlightFromCurrentSelection(color: HighlightColor, openNote: Bool = false) {
+        guard let range = selectionRange, !selectionText.isEmpty else { return }
+        let text = selectionText
+        let from = range.location
+        let to = range.location + range.length
+        // Capture selection rect before clearing — needed for note thread positioning
+        let savedRect = selectionRect
+
+        // Clear selection state
+        selectionRange = nil
+        selectionText = ""
+        selectionRect = .zero
+        clearEditorSelection = true
+
+        Task {
+            if let highlight = await createHighlight(
+                color: color.rawValue,
+                textContent: text,
+                fromPos: from,
+                toPos: to
+            ) {
+                if openNote {
+                    focusHighlightRect = savedRect
+                    focusHighlightId = highlight.id
+                }
+            }
+        }
+    }
+
     func createMarginNote(highlightId: String, content: String) async -> MarginNote? {
         do {
             let note = try annotationStore.createMarginNote(
@@ -464,7 +525,7 @@ public final class AppState: ObservableObject {
             scheduleAutosave()
             return note
         } catch {
-            print("Failed to create margin note: \(error)")
+            showError("Couldn't save note")
             return nil
         }
     }
@@ -478,7 +539,7 @@ public final class AppState: ObservableObject {
             }
             scheduleAutosave()
         } catch {
-            print("Failed to update margin note: \(error)")
+            showError("Couldn't update note")
         }
     }
 
@@ -488,7 +549,7 @@ public final class AppState: ObservableObject {
             marginNotes.removeAll { $0.id == id }
             scheduleAutosave()
         } catch {
-            print("Failed to delete margin note: \(error)")
+            showError("Couldn't delete note")
         }
     }
 

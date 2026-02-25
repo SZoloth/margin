@@ -3,7 +3,6 @@ import SwiftUI
 enum SidebarTab: String, CaseIterable {
     case files = "Files"
     case articles = "Articles"
-    case contents = "Contents"
 }
 
 struct SidebarView: View {
@@ -16,7 +15,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             // App title
             HStack {
-                Text("Margin")
+                Text("MarginOS")
                     .font(.system(size: 18, weight: .semibold))
                     .tracking(-0.3)
                 Spacer()
@@ -113,9 +112,6 @@ struct SidebarView: View {
                         .environmentObject(appState)
                 case .articles:
                     ArticlesSidebarContent()
-                        .environmentObject(appState)
-                case .contents:
-                    TableOfContentsView()
                         .environmentObject(appState)
                 }
             }

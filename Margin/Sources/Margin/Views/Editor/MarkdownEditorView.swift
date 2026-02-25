@@ -6,34 +6,62 @@ struct MarkdownEditorView: View {
     @EnvironmentObject var appState: AppState
 
     var body: some View {
-        MarkdownTextView(
-            content: $appState.content,
-            highlights: appState.highlights,
-            settings: appState.settings,
-            onContentChange: { newContent in
-                appState.updateContent(newContent)
-            },
-            onSelectionChange: { range, rect, text in
-                appState.clearEditorSelection = false
-                if range.length > 0 {
-                    appState.selectionRange = range
-                    appState.selectionRect = rect
-                    appState.selectionText = text
-                } else {
-                    appState.selectionRange = nil
-                    appState.selectionRect = .zero
-                    appState.selectionText = ""
+        GeometryReader { geometry in
+            let totalWidth = geometry.size.width
+            let readerWidth = appState.settings.readerWidth.points
+            let horizontalPadding: CGFloat = 40
+            // Left gutter: space from detail pane edge to the reader content
+            let gutterWidth = max(0, (totalWidth - readerWidth) / 2 - horizontalPadding)
+            let showGutterTOC = gutterWidth >= 120 && !appState.headings.isEmpty
+
+            ZStack(alignment: .topLeading) {
+                // Main editor, centered
+                MarkdownTextView(
+                    content: $appState.content,
+                    highlights: appState.highlights,
+                    settings: appState.settings,
+                    onContentChange: { newContent in
+                        appState.updateContent(newContent)
+                    },
+                    onSelectionChange: { range, rect, text in
+                        appState.clearEditorSelection = false
+                        if range.length > 0 {
+                            appState.selectionRange = range
+                            appState.selectionRect = rect
+                            appState.selectionText = text
+                        } else {
+                            appState.selectionRange = nil
+                            appState.selectionRect = .zero
+                            appState.selectionText = ""
+                        }
+                    },
+                    onHighlightClick: { highlightId, rect in
+                        if highlightId.isEmpty {
+                            appState.focusHighlightId = nil
+                        } else {
+                            appState.focusHighlightRect = rect
+                            appState.focusHighlightId = highlightId
+                        }
+                    },
+                    scrollToOffset: appState.scrollToOffset,
+                    clearSelection: appState.clearEditorSelection
+                )
+                .frame(maxWidth: readerWidth)
+                .padding(.horizontal, horizontalPadding)
+                .frame(maxWidth: .infinity)
+
+                // Left gutter TOC
+                if showGutterTOC {
+                    GutterTableOfContentsView()
+                        .environmentObject(appState)
+                        .frame(width: min(gutterWidth - Spacing.lg, 180))
+                        .padding(.top, 32)
+                        .padding(.leading, Spacing.lg)
                 }
-            },
-            onHighlightClick: { highlightId in
-                appState.focusHighlightId = highlightId
-            },
-            scrollToOffset: appState.scrollToOffset,
-            clearSelection: appState.clearEditorSelection
-        )
-        .frame(maxWidth: appState.settings.readerWidth.points)
-        .padding(.horizontal, 40)
-        .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(editorAccessibilityLabel)
         .overlay {
             if appState.selectionRange != nil, !appState.selectionText.isEmpty {
                 FloatingToolbarView()
@@ -54,6 +82,62 @@ struct MarkdownEditorView: View {
             UndoToastView()
                 .environmentObject(appState)
         }
+        .overlay(alignment: .bottom) {
+            ErrorToastView()
+                .environmentObject(appState)
+                .padding(.bottom, appState.pendingUndo != nil ? 60 : 0)
+        }
+    }
+
+    private var editorAccessibilityLabel: String {
+        let count = appState.highlights.count
+        if count == 0 {
+            return "Document editor"
+        } else {
+            return "Document editor with \(count) highlight\(count == 1 ? "" : "s")"
+        }
+    }
+}
+
+/// Compact table of contents for the left gutter of the editor.
+/// Shows only when the gutter has enough space (>=120pt).
+private struct GutterTableOfContentsView: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(appState.headings) { entry in
+                    Button {
+                        appState.scrollToOffset = nil
+                        DispatchQueue.main.async {
+                            appState.scrollToOffset = entry.offset
+                        }
+                    } label: {
+                        Text(entry.text)
+                            .font(.system(size: entry.level == 1 ? 11 : 10,
+                                          weight: entry.level == 1 ? .medium : .regular))
+                            .foregroundStyle(entry.level == 1 ? .secondary : .tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.leading, entry.level == 1 ? 0 : Spacing.sm)
+                            .padding(.vertical, 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Go to \(entry.text)")
+                }
+            }
+            .padding(.vertical, Spacing.sm)
+        }
+        .opacity(isHovered ? 1.0 : 0.6)
+        .animation(reduceMotion ? nil : .easeOut(duration: AnimationDuration.normal), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
 
@@ -66,13 +150,23 @@ struct MarkdownTextView: NSViewRepresentable {
     let settings: AppSettings
     var onContentChange: (String) -> Void
     var onSelectionChange: (NSRange, CGRect, String) -> Void
-    var onHighlightClick: (String) -> Void
+    var onHighlightClick: (String, CGRect) -> Void
     var scrollToOffset: Int?
     var clearSelection: Bool
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        let textView = scrollView.documentView as! NSTextView
+        let scrollView = NSScrollView()
+        let textView = HighlightCursorTextView()
+        textView.autoresizingMask = [.width]
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        let textContainer = textView.textContainer
+        textContainer?.widthTracksTextView = true
+        textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
 
         textView.isEditable = true
         textView.isSelectable = true
@@ -99,11 +193,12 @@ struct MarkdownTextView: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
-
         // Only update if content actually changed (avoid feedback loop)
         if context.coordinator.isUpdatingFromSwift { return }
         let currentText = textView.string
-        if currentText != content {
+        // Compare against cleaned content since setAttributedContent strips HTML
+        let cleanedContent = stripHTMLTags(content)
+        if currentText != cleanedContent {
             context.coordinator.isUpdatingFromSwift = true
             let selectedRange = textView.selectedRange()
             setAttributedContent(textView: textView, content: content)
@@ -159,8 +254,23 @@ struct MarkdownTextView: NSViewRepresentable {
     }
 
     private func setAttributedContent(textView: NSTextView, content: String) {
-        let attributed = renderMarkdownSyntaxHighlighted(content)
+        let cleaned = stripHTMLTags(content)
+        let attributed = renderMarkdownSyntaxHighlighted(cleaned)
         textView.textStorage?.setAttributedString(attributed)
+    }
+
+    /// Strip common HTML tags from content (e.g. <mark>, <strong>, <em>, <br>).
+    /// These come from Tauri-era highlights stored inline in markdown files.
+    private func stripHTMLTags(_ text: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: "</?(?:mark|strong|em|b|i|br|span|div|p)(?:\\s[^>]*)?\\/?>",
+            options: .caseInsensitive
+        ) else { return text }
+        return regex.stringByReplacingMatches(
+            in: text,
+            range: NSRange(location: 0, length: (text as NSString).length),
+            withTemplate: ""
+        )
     }
 
     // MARK: - Syntax-Highlighted Markdown Renderer
@@ -168,13 +278,21 @@ struct MarkdownTextView: NSViewRepresentable {
     // Preserves raw markdown text (textView.string == original markdown).
     // Applies visual styles via attributes; syntax characters (# ** * ` > etc.) are dimmed.
 
+    /// Attributes that make syntax characters invisible (clear color + tiny font).
+    private func hiddenSyntaxAttrs() -> [NSAttributedString.Key: Any] {
+        [
+            .foregroundColor: NSColor.clear,
+            .font: NSFont.systemFont(ofSize: 0.01),
+        ]
+    }
+
     private func renderMarkdownSyntaxHighlighted(_ markdown: String) -> NSAttributedString {
         let result = NSMutableAttributedString(string: markdown, attributes: defaultAttributes())
         let nsText = markdown as NSString
         let fullRange = NSRange(location: 0, length: nsText.length)
         guard fullRange.length > 0 else { return result }
 
-        let syntaxColor = NSColor.tertiaryLabelColor
+        let hidden = hiddenSyntaxAttrs()
         let fontSize = settings.fontSize.cgFloat
 
         // --- Block-level styles (line by line) ---
@@ -186,14 +304,24 @@ struct MarkdownTextView: NSViewRepresentable {
             if let (level, prefixLen) = headingMatch(line) {
                 let scales: [CGFloat] = [0, 1.8, 1.4, 1.2, 1.1, 1.05, 1.0]
                 let scale = level <= 6 ? scales[level] : 1.0
-                let headingFont = NSFont.systemFont(ofSize: fontSize * scale, weight: .semibold)
+                let headingFont = NSFontManager.shared.convert(
+                    NSFont(name: "Georgia", size: fontSize * scale) ?? NSFont.systemFont(ofSize: fontSize * scale),
+                    toHaveTrait: .boldFontMask
+                )
                 let style = NSMutableParagraphStyle()
                 style.paragraphSpacing = fontSize * 0.4
                 if level > 1 { style.paragraphSpacingBefore = fontSize * 0.8 }
-                result.addAttribute(.font, value: headingFont, range: lineRange)
+                // Apply heading style to content (after prefix)
+                let contentStart = lineStart + prefixLen
+                let contentLen = lineLen - prefixLen
+                if contentLen > 0 {
+                    result.addAttribute(.font, value: headingFont,
+                        range: NSRange(location: contentStart, length: contentLen))
+                }
                 result.addAttribute(.paragraphStyle, value: style, range: lineRange)
+                // Hide the "## " prefix
                 if prefixLen > 0, prefixLen <= lineLen {
-                    result.addAttribute(.foregroundColor, value: syntaxColor,
+                    result.addAttributes(hidden,
                         range: NSRange(location: lineStart, length: prefixLen))
                 }
             } else if line.hasPrefix("> ") {
@@ -206,7 +334,8 @@ struct MarkdownTextView: NSViewRepresentable {
                     result.addAttribute(.font, value: italicFont, range: lineRange)
                 }
                 result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: lineRange)
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                // Hide "> " prefix
+                result.addAttributes(hidden,
                     range: NSRange(location: lineStart, length: min(2, lineLen)))
             } else if line == "---" || line == "***" || line == "___" {
                 result.addAttribute(.foregroundColor, value: NSColor.separatorColor, range: lineRange)
@@ -216,6 +345,9 @@ struct MarkdownTextView: NSViewRepresentable {
                 style.firstLineHeadIndent = 8
                 style.paragraphSpacing = fontSize * 0.2
                 result.addAttribute(.paragraphStyle, value: style, range: lineRange)
+                // Replace "- " with bullet: hide the marker char, keep visual spacing
+                let bulletRange = NSRange(location: lineStart, length: 1)
+                result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: bulletRange)
             } else if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
                 let style = NSMutableParagraphStyle()
                 style.headIndent = 28
@@ -234,12 +366,25 @@ struct MarkdownTextView: NSViewRepresentable {
         }
 
         // --- Code blocks (```...```) ---
-        if let fenceRegex = try? NSRegularExpression(pattern: "```[^\\n]*\\n[\\s\\S]*?```") {
+        if let fenceRegex = try? NSRegularExpression(pattern: "```([^\\n]*)\\n([\\s\\S]*?)```") {
             for match in fenceRegex.matches(in: markdown, range: fullRange) {
                 let codeFont = NSFont.monospacedSystemFont(ofSize: fontSize * 0.85, weight: .regular)
-                result.addAttribute(.font, value: codeFont, range: match.range)
-                result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: match.range)
-                result.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: match.range)
+                // Style the code content
+                let contentRange = match.range(at: 2)
+                result.addAttribute(.font, value: codeFont, range: contentRange)
+                result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: contentRange)
+                result.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: contentRange)
+                // Hide the ``` delimiters (opening line and closing ```)
+                let openStart = match.range.location
+                let openLen = contentRange.location - openStart
+                if openLen > 0 {
+                    result.addAttributes(hidden, range: NSRange(location: openStart, length: openLen))
+                }
+                let closeStart = contentRange.location + contentRange.length
+                let closeLen = (match.range.location + match.range.length) - closeStart
+                if closeLen > 0 {
+                    result.addAttributes(hidden, range: NSRange(location: closeStart, length: closeLen))
+                }
             }
         }
 
@@ -248,13 +393,14 @@ struct MarkdownTextView: NSViewRepresentable {
         // Inline code: `text`
         if let regex = try? NSRegularExpression(pattern: "(?<!`)`(?!`)([^`\\n]+?)`(?!`)") {
             for match in regex.matches(in: markdown, range: fullRange) {
+                let contentRange = match.range(at: 1)
                 let codeFont = NSFont.monospacedSystemFont(ofSize: fontSize * 0.9, weight: .regular)
-                result.addAttribute(.font, value: codeFont, range: match.range)
-                result.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: match.range)
-                // Dim backticks
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                result.addAttribute(.font, value: codeFont, range: contentRange)
+                result.addAttribute(.backgroundColor, value: NSColor.quaternaryLabelColor, range: contentRange)
+                // Hide backticks
+                result.addAttributes(hidden,
                     range: NSRange(location: match.range.location, length: 1))
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                result.addAttributes(hidden,
                     range: NSRange(location: match.range.location + match.range.length - 1, length: 1))
             }
         }
@@ -267,10 +413,10 @@ struct MarkdownTextView: NSViewRepresentable {
                     let bold = NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask)
                     result.addAttribute(.font, value: bold, range: contentRange)
                 }
-                // Dim ** delimiters
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                // Hide ** delimiters
+                result.addAttributes(hidden,
                     range: NSRange(location: match.range.location, length: 2))
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                result.addAttributes(hidden,
                     range: NSRange(location: match.range.location + match.range.length - 2, length: 2))
             }
         }
@@ -283,10 +429,10 @@ struct MarkdownTextView: NSViewRepresentable {
                     let italic = NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask)
                     result.addAttribute(.font, value: italic, range: contentRange)
                 }
-                // Dim * delimiters
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                // Hide * delimiters
+                result.addAttributes(hidden,
                     range: NSRange(location: match.range.location, length: 1))
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                result.addAttributes(hidden,
                     range: NSRange(location: match.range.location + match.range.length - 1, length: 1))
             }
         }
@@ -301,28 +447,32 @@ struct MarkdownTextView: NSViewRepresentable {
                 if let url = URL(string: urlStr) {
                     result.addAttribute(.link, value: url, range: textRange)
                 }
-                // Dim all syntax around the link text: [, ](url)
-                result.addAttribute(.foregroundColor, value: syntaxColor,
+                // Hide [, ](url) syntax
+                result.addAttributes(hidden,
                     range: NSRange(location: match.range.location, length: 1))
                 let afterText = textRange.location + textRange.length
                 let trailingLen = match.range.location + match.range.length - afterText
                 if trailingLen > 0 {
-                    result.addAttribute(.foregroundColor, value: syntaxColor,
+                    result.addAttributes(hidden,
                         range: NSRange(location: afterText, length: trailingLen))
                 }
             }
         }
 
-        // Images: ![alt](url) — dim everything, show alt text in italic
+        // Images: ![alt](url) — hide syntax, show alt text
         if let regex = try? NSRegularExpression(pattern: "!\\[([^\\]]*)\\]\\(([^)]+)\\)") {
             for match in regex.matches(in: markdown, range: fullRange) {
-                result.addAttribute(.foregroundColor, value: syntaxColor, range: match.range)
+                // Hide all syntax
+                result.addAttributes(hidden, range: match.range)
+                // But show the alt text
                 let altRange = match.range(at: 1)
                 if altRange.length > 0 {
-                    result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: altRange)
-                    if let base = result.attribute(.font, at: altRange.location, effectiveRange: nil) as? NSFont {
-                        result.addAttribute(.font, value: NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask), range: altRange)
-                    }
+                    let altAttrs: [NSAttributedString.Key: Any] = [
+                        .foregroundColor: NSColor.secondaryLabelColor,
+                        .font: NSFont(name: "Georgia-Italic", size: fontSize)
+                            ?? NSFont.systemFont(ofSize: fontSize),
+                    ]
+                    result.addAttributes(altAttrs, range: altRange)
                 }
             }
         }
@@ -356,6 +506,7 @@ struct MarkdownTextView: NSViewRepresentable {
         storage.enumerateAttribute(Self.highlightTagKey, in: NSRange(location: 0, length: fullLength)) { value, range, _ in
             if value != nil {
                 storage.removeAttribute(.backgroundColor, range: range)
+                storage.addAttribute(.foregroundColor, value: NSColor.textColor, range: range)
                 storage.removeAttribute(Self.highlightTagKey, range: range)
                 storage.removeAttribute(Self.highlightIdKey, range: range)
             }
@@ -373,6 +524,11 @@ struct MarkdownTextView: NSViewRepresentable {
                     let color = HighlightColor(rawValue: highlight.color)?.nsColor
                         ?? HighlightColor.yellow.nsColor
                     storage.addAttribute(.backgroundColor, value: color, range: range)
+                    storage.addAttribute(.foregroundColor, value: NSColor(name: nil) { appearance in
+                        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                            ? NSColor(white: 0.95, alpha: 1.0)
+                            : NSColor(white: 0.1, alpha: 1.0)
+                    }, range: range)
                     storage.addAttribute(Self.highlightTagKey, value: true, range: range)
                     storage.addAttribute(Self.highlightIdKey, value: highlight.id, range: range)
                     continue
@@ -385,12 +541,20 @@ struct MarkdownTextView: NSViewRepresentable {
                 let color = HighlightColor(rawValue: highlight.color)?.nsColor
                     ?? HighlightColor.yellow.nsColor
                 storage.addAttribute(.backgroundColor, value: color, range: searchRange)
+                storage.addAttribute(.foregroundColor, value: NSColor(name: nil) { appearance in
+                        appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                            ? NSColor(white: 0.95, alpha: 1.0)
+                            : NSColor(white: 0.1, alpha: 1.0)
+                    }, range: searchRange)
                 storage.addAttribute(Self.highlightTagKey, value: true, range: searchRange)
                 storage.addAttribute(Self.highlightIdKey, value: highlight.id, range: searchRange)
             }
         }
 
         storage.endEditing()
+
+        // Invalidate cursor rects so resetCursorRects picks up new highlight ranges
+        textView.window?.invalidateCursorRects(for: textView)
     }
 
     class Coordinator: NSObject, NSTextViewDelegate {
@@ -400,6 +564,13 @@ struct MarkdownTextView: NSViewRepresentable {
 
         init(_ parent: MarkdownTextView) {
             self.parent = parent
+        }
+
+        /// Convert an AppKit window-coordinate rect to SwiftUI `.global` coordinates.
+        /// AppKit: Y=0 at bottom, SwiftUI: Y=0 at top.
+        static func appKitToSwiftUIGlobal(_ windowRect: CGRect, in window: NSWindow?) -> CGRect {
+            guard let contentHeight = window?.contentView?.bounds.height else { return windowRect }
+            return flipWindowRectToSwiftUITopLeft(windowRect, referenceHeight: contentHeight)
         }
 
         func textDidChange(_ notification: Notification) {
@@ -419,10 +590,11 @@ struct MarkdownTextView: NSViewRepresentable {
                 let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
                 let containerOrigin = textView.textContainerOrigin
                 let textViewRect = rect.offsetBy(dx: containerOrigin.x, dy: containerOrigin.y)
-                // Convert from NSTextView document coords to window coords
+                // Convert from NSTextView document coords → window coords → SwiftUI global coords
                 let windowRect = textView.convert(textViewRect, to: nil)
+                let globalRect = Self.appKitToSwiftUIGlobal(windowRect, in: textView.window)
                 let selectedText = (textView.string as NSString).substring(with: range)
-                parent.onSelectionChange(range, windowRect, selectedText)
+                parent.onSelectionChange(range, globalRect, selectedText)
             } else {
                 parent.onSelectionChange(range, .zero, "")
 
@@ -430,16 +602,84 @@ struct MarkdownTextView: NSViewRepresentable {
                 let length = (textView.string as NSString).length
                 if range.length == 0, let storage = textView.textStorage {
                     let checkPos = range.location < length ? range.location : max(0, range.location - 1)
+                    var effectiveRange = NSRange(location: 0, length: 0)
                     if checkPos < length,
                        let highlightId = storage.attribute(
                            MarkdownTextView.highlightIdKey,
                            at: checkPos,
-                           effectiveRange: nil
+                           effectiveRange: &effectiveRange
                        ) as? String {
-                        parent.onHighlightClick(highlightId)
+                        // Compute the rect of the highlight for anchored positioning
+                        var rect = CGRect.zero
+                        if let layoutManager = textView.layoutManager,
+                           let textContainer = textView.textContainer {
+                            let glyphRange = layoutManager.glyphRange(forCharacterRange: effectiveRange, actualCharacterRange: nil)
+                            let textRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+                            let containerOrigin = textView.textContainerOrigin
+                            let textViewRect = textRect.offsetBy(dx: containerOrigin.x, dy: containerOrigin.y)
+                            let windowRect = textView.convert(textViewRect, to: nil)
+                            rect = Self.appKitToSwiftUIGlobal(windowRect, in: textView.window)
+                        }
+                        parent.onHighlightClick(highlightId, rect)
+                    } else {
+                        // Clicked on non-highlight text — dismiss any open highlight popover
+                        parent.onHighlightClick("", .zero)
                     }
                 }
             }
+        }
+    }
+}
+
+/// Custom NSTextView subclass that shows a pointing hand cursor over highlights.
+class HighlightCursorTextView: NSTextView {
+    private var cursorTrackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = cursorTrackingArea {
+            removeTrackingArea(existing)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        cursorTrackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        // Do NOT call super — NSTextView's mouseMoved reasserts the iBeam cursor
+        let point = convert(event.locationInWindow, from: nil)
+        let length = (string as NSString).length
+
+        guard length > 0,
+              let layoutManager = layoutManager,
+              let textContainer = textContainer else {
+            NSCursor.iBeam.set()
+            return
+        }
+
+        let containerPoint = NSPoint(
+            x: point.x - textContainerOrigin.x,
+            y: point.y - textContainerOrigin.y
+        )
+
+        var fraction: CGFloat = 0
+        let charIndex = layoutManager.characterIndex(
+            for: containerPoint,
+            in: textContainer,
+            fractionOfDistanceBetweenInsertionPoints: &fraction
+        )
+
+        if charIndex < length,
+           let storage = textStorage,
+           storage.attribute(MarkdownTextView.highlightIdKey, at: charIndex, effectiveRange: nil) != nil {
+            NSCursor.pointingHand.set()
+        } else {
+            NSCursor.iBeam.set()
         }
     }
 }

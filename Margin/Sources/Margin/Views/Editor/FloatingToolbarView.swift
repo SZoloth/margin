@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Floating toolbar that appears above text selection for highlight creation.
-/// Selection rect is in window coordinates; we convert to local overlay coords.
+/// Selection rect is in SwiftUI `.global` coords; we convert to local overlay coords.
 struct FloatingToolbarView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @State private var isVisible = false
 
     var body: some View {
@@ -20,17 +21,21 @@ struct FloatingToolbarView: View {
                 height: selRect.height
             )
             let centerX = localRect.midX
-            let clampedX = max(8, min(centerX - toolbarWidth / 2, geometry.size.width - toolbarWidth - 8))
-            let aboveY = localRect.minY - toolbarHeight - 8
-            let belowY = localRect.maxY + 8
+            let clampedX = max(Spacing.sm, min(centerX - toolbarWidth / 2, geometry.size.width - toolbarWidth - Spacing.sm))
+            let aboveY = localRect.minY - toolbarHeight - Spacing.sm
+            let belowY = localRect.maxY + Spacing.sm
             let y = aboveY > 40 ? aboveY : belowY
 
             HighlightToolbar(
                 onHighlight: { color in
-                    createHighlightFromSelection(color: color)
+                    dismissThenAct {
+                        createHighlightFromSelection(color: color)
+                    }
                 },
                 onNote: {
-                    createHighlightFromSelection(color: appState.settings.defaultHighlightColor, openNote: true)
+                    dismissThenAct {
+                        createHighlightFromSelection(color: appState.settings.defaultHighlightColor, openNote: true)
+                    }
                 }
             )
             .environmentObject(appState)
@@ -38,11 +43,25 @@ struct FloatingToolbarView: View {
             .opacity(isVisible ? 1 : 0)
             .scaleEffect(isVisible ? 1 : 0.97)
             .offset(y: isVisible ? 0 : 4)
-            .animation(.easeOut(duration: 0.15), value: isVisible)
+            .animation(reduceMotion ? nil : .easeOut(duration: AnimationDuration.normal), value: isVisible)
         }
         .allowsHitTesting(true)
         .onAppear { isVisible = true }
         .onDisappear { isVisible = false }
+    }
+
+    /// Animate out, then execute the action and clear selection state.
+    private func dismissThenAct(_ action: @escaping () -> Void) {
+        if reduceMotion {
+            action()
+            return
+        }
+        withAnimation(.easeIn(duration: AnimationDuration.fast)) {
+            isVisible = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + AnimationDuration.fast + 0.01) {
+            action()
+        }
     }
 
     private func createHighlightFromSelection(color: HighlightColor, openNote: Bool = false) {
@@ -51,11 +70,10 @@ struct FloatingToolbarView: View {
         let from = range.location
         let to = range.location + range.length
 
-        // Clear selection state first to dismiss toolbar
+        // Clear selection state to dismiss toolbar
         appState.selectionRange = nil
         appState.selectionText = ""
         appState.selectionRect = .zero
-        // Also tell the editor to clear its native selection
         appState.clearEditorSelection = true
 
         Task {
@@ -79,6 +97,9 @@ struct HighlightToolbar: View {
     let onHighlight: (HighlightColor) -> Void
     let onNote: () -> Void
 
+    @State private var hoveredColor: HighlightColor?
+    @State private var isNoteHovered = false
+
     private var orderedColors: [HighlightColor] {
         var colors = HighlightColor.allCases
         if let idx = colors.firstIndex(of: appState.settings.defaultHighlightColor), idx != 0 {
@@ -89,14 +110,14 @@ struct HighlightToolbar: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.sm - 2) {
             ForEach(orderedColors) { color in
                 Button {
                     onHighlight(color)
                 } label: {
                     Circle()
                         .fill(color.swiftUIColor)
-                        .frame(width: 18, height: 18)
+                        .frame(width: Spacing.xl, height: Spacing.xl)
                         .overlay {
                             if color == appState.settings.defaultHighlightColor {
                                 Circle()
@@ -105,6 +126,13 @@ struct HighlightToolbar: View {
                                 Circle()
                                     .strokeBorder(.quaternary, lineWidth: 1.5)
                             }
+                        }
+                        .scaleEffect(hoveredColor == color ? 1.15 : 1.0)
+                        .animation(.easeOut(duration: 0.1), value: hoveredColor)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Circle())
+                        .onHover { isHovered in
+                            hoveredColor = isHovered ? color : nil
                         }
                 }
                 .buttonStyle(.plain)
@@ -120,14 +148,19 @@ struct HighlightToolbar: View {
                 Image(systemName: "text.bubble")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
+                    .scaleEffect(isNoteHovered ? 1.1 : 1.0)
+                    .animation(.easeOut(duration: 0.1), value: isNoteHovered)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Add Note")
+            .onHover { isHovered in
+                isNoteHovered = isHovered
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        .padding(.horizontal, Spacing.md - 2)
+        .padding(.vertical, Spacing.sm)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.md))
+        .elevationShadow(Elevation.toast)
     }
 }

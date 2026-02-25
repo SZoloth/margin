@@ -1,10 +1,10 @@
 import Foundation
 import SwiftUI
 
-enum Theme: String, Codable, CaseIterable {
+public enum Theme: String, Codable, CaseIterable {
     case light, dark, system
 
-    var resolved: ColorScheme? {
+    public var resolved: ColorScheme? {
         switch self {
         case .light: return .light
         case .dark: return .dark
@@ -13,10 +13,10 @@ enum Theme: String, Codable, CaseIterable {
     }
 }
 
-enum FontSize: String, Codable, CaseIterable {
+public enum FontSize: String, Codable, CaseIterable {
     case small, `default`, large, xl
 
-    var cgFloat: CGFloat {
+    public var cgFloat: CGFloat {
         switch self {
         case .small: return 16
         case .default: return 18
@@ -25,7 +25,7 @@ enum FontSize: String, Codable, CaseIterable {
         }
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .small: return "Small"
         case .default: return "Default"
@@ -35,10 +35,10 @@ enum FontSize: String, Codable, CaseIterable {
     }
 }
 
-enum LineSpacing: String, Codable, CaseIterable {
+public enum LineSpacing: String, Codable, CaseIterable {
     case compact, `default`, relaxed
 
-    var multiplier: CGFloat {
+    public var multiplier: CGFloat {
         switch self {
         case .compact: return 1.5
         case .default: return 1.72
@@ -46,7 +46,7 @@ enum LineSpacing: String, Codable, CaseIterable {
         }
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .compact: return "Compact"
         case .default: return "Default"
@@ -55,10 +55,10 @@ enum LineSpacing: String, Codable, CaseIterable {
     }
 }
 
-enum ReaderWidth: String, Codable, CaseIterable {
+public enum ReaderWidth: String, Codable, CaseIterable {
     case narrow, `default`, wide
 
-    var points: CGFloat {
+    public var points: CGFloat {
         switch self {
         case .narrow: return 520
         case .default: return 620
@@ -66,7 +66,7 @@ enum ReaderWidth: String, Codable, CaseIterable {
         }
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .narrow: return "Narrow"
         case .default: return "Default"
@@ -75,34 +75,61 @@ enum ReaderWidth: String, Codable, CaseIterable {
     }
 }
 
-enum HighlightColor: String, Codable, CaseIterable, Identifiable {
+public enum HighlightColor: String, Codable, CaseIterable, Identifiable {
     case yellow, green, blue, pink, orange
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var nsColor: NSColor {
+    public var nsColor: NSColor {
         switch self {
-        case .yellow: return NSColor(red: 0.96, green: 0.93, blue: 0.82, alpha: 1.0)
-        case .green: return NSColor(red: 0.86, green: 0.91, blue: 0.84, alpha: 1.0)
-        case .blue: return NSColor(red: 0.85, green: 0.89, blue: 0.92, alpha: 1.0)
-        case .pink: return NSColor(red: 0.93, green: 0.87, blue: 0.89, alpha: 1.0)
-        case .orange: return NSColor(red: 0.94, green: 0.89, blue: 0.81, alpha: 1.0)
+        case .yellow:
+            return NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                    ? NSColor(red: 0.55, green: 0.50, blue: 0.20, alpha: 1.0)
+                    : NSColor(red: 0.96, green: 0.93, blue: 0.82, alpha: 1.0)
+            }
+        case .green:
+            return NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                    ? NSColor(red: 0.22, green: 0.45, blue: 0.25, alpha: 1.0)
+                    : NSColor(red: 0.86, green: 0.91, blue: 0.84, alpha: 1.0)
+            }
+        case .blue:
+            return NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                    ? NSColor(red: 0.20, green: 0.38, blue: 0.55, alpha: 1.0)
+                    : NSColor(red: 0.85, green: 0.89, blue: 0.92, alpha: 1.0)
+            }
+        case .pink:
+            return NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                    ? NSColor(red: 0.55, green: 0.22, blue: 0.35, alpha: 1.0)
+                    : NSColor(red: 0.93, green: 0.87, blue: 0.89, alpha: 1.0)
+            }
+        case .orange:
+            return NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.darkAqua, .vibrantDark]) != nil
+                    ? NSColor(red: 0.55, green: 0.38, blue: 0.15, alpha: 1.0)
+                    : NSColor(red: 0.94, green: 0.89, blue: 0.81, alpha: 1.0)
+            }
         }
     }
 
-    var swiftUIColor: Color {
+    public var swiftUIColor: Color {
         Color(nsColor: nsColor)
     }
 
-    var displayName: String { rawValue.capitalized }
+    public var displayName: String { rawValue.capitalized }
 }
 
-class AppSettings: ObservableObject {
-    @AppStorage("theme") var theme: Theme = .system
-    @AppStorage("autosave") var autosave: Bool = false
-    @AppStorage("persistCorrections") var persistCorrections: Bool = false
-    @AppStorage("fontSize") var fontSize: FontSize = .default
-    @AppStorage("lineSpacing") var lineSpacing: LineSpacing = .default
-    @AppStorage("readerWidth") var readerWidth: ReaderWidth = .default
-    @AppStorage("defaultHighlightColor") var defaultHighlightColor: HighlightColor = .yellow
+public class AppSettings: ObservableObject {
+    @AppStorage("theme") public var theme: Theme = .system
+    @AppStorage("autosave") public var autosave: Bool = false
+    @AppStorage("persistCorrections") public var persistCorrections: Bool = false
+    @AppStorage("fontSize") public var fontSize: FontSize = .default
+    @AppStorage("lineSpacing") public var lineSpacing: LineSpacing = .default
+    @AppStorage("readerWidth") public var readerWidth: ReaderWidth = .default
+    @AppStorage("defaultHighlightColor") public var defaultHighlightColor: HighlightColor = .yellow
+
+    public init() {}
 }

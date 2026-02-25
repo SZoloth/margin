@@ -42,6 +42,25 @@ struct MarginApp: App {
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(appState.currentDoc == nil || appState.highlights.isEmpty)
+
+                Divider()
+
+                Button("Highlight Selection") {
+                    appState.createHighlightFromCurrentSelection(
+                        color: appState.settings.defaultHighlightColor
+                    )
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+                .disabled(appState.selectionRange == nil)
+
+                Button("Highlight & Add Note") {
+                    appState.createHighlightFromCurrentSelection(
+                        color: appState.settings.defaultHighlightColor,
+                        openNote: true
+                    )
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(appState.selectionRange == nil)
             }
         }
 

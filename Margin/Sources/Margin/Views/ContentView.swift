@@ -31,17 +31,6 @@ public struct ContentView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        appState.sidebarOpen.toggle()
-                    }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                }
-                .help("Toggle Sidebar")
-            }
-
             ToolbarItem(placement: .primaryAction) {
                 if !appState.highlights.isEmpty {
                     Button {
