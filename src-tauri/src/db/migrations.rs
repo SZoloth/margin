@@ -159,75 +159,215 @@ fn migrate_corrections_drop_fks(conn: &Connection) -> Result<(), Box<dyn std::er
     // Backfill: import corrections from JSONL files that are not already in the DB
     if let Some(home) = dirs::home_dir() {
         let corrections_dir = home.join(".margin").join("corrections");
-        if corrections_dir.is_dir() {
-            if let Ok(entries) = fs::read_dir(&corrections_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-                        continue;
-                    }
-                    if let Ok(file) = fs::File::open(&path) {
-                        let reader = std::io::BufReader::new(file);
-                        for line in reader.lines() {
-                            let Ok(line) = line else { continue };
-                            let line = line.trim();
-                            if line.is_empty() {
-                                continue;
-                            }
-                            let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
-                                continue;
-                            };
-                            let Some(highlight_id) = val["highlight_id"].as_str() else {
-                                continue;
-                            };
-
-                            // Skip if already in DB
-                            let exists: bool = conn
-                                .query_row(
-                                    "SELECT COUNT(*) > 0 FROM corrections WHERE highlight_id = ?1",
-                                    [highlight_id],
-                                    |row| row.get(0),
-                                )
-                                .unwrap_or(false);
-                            if exists {
-                                continue;
-                            }
-
-                            let id = uuid::Uuid::new_v4().to_string();
-                            let _ = conn.execute(
-                                "INSERT OR IGNORE INTO corrections
-                                    (id, highlight_id, document_id, session_id, original_text,
-                                     prefix_context, suffix_context, extended_context, notes_json,
-                                     document_title, document_source, document_path, category,
-                                     highlight_color, created_at, updated_at)
-                                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
-                                rusqlite::params![
-                                    id,
-                                    highlight_id,
-                                    val["document_id"].as_str().unwrap_or(""),
-                                    val["session_id"].as_str().unwrap_or(""),
-                                    val["original_text"].as_str().unwrap_or(""),
-                                    val["prefix_context"].as_str(),
-                                    val["suffix_context"].as_str(),
-                                    val["extended_context"].as_str(),
-                                    serde_json::to_string(&val["notes"]).unwrap_or_else(|_| "[]".into()),
-                                    val["document_title"].as_str(),
-                                    val["document_source"].as_str().unwrap_or("unknown"),
-                                    val["document_path"].as_str(),
-                                    Option::<String>::None,
-                                    val["highlight_color"].as_str().unwrap_or("yellow"),
-                                    val["exported_at"].as_i64().unwrap_or(0),
-                                    val["exported_at"].as_i64().unwrap_or(0),
-                                ],
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        backfill_corrections_from_dir(conn, &corrections_dir);
     }
 
     Ok(())
+}
+
+/// Import corrections from JSONL files in `dir` that are missing from the DB.
+fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) {
+    if !dir.is_dir() {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Ok(file) = fs::File::open(&path) else {
+            continue;
+        };
+        let reader = std::io::BufReader::new(file);
+        for line in reader.lines() {
+            let Ok(line) = line else { continue };
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+                continue;
+            };
+            let Some(highlight_id) = val["highlight_id"].as_str() else {
+                continue;
+            };
+
+            // Skip if already in DB
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM corrections WHERE highlight_id = ?1",
+                    [highlight_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            if exists {
+                continue;
+            }
+
+            let id = uuid::Uuid::new_v4().to_string();
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text,
+                     prefix_context, suffix_context, extended_context, notes_json,
+                     document_title, document_source, document_path, category,
+                     highlight_color, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                rusqlite::params![
+                    id,
+                    highlight_id,
+                    val["document_id"].as_str().unwrap_or(""),
+                    val["session_id"].as_str().unwrap_or(""),
+                    val["original_text"].as_str().unwrap_or(""),
+                    val["prefix_context"].as_str(),
+                    val["suffix_context"].as_str(),
+                    val["extended_context"].as_str(),
+                    serde_json::to_string(&val["notes"]).unwrap_or_else(|_| "[]".into()),
+                    val["document_title"].as_str(),
+                    val["document_source"].as_str().unwrap_or("unknown"),
+                    val["document_path"].as_str(),
+                    Option::<String>::None,
+                    val["highlight_color"].as_str().unwrap_or("yellow"),
+                    val["exported_at"].as_i64().unwrap_or(0),
+                    val["exported_at"].as_i64().unwrap_or(0),
+                ],
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn corrections_table_sql() -> &'static str {
+        "CREATE TABLE corrections (
+            id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL UNIQUE,
+            document_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            original_text TEXT NOT NULL,
+            prefix_context TEXT,
+            suffix_context TEXT,
+            extended_context TEXT,
+            notes_json TEXT NOT NULL,
+            document_title TEXT,
+            document_source TEXT NOT NULL,
+            document_path TEXT,
+            category TEXT,
+            highlight_color TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );"
+    }
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(corrections_table_sql()).unwrap();
+        conn
+    }
+
+    fn count(conn: &Connection) -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn backfill_imports_jsonl_into_empty_db() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"bad text","notes":["fix"],"document_source":"file","highlight_color":"yellow","exported_at":1700000000000}}"#).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h2","document_id":"d1","session_id":"s1","original_text":"another","notes":["also fix"],"document_source":"file","highlight_color":"green","exported_at":1700000001000}}"#).unwrap();
+        f.flush().unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 2);
+        let text: String = conn
+            .query_row(
+                "SELECT original_text FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(text, "bad text");
+    }
+
+    #[test]
+    fn backfill_skips_duplicates() {
+        let conn = setup_db();
+        // Pre-insert one correction
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at) VALUES ('existing', 'h1', 'd1', 's1', 'old text', '[]', 'file', 'yellow', 0, 0)",
+            [],
+        ).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        // Same highlight_id as existing
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s2","original_text":"new text","notes":["fix"],"document_source":"file","highlight_color":"yellow","exported_at":1700000000000}}"#).unwrap();
+        // New highlight_id
+        writeln!(f, r#"{{"highlight_id":"h2","document_id":"d1","session_id":"s2","original_text":"fresh","notes":["new"],"document_source":"file","highlight_color":"green","exported_at":1700000001000}}"#).unwrap();
+        f.flush().unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 2); // 1 existing + 1 new (h1 skipped)
+        // Original text for h1 should be unchanged
+        let text: String = conn
+            .query_row(
+                "SELECT original_text FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(text, "old text");
+    }
+
+    #[test]
+    fn backfill_ignores_non_jsonl_files() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+        // Create a .txt file — should be skipped
+        let txt_path = dir.path().join("notes.txt");
+        fs::write(&txt_path, r#"{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"t","notes":[],"document_source":"file","highlight_color":"yellow","exported_at":0}"#).unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 0);
+    }
+
+    #[test]
+    fn backfill_skips_malformed_lines() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        writeln!(f, "not json at all").unwrap();
+        writeln!(f, r#"{{"no_highlight_id":true}}"#).unwrap();
+        writeln!(f, "").unwrap(); // empty line
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"good","notes":["ok"],"document_source":"file","highlight_color":"yellow","exported_at":0}}"#).unwrap();
+        f.flush().unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 1); // only the valid line
+    }
+
+    #[test]
+    fn backfill_handles_missing_directory() {
+        let conn = setup_db();
+        let nonexistent = PathBuf::from("/tmp/margin-test-nonexistent-dir-xyz");
+        // Should not panic
+        backfill_corrections_from_dir(&conn, &nonexistent);
+        assert_eq!(count(&conn), 0);
+    }
 }
 
 pub fn get_db() -> Result<Connection, String> {

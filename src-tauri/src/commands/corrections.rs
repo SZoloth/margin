@@ -209,20 +209,42 @@ pub async fn persist_corrections(
 mod tests {
     use super::*;
 
-    fn setup_in_memory_db() -> Connection {
+    fn full_schema_sql() -> &'static str {
+        "CREATE TABLE corrections (
+            id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL UNIQUE,
+            document_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            original_text TEXT NOT NULL,
+            prefix_context TEXT,
+            suffix_context TEXT,
+            extended_context TEXT,
+            notes_json TEXT NOT NULL,
+            document_title TEXT,
+            document_source TEXT NOT NULL,
+            document_path TEXT,
+            category TEXT,
+            highlight_color TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );"
+    }
+
+    fn setup_full_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "CREATE TABLE corrections (
-                original_text TEXT NOT NULL,
-                notes_json TEXT NOT NULL,
-                highlight_color TEXT NOT NULL,
-                document_title TEXT,
-                document_id TEXT NOT NULL,
-                created_at INTEGER NOT NULL
-            );",
+        conn.execute_batch(full_schema_sql()).unwrap();
+        conn
+    }
+
+    fn insert_correction(conn: &Connection, highlight_id: &str, text: &str, notes: &str) {
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES (?1, ?2, 'doc1', 'sess1', ?3, ?4, 'Test', 'file', 'yellow', 1000, 1000)",
+            rusqlite::params![Uuid::new_v4().to_string(), highlight_id, text, notes],
         )
         .unwrap();
-        conn
     }
 
     #[test]
@@ -236,18 +258,19 @@ mod tests {
 
     #[test]
     fn fetch_corrections_orders_desc_and_respects_limit() {
-        let conn = setup_in_memory_db();
+        let conn = setup_full_db();
         for i in 0..5 {
             conn.execute(
-                "INSERT INTO corrections (original_text, notes_json, highlight_color, document_title, document_id, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text, notes_json,
+                     document_title, document_source, highlight_color, created_at, updated_at)
+                 VALUES (?1, ?2, 'doc', 'sess', ?3, '[\"n\"]', NULL, 'file', 'yellow', ?4, ?5)",
                 rusqlite::params![
+                    Uuid::new_v4().to_string(),
+                    format!("h{i}"),
                     format!("t{i}"),
-                    "[\"n\"]",
-                    "yellow",
-                    Option::<String>::None,
-                    "doc",
-                    i as i64
+                    i as i64,
+                    i as i64,
                 ],
             )
             .unwrap();
@@ -261,20 +284,57 @@ mod tests {
 
     #[test]
     fn count_corrections_counts_all_rows() {
-        let conn = setup_in_memory_db();
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["note1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["note2"]"#);
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+    }
+
+    #[test]
+    fn fetch_corrections_deserializes_notes_json() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "bad phrase", r#"["use X instead","also Y"]"#);
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].original_text, "bad phrase");
+        assert_eq!(records[0].notes, vec!["use X instead", "also Y"]);
+        assert_eq!(records[0].highlight_color, "yellow");
+    }
+
+    #[test]
+    fn upsert_updates_on_duplicate_highlight_id() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "original", r#"["old note"]"#);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+
+        // Upsert with same highlight_id should update, not duplicate
         conn.execute(
-            "INSERT INTO corrections (original_text, notes_json, highlight_color, document_title, document_id, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params!["t", "[]", "yellow", Option::<String>::None, "doc", 1i64],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO corrections (original_text, notes_json, highlight_color, document_title, document_id, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params!["t2", "[]", "yellow", Option::<String>::None, "doc", 2i64],
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES (?1, 'h1', 'doc1', 'sess2', 'updated', '[\"new note\"]', 'Test', 'file', 'green', 2000, 2000)
+             ON CONFLICT(highlight_id) DO UPDATE SET
+                original_text = excluded.original_text,
+                notes_json = excluded.notes_json,
+                highlight_color = excluded.highlight_color,
+                updated_at = excluded.updated_at",
+            rusqlite::params![Uuid::new_v4().to_string()],
         )
         .unwrap();
 
-        assert_eq!(count_corrections(&conn).unwrap(), 2);
+        assert_eq!(count_corrections(&conn).unwrap(), 1); // still 1
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records[0].original_text, "updated");
+        assert_eq!(records[0].notes, vec!["new note"]);
+        assert_eq!(records[0].highlight_color, "green");
+    }
+
+    #[test]
+    fn corrections_insert_without_foreign_keys() {
+        // This is the key bug fix test: corrections should insert even when
+        // highlight_id and document_id don't reference existing rows
+        let conn = setup_full_db();
+        insert_correction(&conn, "nonexistent-highlight", "some text", r#"["note"]"#);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
     }
 }
