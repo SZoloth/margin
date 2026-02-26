@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickel-org/nickel.rs/master/schema.json",
   "productName": "Margin",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "identifier": "com.samzoloth.margin",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -54,7 +54,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI1Qzg1RTNCQTg1MUUzMTgKUldRWTQxR29PMTdJSlpvSXBZRlhxbTFCLzJFc2YvcjYxZTRiQ3VOOU5zbllBL3BRNWtXZ0lEYjMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBM0IwQ0QwMEVFNkYyQjgKUldTNDh1WU8wQXc3dW9LOXBrUzN0NGw4a1crVHVSajRDd25aU1B5d2FFMk9pd0FmOW9KcWdZcncK",
       "endpoints": [
         "https://github.com/SZoloth/margin/releases/latest/download/latest.json"
       ]

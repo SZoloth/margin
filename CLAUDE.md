@@ -55,16 +55,11 @@ pnpm tsc --noEmit     # Type check without emitting
 
 ## Testing & Verification
 
-This is a Tauri app (Rust backend + React/TypeScript frontend). After making Rust changes, always run `cargo check` before proceeding. After TypeScript changes, run the TypeScript compiler to catch type errors. Do not assume the first implementation compiles cleanly.
+After Rust changes, run `cargo check`. After TypeScript changes, run `pnpm tsc --noEmit`. Don't assume the first implementation compiles.
 
-**Do NOT use browser automation or Chrome DevTools to test this app.** The app runs inside a Tauri webview, not a browser tab. Chrome DevTools MCP tools, Puppeteer, Playwright, and similar browser automation cannot connect to or interact with the Tauri window. To verify UI changes, ask the user to test manually in the running app, or write unit/integration tests (Vitest for frontend, `cargo test` for backend).
+**No browser automation.** This is a Tauri webview, not a browser tab. Chrome DevTools MCP, Puppeteer, Playwright cannot connect. Write tests or ask user to verify manually.
 
-### Dev vs prod builds
-
-- **Dev:** `pnpm tauri dev` — runs with hot reload, has an orange "dev" badge in the bottom-right corner, window title shows "Margin (Dev)". The Vite dev server runs at `localhost:1420` and feeds the Tauri webview.
-- **Prod:** The installed `Margin.app` in `/Applications` — no dev badge, window title is just "Margin".
-
-**Always test against the dev build** (`pnpm tauri dev`), never the production app in `/Applications`. If `pnpm tauri dev` is already running, changes will hot-reload automatically. Do not launch or interact with `Margin.app` for testing during development.
+**Dev only.** Use `pnpm tauri dev` (hot reload, orange "dev" badge). Launching production `Margin.app` is blocked by hook (`no_prod_app.py`).
 
 ## Issue tracking
 
