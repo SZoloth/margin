@@ -30,6 +30,7 @@ import type { CorrectionInput } from "@/types/annotations";
 import type { ExportResult } from "@/types/export";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
+import { useUpdater } from "@/hooks/useUpdater";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
 import type { UndoAction } from "@/components/ui/UndoToast";
 
@@ -90,6 +91,7 @@ export default function App() {
   const annotations = useAnnotations(doc.refreshRecentDocs);
   const keepLocal = useKeepLocal();
   const search = useSearch();
+  const updater = useUpdater();
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
@@ -1076,6 +1078,72 @@ export default function App() {
         isOpen={showCorrectionsPanel}
         onClose={() => setShowCorrectionsPanel(false)}
       />
+
+      {updater.available && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "8px 14px",
+            fontSize: 12,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            color: "var(--color-text-primary)",
+            backgroundColor: "var(--color-page)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-sm)",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            zIndex: 900,
+          }}
+        >
+          <span>Margin {updater.version} available</span>
+          <button
+            type="button"
+            onClick={updater.install}
+            disabled={updater.installing}
+            style={{
+              padding: "3px 10px",
+              fontSize: 11,
+              fontWeight: 500,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              color: "var(--color-text-primary)",
+              backgroundColor: "var(--hover-bg)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+              cursor: updater.installing ? "default" : "pointer",
+              opacity: updater.installing ? 0.6 : 1,
+            }}
+          >
+            {updater.installing ? "Installing..." : "Update"}
+          </button>
+          {!updater.installing && (
+            <button
+              type="button"
+              onClick={updater.dismiss}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 2,
+                color: "var(--color-text-secondary)",
+                fontSize: 14,
+                lineHeight: 1,
+              }}
+              aria-label="Dismiss"
+            >
+              &times;
+            </button>
+          )}
+          {updater.error && (
+            <span style={{ color: "var(--color-highlight-red)", fontSize: 11 }}>
+              {updater.error}
+            </span>
+          )}
+        </div>
+      )}
     </AppShell>
   );
 }

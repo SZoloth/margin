@@ -58,9 +58,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: R2N63SHFK7
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Margin ${{ github.ref_name }}
           releaseBody: 'Download the `.dmg` below to install Margin.'
           releaseDraft: false
           prerelease: false
+          updaterJsonKeepUniversal: true
