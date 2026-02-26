@@ -71,6 +71,13 @@ pub fn run() {
         .setup(|app| {
             let pool = db::migrations::init_db()?;
             app.manage(pool);
+
+            // Set window title to "Margin (Dev)" in debug builds
+            #[cfg(debug_assertions)]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_title("Margin (Dev)");
+            }
+
             Ok(())
         })
         .build(tauri::generate_context!())

@@ -12,3 +12,4 @@ tsconfig.tsbuildinfo
 *.p8
 *.p12
 *.pem
+*.mov

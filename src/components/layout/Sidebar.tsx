@@ -8,6 +8,20 @@ import type { SearchResult, FileResult } from "@/hooks/useSearch";
 import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
+/** Sanitize FTS snippet HTML — only allow <mark> and </mark> tags, escape everything else. */
+function sanitizeSnippet(html: string): string {
+  // Replace <mark> and </mark> with placeholders, escape the rest, then restore
+  return html
+    .replace(/<mark>/g, "\x00MARK_OPEN\x00")
+    .replace(/<\/mark>/g, "\x00MARK_CLOSE\x00")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\x00MARK_OPEN\x00/g, "<mark>")
+    .replace(/\x00MARK_CLOSE\x00/g, "</mark>");
+}
+
 type SidebarTab = "files" | "articles";
 
 interface SidebarProps {
@@ -355,7 +369,7 @@ export function Sidebar({
                     <div
                       className="text-xs mt-0.5 truncate"
                       style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}
-                      dangerouslySetInnerHTML={{ __html: result.snippet }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeSnippet(result.snippet) }}
                     />
                   )}
                 </button>

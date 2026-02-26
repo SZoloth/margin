@@ -328,8 +328,84 @@ pub fn remove_document_index(state: tauri::State<'_, DbPool>, document_id: Strin
 
 #[tauri::command]
 pub fn index_all_documents(state: tauri::State<'_, DbPool>) -> Result<IndexAllResult, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    index_all_documents_inner(&conn)
+    // Collect document list under lock, then drop lock for file I/O
+    let docs: Vec<(String, String, Option<String>, Option<i64>)> = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        ensure_fts_table(&conn)?;
+
+        let mut stmt = conn
+            .prepare("SELECT id, file_path, title, indexed_at FROM documents WHERE file_path IS NOT NULL")
+            .map_err(|e| format!("Failed to query documents: {e}"))?;
+        stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<i64>>(3)?,
+            ))
+        })
+        .map_err(|e| format!("Failed to read documents: {e}"))?
+        .filter_map(|r| r.ok())
+        .collect()
+    }; // lock dropped here
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+
+    let mut indexed = 0usize;
+    let mut skipped = 0usize;
+    let mut errors = 0usize;
+
+    for (doc_id, file_path, title, indexed_at) in &docs {
+        // Check file mtime — no lock needed
+        let mtime_ms = match std::fs::metadata(file_path) {
+            Ok(meta) => meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0),
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+
+        if let Some(ia) = indexed_at {
+            if mtime_ms <= *ia {
+                skipped += 1;
+                continue;
+            }
+        }
+
+        // Read file — no lock needed
+        let content = match std::fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("index_all: failed to read {file_path}: {e}");
+                errors += 1;
+                continue;
+            }
+        };
+
+        // Briefly reacquire lock for DB writes
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        let doc_title = title.as_deref().unwrap_or("Untitled");
+        if let Err(e) = index_document_inner(&conn, doc_id, doc_title, &content) {
+            eprintln!("index_all: failed to index {file_path}: {e}");
+            errors += 1;
+            continue;
+        }
+        let _ = conn.execute(
+            "UPDATE documents SET indexed_at = ?1 WHERE id = ?2",
+            rusqlite::params![now_ms, doc_id],
+        );
+        indexed += 1;
+    }
+
+    Ok(IndexAllResult { indexed, skipped, errors })
 }
 
 #[cfg(test)]
