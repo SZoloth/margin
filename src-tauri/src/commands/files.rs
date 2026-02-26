@@ -1,4 +1,4 @@
-use crate::db::migrations::get_db;
+use crate::db::migrations::DbPool;
 use crate::db::models::Document;
 use serde::Serialize;
 use std::fs;
@@ -63,7 +63,7 @@ pub async fn list_markdown_files(dir: String) -> Result<Vec<FileEntry>, String> 
 }
 
 #[tauri::command]
-pub async fn rename_file(old_path: String, new_name: String) -> Result<Document, String> {
+pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_name: String) -> Result<Document, String> {
     let new_name = new_name.trim().to_string();
     if new_name.is_empty() {
         return Err("File name cannot be empty".to_string());
@@ -104,9 +104,9 @@ pub async fn rename_file(old_path: String, new_name: String) -> Result<Document,
         .to_string();
 
     // Update database — roll back the file rename if DB fails
-    let conn = get_db().map_err(|e| {
+    let conn = state.0.lock().map_err(|_| {
         let _ = fs::rename(&new_path, &old_path);
-        format!("Failed to open database (file rename rolled back): {}", e)
+        "Failed to acquire database lock (file rename rolled back)".to_string()
     })?;
     conn.execute(
         "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3",

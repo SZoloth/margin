@@ -1,4 +1,4 @@
-use crate::db::migrations::get_db;
+use crate::db::migrations::DbPool;
 use crate::db::models::{Highlight, MarginNote};
 use rusqlite::Connection;
 use std::time::SystemTime;
@@ -154,6 +154,7 @@ fn remove_margin_note(conn: &Connection, id: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn create_highlight(
+    state: tauri::State<'_, DbPool>,
     document_id: String,
     color: String,
     text_content: String,
@@ -162,7 +163,7 @@ pub async fn create_highlight(
     prefix_context: Option<String>,
     suffix_context: Option<String>,
 ) -> Result<Highlight, String> {
-    let conn = get_db()?;
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let id = Uuid::new_v4().to_string();
     let now = now_millis();
 
@@ -190,14 +191,14 @@ pub async fn create_highlight(
 }
 
 #[tauri::command]
-pub async fn get_highlights(document_id: String) -> Result<Vec<Highlight>, String> {
-    let conn = get_db()?;
+pub async fn get_highlights(state: tauri::State<'_, DbPool>, document_id: String) -> Result<Vec<Highlight>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     fetch_highlights(&conn, &document_id)
 }
 
 #[tauri::command]
-pub async fn update_highlight_color(id: String, color: String) -> Result<(), String> {
-    let conn = get_db()?;
+pub async fn update_highlight_color(state: tauri::State<'_, DbPool>, id: String, color: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let now = now_millis();
 
     set_highlight_color(&conn, &id, &color, now)?;
@@ -209,8 +210,8 @@ pub async fn update_highlight_color(id: String, color: String) -> Result<(), Str
 }
 
 #[tauri::command]
-pub async fn delete_highlight(id: String) -> Result<(), String> {
-    let conn = get_db()?;
+pub async fn delete_highlight(state: tauri::State<'_, DbPool>, id: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
 
     let doc_id = document_id_for_highlight(&conn, &id)?;
     remove_highlight(&conn, &id)?;
@@ -221,10 +222,11 @@ pub async fn delete_highlight(id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn create_margin_note(
+    state: tauri::State<'_, DbPool>,
     highlight_id: String,
     content: String,
 ) -> Result<MarginNote, String> {
-    let conn = get_db()?;
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let id = Uuid::new_v4().to_string();
     let now = now_millis();
 
@@ -243,14 +245,14 @@ pub async fn create_margin_note(
 }
 
 #[tauri::command]
-pub async fn get_margin_notes(document_id: String) -> Result<Vec<MarginNote>, String> {
-    let conn = get_db()?;
+pub async fn get_margin_notes(state: tauri::State<'_, DbPool>, document_id: String) -> Result<Vec<MarginNote>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     fetch_margin_notes(&conn, &document_id)
 }
 
 #[tauri::command]
-pub async fn update_margin_note(id: String, content: String) -> Result<(), String> {
-    let conn = get_db()?;
+pub async fn update_margin_note(state: tauri::State<'_, DbPool>, id: String, content: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let now = now_millis();
 
     let doc_id = document_id_for_margin_note(&conn, &id)?;
@@ -261,8 +263,8 @@ pub async fn update_margin_note(id: String, content: String) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub async fn delete_margin_note(id: String) -> Result<(), String> {
-    let conn = get_db()?;
+pub async fn delete_margin_note(state: tauri::State<'_, DbPool>, id: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
 
     let doc_id = document_id_for_margin_note(&conn, &id)?;
     remove_margin_note(&conn, &id)?;

@@ -221,6 +221,7 @@ export function AppShell({
           recentDocs={recentDocs}
           searchQuery={search.query}
           onSearch={search.search}
+          searchResults={search.results}
           fileResults={search.fileResults}
           isSearching={search.isSearching}
           onOpenFilePath={(path, newTab) => { onOpenFilePath(path, newTab); closeSidebar(); }}

@@ -1,4 +1,4 @@
-use crate::db::migrations::get_db;
+use crate::db::migrations::DbPool;
 use crate::db::models::CorrectionInput;
 use rusqlite::Connection;
 use std::fs;
@@ -105,20 +105,21 @@ fn count_corrections(conn: &Connection) -> rusqlite::Result<i64> {
 }
 
 #[tauri::command]
-pub async fn get_all_corrections(limit: Option<i64>) -> Result<Vec<CorrectionRecord>, String> {
-    let conn = get_db()?;
+pub async fn get_all_corrections(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<CorrectionRecord>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let limit = limit.unwrap_or(200).max(1).min(2000);
     fetch_corrections(&conn, limit).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn get_corrections_count() -> Result<i64, String> {
-    let conn = get_db()?;
+pub async fn get_corrections_count(state: tauri::State<'_, DbPool>) -> Result<i64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     count_corrections(&conn).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn persist_corrections(
+    state: tauri::State<'_, DbPool>,
     corrections: Vec<CorrectionInput>,
     document_id: String,
     document_title: Option<String>,
@@ -126,10 +127,10 @@ pub async fn persist_corrections(
     document_path: Option<String>,
     export_date: String,
 ) -> Result<String, String> {
-    let mut conn = get_db()?;
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let session_id = Uuid::new_v4().to_string();
     let now = now_millis()?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
     let safe_export_date = sanitize_filename_component(&export_date);
     let mut jsonl_file = dirs::home_dir()
@@ -360,8 +361,7 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
                 created_at: row.get(6)?,
             })
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     let now = {
         let d = SystemTime::now()
@@ -401,30 +401,31 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
 }
 
 #[tauri::command]
-pub async fn get_corrections_by_document(limit: Option<i64>) -> Result<Vec<DocumentCorrections>, String> {
-    let conn = get_db()?;
+pub async fn get_corrections_by_document(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<DocumentCorrections>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let limit = limit.unwrap_or(50).max(1).min(500);
     fetch_corrections_by_document(&conn, limit).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn update_correction_writing_type(
+    state: tauri::State<'_, DbPool>,
     highlight_id: String,
     writing_type: String,
 ) -> Result<(), String> {
-    let conn = get_db()?;
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     update_writing_type(&conn, &highlight_id, &writing_type).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn delete_correction(highlight_id: String) -> Result<(), String> {
-    let conn = get_db()?;
+pub async fn delete_correction(state: tauri::State<'_, DbPool>, highlight_id: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     delete_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn export_corrections_json(path: Option<String>) -> Result<usize, String> {
-    let conn = get_db()?;
+pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Option<String>) -> Result<usize, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let export = build_corrections_export(&conn).map_err(|e| e.to_string())?;
     let count = export.total_count;
 

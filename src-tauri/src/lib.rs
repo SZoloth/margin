@@ -31,6 +31,7 @@ pub fn run() {
         .manage(Mutex::new(watcher::FileWatcher::new()))
         .manage(PendingOpenFiles(Mutex::new(Vec::new())))
         .invoke_handler(tauri::generate_handler![
+            commands::search::index_all_documents,
             commands::files::open_file_dialog,
             commands::files::read_file,
             commands::files::save_file,
@@ -67,8 +68,9 @@ pub fn run() {
             watcher::unwatch_file,
             drain_pending_open_files,
         ])
-        .setup(|_app| {
-            db::migrations::init_db()?;
+        .setup(|app| {
+            let pool = db::migrations::init_db()?;
+            app.manage(pool);
             Ok(())
         })
         .build(tauri::generate_context!())

@@ -4,7 +4,7 @@ import { FolderOpenIcon, Search01Icon, Settings01Icon } from "@hugeicons/core-fr
 import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
 import type { KeepLocalItem } from "@/types/keep-local";
-import type { FileResult } from "@/hooks/useSearch";
+import type { SearchResult, FileResult } from "@/hooks/useSearch";
 import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
@@ -17,6 +17,7 @@ interface SidebarProps {
   recentDocs: Document[];
   searchQuery: string;
   onSearch: (query: string) => void;
+  searchResults: SearchResult[];
   fileResults: FileResult[];
   isSearching: boolean;
   onOpenFilePath: (path: string, newTab: boolean) => void;
@@ -39,6 +40,7 @@ export function Sidebar({
   recentDocs,
   searchQuery,
   onSearch,
+  searchResults,
   fileResults,
   isSearching,
   onOpenFilePath,
@@ -94,6 +96,7 @@ export function Sidebar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const hasResults = searchResults.length > 0 || fileResults.length > 0;
   const showDropdown = activeTab === "files" && isFocused && inputValue.trim().length > 0;
   const dropdown = useAnimatedPresence(showDropdown, 150);
 
@@ -102,6 +105,8 @@ export function Sidebar({
     if (keepLocalDebounceRef.current) clearTimeout(keepLocalDebounceRef.current);
     keepLocalDebounceRef.current = setTimeout(() => onKeepLocalSearch(value), 150);
   }, [onKeepLocalSearch]);
+
+  const totalResults = searchResults.length + fileResults.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -116,20 +121,38 @@ export function Sidebar({
       setIsFocused(false);
     } else if (e.key === "ArrowDown" && showDropdown) {
       e.preventDefault();
-      setActiveResultIndex((i) => Math.min(i + 1, fileResults.length - 1));
+      setActiveResultIndex((i) => Math.min(i + 1, totalResults - 1));
     } else if (e.key === "ArrowUp" && showDropdown) {
       e.preventDefault();
       setActiveResultIndex((i) => Math.max(i - 1, -1));
     } else if (e.key === "Enter" && activeTab === "files") {
-      if (activeResultIndex >= 0 && activeResultIndex < fileResults.length) {
+      if (activeResultIndex >= 0) {
         e.preventDefault();
-        const file = fileResults[activeResultIndex];
-        if (file) {
-          onOpenFilePath(file.path, e.metaKey);
-          setIsFocused(false);
-          setInputValue("");
-          onSearch("");
-          setActiveResultIndex(-1);
+        // FTS5 results come first
+        if (activeResultIndex < searchResults.length) {
+          const result = searchResults[activeResultIndex];
+          if (result) {
+            // Find the document in recentDocs to open it
+            const doc = recentDocs.find((d) => d.id === result.documentId);
+            if (doc) {
+              onSelectRecentDoc(doc, e.metaKey);
+            }
+            setIsFocused(false);
+            setInputValue("");
+            onSearch("");
+            setActiveResultIndex(-1);
+          }
+        } else {
+          // File results come after FTS results
+          const fileIdx = activeResultIndex - searchResults.length;
+          const file = fileResults[fileIdx];
+          if (file) {
+            onOpenFilePath(file.path, e.metaKey);
+            setIsFocused(false);
+            setInputValue("");
+            onSearch("");
+            setActiveResultIndex(-1);
+          }
         }
       } else {
         onSearch(inputValue);
@@ -291,24 +314,72 @@ export function Sidebar({
                 : "opacity 100ms var(--ease-exit), transform 100ms var(--ease-exit)",
             }}
           >
-            {isSearching && fileResults.length === 0 && (
+            {isSearching && !hasResults && (
               <div className="px-3 py-3 text-sm italic" style={{ color: "var(--color-text-secondary)" }}>
                 Searching...
               </div>
             )}
-            {!isSearching && fileResults.length === 0 && (
+            {!isSearching && !hasResults && (
               <div className="px-3 py-3 text-sm italic" style={{ color: "var(--color-text-secondary)" }}>
                 No results
               </div>
             )}
-            {fileResults.map((file, index) => {
-              const parts = file.path.split("/");
-              const parentDir = parts.length > 2 ? parts[parts.length - 2] : "";
+            {/* FTS5 indexed document results */}
+            {searchResults.map((result, index) => {
               const isActive = index === activeResultIndex;
               return (
                 <button
-                  key={file.path}
+                  key={`fts-${result.documentId}`}
                   id={`search-option-${index}`}
+                  role="option"
+                  aria-selected={isActive}
+                  onClick={(e) => {
+                    const doc = recentDocs.find((d) => d.id === result.documentId);
+                    if (doc) {
+                      onSelectRecentDoc(doc, e.metaKey);
+                    }
+                    setIsFocused(false);
+                    setInputValue("");
+                    onSearch("");
+                    setActiveResultIndex(-1);
+                  }}
+                  className="interactive-item w-full text-left px-3 py-2"
+                  style={{
+                    color: "var(--color-text-primary)",
+                    borderRadius: 0,
+                    backgroundColor: isActive ? "var(--active-bg)" : undefined,
+                  }}
+                >
+                  <div className="text-sm font-medium truncate">{result.title}</div>
+                  {result.snippet && (
+                    <div
+                      className="text-xs mt-0.5 truncate"
+                      style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}
+                      dangerouslySetInnerHTML={{ __html: result.snippet }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+            {/* Divider between FTS and file results */}
+            {searchResults.length > 0 && fileResults.length > 0 && (
+              <div
+                className="px-3 py-1.5 text-xs font-medium uppercase tracking-wider"
+                style={{ color: "var(--color-text-secondary)", opacity: 0.5 }}
+              >
+                Files on disk
+              </div>
+            )}
+            {/* mdfind file results */}
+            {fileResults.map((file, index) => {
+              const parts = file.path.split("/");
+              const parentDir = parts.length > 2 ? parts[parts.length - 2] : "";
+              const combinedIndex = searchResults.length + index;
+              const isActive = combinedIndex === activeResultIndex;
+              return (
+                <button
+                  key={file.path}
+                  id={`search-option-${combinedIndex}`}
                   role="option"
                   aria-selected={isActive}
                   onClick={(e) => {

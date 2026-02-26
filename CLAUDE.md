@@ -53,9 +53,11 @@ pnpm tsc --noEmit     # Type check without emitting
 - **Styling:** CSS variables for theming (light/dark via `prefers-color-scheme`), Tailwind v4, custom CSS in `src/styles/`. Highlight colors defined as CSS custom properties in `globals.css`.
 - **Editor:** TipTap with custom extensions in `src/components/editor/extensions/` (MultiColorHighlight, MarginNote).
 
-## Build & Verification
+## Testing & Verification
 
 This is a Tauri app (Rust backend + React/TypeScript frontend). After making Rust changes, always run `cargo check` before proceeding. After TypeScript changes, run the TypeScript compiler to catch type errors. Do not assume the first implementation compiles cleanly.
+
+**Do NOT use browser automation or Chrome DevTools to test this app.** The app runs inside a Tauri webview, not a browser tab. Chrome DevTools MCP tools, Puppeteer, Playwright, and similar browser automation cannot connect to or interact with the Tauri window. To verify UI changes, ask the user to test manually in the running app, or write unit/integration tests (Vitest for frontend, `cargo test` for backend).
 
 ## Issue tracking
 

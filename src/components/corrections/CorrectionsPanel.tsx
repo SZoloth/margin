@@ -340,15 +340,101 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
       if (count === 0) {
         setExportStatus("No corrections to export");
       } else {
-        await writeText("/synthesize-writing-rules");
-        setExportStatus(`Exported ${count} corrections. Command copied to clipboard.`);
+        const prompt = `Objective
+- Convert writing corrections from ~/.margin/corrections-export.json into actionable writing rules in ~/.margin/writing-rules.md.
+- Done when: (1) rules are grouped and de-duplicated, (2) each rule has ≥1 before/after example grounded in the corrections, (3) only the "## Learned from corrections" section is added/updated while all other existing content is preserved verbatim.
+
+Context / Inputs
+- Input JSON: ~/.margin/corrections-export.json (${count} corrections)
+- Output Markdown: ~/.margin/writing-rules.md
+
+Scope Constraints (blast radius)
+- Read ONLY: ~/.margin/corrections-export.json (and ~/.margin/writing-rules.md if it exists).
+- Write ONLY: ~/.margin/writing-rules.md
+- Do NOT change any sections outside "## Learned from corrections".
+- No invented examples: before/after must be derived from actual snippet + correction pairs found in the JSON. If a correction lacks enough context to show a clean example, omit the example and mark the rule "example unavailable".
+
+Process (must follow)
+1) Inspect
+   - Parse the JSON and print a short schema sketch of what you found (keys present, how filename/snippet/notes are represented).
+   - Report counts: total corrections, unique filenames, and whether writingType exists (and distinct values).
+2) Plan (checkpoint)
+   - Propose a grouping strategy:
+     - Primary themes: word choice, tone, structure, domain-specific, clarity, concision, formatting (add others only if needed).
+     - Secondary grouping: writingType (if present). If not present, infer a small set of writing contexts ONLY when the correction text explicitly indicates it (e.g., "email", "blog", "doc").
+   - Define "strong signal" as the same or semantically equivalent correction occurring ≥2 times (e.g., repeated admonition about hedging words). List the top repeated patterns you expect to turn into rules.
+   - STOP after the plan and wait for approval if anything about the JSON structure prevents faithful extraction.
+3) Generate rules
+   - Create/update the "## Learned from corrections" section with this structure:
+
+## Learned from corrections
+### Summary
+- Bullet list of 5-10 highest-signal rules (ordered by strength: repeat frequency + severity/impact).
+
+### By writing type (if writingType exists)
+#### <writingType>
+- Theme headings under each type.
+
+### By theme (always include)
+#### Word choice
+#### Tone
+#### Structure
+#### Domain-specific / terminology
+(Include additional themes only if supported by corrections.)
+
+Rule format (repeat for each rule)
+- Rule: <imperative, testable>
+- When to apply: <1 sentence>
+- Why: <1 sentence, grounded in correction text>
+- Signal: <e.g., "seen 3 times across 2 files">
+- Before -> After:
+  - Before: "..." (verbatim snippet segment)
+  - After:  "..." (edited version matching the correction)
+- Notes: <edge cases or exceptions; optional>
+
+4) Update file safely (preservation requirement)
+   - If ~/.margin/writing-rules.md exists:
+     - Preserve everything outside the "## Learned from corrections" section verbatim.
+     - Replace the entire "## Learned from corrections" section content (idempotent rewrite).
+   - If it does not exist:
+     - Create it with a short header and then the "## Learned from corrections" section.
+5) Wire into agent config (idempotent)
+   - Look for the agent config file in the current project or home directory. Common locations:
+     - CLAUDE.md or .claude/CLAUDE.md (Claude Code)
+     - AGENTS.md (Codex, others)
+     - .cursorrules (Cursor)
+     - .windsurfrules (Windsurf)
+     - .github/copilot-instructions.md (Copilot)
+   - If you find one (or more), check whether it already references ~/.margin/writing-rules.md.
+   - If not, append a one-line include/reference at the end. Example for markdown-based configs:
+     - "See ~/.margin/writing-rules.md for writing style rules learned from corrections."
+   - If you can't determine the agent config format, print the line and ask the user where to add it.
+   - Do NOT modify any existing content in the config file beyond appending this reference.
+
+Verification (must provide)
+- A checklist:
+  - [ ] Total corrections processed = <N>
+  - [ ] Number of rules generated = <N>
+  - [ ] Number of rules with before/after examples = <N>
+  - [ ] Repeated patterns (>=2) captured = <list + counts>
+- Show a brief "change summary":
+  - Whether file was created vs updated
+  - The exact heading path(s) added under "## Learned from corrections"
+  - Confirm no other sections were modified
+
+Stop Conditions (pause and ask)
+- If JSON lacks snippet text needed for before/after examples.
+- If writingType is absent and you would need to guess contexts.
+- If ~/.margin/writing-rules.md has multiple similarly-named sections and it's ambiguous which one to replace.`;
+        await writeText(prompt);
+        setExportStatus("Prompt copied to clipboard. Paste into your coding agent to generate writing rules.");
       }
       if (exportTimeoutRef.current !== null) {
         window.clearTimeout(exportTimeoutRef.current);
       }
       exportTimeoutRef.current = window.setTimeout(
         () => setExportStatus(null),
-        3000,
+        8000,
       );
     } catch (err) {
       console.error("Failed to export corrections:", err);
@@ -564,8 +650,11 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
                 style={{
                   fontSize: 11,
                   color: "var(--color-text-secondary)",
-                  textAlign: "center",
-                  marginTop: 6,
+                  lineHeight: 1.5,
+                  marginTop: 8,
+                  padding: "8px 10px",
+                  backgroundColor: "var(--hover-bg)",
+                  borderRadius: "var(--radius-sm)",
                 }}
               >
                 {exportStatus}

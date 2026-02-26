@@ -2,6 +2,7 @@ use rusqlite::Connection;
 use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 fn db_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let home = dirs::home_dir().ok_or("Could not determine home directory")?;
@@ -10,12 +11,29 @@ fn db_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(margin_dir.join("margin.db"))
 }
 
-pub fn init_db() -> Result<(), Box<dyn std::error::Error>> {
+/// Shared database connection pool (single connection behind a mutex).
+/// All Tauri commands use this via managed state instead of opening fresh connections.
+pub struct DbPool(pub Mutex<Connection>);
+
+impl DbPool {
+    pub fn new(conn: Connection) -> Self {
+        DbPool(Mutex::new(conn))
+    }
+}
+
+fn apply_pragmas(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    conn.execute_batch("PRAGMA busy_timeout=5000;")?;
+    conn.execute_batch("PRAGMA synchronous=NORMAL;")?;
+    Ok(())
+}
+
+pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     let path = db_path()?;
     let conn = Connection::open(&path)?;
 
-    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
-    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    apply_pragmas(&conn)?;
 
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS documents (
@@ -105,7 +123,10 @@ pub fn init_db() -> Result<(), Box<dyn std::error::Error>> {
     // Migration: add writing_type column to corrections
     migrate_corrections_add_writing_type(&conn)?;
 
-    Ok(())
+    // Migration: add access_count and indexed_at columns to documents
+    migrate_documents_add_frecency_columns(&conn)?;
+
+    Ok(DbPool::new(conn))
 }
 
 /// Rebuilds the corrections table without foreign key constraints.
@@ -276,6 +297,98 @@ fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) -> us
 mod tests {
     use super::*;
     use std::io::Write;
+
+    // === DbPool tests ===
+
+    #[test]
+    fn db_pool_sets_wal_mode() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        // In-memory databases report "memory" instead of "wal", but the pragma doesn't error.
+        // For a real file DB it would be "wal". Just verify it doesn't fail.
+        assert!(!mode.is_empty());
+    }
+
+    #[test]
+    fn db_pool_sets_foreign_keys() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let fk: i64 = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0)).unwrap();
+        assert_eq!(fk, 1);
+    }
+
+    #[test]
+    fn db_pool_sets_busy_timeout() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let timeout: i64 = conn.query_row("PRAGMA busy_timeout", [], |r| r.get(0)).unwrap();
+        assert_eq!(timeout, 5000);
+    }
+
+    #[test]
+    fn db_pool_connection_is_reusable() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let pool = DbPool::new(conn);
+
+        // First use
+        {
+            let c = pool.0.lock().unwrap();
+            c.execute_batch("CREATE TABLE test (id INTEGER PRIMARY KEY)").unwrap();
+            c.execute("INSERT INTO test (id) VALUES (1)", []).unwrap();
+        }
+
+        // Second use — same connection, data persists
+        {
+            let c = pool.0.lock().unwrap();
+            let count: i64 = c.query_row("SELECT COUNT(*) FROM test", [], |r| r.get(0)).unwrap();
+            assert_eq!(count, 1);
+        }
+    }
+
+    // === Frecency migration tests ===
+
+    #[test]
+    fn migrate_adds_access_count_and_indexed_at() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE documents (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                file_path TEXT,
+                keep_local_id TEXT,
+                title TEXT,
+                author TEXT,
+                url TEXT,
+                word_count INTEGER DEFAULT 0,
+                last_opened_at INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                UNIQUE(file_path),
+                UNIQUE(keep_local_id)
+            );",
+        ).unwrap();
+
+        migrate_documents_add_frecency_columns(&conn).unwrap();
+
+        // Verify columns exist
+        conn.execute(
+            "INSERT INTO documents (id, source, last_opened_at, created_at, access_count, indexed_at)
+             VALUES ('d1', 'file', 1000, 1000, 5, 2000)",
+            [],
+        ).unwrap();
+
+        let (ac, ia): (i64, Option<i64>) = conn.query_row(
+            "SELECT access_count, indexed_at FROM documents WHERE id = 'd1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(ac, 5);
+        assert_eq!(ia, Some(2000));
+
+        // Idempotent
+        migrate_documents_add_frecency_columns(&conn).unwrap();
+    }
 
     fn corrections_table_sql() -> &'static str {
         "CREATE TABLE corrections (
@@ -526,10 +639,21 @@ fn migrate_corrections_add_writing_type(conn: &Connection) -> Result<(), Box<dyn
     Ok(())
 }
 
-pub fn get_db() -> Result<Connection, String> {
-    let path = db_path().map_err(|e| e.to_string())?;
-    let conn = Connection::open(&path).map_err(|e| e.to_string())?;
-    conn.execute_batch("PRAGMA foreign_keys=ON;")
-        .map_err(|e| e.to_string())?;
-    Ok(conn)
+/// Adds `access_count` and `indexed_at` columns to the documents table if they don't exist.
+fn migrate_documents_add_frecency_columns(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(documents)")?;
+        let cols = stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        cols
+    };
+
+    if !columns.iter().any(|c| c == "access_count") {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN access_count INTEGER DEFAULT 0;")?;
+    }
+    if !columns.iter().any(|c| c == "indexed_at") {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN indexed_at INTEGER;")?;
+    }
+    Ok(())
 }

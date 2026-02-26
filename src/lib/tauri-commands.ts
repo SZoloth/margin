@@ -93,3 +93,13 @@ export async function exportCorrectionsJson(path?: string): Promise<number> {
     path === undefined ? {} : { path },
   );
 }
+
+export interface IndexAllResult {
+  indexed: number;
+  skipped: number;
+  errors: number;
+}
+
+export async function indexAllDocuments(): Promise<IndexAllResult> {
+  return invoke<IndexAllResult>("index_all_documents");
+}

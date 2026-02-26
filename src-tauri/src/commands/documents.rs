@@ -1,4 +1,4 @@
-use crate::db::migrations::get_db;
+use crate::db::migrations::DbPool;
 use crate::db::models::Document;
 use rusqlite::Connection;
 use uuid::Uuid;
@@ -85,14 +85,14 @@ fn upsert_document_inner(conn: &Connection, mut doc: Document) -> Result<Documen
 // === Tauri command handlers ===
 
 #[tauri::command]
-pub async fn get_recent_documents(limit: Option<i64>) -> Result<Vec<Document>, String> {
-    let conn = get_db()?;
+pub async fn get_recent_documents(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<Document>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     fetch_recent_documents(&conn, limit.unwrap_or(20))
 }
 
 #[tauri::command]
-pub async fn upsert_document(doc: Document) -> Result<Document, String> {
-    let conn = get_db()?;
+pub async fn upsert_document(state: tauri::State<'_, DbPool>, doc: Document) -> Result<Document, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     upsert_document_inner(&conn, doc)
 }
 

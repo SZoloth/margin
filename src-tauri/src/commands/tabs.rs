@@ -1,4 +1,4 @@
-use crate::db::migrations::get_db;
+use crate::db::migrations::DbPool;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
@@ -71,14 +71,14 @@ fn persist_open_tabs(conn: &Connection, tabs: &[PersistedTab]) -> Result<(), Str
 // === Tauri command handlers ===
 
 #[tauri::command]
-pub async fn get_open_tabs() -> Result<Vec<PersistedTab>, String> {
-    let conn = get_db()?;
+pub async fn get_open_tabs(state: tauri::State<'_, DbPool>) -> Result<Vec<PersistedTab>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     fetch_open_tabs(&conn)
 }
 
 #[tauri::command]
-pub async fn save_open_tabs(tabs: Vec<PersistedTab>) -> Result<(), String> {
-    let conn = get_db()?;
+pub async fn save_open_tabs(state: tauri::State<'_, DbPool>, tabs: Vec<PersistedTab>) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     persist_open_tabs(&conn, &tabs)
 }
 
