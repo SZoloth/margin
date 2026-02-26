@@ -51,5 +51,12 @@
       }
     ]
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI1Qzg1RTNCQTg1MUUzMTgKUldRWTQxR29PMTdJSlpvSXBZRlhxbTFCLzJFc2YvcjYxZTRiQ3VOOU5zbllBL3BRNWtXZ0lEYjMK",
+      "endpoints": [
+        "https://github.com/SZoloth/margin/releases/latest/download/latest.json"
+      ]
+    }
+  }
 }

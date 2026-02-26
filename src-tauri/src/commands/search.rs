@@ -346,7 +346,8 @@ pub fn index_all_documents(state: tauri::State<'_, DbPool>) -> Result<IndexAllRe
             ))
         })
         .map_err(|e| format!("Failed to read documents: {e}"))?;
-        rows.filter_map(|r| r.ok()).collect()
+        let result: Vec<_> = rows.filter_map(|r| r.ok()).collect();
+        result
     }; // lock dropped here
 
     let now_ms = std::time::SystemTime::now()
