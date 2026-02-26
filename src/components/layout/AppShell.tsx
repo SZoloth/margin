@@ -4,10 +4,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Menu01Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
-import type { KeepLocalItem } from "@/types/keep-local";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TabBar } from "@/components/layout/TabBar";
-import type { useKeepLocal } from "@/hooks/useKeepLocal";
 import type { useSearch } from "@/hooks/useSearch";
 
 interface AppShellProps {
@@ -18,8 +16,6 @@ interface AppShellProps {
   onOpenFile: () => void;
   onSelectRecentDoc: (doc: Document, newTab: boolean) => void;
   isDirty: boolean;
-  keepLocal: ReturnType<typeof useKeepLocal>;
-  onSelectKeepLocalItem: (item: KeepLocalItem, newTab: boolean) => void;
   search: ReturnType<typeof useSearch>;
   hasAnnotations?: boolean;
   onExport?: () => void;
@@ -44,8 +40,6 @@ export function AppShell({
   onOpenFile,
   onSelectRecentDoc,
   isDirty: _isDirty,
-  keepLocal,
-  onSelectKeepLocalItem,
   search,
   hasAnnotations,
   onExport,
@@ -226,12 +220,6 @@ export function AppShell({
           isSearching={search.isSearching}
           onOpenFilePath={(path, newTab) => { onOpenFilePath(path, newTab); closeSidebar(); }}
           onRenameFile={onRenameFile}
-          keepLocalItems={keepLocal.items}
-          keepLocalIsOnline={keepLocal.isOnline}
-          keepLocalIsLoading={keepLocal.isLoading}
-          keepLocalQuery={keepLocal.query}
-          onKeepLocalSearch={keepLocal.search}
-          onSelectKeepLocalItem={(item, newTab) => { onSelectKeepLocalItem(item, newTab); closeSidebar(); }}
           onOpenSettings={onOpenSettings}
           tabs={tabs}
         />
@@ -377,7 +365,7 @@ export function AppShell({
                     letterSpacing: "-0.01em",
                   }}
                 >
-                  Open a file or select an article to start reading
+                  Open a file to start reading
                 </p>
                 <p
                   className="mt-2 opacity-50"
