@@ -1,6 +1,6 @@
 [package]
 name = "margin"
-version = "0.5.6"
+version = "0.5.7"
 description = "A local markdown reader and editor"
 authors = ["Sam Zoloth"]
 edition = "2021"
@@ -25,11 +25,16 @@ serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13", features = ["json"], default-features = false }
 notify = { version = "7", features = ["macos_fsevent"] }
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+
+[profile.release]
+codegen-units = 16   # parallelize codegen (default 1)
+opt-level = 2        # negligible diff for desktop app, faster compile
+strip = true         # smaller binary, faster signing
 
 [dev-dependencies]
 tempfile = "3"
