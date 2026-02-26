@@ -1,11 +1,9 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FolderOpenIcon, Search01Icon, Settings01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
-import type { KeepLocalItem } from "@/types/keep-local";
 import type { SearchResult, FileResult } from "@/hooks/useSearch";
-import { SidebarKeepLocal } from "@/components/layout/SidebarKeepLocal";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
 /** Sanitize FTS snippet HTML — only allow <mark> and </mark> tags, escape everything else. */
@@ -22,8 +20,6 @@ function sanitizeSnippet(html: string): string {
     .replace(/\x00MARK_CLOSE\x00/g, "</mark>");
 }
 
-type SidebarTab = "files" | "articles";
-
 interface SidebarProps {
   onOpenFile: () => void;
   onSelectRecentDoc: (doc: Document, newTab: boolean) => void;
@@ -37,13 +33,6 @@ interface SidebarProps {
   onOpenFilePath: (path: string, newTab: boolean) => void;
   onRenameFile?: (doc: Document, newName: string) => void;
   tabs: Tab[];
-  // Keep-local props
-  keepLocalItems: KeepLocalItem[];
-  keepLocalIsOnline: boolean;
-  keepLocalIsLoading: boolean;
-  keepLocalQuery: string;
-  onKeepLocalSearch: (q: string) => void;
-  onSelectKeepLocalItem: (item: KeepLocalItem, newTab: boolean) => void;
   onOpenSettings?: () => void;
 }
 
@@ -60,15 +49,8 @@ export function Sidebar({
   onOpenFilePath,
   onRenameFile,
   tabs,
-  keepLocalItems,
-  keepLocalIsOnline,
-  keepLocalIsLoading,
-  keepLocalQuery,
-  onKeepLocalSearch,
-  onSelectKeepLocalItem,
   onOpenSettings,
 }: SidebarProps) {
-  const [activeTab, setActiveTab] = useState<SidebarTab>("files");
   const [isFocused, setIsFocused] = useState(false);
   const [inputValue, setInputValue] = useState(searchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,27 +60,10 @@ export function Sidebar({
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync input value when the active tab's query changes externally
+  // Sync input value when search query changes externally
   useEffect(() => {
-    setInputValue(activeTab === "files" ? searchQuery : keepLocalQuery);
-  }, [searchQuery, keepLocalQuery, activeTab]);
-
-  // Sidebar tab content crossfade
-  const [tabContentVisible, setTabContentVisible] = useState(true);
-  const tabFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Reset input when switching tabs
-  const handleTabChange = (tab: SidebarTab) => {
-    if (tab === activeTab) return;
-    if (tabFadeRef.current) clearTimeout(tabFadeRef.current);
-    setTabContentVisible(false);
-    tabFadeRef.current = setTimeout(() => {
-      setActiveTab(tab);
-      setInputValue(tab === "files" ? searchQuery : keepLocalQuery);
-      setIsFocused(false);
-      setTabContentVisible(true);
-    }, 80);
-  };
+    setInputValue(searchQuery);
+  }, [searchQuery]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -111,25 +76,15 @@ export function Sidebar({
   }, []);
 
   const hasResults = searchResults.length > 0 || fileResults.length > 0;
-  const showDropdown = activeTab === "files" && isFocused && inputValue.trim().length > 0;
+  const showDropdown = isFocused && inputValue.trim().length > 0;
   const dropdown = useAnimatedPresence(showDropdown, 150);
-
-  const keepLocalDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedKeepLocalSearch = useCallback((value: string) => {
-    if (keepLocalDebounceRef.current) clearTimeout(keepLocalDebounceRef.current);
-    keepLocalDebounceRef.current = setTimeout(() => onKeepLocalSearch(value), 150);
-  }, [onKeepLocalSearch]);
 
   const totalResults = searchResults.length + fileResults.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setInputValue("");
-      if (activeTab === "files") {
-        onSearch("");
-      } else {
-        onKeepLocalSearch("");
-      }
+      onSearch("");
       setActiveResultIndex(-1);
       inputRef.current?.blur();
       setIsFocused(false);
@@ -139,7 +94,7 @@ export function Sidebar({
     } else if (e.key === "ArrowUp" && showDropdown) {
       e.preventDefault();
       setActiveResultIndex((i) => Math.max(i - 1, -1));
-    } else if (e.key === "Enter" && activeTab === "files") {
+    } else if (e.key === "Enter") {
       if (activeResultIndex >= 0) {
         e.preventDefault();
         // FTS5 results come first
@@ -178,11 +133,7 @@ export function Sidebar({
     const value = e.target.value;
     setInputValue(value);
     setActiveResultIndex(-1);
-    if (activeTab === "files") {
-      onSearch(value);
-    } else {
-      debouncedKeepLocalSearch(value);
-    }
+    onSearch(value);
   };
 
   const openDocIds = useMemo(() => {
@@ -287,7 +238,7 @@ export function Sidebar({
             aria-controls="search-listbox"
             aria-activedescendant={activeResultIndex >= 0 ? `search-option-${activeResultIndex}` : undefined}
             aria-autocomplete="list"
-            placeholder={activeTab === "files" ? "Search files..." : "Search articles..."}
+            placeholder="Search files..."
             value={inputValue}
             onChange={handleChange}
             onFocus={() => setIsFocused(true)}
@@ -295,20 +246,18 @@ export function Sidebar({
             className="flex-1 text-sm bg-transparent outline-none"
             style={{ color: "var(--color-text-primary)", minWidth: 0 }}
           />
-          {activeTab === "files" && (
-            <button
-              onClick={onOpenFile}
-              className="btn-sm flex-shrink-0 p-1"
-              style={{ color: "var(--color-text-secondary)" }}
-              aria-label="Open file"
-              title="Open file (⌘O)"
-            >
-              <HugeiconsIcon icon={FolderOpenIcon} size={14} color="currentColor" strokeWidth={2} />
-            </button>
-          )}
+          <button
+            onClick={onOpenFile}
+            className="btn-sm flex-shrink-0 p-1"
+            style={{ color: "var(--color-text-secondary)" }}
+            aria-label="Open file"
+            title="Open file (⌘O)"
+          >
+            <HugeiconsIcon icon={FolderOpenIcon} size={14} color="currentColor" strokeWidth={2} />
+          </button>
         </div>
 
-        {/* Search dropdown (files tab only) */}
+        {/* Search dropdown */}
         {dropdown.isMounted && (
           <div
             id="search-listbox"
@@ -426,71 +375,19 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 px-4 mb-3">
-        <button
-          onClick={() => handleTabChange("files")}
-          className="sidebar-tab flex-1 py-1.5 text-xs font-medium text-center"
-          style={{
-            backgroundColor: activeTab === "files" ? "var(--active-bg)" : "transparent",
-            color: activeTab === "files" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-            fontWeight: activeTab === "files" ? 500 : 400,
-            borderRadius: "var(--radius-sm)",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Files
-        </button>
-        <button
-          onClick={() => handleTabChange("articles")}
-          className="sidebar-tab flex-1 py-1.5 text-xs font-medium text-center flex items-center justify-center gap-1.5"
-          style={{
-            backgroundColor: activeTab === "articles" ? "var(--active-bg)" : "transparent",
-            color: activeTab === "articles" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-            fontWeight: activeTab === "articles" ? 500 : 400,
-            borderRadius: "var(--radius-sm)",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Articles
-          <span
-            role="status"
-            aria-label={keepLocalIsOnline ? "Online" : "Offline"}
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              backgroundColor: keepLocalIsOnline ? "var(--color-success)" : "var(--color-danger)",
-              flexShrink: 0,
-            }}
-          />
-        </button>
-      </div>
-
-      {/* Tab content — scrollable */}
-      <div
-        className="flex-1 overflow-y-auto px-4 pb-4"
-        style={{
-          opacity: tabContentVisible ? 1 : 0,
-          transition: tabContentVisible
-            ? "opacity 150ms var(--ease-entrance)"
-            : "opacity 80ms var(--ease-exit)",
-        }}
-      >
-        {activeTab === "files" ? (
-          <div>
-            {recentDocs.length === 0 ? (
-              <div
-                className="px-3 text-sm italic"
-                style={{ color: "var(--color-text-secondary)" }}
-              >
-                No recent documents
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {temporalGroups.map((group) => {
+      {/* Recent documents — scrollable */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div>
+          {recentDocs.length === 0 ? (
+            <div
+              className="px-3 text-sm italic"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              No recent documents
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {temporalGroups.map((group) => {
                   let runningIndex = 0;
                   // Calculate offset for stagger: sum of docs in prior groups
                   for (const g of temporalGroups) {
@@ -611,16 +508,8 @@ export function Sidebar({
                   );
                 })}
               </div>
-            )}
-          </div>
-        ) : (
-          <SidebarKeepLocal
-            items={keepLocalItems}
-            isOnline={keepLocalIsOnline}
-            isLoading={keepLocalIsLoading}
-            onSelectItem={onSelectKeepLocalItem}
-          />
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

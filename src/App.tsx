@@ -24,7 +24,6 @@ import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-anno
 import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 
-import type { KeepLocalItem } from "@/types/keep-local";
 import type { Document } from "@/types/document";
 import type { CorrectionInput } from "@/types/annotations";
 import type { ExportResult } from "@/types/export";
@@ -812,39 +811,6 @@ export default function App() {
     [doc, keepLocal, tabsHook]
   );
 
-  // Open a keep-local article
-  const handleSelectKeepLocalItem = useCallback(
-    async (item: KeepLocalItem, newTab: boolean) => {
-      openAsNewTabRef.current = newTab;
-      tabsHook.snapshotActive();
-      try {
-        const markdown = await keepLocal.getContent(item.id);
-        const now = Date.now();
-
-        const docRecord: Document = {
-          id: crypto.randomUUID(),
-          source: "keep-local",
-          file_path: null,
-          keep_local_id: item.id,
-          title: item.title ?? "Untitled",
-          author: item.author ?? null,
-          url: item.url,
-          word_count: item.wordCount,
-          last_opened_at: now,
-          created_at: now,
-        };
-
-        await doc.openKeepLocalArticle(docRecord, markdown);
-        if (doc.currentDoc) {
-          void search.indexDocument(doc.currentDoc.id, doc.currentDoc.title ?? "Untitled", markdown);
-        }
-      } catch (err) {
-        console.error("Failed to open keep-local article:", err);
-      }
-    },
-    [keepLocal, doc, search]
-  );
-
   return (
     <AppShell
       onOpenSettings={() => setShowSettings(true)}
@@ -853,8 +819,6 @@ export default function App() {
       onOpenFile={doc.openFile}
       onSelectRecentDoc={handleSelectRecentDoc}
       isDirty={doc.isDirty}
-      keepLocal={keepLocal}
-      onSelectKeepLocalItem={handleSelectKeepLocalItem}
       search={search}
       hasAnnotations={annotations.isLoaded && annotations.highlights.length > 0}
       onExport={() => setShowExportPopover(true)}
