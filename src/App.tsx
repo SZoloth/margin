@@ -28,6 +28,7 @@ import type { Document } from "@/types/document";
 import type { CorrectionInput } from "@/types/annotations";
 import type { ExportResult } from "@/types/export";
 import { UndoToast } from "@/components/ui/UndoToast";
+import { ErrorToast } from "@/components/ui/ErrorToast";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { useUpdater } from "@/hooks/useUpdater";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
@@ -100,6 +101,8 @@ export default function App() {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
+  const [errorToast, setErrorToast] = useState<{ message: string; id: number } | null>(null);
+  const errorIdRef = useRef(0);
   const undoIdRef = useRef(0);
   const highlightThread = useAnimatedPresence(!!focusHighlightId, 200);
   const lastHighlightRef = useRef<{ highlight: import("@/types/annotations").Highlight; notes: import("@/types/annotations").MarginNote[]; anchorRect: DOMRect | null } | null>(null);
@@ -805,6 +808,7 @@ export default function App() {
           await doc.openKeepLocalArticle(recentDoc, markdown);
         } catch (err) {
           console.error("Failed to reopen keep-local article:", err);
+          setErrorToast({ message: "Could not load article — is keep-local running?", id: ++errorIdRef.current });
         }
       }
     },
@@ -912,6 +916,7 @@ export default function App() {
       />
 
       <UndoToast action={undoAction} />
+      <ErrorToast key={errorToast?.id} message={errorToast?.message ?? null} />
 
       {/* Unsaved changes dialog */}
       {unsavedDialog.isMounted && (() => {
