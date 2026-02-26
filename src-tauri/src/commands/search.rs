@@ -215,6 +215,7 @@ fn increment_access_count(conn: &Connection, document_id: &str) -> Result<(), St
     Ok(())
 }
 
+#[cfg(test)]
 fn index_all_documents_inner(conn: &Connection) -> Result<IndexAllResult, String> {
     ensure_fts_table(conn)?;
 
@@ -336,7 +337,7 @@ pub fn index_all_documents(state: tauri::State<'_, DbPool>) -> Result<IndexAllRe
         let mut stmt = conn
             .prepare("SELECT id, file_path, title, indexed_at FROM documents WHERE file_path IS NOT NULL")
             .map_err(|e| format!("Failed to query documents: {e}"))?;
-        stmt.query_map([], |row| {
+        let rows = stmt.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -344,9 +345,8 @@ pub fn index_all_documents(state: tauri::State<'_, DbPool>) -> Result<IndexAllRe
                 row.get::<_, Option<i64>>(3)?,
             ))
         })
-        .map_err(|e| format!("Failed to read documents: {e}"))?
-        .filter_map(|r| r.ok())
-        .collect()
+        .map_err(|e| format!("Failed to read documents: {e}"))?;
+        rows.filter_map(|r| r.ok()).collect()
     }; // lock dropped here
 
     let now_ms = std::time::SystemTime::now()

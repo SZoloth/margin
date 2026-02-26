@@ -25,20 +25,27 @@ export function useSearch() {
   const [query, setQuery] = useState("");
   const [isIndexing, setIsIndexing] = useState(false);
 
-  // AbortController ref for cancelling in-flight searches
   const searchIdRef = useRef(0);
+  const mdfindTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback((q: string) => {
     setQuery(q);
+
+    // Clear pending mdfind timeout from previous keystroke
+    if (mdfindTimeoutRef.current !== null) {
+      clearTimeout(mdfindTimeoutRef.current);
+      mdfindTimeoutRef.current = null;
+    }
+
+    // Increment search ID to cancel previous in-flight results
+    const thisSearchId = ++searchIdRef.current;
+
     if (!q.trim()) {
       setResults([]);
       setFileResults([]);
       setIsSearching(false);
       return;
     }
-
-    // Increment search ID to cancel previous in-flight search
-    const thisSearchId = ++searchIdRef.current;
 
     // FTS5 search — no debounce, fires on every keystroke (<5ms for local FTS)
     setIsSearching(true);
@@ -47,24 +54,19 @@ export function useSearch() {
       limit: 20,
     })
       .then((ftsResults) => {
-        // Only update if this is still the latest search
         if (searchIdRef.current !== thisSearchId) return;
         setResults(ftsResults);
+        setIsSearching(false);
       })
       .catch((err) => {
         if (searchIdRef.current !== thisSearchId) return;
         console.error("FTS search failed:", err);
         setResults([]);
-      })
-      .finally(() => {
-        if (searchIdRef.current !== thisSearchId) return;
-        // If FTS returned results, no need for mdfind
-        // Only fall back to mdfind if no FTS results
+        setIsSearching(false);
       });
 
-    // Debounced mdfind fallback (200ms) — only for file-on-disk discovery
-    // This is secondary to FTS5 and runs in the background
-    const mdfindTimeout = setTimeout(async () => {
+    // Debounced mdfind fallback (200ms) — secondary file-on-disk discovery
+    mdfindTimeoutRef.current = setTimeout(async () => {
       if (searchIdRef.current !== thisSearchId) return;
       try {
         const files = await invoke<FileSearchResult[]>("search_files_on_disk", {
@@ -77,14 +79,8 @@ export function useSearch() {
         if (searchIdRef.current !== thisSearchId) return;
         console.error("File search failed:", err);
         setFileResults([]);
-      } finally {
-        if (searchIdRef.current !== thisSearchId) return;
-        setIsSearching(false);
       }
     }, 200);
-
-    // Cleanup timeout if search is cancelled
-    return () => clearTimeout(mdfindTimeout);
   }, []);
 
   const indexDocument = useCallback(

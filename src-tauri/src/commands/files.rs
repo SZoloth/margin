@@ -104,10 +104,7 @@ pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_
         .to_string();
 
     // Update database — roll back the file rename if DB fails
-    let conn = state.0.lock().map_err(|_| {
-        let _ = fs::rename(&new_path, &old_path);
-        "Failed to acquire database lock (file rename rolled back)".to_string()
-    })?;
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     conn.execute(
         "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3",
         rusqlite::params![new_path_str, new_title, old_path],
