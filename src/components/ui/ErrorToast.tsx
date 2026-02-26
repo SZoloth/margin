@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 
 interface ErrorToastProps {
@@ -10,26 +10,35 @@ export function ErrorToast({ message, duration = 4000 }: ErrorToastProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [current, setCurrent] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const clearAllTimers = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (fadeTimerRef.current) { clearTimeout(fadeTimerRef.current); fadeTimerRef.current = null; }
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+  }, []);
+
+  const dismiss = useCallback(() => {
+    clearAllTimers();
+    setIsVisible(false);
+    fadeTimerRef.current = setTimeout(() => setCurrent(null), 200);
+  }, [clearAllTimers]);
 
   useEffect(() => {
     if (!message) return;
 
-    if (timerRef.current) clearTimeout(timerRef.current);
+    clearAllTimers();
 
     setCurrent(message);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => setIsVisible(true));
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = requestAnimationFrame(() => setIsVisible(true));
     });
 
-    timerRef.current = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(() => setCurrent(null), 200);
-    }, duration);
+    timerRef.current = setTimeout(dismiss, duration);
 
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [message, duration]);
+    return clearAllTimers;
+  }, [message, duration, clearAllTimers, dismiss]);
 
   if (!current) return null;
 
@@ -58,11 +67,7 @@ export function ErrorToast({ message, duration = 4000 }: ErrorToastProps) {
       </span>
       <button
         type="button"
-        onClick={() => {
-          if (timerRef.current) clearTimeout(timerRef.current);
-          setIsVisible(false);
-          setTimeout(() => setCurrent(null), 200);
-        }}
+        onClick={dismiss}
         className="text-xs"
         style={{ color: "var(--color-text-secondary)", cursor: "pointer", padding: "2px 4px" }}
         aria-label="Dismiss"
