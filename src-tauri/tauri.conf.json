@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickel-org/nickel.rs/master/schema.json",
   "productName": "Margin",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "identifier": "com.samzoloth.margin",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -29,6 +29,7 @@
       "app",
       "dmg"
     ],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
