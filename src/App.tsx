@@ -23,6 +23,8 @@ import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
+import { stat } from "@tauri-apps/plugin-fs";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type { Document } from "@/types/document";
 import type { CorrectionInput } from "@/types/annotations";
@@ -424,12 +426,58 @@ export default function App() {
     try {
       const newContent = await readFile(path);
       setContentExternalRef.current(newContent);
+      // Update mtime baseline so focus fallback doesn't redundantly reload
+      stat(path)
+        .then((info) => {
+          if (info.mtime) lastMtimeRef.current = info.mtime.getTime();
+        })
+        .catch(() => {});
     } catch (err) {
       console.error("Failed to reload file:", err);
     }
   }, []);
 
   useFileWatcher(doc.filePath, handleFileChanged);
+
+  // Focus-based fallback: stat the file on window focus and reload if mtime changed.
+  // Safety net so a missed watcher event is never permanent.
+  const lastMtimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (!doc.filePath) {
+      lastMtimeRef.current = 0;
+      return;
+    }
+
+    // Seed mtime on mount / path change
+    const currentPath = doc.filePath;
+    stat(currentPath)
+      .then((info) => {
+        if (info.mtime) lastMtimeRef.current = info.mtime.getTime();
+      })
+      .catch(() => {});
+
+    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (!focused) return;
+      stat(currentPath)
+        .then((info) => {
+          const mtime = info.mtime?.getTime() ?? 0;
+          if (mtime > 0 && lastMtimeRef.current > 0 && mtime !== lastMtimeRef.current) {
+            lastMtimeRef.current = mtime;
+            handleFileChanged(currentPath);
+          } else if (mtime > 0 && lastMtimeRef.current === 0) {
+            // Baseline unknown (seed stat failed) — seed now and do a
+            // one-time reload since we can't tell if the file changed.
+            lastMtimeRef.current = mtime;
+            handleFileChanged(currentPath);
+          } else if (mtime > 0) {
+            lastMtimeRef.current = mtime;
+          }
+        })
+        .catch(() => {});
+    });
+
+    return () => { void unlisten.then((fn) => fn()); };
+  }, [doc.filePath, handleFileChanged]);
 
   // Handle files opened via macOS "Open With" / double-click
   const openFilePathRef = useRef(doc.openFilePath);
