@@ -162,9 +162,8 @@ export async function formatAnnotationsMarkdown(
     }
   }
 
-  // WQG footer: only when at least one highlight has a matching printed note
-  const highlightIds = new Set(items.map((h) => h.id));
-  const hasMatchedNotes = marginNotes.some((n) => highlightIds.has(n.highlight_id));
+  // WQG footer: only when at least one highlight has a matching note
+  const hasMatchedNotes = items.some((h) => notesByHighlight.has(h.id));
 
   if (hasMatchedNotes) {
     lines.push("");

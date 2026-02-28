@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Document, FileEntry } from "@/types/document";
 import type { CorrectionInput, CorrectionRecord, DocumentCorrections } from "@/types/annotations";
 import type { PersistedTab } from "@/types/tab";
+import type { WritingType } from "@/lib/writing-types";
 
 export async function openFileDialog(): Promise<string | null> {
   return invoke<string | null>("open_file_dialog");
@@ -103,8 +104,6 @@ export interface IndexAllResult {
 export async function indexAllDocuments(): Promise<IndexAllResult> {
   return invoke<IndexAllResult>("index_all_documents");
 }
-
-import type { WritingType } from "@/lib/writing-types";
 
 export type WritingRuleSeverity = "must-fix" | "should-fix" | "nice-to-fix";
 

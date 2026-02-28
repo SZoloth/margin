@@ -322,7 +322,9 @@ fn write_export_files(markdown: &str, hook_py: &str) -> Result<(String, String),
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755));
+            if let Err(e) = std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)) {
+                eprintln!("Warning: could not set executable permission on {}: {e}", hook_path.display());
+            }
         }
     }
 
