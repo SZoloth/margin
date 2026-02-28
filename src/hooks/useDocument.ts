@@ -35,6 +35,7 @@ export interface UseDocumentReturn {
   openRecentDocument: (doc: Document) => Promise<void>;
   openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
   saveCurrentFile: () => Promise<void>;
+  isSelfSave: (path: string) => boolean;
   refreshRecentDocs: () => void;
   renameDocFile: (doc: Document, newName: string) => Promise<void>;
   setContent: (newContent: string) => void;
@@ -62,6 +63,22 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
       setIsLoadingRaw(false);
     }
   }, []);
+  // Track self-saves by path + timestamp so the file watcher can skip reloads.
+  // Uses a time-window approach: all watcher events for the saved path within
+  // the window are suppressed (handles multiple FS events per save).
+  const selfSaveRef = useRef<{ path: string; until: number } | null>(null);
+
+  const isSelfSave = useCallback((path: string): boolean => {
+    const entry = selfSaveRef.current;
+    if (!entry) return false;
+    if (entry.path !== path) return false;
+    if (Date.now() > entry.until) {
+      selfSaveRef.current = null;
+      return false;
+    }
+    return true;
+  }, []);
+
   // Track keep-local doc IDs so we can reuse them
   const keepLocalDocMapRef = useRef<Map<string, Document>>(new Map());
   // Track docs by file path so we can preserve last_opened_at on re-open
@@ -281,13 +298,15 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
     try {
       // Strip any <mark> tags that TipTap's serializer may leak into markdown
       const clean = content.replace(/<\/?mark[^>]*>/g, "");
+      // Mark this path as self-saved for 1s so the file watcher skips the reload
+      selfSaveRef.current = { path: filePath, until: Date.now() + 1000 };
       await saveFileCommand(filePath, clean);
       setIsDirty(false);
 
       if (currentDoc) {
         const updated: Document = {
           ...currentDoc,
-          word_count: countWords(content),
+          word_count: countWords(clean),
           last_opened_at: Date.now(),
         };
         const saved = await upsertDocument(updated);
@@ -346,6 +365,7 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
     openRecentDocument,
     openKeepLocalArticle,
     saveCurrentFile,
+    isSelfSave,
     refreshRecentDocs,
     renameDocFile,
     setContent,

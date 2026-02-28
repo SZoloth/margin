@@ -17,6 +17,7 @@ interface ReaderProps {
 
 export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderProps) {
   const isExternalUpdate = useRef(false);
+  const lastEmittedMarkdownRef = useRef<string | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -39,12 +40,16 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
     editorProps: {
       attributes: {
         class: "reader-content",
+        autocorrect: "off",
+        autocapitalize: "off",
+        spellcheck: "false",
       },
     },
     onUpdate: ({ editor: ed }) => {
       if (isExternalUpdate.current) return;
-      const md = ed.storage.markdown.getMarkdown();
-      onUpdate(md as string);
+      const md = ed.storage.markdown.getMarkdown() as string;
+      lastEmittedMarkdownRef.current = md;
+      onUpdate(md);
     },
   });
 
@@ -56,6 +61,14 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
+
+    // If the content prop matches what the editor last emitted via onUpdate,
+    // this is a round-trip from the editor's own typing — skip setContent
+    // to prevent the cursor from jumping to the end of the document.
+    if (content === lastEmittedMarkdownRef.current) {
+      lastEmittedMarkdownRef.current = null;
+      return;
+    }
 
     const currentMd = editor.storage.markdown.getMarkdown() as string;
     if (currentMd === content) return;

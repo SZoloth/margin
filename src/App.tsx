@@ -420,9 +420,16 @@ export default function App() {
     doc.setContent(md);
   }, [doc.setContent]);
 
+  const isSelfSaveRef = useRef(doc.isSelfSave);
+  isSelfSaveRef.current = doc.isSelfSave;
+
   const handleFileChanged = useCallback(async (path: string) => {
     const currentDoc = currentDocRef.current;
     if (!currentDoc || currentDoc.file_path !== path) return;
+
+    // Skip reload when we initiated the save — avoids cursor jump
+    if (isSelfSaveRef.current(path)) return;
+
     try {
       const newContent = await readFile(path);
       setContentExternalRef.current(newContent);
