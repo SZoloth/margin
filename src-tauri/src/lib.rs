@@ -49,6 +49,7 @@ pub fn run() {
             commands::annotations::get_margin_notes,
             commands::annotations::update_margin_note,
             commands::annotations::delete_margin_note,
+            commands::annotations::delete_all_highlights_for_document,
             commands::keep_local::keep_local_health,
             commands::keep_local::keep_local_list_items,
             commands::keep_local::keep_local_get_item,

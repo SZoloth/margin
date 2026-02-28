@@ -150,6 +150,14 @@ fn remove_margin_note(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn remove_all_highlights_for_document(conn: &Connection, document_id: &str) -> Result<usize, String> {
+    conn.execute(
+        "DELETE FROM highlights WHERE document_id = ?1",
+        rusqlite::params![document_id],
+    )
+    .map_err(|e| e.to_string())
+}
+
 // === Tauri command handlers ===
 
 #[tauri::command]
@@ -271,6 +279,15 @@ pub async fn delete_margin_note(state: tauri::State<'_, DbPool>, id: String) -> 
     touch_document(&conn, &doc_id)?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_all_highlights_for_document(
+    state: tauri::State<'_, DbPool>,
+    document_id: String,
+) -> Result<usize, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    remove_all_highlights_for_document(&conn, &document_id)
 }
 
 #[cfg(test)]
@@ -529,6 +546,44 @@ mod tests {
 
         let notes = fetch_margin_notes(&conn, "doc1").unwrap();
         assert!(notes.is_empty());
+    }
+
+    // === Batch delete tests ===
+
+    #[test]
+    fn remove_all_highlights_for_document_clears_all() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_doc(&conn, "doc2");
+
+        // doc1: 2 highlights, 1 with a note
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text1", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "text2", 10, 15, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "note on h1", 1000).unwrap();
+
+        // doc2: 1 highlight with a note (should be untouched)
+        insert_highlight(&conn, "h3", "doc2", "blue", "text3", 0, 5, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n2", "h3", "note on h3", 1000).unwrap();
+
+        let deleted = remove_all_highlights_for_document(&conn, "doc1").unwrap();
+        assert_eq!(deleted, 2);
+
+        // doc1 is empty
+        assert!(fetch_highlights(&conn, "doc1").unwrap().is_empty());
+        assert!(fetch_margin_notes(&conn, "doc1").unwrap().is_empty());
+
+        // doc2 untouched
+        assert_eq!(fetch_highlights(&conn, "doc2").unwrap().len(), 1);
+        assert_eq!(fetch_margin_notes(&conn, "doc2").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn remove_all_highlights_for_document_empty_is_noop() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let deleted = remove_all_highlights_for_document(&conn, "doc1").unwrap();
+        assert_eq!(deleted, 0);
     }
 }
 

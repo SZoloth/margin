@@ -204,7 +204,7 @@ export default function App() {
     doc.restoreFromCache(cache.document, cache.content, cache.filePath, false);
 
     if (cache.annotationsLoaded) {
-      annotations.restoreFromCache(cache.highlights, cache.marginNotes);
+      annotations.restoreFromCache(cache.document!.id, cache.highlights, cache.marginNotes);
     }
 
     // Reset highlight mark restoration so marks re-apply for new doc
@@ -815,6 +815,46 @@ export default function App() {
             console.error("Failed to persist corrections:", err);
           }
         }
+      }
+
+      // Clear annotations from editor and DB after export
+      if (highlights.length > 0) {
+        // Strip highlight and marginNote marks from the editor
+        const { state } = editor;
+        const { tr } = state;
+        state.doc.descendants((node, pos) => {
+          if (!node.isText) return;
+          const highlightMark = node.marks.find((m) => m.type.name === "highlight");
+          const marginNoteMark = node.marks.find((m) => m.type.name === "marginNote");
+          if (highlightMark) {
+            tr.removeMark(pos, pos + node.nodeSize, highlightMark.type);
+          }
+          if (marginNoteMark) {
+            tr.removeMark(pos, pos + node.nodeSize, marginNoteMark.type);
+          }
+        });
+        if (tr.steps.length > 0) {
+          tr.setMeta("addToHistory", false);
+          isRestoringMarksRef.current = true;
+          try {
+            editor.view.dispatch(tr);
+          } finally {
+            isRestoringMarksRef.current = false;
+          }
+        }
+
+        // Delete from DB and clear React state
+        await annotationsRef.current.clearAnnotations(currentDoc.id);
+
+        // Close any open highlight popover
+        setFocusHighlightId(null);
+        setAnchorRect(null);
+
+        // Tell mark-restoration useEffect this doc is already handled
+        lastRestoredDocId.current = currentDoc.id;
+
+        // Force-update the tab cache so tab switching doesn't resurrect stale annotations
+        tabsHook.snapshotActive();
       }
 
       return {

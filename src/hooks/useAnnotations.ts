@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Highlight,
@@ -27,23 +27,42 @@ export interface UseAnnotationsReturn {
   updateMarginNote: (id: string, content: string) => Promise<void>;
   deleteMarginNote: (id: string) => Promise<void>;
 
-  restoreFromCache: (highlights: Highlight[], marginNotes: MarginNote[]) => void;
+  clearAnnotations: (documentId: string) => Promise<void>;
+
+  restoreFromCache: (documentId: string, highlights: Highlight[], marginNotes: MarginNote[]) => void;
 }
 
 export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [marginNotes, setMarginNotes] = useState<MarginNote[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const currentDocumentIdRef = useRef<string | null>(null);
+  const loadSeqRef = useRef(0);
 
   const loadAnnotations = useCallback(async (documentId: string) => {
+    const seq = ++loadSeqRef.current;
+    const prevDocId = currentDocumentIdRef.current;
+    currentDocumentIdRef.current = documentId;
     setIsLoaded(false);
-    const [loadedHighlights, loadedNotes] = await Promise.all([
-      invoke<Highlight[]>("get_highlights", { documentId }),
-      invoke<MarginNote[]>("get_margin_notes", { documentId }),
-    ]);
-    setHighlights(loadedHighlights);
-    setMarginNotes(loadedNotes);
-    setIsLoaded(true);
+    if (prevDocId !== documentId) {
+      setHighlights([]);
+      setMarginNotes([]);
+    }
+    try {
+      const [loadedHighlights, loadedNotes] = await Promise.all([
+        invoke<Highlight[]>("get_highlights", { documentId }),
+        invoke<MarginNote[]>("get_margin_notes", { documentId }),
+      ]);
+      if (loadSeqRef.current !== seq || currentDocumentIdRef.current !== documentId) {
+        return;
+      }
+      setHighlights(loadedHighlights);
+      setMarginNotes(loadedNotes);
+    } finally {
+      if (loadSeqRef.current === seq && currentDocumentIdRef.current === documentId) {
+        setIsLoaded(true);
+      }
+    }
   }, []);
 
   const createHighlight = useCallback(
@@ -65,7 +84,9 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
         prefixContext: params.prefixContext,
         suffixContext: params.suffixContext,
       });
-      setHighlights((prev) => [...prev, highlight]);
+      if (currentDocumentIdRef.current === highlight.document_id) {
+        setHighlights((prev) => [...prev, highlight]);
+      }
       onMutate?.();
       return highlight;
     },
@@ -111,7 +132,18 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
     onMutate?.();
   }, [onMutate]);
 
-  const restoreFromCache = useCallback((cachedHighlights: Highlight[], cachedMarginNotes: MarginNote[]) => {
+  const clearAnnotations = useCallback(async (documentId: string) => {
+    await invoke("delete_all_highlights_for_document", { documentId });
+    if (currentDocumentIdRef.current !== documentId) return;
+    setHighlights([]);
+    setMarginNotes([]);
+    setIsLoaded(true);
+  }, []);
+
+  const restoreFromCache = useCallback((documentId: string, cachedHighlights: Highlight[], cachedMarginNotes: MarginNote[]) => {
+    currentDocumentIdRef.current = documentId;
+    // Invalidate any in-flight loads for a previous document.
+    loadSeqRef.current += 1;
     setHighlights(cachedHighlights);
     setMarginNotes(cachedMarginNotes);
     setIsLoaded(true);
@@ -127,6 +159,7 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
     createMarginNote,
     updateMarginNote,
     deleteMarginNote,
+    clearAnnotations,
     restoreFromCache,
   };
 }
