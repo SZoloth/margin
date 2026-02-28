@@ -2,6 +2,14 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Typography from "@tiptap/extension-typography";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableHeader from "@tiptap/extension-table-header";
+import TableCell from "@tiptap/extension-table-cell";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
 import { MultiColorHighlight } from "./extensions/highlight";
@@ -23,6 +31,14 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
     extensions: [
       StarterKit,
       Typography,
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Link.configure({ openOnClick: false, autolink: true }),
+      Image.configure({ inline: false, allowBase64: true }),
       MultiColorHighlight.configure({ multicolor: true }),
       MarginNote,
       Markdown.configure({

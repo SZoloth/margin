@@ -98,8 +98,14 @@
 }
 
 /* Lists */
-.reader-content ul,
+.reader-content ul {
+  list-style-type: disc;
+  margin: 1em 0;
+  padding-left: 1.5em;
+}
+
 .reader-content ol {
+  list-style-type: decimal;
   margin: 1em 0;
   padding-left: 1.5em;
 }
@@ -134,23 +140,80 @@
   border-radius: 4px;
 }
 
-/* Tables */
+/* Tables (TipTap wraps in .tableWrapper for overflow) */
+.reader-content .tableWrapper {
+  overflow-x: auto;
+  margin: 1.5em 0;
+}
+
 .reader-content table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1.5em 0;
   font-size: 0.95em;
+  margin: 1.5em 0;
 }
 
 .reader-content th,
 .reader-content td {
   padding: 0.5em 0.75em;
   text-align: left;
-  border-bottom: 1px solid var(--color-border);
+  border: 1px solid var(--color-border);
+  min-width: 4em;
 }
 
 .reader-content th {
   font-weight: 600;
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.reader-content .selectedCell {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+:root[data-theme="dark"] .reader-content th {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .reader-content .selectedCell {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Task lists */
+.reader-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 1em 0;
+}
+
+.reader-content ul[data-type="taskList"] > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  margin-bottom: 0.35em;
+}
+
+.reader-content ul[data-type="taskList"] > li > label {
+  flex-shrink: 0;
+  margin-top: 0.2em;
+}
+
+.reader-content ul[data-type="taskList"] > li > label input[type="checkbox"] {
+  accent-color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.reader-content ul[data-type="taskList"] > li > div {
+  flex: 1;
+}
+
+.reader-content ul[data-type="taskList"] > li[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Nested task lists */
+.reader-content ul[data-type="taskList"] ul[data-type="taskList"] {
+  margin: 0.25em 0 0 1.5em;
 }
 
 /* Responsive typography */
