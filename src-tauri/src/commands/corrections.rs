@@ -423,11 +423,29 @@ pub async fn delete_correction(state: tauri::State<'_, DbPool>, highlight_id: St
     delete_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())
 }
 
+fn export_and_clear_corrections(conn: &Connection, path: &std::path::Path) -> Result<usize, String> {
+    let export = build_corrections_export(conn).map_err(|e| e.to_string())?;
+    let count = export.total_count;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+    }
+
+    let json = serde_json::to_string_pretty(&export).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| format!("Failed to write export: {e}"))?;
+
+    conn.execute(
+        "DELETE FROM corrections WHERE session_id != '__backfilled__'",
+        [],
+    )
+    .map_err(|e| format!("Failed to clear exported corrections: {e}"))?;
+
+    Ok(count)
+}
+
 #[tauri::command]
 pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Option<String>) -> Result<usize, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let export = build_corrections_export(&conn).map_err(|e| e.to_string())?;
-    let count = export.total_count;
 
     let export_path = if let Some(p) = path {
         std::path::PathBuf::from(p)
@@ -438,14 +456,7 @@ pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Opti
             .join("corrections-export.json")
     };
 
-    if let Some(parent) = export_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
-    }
-
-    let json = serde_json::to_string_pretty(&export).map_err(|e| e.to_string())?;
-    fs::write(&export_path, json).map_err(|e| format!("Failed to write export: {e}"))?;
-
-    Ok(count)
+    export_and_clear_corrections(&conn, &export_path)
 }
 
 #[cfg(test)]
@@ -770,6 +781,59 @@ mod tests {
         // Most recent first
         assert_eq!(export.corrections[0].original_text, "also bad");
         assert_eq!(export.corrections[1].original_text, "bad text");
+    }
+
+    #[test]
+    fn export_and_clear_deletes_non_backfilled_corrections() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let count = export_and_clear_corrections(&conn, &path).unwrap();
+
+        assert_eq!(count, 2);
+        assert!(path.exists());
+        assert_eq!(count_corrections(&conn).unwrap(), 0);
+    }
+
+    #[test]
+    fn export_and_clear_preserves_backfilled_rows() {
+        let conn = setup_full_db();
+        // Regular correction
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        // Backfilled correction (should survive)
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'old text', '[\"old\"]', 'Doc', 'file', 'yellow', 500, 500)",
+            [],
+        ).unwrap();
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let count = export_and_clear_corrections(&conn, &path).unwrap();
+
+        assert_eq!(count, 1); // only non-backfilled exported
+        assert_eq!(count_corrections(&conn).unwrap(), 1); // backfilled survives
+        let remaining: String = conn
+            .query_row("SELECT session_id FROM corrections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remaining, "__backfilled__");
+    }
+
+    #[test]
+    fn export_and_clear_returns_zero_when_empty() {
+        let conn = setup_full_db();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let count = export_and_clear_corrections(&conn, &path).unwrap();
+        assert_eq!(count, 0);
+        assert_eq!(count_corrections(&conn).unwrap(), 0);
     }
 
     #[test]
