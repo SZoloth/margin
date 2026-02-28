@@ -89,7 +89,7 @@ function findTextInDoc(
 
 export default function App() {
   const { settings, setSetting } = useSettings();
-  const doc = useDocument(settings.autosave);
+  const doc = useDocument();
   const annotations = useAnnotations(doc.refreshRecentDocs);
   const keepLocal = useKeepLocal();
   const search = useSearch();
@@ -985,9 +985,9 @@ export default function App() {
           <HighlightThread
             highlight={highlight}
             notes={notes}
-            onAddNote={(...args) => { const p = annotations.createMarginNote(...args); doc.triggerAutosave(); return p; }}
-            onUpdateNote={(...args) => { const p = annotations.updateMarginNote(...args); doc.triggerAutosave(); return p; }}
-            onDeleteNote={(...args) => { const p = annotations.deleteMarginNote(...args); doc.triggerAutosave(); return p; }}
+            onAddNote={annotations.createMarginNote}
+            onUpdateNote={annotations.updateMarginNote}
+            onDeleteNote={annotations.deleteMarginNote}
             onDeleteHighlight={handleDeleteHighlight}
             onClose={() => {
               setFocusHighlightId(null);

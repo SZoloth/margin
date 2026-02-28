@@ -461,16 +461,6 @@ export function SettingsModal({
         {/* Editor section */}
         <SectionHeader title="Editor" />
 
-        <SettingRow
-          label="Autosave"
-          description="Automatically save 2s after editing"
-        >
-          <ToggleSwitch
-            checked={settings.autosave}
-            onChange={(v) => setSetting("autosave", v)}
-          />
-        </SettingRow>
-
         <SettingRow label="Default highlight color">
           <div style={{ display: "flex", gap: 6 }}>
             {HIGHLIGHT_COLORS.map((c) => (
