@@ -131,6 +131,15 @@ export function useSearch() {
     };
   }, []);
 
+  // Clean up mdfind timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (mdfindTimeoutRef.current !== null) {
+        clearTimeout(mdfindTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return {
     results,
     fileResults,

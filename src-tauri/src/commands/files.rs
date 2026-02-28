@@ -62,8 +62,7 @@ pub async fn list_markdown_files(dir: String) -> Result<Vec<FileEntry>, String> 
     Ok(entries)
 }
 
-#[tauri::command]
-pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_name: String) -> Result<Document, String> {
+fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: String) -> Result<Document, String> {
     let new_name = new_name.trim().to_string();
     if new_name.is_empty() {
         return Err("File name cannot be empty".to_string());
@@ -104,8 +103,7 @@ pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_
         .to_string();
 
     // Update database — roll back the file rename if DB fails
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    conn.execute(
+    let updated_rows = conn.execute(
         "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3",
         rusqlite::params![new_path_str, new_title, old_path],
     )
@@ -113,6 +111,13 @@ pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_
         let _ = fs::rename(&new_path, &old_path);
         format!("Failed to update database (file rename rolled back): {}", e)
     })?;
+    if updated_rows != 1 {
+        let _ = fs::rename(&new_path, &old_path);
+        return Err(format!(
+            "Failed to update database (expected 1 row, got {}; file rename rolled back)",
+            updated_rows
+        ));
+    }
 
     // Return the updated document
     let doc = conn
@@ -123,12 +128,39 @@ pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_
             rusqlite::params![new_path_str],
             |row| Document::from_row(row),
         )
-        .map_err(|e| format!("Failed to fetch updated document: {}", e))?;
+        .map_err(|e| {
+            let _ = fs::rename(&new_path, &old_path);
+            let old_title = Path::new(&old_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .strip_suffix(".md")
+                .or_else(|| {
+                    Path::new(&old_path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .strip_suffix(".markdown")
+                })
+                .unwrap_or("")
+                .to_string();
+            let _ = conn.execute(
+                "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3",
+                rusqlite::params![old_path, old_title, new_path_str],
+            );
+            format!("Failed to fetch updated document (file rename rolled back): {}", e)
+        })?;
 
     Ok(doc)
 }
 
-fn collect_markdown_entries(dir: &Path) -> Result<Vec<FileEntry>, String> {
+#[tauri::command]
+pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_name: String) -> Result<Document, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    rename_file_inner(&conn, old_path, new_name)
+}
+
+pub fn collect_markdown_entries(dir: &Path) -> Result<Vec<FileEntry>, String> {
     let mut results = Vec::new();
 
     let read_dir =
@@ -168,4 +200,322 @@ fn collect_markdown_entries(dir: &Path) -> Result<Vec<FileEntry>, String> {
     }
 
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn make_test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("margin_test_files_{}", name));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE documents (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                file_path TEXT,
+                keep_local_id TEXT,
+                title TEXT,
+                author TEXT,
+                url TEXT,
+                word_count INTEGER DEFAULT 0,
+                last_opened_at INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL DEFAULT 0,
+                access_count INTEGER DEFAULT 0,
+                indexed_at INTEGER,
+                UNIQUE(file_path),
+                UNIQUE(keep_local_id)
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    // === collect_markdown_entries tests ===
+
+    #[test]
+    fn collects_md_and_markdown_files() {
+        let dir = make_test_dir("md_and_markdown");
+        fs::write(dir.join("test.md"), "# test").unwrap();
+        fs::write(dir.join("notes.markdown"), "# notes").unwrap();
+
+        let entries = collect_markdown_entries(&dir).unwrap();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"test.md"));
+        assert!(names.contains(&"notes.markdown"));
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn skips_hidden_files() {
+        let dir = make_test_dir("hidden_files");
+        fs::write(dir.join(".hidden.md"), "# hidden").unwrap();
+        fs::write(dir.join("visible.md"), "# visible").unwrap();
+
+        let entries = collect_markdown_entries(&dir).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "visible.md");
+    }
+
+    #[test]
+    fn skips_hidden_directories() {
+        let dir = make_test_dir("hidden_dirs");
+        let hidden = dir.join(".hidden");
+        fs::create_dir_all(&hidden).unwrap();
+        fs::write(hidden.join("test.md"), "# test").unwrap();
+        fs::write(dir.join("visible.md"), "# visible").unwrap();
+
+        let entries = collect_markdown_entries(&dir).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "visible.md");
+    }
+
+    #[test]
+    fn includes_dirs_only_when_containing_markdown() {
+        let dir = make_test_dir("dir_with_md");
+        let subdir_with = dir.join("has_md");
+        let subdir_without = dir.join("empty_sub");
+        fs::create_dir_all(&subdir_with).unwrap();
+        fs::create_dir_all(&subdir_without).unwrap();
+        fs::write(subdir_with.join("note.md"), "# note").unwrap();
+
+        let entries = collect_markdown_entries(&dir).unwrap();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"has_md"));
+        assert!(!names.contains(&"empty_sub"));
+    }
+
+    #[test]
+    fn skips_non_markdown_files() {
+        let dir = make_test_dir("non_md");
+        fs::write(dir.join("test.txt"), "text").unwrap();
+        fs::write(dir.join("test.rs"), "fn main() {}").unwrap();
+        fs::write(dir.join("test.json"), "{}").unwrap();
+
+        let entries = collect_markdown_entries(&dir).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn empty_directory_returns_empty_vec() {
+        let dir = make_test_dir("empty");
+        let entries = collect_markdown_entries(&dir).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    // === sort logic tests ===
+
+    #[test]
+    fn directories_sort_before_files() {
+        let dir = make_test_dir("sort_dir_first");
+        let subdir = dir.join("subdir");
+        fs::create_dir_all(&subdir).unwrap();
+        fs::write(subdir.join("inner.md"), "# inner").unwrap();
+        fs::write(dir.join("root.md"), "# root").unwrap();
+
+        let mut entries = collect_markdown_entries(&dir).unwrap();
+        entries.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+
+        assert!(entries[0].is_dir, "first entry should be a directory");
+        assert_eq!(entries[0].name, "subdir");
+    }
+
+    #[test]
+    fn alphabetical_case_insensitive_within_category() {
+        let dir = make_test_dir("sort_alpha");
+        fs::write(dir.join("Beta.md"), "# beta").unwrap();
+        fs::write(dir.join("alpha.md"), "# alpha").unwrap();
+
+        let mut entries = collect_markdown_entries(&dir).unwrap();
+        entries.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+
+        assert_eq!(entries[0].name, "alpha.md");
+        assert_eq!(entries[1].name, "Beta.md");
+    }
+
+    // === rename_file_inner tests ===
+
+    #[test]
+    fn rename_rejects_empty_name() {
+        let dir = make_test_dir("rename_empty");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+
+        let result = rename_file_inner(&conn, old.to_string_lossy().to_string(), "".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn rename_rejects_whitespace_only_name() {
+        let dir = make_test_dir("rename_ws");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+
+        let result = rename_file_inner(&conn, old.to_string_lossy().to_string(), "   ".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot be empty"));
+    }
+
+    #[test]
+    fn rename_rejects_forward_slash() {
+        let dir = make_test_dir("rename_fslash");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+
+        let result = rename_file_inner(&conn, old.to_string_lossy().to_string(), "sub/file".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("path separators"));
+    }
+
+    #[test]
+    fn rename_rejects_backslash() {
+        let dir = make_test_dir("rename_bslash");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+
+        let result = rename_file_inner(&conn, old.to_string_lossy().to_string(), "sub\\file".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("path separators"));
+    }
+
+    #[test]
+    fn rename_auto_appends_md_extension() {
+        let dir = make_test_dir("rename_auto_md");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+        let old_str = old.to_string_lossy().to_string();
+        conn.execute(
+            "INSERT INTO documents (id, source, file_path, title, last_opened_at, created_at)
+             VALUES ('d1', 'file', ?1, 'old', 1000, 1000)",
+            rusqlite::params![old_str],
+        ).unwrap();
+
+        let doc = rename_file_inner(&conn, old_str, "notes".to_string()).unwrap();
+        assert!(doc.file_path.as_ref().unwrap().ends_with("notes.md"));
+        assert_eq!(doc.title.as_ref().unwrap(), "notes");
+    }
+
+    #[test]
+    fn rename_preserves_md_extension() {
+        let dir = make_test_dir("rename_keep_md");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+        let old_str = old.to_string_lossy().to_string();
+        conn.execute(
+            "INSERT INTO documents (id, source, file_path, title, last_opened_at, created_at)
+             VALUES ('d1', 'file', ?1, 'old', 1000, 1000)",
+            rusqlite::params![old_str],
+        ).unwrap();
+
+        let doc = rename_file_inner(&conn, old_str, "notes.md".to_string()).unwrap();
+        assert!(doc.file_path.as_ref().unwrap().ends_with("notes.md"));
+        // Should NOT be notes.md.md
+        assert!(!doc.file_path.as_ref().unwrap().ends_with("notes.md.md"));
+    }
+
+    #[test]
+    fn rename_preserves_markdown_extension() {
+        let dir = make_test_dir("rename_keep_markdown");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+        let old_str = old.to_string_lossy().to_string();
+        conn.execute(
+            "INSERT INTO documents (id, source, file_path, title, last_opened_at, created_at)
+             VALUES ('d1', 'file', ?1, 'old', 1000, 1000)",
+            rusqlite::params![old_str],
+        ).unwrap();
+
+        let doc = rename_file_inner(&conn, old_str, "notes.markdown".to_string()).unwrap();
+        assert!(doc.file_path.as_ref().unwrap().ends_with("notes.markdown"));
+        assert_eq!(doc.title.as_ref().unwrap(), "notes");
+    }
+
+    #[test]
+    fn rename_rejects_when_target_exists() {
+        let dir = make_test_dir("rename_exists");
+        let old = dir.join("old.md");
+        let target = dir.join("taken.md");
+        fs::write(&old, "# old").unwrap();
+        fs::write(&target, "# taken").unwrap();
+        let conn = setup_db();
+
+        let result = rename_file_inner(&conn, old.to_string_lossy().to_string(), "taken.md".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("already exists"));
+    }
+
+    #[test]
+    fn rename_rejects_when_source_missing() {
+        let dir = make_test_dir("rename_no_src");
+        let missing = dir.join("ghost.md");
+        let conn = setup_db();
+
+        let result = rename_file_inner(&conn, missing.to_string_lossy().to_string(), "new.md".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn rename_rollback_on_db_failure() {
+        let dir = make_test_dir("rename_rollback");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let old_str = old.to_string_lossy().to_string();
+
+        // Create a DB without the documents table so the UPDATE fails
+        let conn = Connection::open_in_memory().unwrap();
+
+        let result = rename_file_inner(&conn, old_str.clone(), "new.md".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("rolled back"));
+
+        // Verify the file was renamed back to the original name
+        assert!(old.exists(), "original file should be restored after rollback");
+        assert!(!dir.join("new.md").exists(), "new file should not exist after rollback");
+    }
+
+    #[test]
+    fn rename_rolls_back_when_no_document_row_matches_old_path() {
+        let dir = make_test_dir("rename_missing_db_row");
+        let old = dir.join("old.md");
+        fs::write(&old, "# old").unwrap();
+        let conn = setup_db();
+
+        let result =
+            rename_file_inner(&conn, old.to_string_lossy().to_string(), "new.md".to_string());
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("expected 1 row"));
+
+        // File should be rolled back to the original name
+        assert!(old.exists(), "original file should be restored after rollback");
+        assert!(
+            !dir.join("new.md").exists(),
+            "new file should not exist after rollback"
+        );
+    }
 }

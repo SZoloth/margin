@@ -183,3 +183,54 @@ fn urlencoding(s: &str) -> String {
     }
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alphanumerics_pass_through_unchanged() {
+        assert_eq!(urlencoding("abc123"), "abc123");
+        assert_eq!(urlencoding("ABCxyz"), "ABCxyz");
+    }
+
+    #[test]
+    fn unreserved_chars_pass_through() {
+        assert_eq!(urlencoding("-._~"), "-._~");
+    }
+
+    #[test]
+    fn reserved_chars_are_percent_encoded() {
+        assert_eq!(urlencoding(" "), "%20");
+        assert_eq!(urlencoding("&"), "%26");
+        assert_eq!(urlencoding("="), "%3D");
+    }
+
+    #[test]
+    fn empty_string_returns_empty() {
+        assert_eq!(urlencoding(""), "");
+    }
+
+    #[test]
+    fn utf8_multibyte_characters_encoded() {
+        // e-acute is U+00E9, encoded as 0xC3 0xA9 in UTF-8
+        assert_eq!(urlencoding("caf\u{00e9}"), "caf%C3%A9");
+    }
+
+    #[test]
+    fn mixed_content() {
+        assert_eq!(
+            urlencoding("hello world&foo=bar"),
+            "hello%20world%26foo%3Dbar"
+        );
+    }
+
+    #[test]
+    fn ascii_special_chars() {
+        assert_eq!(urlencoding("/"), "%2F");
+        assert_eq!(urlencoding("?"), "%3F");
+        assert_eq!(urlencoding("#"), "%23");
+        assert_eq!(urlencoding("+"), "%2B");
+        assert_eq!(urlencoding("@"), "%40");
+    }
+}
