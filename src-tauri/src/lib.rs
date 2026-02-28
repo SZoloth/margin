@@ -67,6 +67,8 @@ pub fn run() {
             commands::corrections::export_corrections_json,
             commands::tabs::get_open_tabs,
             commands::tabs::save_open_tabs,
+            commands::writing_rules::get_writing_rules,
+            commands::writing_rules::export_writing_rules,
             watcher::watch_file,
             watcher::unwatch_file,
             drain_pending_open_files,

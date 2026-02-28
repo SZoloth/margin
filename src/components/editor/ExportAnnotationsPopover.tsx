@@ -1,14 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import type { ExportResult } from "@/types/export";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
-
-const WRITING_TYPES = [
-  { value: "general", label: "General" },
-  { value: "email", label: "Email" },
-  { value: "prd", label: "PRD" },
-  { value: "blog", label: "Blog" },
-  { value: "cover-letter", label: "Cover letter" },
-] as const;
+import { WRITING_TYPES } from "@/lib/writing-types";
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;

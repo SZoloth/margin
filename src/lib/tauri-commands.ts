@@ -103,3 +103,41 @@ export interface IndexAllResult {
 export async function indexAllDocuments(): Promise<IndexAllResult> {
   return invoke<IndexAllResult>("index_all_documents");
 }
+
+import type { WritingType } from "@/lib/writing-types";
+
+export type WritingRuleSeverity = "must-fix" | "should-fix" | "nice-to-fix";
+
+export interface WritingRule {
+  id: string;
+  writingType: WritingType;
+  category: string;
+  ruleText: string;
+  whenToApply: string | null;
+  why: string | null;
+  severity: WritingRuleSeverity;
+  exampleBefore: string | null;
+  exampleAfter: string | null;
+  source: string;
+  signalCount: number;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WritingRulesExportResult {
+  markdownPath: string;
+  hookPath: string;
+  ruleCount: number;
+}
+
+export async function getWritingRules(writingType?: string): Promise<WritingRule[]> {
+  return invoke<WritingRule[]>(
+    "get_writing_rules",
+    writingType === undefined ? {} : { writingType },
+  );
+}
+
+export async function exportWritingRules(): Promise<WritingRulesExportResult> {
+  return invoke<WritingRulesExportResult>("export_writing_rules");
+}

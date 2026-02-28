@@ -8,14 +8,7 @@ import {
   exportCorrectionsJson,
 } from "@/lib/tauri-commands";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
-
-const WRITING_TYPES = [
-  { value: "general", label: "General" },
-  { value: "email", label: "Email" },
-  { value: "prd", label: "PRD" },
-  { value: "blog", label: "Blog" },
-  { value: "cover-letter", label: "Cover letter" },
-] as const;
+import { WRITING_TYPES } from "@/lib/writing-types";
 
 const PAGE_SIZE = 50;
 

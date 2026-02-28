@@ -126,6 +126,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add access_count and indexed_at columns to documents
     migrate_documents_add_frecency_columns(&conn)?;
 
+    // Migration: create writing_rules table
+    migrate_add_writing_rules_table(&conn)?;
+
     Ok(DbPool::new(conn))
 }
 
@@ -615,6 +618,125 @@ mod tests {
         // Running migration again is idempotent
         migrate_corrections_add_writing_type(&conn).unwrap();
     }
+
+    // === Writing rules migration tests ===
+
+    #[test]
+    fn migrate_creates_writing_rules_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        // Insert a valid rule
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'ai-slop', 'No negative parallelism', 'must-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn migrate_writing_rules_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap(); // should not error
+    }
+
+    #[test]
+    fn writing_rules_rejects_invalid_writing_type() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        let result = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'invalid-type', 'test', 'rule', 'must-fix', 'manual', 1000, 1000)",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn writing_rules_rejects_invalid_severity() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        let result = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'test', 'rule', 'critical', 'manual', 1000, 1000)",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn writing_rules_unique_constraint_prevents_duplicates() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'ai-slop', 'No negative parallelism', 'must-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        // Same writing_type + category + rule_text should fail
+        let result = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r2', 'general', 'ai-slop', 'No negative parallelism', 'should-fix', 'manual', 2000, 2000)",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn writing_rules_allows_same_rule_different_types() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'tone', 'Be direct', 'should-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        // Same category + rule_text but different writing_type is fine
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r2', 'email', 'tone', 'Be direct', 'should-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn writing_rules_stores_all_optional_fields() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity,
+             example_before, example_after, source, signal_count, notes, created_at, updated_at)
+             VALUES ('r1', 'blog', 'argument-rigor', 'Expand assertions with proof', 'Bold claims', 'Credibility',
+             'must-fix', 'Claim without proof.', 'Claim with example.', 'corrections', 3, 'From blog review', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let (when, why, before, after, notes, signal): (Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64) = conn.query_row(
+            "SELECT when_to_apply, why, example_before, example_after, notes, signal_count FROM writing_rules WHERE id = 'r1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+        ).unwrap();
+        assert_eq!(when, Some("Bold claims".to_string()));
+        assert_eq!(why, Some("Credibility".to_string()));
+        assert_eq!(before, Some("Claim without proof.".to_string()));
+        assert_eq!(after, Some("Claim with example.".to_string()));
+        assert_eq!(notes, Some("From blog review".to_string()));
+        assert_eq!(signal, 3);
+    }
 }
 
 /// Adds a `writing_type` column to the corrections table if it doesn't exist.
@@ -636,6 +758,33 @@ fn migrate_corrections_add_writing_type(conn: &Connection) -> Result<(), Box<dyn
         )?;
     }
 
+    Ok(())
+}
+
+/// Creates the `writing_rules` table if it doesn't exist.
+pub fn migrate_add_writing_rules_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS writing_rules (
+            id TEXT PRIMARY KEY,
+            writing_type TEXT NOT NULL DEFAULT 'general'
+                CHECK(writing_type IN ('general','email','prd','blog','cover-letter','resume','slack','pitch','outreach')),
+            category TEXT NOT NULL,
+            rule_text TEXT NOT NULL,
+            when_to_apply TEXT,
+            why TEXT,
+            severity TEXT NOT NULL DEFAULT 'should-fix'
+                CHECK(severity IN ('must-fix','should-fix','nice-to-fix')),
+            example_before TEXT,
+            example_after TEXT,
+            source TEXT NOT NULL DEFAULT 'manual',
+            signal_count INTEGER NOT NULL DEFAULT 1,
+            notes TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(writing_type, category, rule_text)
+        );
+        CREATE INDEX IF NOT EXISTS idx_writing_rules_type ON writing_rules(writing_type);",
+    )?;
     Ok(())
 }
 

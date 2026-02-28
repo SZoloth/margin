@@ -12,7 +12,7 @@ interface ExportParams {
 function posToLineNumber(editor: Editor, pos: number): number {
   try {
     const docSize = editor.state.doc.content.size;
-    const clampedPos = Math.min(pos, docSize);
+    const clampedPos = Math.max(0, Math.min(pos, docSize));
     const textBefore = editor.state.doc.textBetween(0, clampedPos, "\n");
     return textBefore.split("\n").length;
   } catch {
@@ -160,6 +160,20 @@ export async function formatAnnotationsMarkdown(
         lines.push(`**Note:** ${note.content}`);
       }
     }
+  }
+
+  // WQG footer: only when at least one highlight has a matching printed note
+  const highlightIds = new Set(items.map((h) => h.id));
+  const hasMatchedNotes = marginNotes.some((n) => highlightIds.has(n.highlight_id));
+
+  if (hasMatchedNotes) {
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push(
+      "Run `/writing-quality-gate editorial` to apply these corrections.",
+    );
+    lines.push("Writing rules: `~/.margin/writing-rules.md`");
   }
 
   lines.push("");

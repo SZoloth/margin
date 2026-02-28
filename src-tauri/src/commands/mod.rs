@@ -5,3 +5,4 @@ pub mod files;
 pub mod keep_local;
 pub mod search;
 pub mod tabs;
+pub mod writing_rules;
