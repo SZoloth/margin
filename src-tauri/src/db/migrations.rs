@@ -196,19 +196,17 @@ fn migrate_corrections_drop_fks(conn: &Connection) -> Result<(), Box<dyn std::er
     if !backfilled {
         if let Some(home) = dirs::home_dir() {
             let corrections_dir = home.join(".margin").join("corrections");
-            let count = backfill_corrections_from_dir(conn, &corrections_dir);
-            if count > 0 {
-                // Insert a sentinel row so backfill doesn't run again
-                let _ = conn.execute(
-                    "INSERT OR IGNORE INTO corrections
-                        (id, highlight_id, document_id, session_id, original_text,
-                         notes_json, document_source, highlight_color, created_at, updated_at)
-                     VALUES ('__backfill_marker__', '__backfill_marker__', '', '__backfilled__',
-                             '', '[]', 'system', 'none', 0, 0)",
-                    [],
-                );
-            }
+            backfill_corrections_from_dir(conn, &corrections_dir);
         }
+        // Always insert sentinel so backfill doesn't re-run, even if dir was empty/missing
+        let _ = conn.execute(
+            "INSERT OR IGNORE INTO corrections
+                (id, highlight_id, document_id, session_id, original_text,
+                 notes_json, document_source, highlight_color, created_at, updated_at)
+             VALUES ('__backfill_marker__', '__backfill_marker__', '', '__backfilled__',
+                     '', '[]', 'system', 'none', 0, 0)",
+            [],
+        );
     }
 
     Ok(())

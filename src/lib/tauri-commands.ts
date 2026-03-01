@@ -80,7 +80,7 @@ export async function getCorrectionsByDocument(limit?: number): Promise<Document
   );
 }
 
-export async function updateCorrectionWritingType(highlightId: string, writingType: string): Promise<void> {
+export async function updateCorrectionWritingType(highlightId: string, writingType: WritingType): Promise<void> {
   return invoke<void>("update_correction_writing_type", { highlightId, writingType });
 }
 
@@ -130,7 +130,7 @@ export interface WritingRulesExportResult {
   ruleCount: number;
 }
 
-export async function getWritingRules(writingType?: string): Promise<WritingRule[]> {
+export async function getWritingRules(writingType?: WritingType): Promise<WritingRule[]> {
   return invoke<WritingRule[]>(
     "get_writing_rules",
     writingType === undefined ? {} : { writingType },

@@ -84,6 +84,9 @@ fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: St
         .ok_or_else(|| "Cannot determine parent directory".to_string())?;
     let new_path = parent.join(&new_name);
 
+    // Pre-checks: rename(2) on macOS/Unix atomically replaces the target,
+    // so we must check existence before calling rename to prevent data loss.
+    // The TOCTOU window is acceptable for a local single-user desktop app.
     if new_path.exists() {
         return Err(format!("A file named '{}' already exists", new_name));
     }
@@ -91,7 +94,7 @@ fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: St
         return Err(format!("Source file does not exist: {}", old_path));
     }
 
-    // Rename on disk
+    // Rename on disk first — atomic on macOS (rename(2))
     fs::rename(&old_path, &new_path)
         .map_err(|e| format!("Failed to rename file: {}", e))?;
 
@@ -102,53 +105,25 @@ fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: St
         .unwrap_or(&new_name)
         .to_string();
 
-    // Update database — roll back the file rename if DB fails
-    let updated_rows = conn.execute(
-        "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3",
-        rusqlite::params![new_path_str, new_title, old_path],
-    )
-    .map_err(|e| {
-        let _ = fs::rename(&new_path, &old_path);
-        format!("Failed to update database (file rename rolled back): {}", e)
-    })?;
-    if updated_rows != 1 {
-        let _ = fs::rename(&new_path, &old_path);
-        return Err(format!(
-            "Failed to update database (expected 1 row, got {}; file rename rolled back)",
-            updated_rows
-        ));
-    }
-
-    // Return the updated document
+    // Update database and return updated document in one query.
+    // Roll back the file rename if the DB operation fails.
     let doc = conn
         .query_row(
-            "SELECT id, source, file_path, keep_local_id, title, author, url,
-                    word_count, last_opened_at, created_at
-             FROM documents WHERE file_path = ?1",
-            rusqlite::params![new_path_str],
+            "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3
+             RETURNING id, source, file_path, keep_local_id, title, author, url,
+                       word_count, last_opened_at, created_at",
+            rusqlite::params![new_path_str, new_title, old_path],
             |row| Document::from_row(row),
         )
         .map_err(|e| {
-            let _ = fs::rename(&new_path, &old_path);
-            let old_title = Path::new(&old_path)
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .strip_suffix(".md")
-                .or_else(|| {
-                    Path::new(&old_path)
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("")
-                        .strip_suffix(".markdown")
-                })
-                .unwrap_or("")
-                .to_string();
-            let _ = conn.execute(
-                "UPDATE documents SET file_path = ?1, title = ?2 WHERE file_path = ?3",
-                rusqlite::params![old_path, old_title, new_path_str],
-            );
-            format!("Failed to fetch updated document (file rename rolled back): {}", e)
+            match fs::rename(&new_path, &old_path) {
+                Ok(()) => format!("Failed to update database (file rename rolled back): {}", e),
+                Err(rb_err) => format!(
+                    "Failed to update database AND rollback failed — file is at '{}' but DB has old path. \
+                     DB error: {}. Rollback error: {}",
+                    new_path.display(), e, rb_err
+                ),
+            }
         })?;
 
     Ok(doc)
@@ -509,7 +484,7 @@ mod tests {
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
-            .contains("expected 1 row"));
+            .contains("rolled back"));
 
         // File should be rolled back to the original name
         assert!(old.exists(), "original file should be restored after rollback");

@@ -1006,7 +1006,6 @@ export default function App() {
         onExport={handleExportAnnotations}
         onClose={() => setShowExportPopover(false)}
         persistCorrections={settings.persistCorrections}
-        hasMarginNotes={annotations.marginNotes.length > 0}
         onOpenSettings={() => setShowSettings(true)}
       />
 

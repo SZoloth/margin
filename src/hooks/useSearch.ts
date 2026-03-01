@@ -1,16 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { indexAllDocuments } from "@/lib/tauri-commands";
 
 export interface SearchResult {
   documentId: string;
   title: string;
   snippet: string;
   rank: number;
-}
-
-interface FileSearchResult {
-  path: string;
-  filename: string;
 }
 
 export interface FileResult {
@@ -69,7 +65,7 @@ export function useSearch() {
     mdfindTimeoutRef.current = setTimeout(async () => {
       if (searchIdRef.current !== thisSearchId) return;
       try {
-        const files = await invoke<FileSearchResult[]>("search_files_on_disk", {
+        const files = await invoke<FileResult[]>("search_files_on_disk", {
           query: q.trim(),
           limit: 20,
         });
@@ -106,9 +102,7 @@ export function useSearch() {
   useEffect(() => {
     let cancelled = false;
     setIsIndexing(true);
-    invoke<{ indexed: number; skipped: number; errors: number }>(
-      "index_all_documents"
-    )
+    indexAllDocuments()
       .then((result) => {
         if (cancelled) return;
         if (result.indexed > 0) {

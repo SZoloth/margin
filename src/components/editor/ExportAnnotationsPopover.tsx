@@ -1,14 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import type { ExportResult } from "@/types/export";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
-import { WRITING_TYPES } from "@/lib/writing-types";
+
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;
   onExport: (writingType: string | null) => Promise<ExportResult>;
   onClose: () => void;
   persistCorrections: boolean;
-  hasMarginNotes: boolean;
   onOpenSettings: () => void;
 }
 
@@ -17,15 +16,11 @@ export function ExportAnnotationsPopover({
   onExport,
   onClose,
   persistCorrections,
-  hasMarginNotes,
   onOpenSettings,
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [writingType, setWritingType] = useState<string>("general");
   const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
-
-  const showWritingTypeSelector = persistCorrections && hasMarginNotes;
 
   // Reset state when popover opens
   useEffect(() => {
@@ -62,8 +57,7 @@ export function ExportAnnotationsPopover({
     (async () => {
       setExporting(true);
       try {
-        const wt = showWritingTypeSelector ? writingType : null;
-        const res = await onExportRef.current(wt);
+        const res = await onExportRef.current(null);
         if (!cancelled) setResult(res);
       } catch (err) {
         console.error("Export failed:", err);
@@ -123,6 +117,7 @@ export function ExportAnnotationsPopover({
       >
         {/* Close button */}
         <button
+          type="button"
           onClick={onClose}
           aria-label="Close"
           style={{
@@ -204,45 +199,6 @@ export function ExportAnnotationsPopover({
                   >
                     {snippet}
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Writing type tag */}
-            {result.correctionsSaved && showWritingTypeSelector && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  flexWrap: "wrap",
-                  borderTop: "1px solid var(--color-border)",
-                  paddingTop: 10,
-                }}
-              >
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                  Tagged as
-                </span>
-                {WRITING_TYPES.map((wt) => (
-                  <button
-                    key={wt.value}
-                    type="button"
-                    onClick={() => setWritingType(wt.value)}
-                    style={{
-                      padding: "2px 8px",
-                      fontSize: 11,
-                      fontFamily: "'Inter', system-ui, sans-serif",
-                      fontWeight: writingType === wt.value ? 600 : 400,
-                      color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                      backgroundColor: writingType === wt.value ? "var(--hover-bg)" : "transparent",
-                      border: writingType === wt.value ? "1px solid var(--color-border)" : "1px solid transparent",
-                      borderRadius: "var(--radius-sm)",
-                      cursor: "pointer",
-                      transition: "all 150ms ease",
-                    }}
-                  >
-                    {wt.label}
-                  </button>
                 ))}
               </div>
             )}

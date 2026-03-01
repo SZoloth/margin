@@ -24,26 +24,7 @@ fn fetch_writing_rules(
     conn: &Connection,
     writing_type: Option<&str>,
 ) -> rusqlite::Result<Vec<WritingRule>> {
-    let (sql, params): (&str, Vec<Box<dyn rusqlite::types::ToSql>>) = match writing_type {
-        Some(wt) => (
-            "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
-                    example_before, example_after, source, signal_count, notes, created_at, updated_at
-             FROM writing_rules WHERE writing_type = ?1
-             ORDER BY signal_count DESC, created_at DESC",
-            vec![Box::new(wt.to_string()) as Box<dyn rusqlite::types::ToSql>],
-        ),
-        None => (
-            "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
-                    example_before, example_after, source, signal_count, notes, created_at, updated_at
-             FROM writing_rules
-             ORDER BY writing_type, signal_count DESC, created_at DESC",
-            vec![],
-        ),
-    };
-
-    let mut stmt = conn.prepare(sql)?;
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+    let map_row = |row: &rusqlite::Row| -> rusqlite::Result<WritingRule> {
         Ok(WritingRule {
             id: row.get(0)?,
             writing_type: row.get(1)?,
@@ -60,9 +41,30 @@ fn fetch_writing_rules(
             created_at: row.get(12)?,
             updated_at: row.get(13)?,
         })
-    })?;
+    };
 
-    rows.collect()
+    match writing_type {
+        Some(wt) => {
+            let mut stmt = conn.prepare(
+                "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
+                        example_before, example_after, source, signal_count, notes, created_at, updated_at
+                 FROM writing_rules WHERE writing_type = ?1
+                 ORDER BY signal_count DESC, created_at DESC",
+            )?;
+            let rows = stmt.query_map([wt], map_row)?;
+            rows.collect()
+        }
+        None => {
+            let mut stmt = conn.prepare(
+                "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
+                        example_before, example_after, source, signal_count, notes, created_at, updated_at
+                 FROM writing_rules
+                 ORDER BY writing_type, signal_count DESC, created_at DESC",
+            )?;
+            let rows = stmt.query_map([], map_row)?;
+            rows.collect()
+        }
+    }
 }
 
 fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
@@ -114,11 +116,11 @@ fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
         lines.push(format!("## {label}"));
 
         // Sub-group by category
-        let mut cat_groups: Vec<(String, Vec<&&WritingRule>)> = Vec::new();
+        let mut cat_groups: Vec<(String, Vec<&WritingRule>)> = Vec::new();
         let mut cat_map: std::collections::HashMap<String, usize> =
             std::collections::HashMap::new();
 
-        for rule in group_rules {
+        for &rule in group_rules {
             if let Some(&idx) = cat_map.get(&rule.category) {
                 cat_groups[idx].1.push(rule);
             } else {
@@ -206,6 +208,17 @@ fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
             .collect::<Vec<_>>(),
     )
     .unwrap_or_else(|_| "[]".to_string());
+
+    // Guard: `"""` in JSON would break the Python raw triple-quoted string delimiter.
+    // serde_json escapes `"` as `\"` so this shouldn't happen in practice, but defend
+    // against it since the generated file runs as a hook with full user permissions.
+    if kill_words_json.contains(r#"""""#) || slop_patterns_json.contains(r#"""""#) {
+        return "#!/usr/bin/env python3\n\
+# ERROR: A writing rule contains a triple-quote sequence that cannot be safely\n\
+# embedded. Remove the offending rule text and re-export.\n\
+import sys; print('writing_guard: triple-quote injection blocked — skipping guard', file=sys.stderr); sys.exit(1)\n"
+            .to_string();
+    }
 
     format!(
         r#"#!/usr/bin/env python3

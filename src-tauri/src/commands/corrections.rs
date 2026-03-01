@@ -67,6 +67,7 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
     let mut stmt = conn.prepare(
         "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type
          FROM corrections
+         WHERE highlight_id != '__backfill_marker__'
          ORDER BY created_at DESC
          LIMIT ?1",
     )?;
@@ -101,7 +102,11 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
 }
 
 fn count_corrections(conn: &Connection) -> rusqlite::Result<i64> {
-    conn.query_row("SELECT COUNT(*) FROM corrections", [], |row| row.get(0))
+    conn.query_row(
+        "SELECT COUNT(*) FROM corrections WHERE highlight_id != '__backfill_marker__'",
+        [],
+        |row| row.get(0),
+    )
 }
 
 #[tauri::command]
@@ -337,6 +342,34 @@ pub struct ExportedCorrection {
     pub created_at: i64,
 }
 
+/// Formats Unix seconds as an ISO 8601 UTC timestamp (e.g. "2026-03-01T12:34:56Z").
+fn unix_secs_to_iso8601(secs: u64) -> String {
+    let days = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hours = time_of_day / 3600;
+    let minutes = (time_of_day % 3600) / 60;
+    let seconds = time_of_day % 60;
+
+    let mut y = 1970i64;
+    let mut remaining_days = days as i64;
+    loop {
+        let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+        let year_days: i64 = if leap { 366 } else { 365 };
+        if remaining_days < year_days { break; }
+        remaining_days -= year_days;
+        y += 1;
+    }
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut m = 0usize;
+    for &md in &month_days {
+        if remaining_days < md as i64 { break; }
+        remaining_days -= md as i64;
+        m += 1;
+    }
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m + 1, remaining_days + 1, hours, minutes, seconds)
+}
+
 fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsExport> {
     let mut stmt = conn.prepare(
         "SELECT original_text, notes_json, extended_context, writing_type,
@@ -363,36 +396,12 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
-    let now = {
-        let d = SystemTime::now()
+    let now = unix_secs_to_iso8601(
+        SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default();
-        // ISO 8601 UTC timestamp
-        let secs = d.as_secs();
-        let days = secs / 86400;
-        let time_of_day = secs % 86400;
-        let hours = time_of_day / 3600;
-        let minutes = (time_of_day % 3600) / 60;
-        let seconds = time_of_day % 60;
-        // Approximate date calculation (good enough for export timestamp)
-        let mut y = 1970i64;
-        let mut remaining_days = days as i64;
-        loop {
-            let year_days = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) { 366 } else { 365 };
-            if remaining_days < year_days { break; }
-            remaining_days -= year_days;
-            y += 1;
-        }
-        let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
-        let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-        let mut m = 0usize;
-        for &md in &month_days {
-            if remaining_days < md as i64 { break; }
-            remaining_days -= md as i64;
-            m += 1;
-        }
-        format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m + 1, remaining_days + 1, hours, minutes, seconds)
-    };
+            .unwrap_or_default()
+            .as_secs(),
+    );
     Ok(CorrectionsExport {
         exported_at: now,
         total_count: corrections.len(),
@@ -438,7 +447,11 @@ fn export_and_clear_corrections(conn: &Connection, path: &std::path::Path) -> Re
         "DELETE FROM corrections WHERE session_id != '__backfilled__'",
         [],
     )
-    .map_err(|e| format!("Failed to clear exported corrections: {e}"))?;
+    .map_err(|e| format!(
+        "Failed to clear exported corrections: {e}. \
+         Export file was written to {} — corrections remain in DB and may be re-exported.",
+        path.display()
+    ))?;
 
     Ok(count)
 }

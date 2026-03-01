@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { DocumentCorrections, CorrectionDetail } from "@/types/annotations";
 import {
@@ -8,7 +8,7 @@ import {
   exportCorrectionsJson,
 } from "@/lib/tauri-commands";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
-import { WRITING_TYPES } from "@/lib/writing-types";
+import { WRITING_TYPES, type WritingType } from "@/lib/writing-types";
 
 const PAGE_SIZE = 50;
 
@@ -22,7 +22,7 @@ function WritingTypeChips({
   onChange,
 }: {
   value: string | null;
-  onChange: (v: string) => void;
+  onChange: (v: WritingType) => void;
 }) {
   return (
     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -67,7 +67,7 @@ function CorrectionItem({
   onDelete,
 }: {
   correction: CorrectionDetail;
-  onUpdateType: (highlightId: string, writingType: string) => void;
+  onUpdateType: (highlightId: string, writingType: WritingType) => void;
   onDelete: (highlightId: string) => void;
 }) {
   const [showTypeChips, setShowTypeChips] = useState(false);
@@ -177,7 +177,7 @@ function DocumentGroup({
   onDelete,
 }: {
   group: DocumentCorrections;
-  onUpdateType: (highlightId: string, writingType: string) => void;
+  onUpdateType: (highlightId: string, writingType: WritingType) => void;
   onDelete: (highlightId: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -237,20 +237,21 @@ function DocumentGroup({
 
 export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
   const [groups, setGroups] = useState<DocumentCorrections[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
   const exportTimeoutRef = useRef<number | null>(null);
+  const totalCount = useMemo(
+    () => groups.reduce((sum, g) => sum + g.corrections.length, 0),
+    [groups],
+  );
 
   const loadCorrections = useCallback(async (pageLimit: number) => {
     setLoading(true);
     try {
       const data = await getCorrectionsByDocument(pageLimit);
       setGroups(data);
-      const total = data.reduce((sum, g) => sum + g.corrections.length, 0);
-      setTotalCount(total);
     } catch (err) {
       console.error("Failed to load corrections:", err);
     } finally {
@@ -287,7 +288,7 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
   }, []);
 
   const handleUpdateType = useCallback(
-    async (highlightId: string, writingType: string) => {
+    async (highlightId: string, writingType: WritingType) => {
       try {
         await updateCorrectionWritingType(highlightId, writingType);
         setGroups((prev) =>
@@ -319,7 +320,6 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
             }))
             .filter((g) => g.corrections.length > 0),
         );
-        setTotalCount((prev) => prev - 1);
       } catch (err) {
         console.error("Failed to delete correction:", err);
       }
