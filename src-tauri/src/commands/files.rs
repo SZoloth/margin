@@ -113,7 +113,7 @@ fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: St
              RETURNING id, source, file_path, keep_local_id, title, author, url,
                        word_count, last_opened_at, created_at",
             rusqlite::params![new_path_str, new_title, old_path],
-            |row| Document::from_row(row),
+            Document::from_row,
         )
         .map_err(|e| {
             match fs::rename(&new_path, &old_path) {

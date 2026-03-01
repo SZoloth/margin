@@ -8,6 +8,7 @@ struct FileChangedPayload {
     path: String,
 }
 
+#[derive(Default)]
 pub struct FileWatcher {
     watcher: Option<RecommendedWatcher>,
     watched_dir: Option<PathBuf>,
@@ -15,10 +16,7 @@ pub struct FileWatcher {
 
 impl FileWatcher {
     pub fn new() -> Self {
-        FileWatcher {
-            watcher: None,
-            watched_dir: None,
-        }
+        Self::default()
     }
 
     pub fn watch(&mut self, path: &str, app_handle: &AppHandle) -> Result<(), String> {
@@ -51,7 +49,7 @@ impl FileWatcher {
                     }
 
                     // Only emit when the event involves our target file (full path match)
-                    let is_target = event.paths.iter().any(|p| *p == target_full);
+                    let is_target = event.paths.contains(&target_full);
                     if !is_target {
                         return;
                     }

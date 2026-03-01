@@ -112,7 +112,7 @@ fn count_corrections(conn: &Connection) -> rusqlite::Result<i64> {
 #[tauri::command]
 pub async fn get_all_corrections(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<CorrectionRecord>, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let limit = limit.unwrap_or(200).max(1).min(2000);
+    let limit = limit.unwrap_or(200).clamp(1, 2000);
     fetch_corrections(&conn, limit).map_err(|e| e.to_string())
 }
 
@@ -412,7 +412,7 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
 #[tauri::command]
 pub async fn get_corrections_by_document(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<DocumentCorrections>, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let limit = limit.unwrap_or(50).max(1).min(500);
+    let limit = limit.unwrap_or(50).clamp(1, 500);
     fetch_corrections_by_document(&conn, limit).map_err(|e| e.to_string())
 }
 

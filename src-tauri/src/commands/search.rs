@@ -94,14 +94,9 @@ fn sanitize_fts_query(query: &str) -> String {
 
     // Remove FTS5 operators and special chars
     let cleaned: String = trimmed
-        .replace('"', "")
-        .replace('\'', "")
-        .replace('(', "")
-        .replace(')', "")
-        .replace('{', "")
-        .replace('}', "")
-        .replace(':', "")
-        .replace('^', "");
+        .chars()
+        .filter(|c| !matches!(c, '"' | '\'' | '(' | ')' | '{' | '}' | ':' | '^'))
+        .collect();
 
     let terms: Vec<String> = cleaned
         .split_whitespace()

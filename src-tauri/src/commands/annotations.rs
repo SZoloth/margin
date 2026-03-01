@@ -40,6 +40,7 @@ fn document_id_for_margin_note(conn: &Connection, note_id: &str) -> Result<Strin
 
 // === Inner functions (testable with &Connection) ===
 
+#[allow(clippy::too_many_arguments)]
 fn insert_highlight(
     conn: &Connection,
     id: &str,
@@ -75,7 +76,7 @@ fn fetch_highlights(conn: &Connection, document_id: &str) -> Result<Vec<Highligh
         .map_err(|e| e.to_string())?;
 
     let results = stmt
-        .query_map([document_id], |row| Highlight::from_row(row))
+        .query_map([document_id], Highlight::from_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string());
@@ -125,7 +126,7 @@ fn fetch_margin_notes(conn: &Connection, document_id: &str) -> Result<Vec<Margin
         .map_err(|e| e.to_string())?;
 
     let results = stmt
-        .query_map([document_id], |row| MarginNote::from_row(row))
+        .query_map([document_id], MarginNote::from_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string());
@@ -160,6 +161,7 @@ fn remove_all_highlights_for_document(conn: &Connection, document_id: &str) -> R
 
 // === Tauri command handlers ===
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn create_highlight(
     state: tauri::State<'_, DbPool>,

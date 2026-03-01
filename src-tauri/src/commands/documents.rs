@@ -17,7 +17,7 @@ fn fetch_recent_documents(conn: &Connection, limit: i64) -> Result<Vec<Document>
         .map_err(|e| e.to_string())?;
 
     let results = stmt
-        .query_map([limit], |row| Document::from_row(row))
+        .query_map([limit], Document::from_row)
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string());
