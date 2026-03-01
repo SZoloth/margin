@@ -20,51 +20,69 @@ pub struct WritingRule {
     pub updated_at: i64,
 }
 
+fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
+    Ok(WritingRule {
+        id: row.get(0)?,
+        writing_type: row.get(1)?,
+        category: row.get(2)?,
+        rule_text: row.get(3)?,
+        when_to_apply: row.get(4)?,
+        why: row.get(5)?,
+        severity: row.get(6)?,
+        example_before: row.get(7)?,
+        example_after: row.get(8)?,
+        source: row.get(9)?,
+        signal_count: row.get(10)?,
+        notes: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+    })
+}
+
+const RULES_SELECT: &str =
+    "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
+            example_before, example_after, source, signal_count, notes, created_at, updated_at
+     FROM writing_rules";
+
 fn fetch_writing_rules(
     conn: &Connection,
     writing_type: Option<&str>,
 ) -> rusqlite::Result<Vec<WritingRule>> {
-    let map_row = |row: &rusqlite::Row| -> rusqlite::Result<WritingRule> {
-        Ok(WritingRule {
-            id: row.get(0)?,
-            writing_type: row.get(1)?,
-            category: row.get(2)?,
-            rule_text: row.get(3)?,
-            when_to_apply: row.get(4)?,
-            why: row.get(5)?,
-            severity: row.get(6)?,
-            example_before: row.get(7)?,
-            example_after: row.get(8)?,
-            source: row.get(9)?,
-            signal_count: row.get(10)?,
-            notes: row.get(11)?,
-            created_at: row.get(12)?,
-            updated_at: row.get(13)?,
-        })
-    };
-
     match writing_type {
         Some(wt) => {
-            let mut stmt = conn.prepare(
-                "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
-                        example_before, example_after, source, signal_count, notes, created_at, updated_at
-                 FROM writing_rules WHERE writing_type = ?1
-                 ORDER BY signal_count DESC, created_at DESC",
-            )?;
-            let rows = stmt.query_map([wt], map_row)?;
+            let sql = format!("{RULES_SELECT} WHERE writing_type = ?1 ORDER BY signal_count DESC, created_at DESC");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map([wt], rule_from_row)?;
             rows.collect()
         }
         None => {
-            let mut stmt = conn.prepare(
-                "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
-                        example_before, example_after, source, signal_count, notes, created_at, updated_at
-                 FROM writing_rules
-                 ORDER BY writing_type, signal_count DESC, created_at DESC",
-            )?;
-            let rows = stmt.query_map([], map_row)?;
+            let sql = format!("{RULES_SELECT} ORDER BY writing_type, signal_count DESC, created_at DESC");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map([], rule_from_row)?;
             rows.collect()
         }
     }
+}
+
+/// Groups items by a string key, preserving insertion order.
+fn group_by_key<'a, T, F>(items: &'a [T], key_fn: F) -> Vec<(&'a str, Vec<&'a T>)>
+where
+    F: Fn(&T) -> &str,
+{
+    let mut groups: Vec<(&'a str, Vec<&'a T>)> = Vec::new();
+    let mut index: std::collections::HashMap<&'a str, usize> = std::collections::HashMap::new();
+
+    for item in items {
+        let key = key_fn(item);
+        if let Some(&idx) = index.get(key) {
+            groups[idx].1.push(item);
+        } else {
+            let idx = groups.len();
+            index.insert(key, idx);
+            groups.push((key, vec![item]));
+        }
+    }
+    groups
 }
 
 fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
@@ -73,20 +91,7 @@ fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
     lines.push(String::new());
     lines.push("_For AI agents: apply rules matching the writing type. General rules always apply._".to_string());
 
-    // Group by writing_type
-    let mut groups: Vec<(String, Vec<&WritingRule>)> = Vec::new();
-    let mut group_map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-
-    // Ensure "general" comes first
-    for rule in rules {
-        if let Some(&idx) = group_map.get(&rule.writing_type) {
-            groups[idx].1.push(rule);
-        } else {
-            let idx = groups.len();
-            group_map.insert(rule.writing_type.clone(), idx);
-            groups.push((rule.writing_type.clone(), vec![rule]));
-        }
-    }
+    let mut groups = group_by_key(rules, |r| &r.writing_type);
 
     // Sort: "general" first, then alphabetical
     groups.sort_by(|a, b| {
@@ -101,7 +106,7 @@ fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
 
     for (writing_type, group_rules) in &groups {
         lines.push(String::new());
-        let label = match writing_type.as_str() {
+        let label = match *writing_type {
             "general" => "General",
             "email" => "Email",
             "prd" => "PRD",
@@ -115,20 +120,7 @@ fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
         };
         lines.push(format!("## {label}"));
 
-        // Sub-group by category
-        let mut cat_groups: Vec<(String, Vec<&WritingRule>)> = Vec::new();
-        let mut cat_map: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
-
-        for &rule in group_rules {
-            if let Some(&idx) = cat_map.get(&rule.category) {
-                cat_groups[idx].1.push(rule);
-            } else {
-                let idx = cat_groups.len();
-                cat_map.insert(rule.category.clone(), idx);
-                cat_groups.push((rule.category.clone(), vec![rule]));
-            }
-        }
+        let cat_groups = group_by_key(group_rules, |r| &r.category);
 
         for (category, cat_rules) in &cat_groups {
             lines.push(String::new());
