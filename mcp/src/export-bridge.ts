@@ -51,7 +51,8 @@ export class ExportBridge {
       this.server = createServer((req, res) => this.handleRequest(req, res));
       const onError = (err: Error) => reject(err);
       this.server.on("error", onError);
-      this.server.listen(port, () => {
+      // Bind to localhost only; this endpoint accepts arbitrary prompt bodies.
+      this.server.listen(port, "127.0.0.1", () => {
         this.server!.removeListener("error", onError);
         const addr = this.server!.address();
         this.port = typeof addr === "object" && addr ? addr.port : port;

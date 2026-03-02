@@ -19,6 +19,7 @@ export function ExportAnnotationsPopover({
   onOpenSettings,
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
 
@@ -26,6 +27,7 @@ export function ExportAnnotationsPopover({
   useEffect(() => {
     if (isOpen) {
       setResult(null);
+      setErrorMessage(null);
       setExporting(false);
     }
   }, [isOpen]);
@@ -58,10 +60,16 @@ export function ExportAnnotationsPopover({
       setExporting(true);
       try {
         const res = await onExportRef.current(null);
-        if (!cancelled) setResult(res);
+        if (!cancelled) {
+          setResult(res);
+          setErrorMessage(null);
+        }
       } catch (err) {
         console.error("Export failed:", err);
-        if (!cancelled) setResult({ highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" });
+        if (!cancelled) {
+          setResult(null);
+          setErrorMessage("Export failed. Please try again.");
+        }
       } finally {
         if (!cancelled) setExporting(false);
       }
@@ -148,6 +156,25 @@ export function ExportAnnotationsPopover({
             }}
           >
             Exporting...
+          </div>
+        ) : errorMessage ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--color-text-primary)",
+                fontSize: 14,
+                fontWeight: 500,
+              }}
+            >
+              <span style={{ color: "var(--color-danger, #d33)" }}>×</span>
+              Export failed
+            </div>
+            <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>
+              {errorMessage}
+            </div>
           </div>
         ) : result ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

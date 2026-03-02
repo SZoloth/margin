@@ -13,6 +13,7 @@ if (!globalThis.requestAnimationFrame) {
 
 describe("ExportAnnotationsPopover", () => {
   it("shows an error state when export fails (does not claim clipboard success)", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const onExport = vi.fn().mockRejectedValue(new Error("clipboard failed"));
     const onClose = vi.fn();
     const onOpenSettings = vi.fn();
@@ -33,11 +34,12 @@ describe("ExportAnnotationsPopover", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/export failed/i)).toBeTruthy();
+      expect(screen.getByText(/^export failed$/i)).toBeTruthy();
     });
 
     expect(screen.queryByText(/copied to clipboard/i)).toBeNull();
     expect(screen.queryByText(/sent to claude/i)).toBeNull();
+
+    consoleError.mockRestore();
   });
 });
-

@@ -519,5 +519,10 @@ process.on("SIGTERM", shutdown);
 
 main().catch((err) => {
   console.error("MCP server error:", err);
+  try {
+    bridge.stop();
+  } catch {
+    // ignore
+  }
   process.exit(1);
 });
