@@ -184,10 +184,10 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
           background: "var(--color-page)",
         }}
       >
-        <TabButton active={activeTab === "corrections"} onClick={() => setActiveTab("corrections")} count={correctionStats.total}>
+        <TabButton active={activeTab === "corrections"} onClick={() => setActiveTab("corrections")}>
           Corrections
         </TabButton>
-        <TabButton active={activeTab === "rules"} onClick={() => setActiveTab("rules")} count={ruleStats.ruleCount}>
+        <TabButton active={activeTab === "rules"} onClick={() => setActiveTab("rules")}>
           Rules
         </TabButton>
       </div>
@@ -224,7 +224,7 @@ function Stat({ value, label, accent }: { value: number | string; label: string;
   );
 }
 
-function TabButton({ active, onClick, count, children }: { active: boolean; onClick: () => void; count: number; children: React.ReactNode }) {
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -233,10 +233,10 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
       onClick={onClick}
       style={{
         padding: "12px 16px",
-        fontSize: 13,
-        fontWeight: active ? 600 : 500,
+        fontSize: 14,
+        fontWeight: active ? 500 : 400,
         color: active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-        borderBottom: active ? "2px solid var(--color-text-primary)" : "2px solid transparent",
+        borderBottom: active ? "2px solid var(--color-accent)" : "2px solid transparent",
         cursor: "pointer",
         background: "none",
         borderTop: "none",
@@ -246,9 +246,6 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
       }}
     >
       {children}
-      <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-secondary)", marginLeft: 4 }}>
-        {count}
-      </span>
     </button>
   );
 }

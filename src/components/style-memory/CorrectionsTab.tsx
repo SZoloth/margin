@@ -29,8 +29,19 @@ function formatDateLabel(timestamp: number, todayMs: number, yesterdayMs: number
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMs / 3600000);
+  const diffDay = Math.floor(diffMs / 86400000);
+
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+  if (diffDay === 1) return "Yesterday";
+  if (diffDay < 7) return `${diffDay} days ago`;
+  return new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function groupByDate(corrections: CorrectionDetail[]): Map<string, CorrectionDetail[]> {
@@ -146,22 +157,22 @@ function CorrectionCard({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: 13,
+            fontFamily: "'Newsreader', Georgia, serif",
+            fontSize: 15,
             fontStyle: "italic",
-            color: "var(--color-text-primary)",
+            color: "var(--color-text-secondary)",
             lineHeight: 1.5,
             marginBottom: 4,
-            fontWeight: expanded ? 500 : 400,
           }}
         >
           &ldquo;{correction.originalText}&rdquo;
         </div>
         {correction.notes.length > 0 && (
-          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 6 }}>
+          <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: 14, color: "var(--color-text-primary)", lineHeight: 1.4, marginBottom: 6 }}>
             {correction.notes.join("; ")}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
           <button
             type="button"
             onClick={(e) => {
@@ -170,7 +181,7 @@ function CorrectionCard({
             }}
             style={{
               padding: "1px 7px",
-              fontSize: 10,
+              fontSize: 12,
               color: "var(--color-text-secondary)",
               backgroundColor: correction.writingType ? "var(--hover-bg)" : "transparent",
               border: correction.writingType
@@ -184,11 +195,11 @@ function CorrectionCard({
             {correction.writingType ?? "untagged"}
           </button>
           {correction.documentTitle && (
-            <span style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>
+            <span style={{ color: "var(--color-accent)" }}>
               {correction.documentTitle}
             </span>
           )}
-          <span>{formatTime(correction.createdAt)}</span>
+          <span>{formatRelativeTime(correction.createdAt)}</span>
           <button
             type="button"
             onClick={(e) => {
@@ -413,7 +424,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
           <input
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Search corrections..."
+            placeholder="Filter corrections..."
             style={{
               width: "100%",
               padding: "6px 10px 6px 28px",
@@ -530,22 +541,16 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                 <div key={dateLabel}>
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 600,
-                      color: "var(--color-text-secondary)",
+                      color: "var(--color-text-tertiary)",
                       textTransform: "uppercase",
                       letterSpacing: "0.3px",
                       padding: "16px 0 6px",
                       borderBottom: "1px solid var(--color-border)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
                     }}
                   >
                     {dateLabel}
-                    <span style={{ fontWeight: 400 }}>
-                      &middot; {items.length} correction{items.length === 1 ? "" : "s"}
-                    </span>
                   </div>
                   {items.map((c) => (
                     <CorrectionCard

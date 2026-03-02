@@ -5,6 +5,7 @@
   --color-diff-add-border: #7a9460;
   --color-diff-del-bg: #ecdede;
   --color-diff-del-border: #b07070;
+  --color-diff-del-text: #5a2e2e;
 }
 
 :root[data-theme="dark"] {
@@ -12,6 +13,7 @@
   --color-diff-add-border: #6a8450;
   --color-diff-del-bg: #2e1e1e;
   --color-diff-del-border: #9a6060;
+  --color-diff-del-text: #c89090;
 }
 
 /* Insertion mark */
@@ -22,25 +24,26 @@
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
   border-radius: 2px;
-  padding: 0 1px;
+  padding: 0 2px;
 }
 
 /* Deletion mark */
 .diff-mark--deletion {
   background-color: var(--color-diff-del-bg);
+  color: var(--color-diff-del-text);
   text-decoration: line-through;
   text-decoration-color: var(--color-diff-del-border);
   text-decoration-thickness: 1px;
   opacity: 0.8;
   border-radius: 2px;
-  padding: 0 1px;
+  padding: 0 2px;
 }
 
 /* Banner strip below title bar */
 .diff-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 8px 24px;
   font-size: 12.5px;
   font-family: 'Instrument Sans', system-ui, sans-serif;
@@ -49,8 +52,16 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.diff-banner__accent {
+  width: 3px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 1px;
+  background-color: var(--color-accent);
+}
+
 .diff-banner__count {
-  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .diff-banner__time {
@@ -60,41 +71,53 @@
 
 .diff-banner__actions {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 16px;
   margin-left: auto;
 }
 
 .diff-banner__btn {
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 500;
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: none;
   background: none;
   color: var(--color-text-primary);
   cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-micro);
+  transition: opacity var(--duration-fast) var(--ease-micro);
 }
 
 .diff-banner__btn:hover {
-  background-color: var(--hover-bg);
+  opacity: 0.7;
+}
+
+.diff-banner__btn--accent {
+  color: var(--color-accent);
 }
 
 .diff-banner__btn--primary {
-  background-color: var(--color-accent);
-  border-color: var(--color-accent);
-  color: white;
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 
-.diff-banner__btn--primary:hover {
-  opacity: 0.9;
+.diff-banner__btn--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+  opacity: 0.35;
+  padding: 2px;
+}
+
+.diff-banner__btn--icon:hover {
+  opacity: 0.7;
 }
 
 /* Floating navigation chip */
 .diff-nav-chip {
   position: fixed;
-  bottom: 20px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -107,7 +130,7 @@
   color: #FFFFF8;
   background-color: #1A1714;
   border-radius: 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   z-index: 800;
   user-select: none;
 }
@@ -115,6 +138,10 @@
 :root[data-theme="dark"] .diff-nav-chip {
   background-color: #2a2a2a;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.diff-nav-chip__label {
+  font-weight: 500;
 }
 
 .diff-nav-chip__btn {
@@ -125,16 +152,13 @@
   height: 22px;
   border: none;
   background: none;
-  color: #999;
-  font-size: 14px;
+  color: #FFFFF8;
   cursor: pointer;
   border-radius: 50%;
-  transition: color var(--duration-fast) var(--ease-micro),
-              background-color var(--duration-fast) var(--ease-micro);
+  transition: background-color var(--duration-fast) var(--ease-micro);
 }
 
 .diff-nav-chip__btn:hover {
-  color: white;
   background-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -148,9 +172,15 @@
 }
 
 .diff-controls__btn {
-  padding: 2px 6px;
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
   font-family: 'Instrument Sans', system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   border: none;
   background: none;
   cursor: pointer;
@@ -161,6 +191,7 @@
 
 .diff-controls__btn--keep {
   color: var(--color-diff-add-border);
+  background-color: color-mix(in srgb, var(--color-diff-add-border) 10%, transparent);
 }
 
 .diff-controls__btn--keep:hover {
@@ -168,7 +199,7 @@
 }
 
 .diff-controls__btn--revert {
-  color: var(--color-diff-del-border);
+  color: var(--color-text-tertiary);
 }
 
 .diff-controls__btn--revert:hover {

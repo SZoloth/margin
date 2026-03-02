@@ -295,9 +295,18 @@ export function AppShell({
             <button
               type="button"
               onClick={onExport}
-              className="btn-sm p-1"
               style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                fontSize: 13,
+                fontWeight: 500,
                 color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-sm)",
+                background: "none",
+                cursor: "pointer",
                 opacity: exportBtn.isVisible ? 1 : 0,
                 transform: exportBtn.isVisible ? "scale(1)" : "scale(0.9)",
                 transition: exportBtn.isVisible
@@ -308,8 +317,10 @@ export function AppShell({
               aria-label="Export annotations"
               title="Export annotations (⌘⇧E)"
               aria-hidden={!showExport}
+              tabIndex={showExport ? 0 : -1}
             >
-              <HugeiconsIcon icon={Download01Icon} size={18} color="currentColor" strokeWidth={1.5} />
+              <HugeiconsIcon icon={Download01Icon} size={14} color="currentColor" strokeWidth={1.5} />
+              Export
             </button>
           )}
           {showExport && mcpConnected && (
@@ -356,7 +367,7 @@ export function AppShell({
                     color: "var(--color-text-primary)",
                   }}
                 >
-                  &ldquo;We have books inside our books.&rdquo;
+                  &ldquo;With me poetry has not been a purpose, but a passion.&rdquo;
                 </p>
                 <p
                   className="mt-1"
@@ -367,7 +378,7 @@ export function AppShell({
                     color: "var(--color-text-tertiary)",
                   }}
                 >
-                  Edgar Allan Poe, Marginalia
+                  Edgar Allan Poe
                 </p>
                 {/* Divider between quote and CTA */}
                 <div
@@ -385,9 +396,11 @@ export function AppShell({
                     color: "var(--color-text-secondary)",
                   }}
                 >
-                  Open a file to start reading{" "}
-                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd>
+                  Open a file to start reading, or drop a markdown file anywhere.
                 </p>
+                <div style={{ marginTop: 12 }}>
+                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd>
+                </div>
               </div>
             </div>
           )}

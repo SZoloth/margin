@@ -41,9 +41,11 @@ export function DiffNavChip({
         onClick={onPrev}
         aria-label="Previous change"
       >
-        ‹
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M8.5 3.5l-4 3.5 4 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
-      <span>
+      <span className="diff-nav-chip__label">
         {currentIndex + 1} of {totalCount}
       </span>
       <button
@@ -52,7 +54,9 @@ export function DiffNavChip({
         onClick={onNext}
         aria-label="Next change"
       >
-        ›
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M5.5 3.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
     </div>
   );

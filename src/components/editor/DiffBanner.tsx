@@ -37,35 +37,33 @@ export function DiffBanner({
     return () => clearInterval(id);
   }, [updatedAt]);
 
-  const label = changeCount === 1 ? "1 change" : `${changeCount} changes`;
-  const pendingLabel = isReviewing && pendingCount > 0
-    ? ` (${pendingCount} remaining)`
-    : "";
+  const label = isReviewing && pendingCount > 0
+    ? `${pendingCount} change${pendingCount === 1 ? "" : "s"} remaining`
+    : `${changeCount} change${changeCount === 1 ? "" : "s"} to review`;
 
   return (
     <div className="diff-banner">
+      <div className="diff-banner__accent" />
       <span className="diff-banner__count">
-        {label}{pendingLabel}
+        {label}
       </span>
       {updatedAt && (
         <span className="diff-banner__time">
-          {relativeTime(updatedAt)}
+          Updated {relativeTime(updatedAt)}
         </span>
       )}
       <div className="diff-banner__actions">
+        <button
+          type="button"
+          className="diff-banner__btn diff-banner__btn--accent"
+          onClick={onAcceptAll}
+        >
+          Accept all
+        </button>
         {!isReviewing && (
           <button
             type="button"
-            className="diff-banner__btn"
-            onClick={onDismiss}
-          >
-            Dismiss
-          </button>
-        )}
-        {!isReviewing && (
-          <button
-            type="button"
-            className="diff-banner__btn"
+            className="diff-banner__btn diff-banner__btn--primary"
             onClick={onReview}
           >
             Review
@@ -73,10 +71,13 @@ export function DiffBanner({
         )}
         <button
           type="button"
-          className="diff-banner__btn diff-banner__btn--primary"
-          onClick={onAcceptAll}
+          className="diff-banner__btn diff-banner__btn--icon"
+          onClick={onDismiss}
+          aria-label="Dismiss"
         >
-          Accept all
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
     </div>

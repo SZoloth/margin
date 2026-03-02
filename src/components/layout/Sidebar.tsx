@@ -194,8 +194,13 @@ export function Sidebar({
       {/* App header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-4">
         <h1
-          className="text-lg font-semibold tracking-tight"
-          style={{ color: "var(--color-text-primary)" }}
+          style={{
+            fontFamily: "'Newsreader', Georgia, serif",
+            fontSize: 20,
+            fontWeight: 600,
+            letterSpacing: "-0.02em",
+            color: "var(--color-text-primary)",
+          }}
         >
           Margin
         </h1>
@@ -238,7 +243,7 @@ export function Sidebar({
             aria-controls="search-listbox"
             aria-activedescendant={activeResultIndex >= 0 ? `search-option-${activeResultIndex}` : undefined}
             aria-autocomplete="list"
-            placeholder="Search files..."
+            placeholder="Search documents..."
             value={inputValue}
             onChange={handleChange}
             onFocus={() => setIsFocused(true)}
@@ -383,7 +388,7 @@ export function Sidebar({
               className="px-3 text-sm italic"
               style={{ color: "var(--color-text-secondary)" }}
             >
-              No recent documents
+              Your recent documents will appear here
             </div>
           ) : (
             <div className="flex flex-col gap-4">
@@ -398,7 +403,7 @@ export function Sidebar({
                     <div key={group.label}>
                       <h2
                         className="text-xs font-semibold uppercase tracking-wider mb-2 px-3"
-                        style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}
+                        style={{ color: "var(--color-text-tertiary)" }}
                       >
                         {group.label}
                       </h2>
