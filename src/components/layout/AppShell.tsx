@@ -330,15 +330,15 @@ export function AppShell({
                 pointerEvents: emptyState.isVisible ? "auto" : "none",
               }}
             >
-              <div className="text-center" style={{ maxWidth: 320 }}>
+              <div className="text-center" style={{ maxWidth: 480 }}>
                 <p
                   style={{
                     fontFamily: "'Newsreader', Georgia, serif",
                     fontStyle: "italic",
-                    fontSize: "1.25rem",
+                    fontSize: "28px",
                     letterSpacing: "-0.01em",
-                    lineHeight: 1.6,
-                    opacity: 0.5,
+                    lineHeight: 1.45,
+                    color: "var(--color-text-primary)",
                   }}
                 >
                   &ldquo;We have books inside our books.&rdquo;
@@ -346,33 +346,32 @@ export function AppShell({
                 <p
                   className="mt-1"
                   style={{
-                    fontSize: "0.6875rem",
-                    letterSpacing: "0.04em",
+                    fontSize: "13px",
+                    letterSpacing: "0.02em",
                     textTransform: "uppercase",
-                    opacity: 0.35,
+                    color: "var(--color-text-tertiary)",
                   }}
                 >
                   Edgar Allan Poe, Marginalia
                 </p>
-                <p
-                  className="mt-6"
+                {/* Divider between quote and CTA */}
+                <div
                   style={{
-                    fontFamily: "'Newsreader', Georgia, serif",
-                    fontStyle: "italic",
-                    fontSize: "1rem",
-                    letterSpacing: "-0.01em",
+                    width: 40,
+                    height: 1,
+                    background: "var(--color-border)",
+                    margin: "32px auto",
+                  }}
+                />
+                <p
+                  style={{
+                    fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                    fontSize: "15px",
+                    color: "var(--color-text-secondary)",
                   }}
                 >
-                  Open a file to start reading
-                </p>
-                <p
-                  className="mt-2 opacity-50"
-                  style={{
-                    fontSize: "0.8125rem",
-                    letterSpacing: "0.01em",
-                  }}
-                >
-                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd> to open a file, or drag one here
+                  Open a file to start reading{" "}
+                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd>
                 </p>
               </div>
             </div>

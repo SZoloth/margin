@@ -87,15 +87,14 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
           : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
       }}
     >
-      {/* Toolbar */}
+      {/* Header */}
       <div
         style={{
-          height: 44,
           borderBottom: "1px solid var(--color-border)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 16px",
+          padding: "16px 32px",
           flexShrink: 0,
         }}
       >
@@ -103,28 +102,25 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
           <button
             type="button"
             onClick={onClose}
+            aria-label="Back"
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              color: "var(--color-text-secondary)",
+              justifyContent: "center",
               background: "none",
               border: "none",
               cursor: "pointer",
-              padding: "4px 8px",
+              padding: "4px",
               borderRadius: "var(--radius-sm)",
+              color: "var(--color-text-secondary)",
               transition: "all 100ms",
             }}
           >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 14, height: 14 }}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 16, height: 16 }}>
               <path d="M10 3L5 8L10 13" />
             </svg>
-            Back
           </button>
-          <span style={{ width: 1, height: 20, background: "var(--color-border)" }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)", fontFamily: "'Newsreader', Georgia, serif" }}>
+          <span style={{ fontSize: 22, fontWeight: 600, color: "var(--color-text-primary)", fontFamily: "'Newsreader', Georgia, serif", letterSpacing: "-0.01em" }}>
             Style Memory
           </span>
         </div>
@@ -160,23 +156,18 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 24,
-          padding: "12px 32px",
+          gap: 48,
+          padding: "24px 32px",
           borderBottom: "1px solid var(--color-border)",
-          background: "var(--color-sidebar, var(--hover-bg))",
+          background: "var(--color-page)",
           flexShrink: 0,
         }}
       >
         <Stat value={correctionStats.total} label="Corrections" />
-        <StatDivider />
         <Stat value={correctionStats.documentCount} label="Documents" />
-        <StatDivider />
         <Stat value={ruleStats.ruleCount} label="Rules" />
         {correctionStats.untaggedCount > 0 && (
-          <>
-            <StatDivider />
-            <Stat value={`${correctionStats.untaggedCount} untagged`} label="Needs attention" small />
-          </>
+          <Stat value={correctionStats.untaggedCount} label="Needs attention" accent />
         )}
       </div>
 
@@ -213,27 +204,24 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
   );
 }
 
-function Stat({ value, label, small }: { value: number | string; label: string; small?: boolean }) {
+function Stat({ value, label, accent }: { value: number | string; label: string; accent?: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <span style={{
-        fontSize: small ? 14 : 36,
-        fontWeight: small ? 500 : 700,
-        fontFamily: small ? undefined : "'Newsreader', Georgia, serif",
-        color: small ? "var(--color-text-secondary)" : "var(--color-text-primary)",
-        lineHeight: 1.2,
+        fontSize: 36,
+        fontWeight: 700,
+        fontFamily: "'Newsreader', Georgia, serif",
+        color: accent ? "var(--color-accent)" : "var(--color-text-primary)",
+        lineHeight: 1,
+        letterSpacing: "-0.02em",
       }}>
         {value}
       </span>
-      <span style={{ fontSize: 12, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px", marginTop: 2 }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>
         {label}
       </span>
     </div>
   );
-}
-
-function StatDivider() {
-  return <div style={{ width: 1, height: 32, background: "var(--color-border)" }} />;
 }
 
 function TabButton({ active, onClick, count, children }: { active: boolean; onClick: () => void; count: number; children: React.ReactNode }) {
@@ -244,7 +232,7 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
       aria-selected={active}
       onClick={onClick}
       style={{
-        padding: "10px 16px",
+        padding: "12px 16px",
         fontSize: 13,
         fontWeight: active ? 600 : 500,
         color: active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
