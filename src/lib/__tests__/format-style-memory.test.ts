@@ -11,6 +11,7 @@ function correction(overrides: Partial<CorrectionRecord> = {}): CorrectionRecord
     documentId: "doc-1",
     createdAt: 1700000000000,
     writingType: null,
+    polarity: null,
     ...overrides,
   };
 }
@@ -36,8 +37,8 @@ describe("formatStyleMemory", () => {
       correction({ documentId: "doc-2", documentTitle: "Article B", originalText: "word2" }),
       correction({ documentId: "doc-1", documentTitle: "Article A", originalText: "word3" }),
     ]);
-    // Should have two document headers
-    const headers = result.match(/^## From /gm);
+    // Should have two document headers (### level when nested under ## section)
+    const headers = result.match(/^###? From /gm);
     expect(headers).toHaveLength(2);
     expect(result).toContain("3 corrections across 2 documents");
   });
@@ -101,5 +102,39 @@ describe("formatStyleMemory", () => {
     const result = formatStyleMemory([withType, withoutType]);
     expect(result).toContain("# Writing preferences (from Margin)");
     expect(result).toContain("2 corrections");
+  });
+
+  it("groups by polarity when polarity data is present", () => {
+    const result = formatStyleMemory([
+      correction({ polarity: "positive", originalText: "good phrase" }),
+      correction({ polarity: "corrective", originalText: "bad phrase", documentId: "doc-2" }),
+      correction({ polarity: null, originalText: "untagged" }),
+    ]);
+    expect(result).toContain("Writing Samples (do more of this)");
+    expect(result).toContain("Corrections (avoid this)");
+    expect(result).toContain("Other feedback");
+    expect(result).toContain("good phrase");
+    expect(result).toContain("bad phrase");
+    expect(result).toContain("untagged");
+  });
+
+  it("uses legacy format when no polarity data exists", () => {
+    const result = formatStyleMemory([
+      correction({ polarity: null }),
+      correction({ polarity: null, documentId: "doc-2" }),
+    ]);
+    expect(result).toContain("Feedback by document");
+    expect(result).not.toContain("Writing Samples");
+    expect(result).not.toContain("Corrections (avoid");
+  });
+
+  it("omits Other feedback section when all items are tagged", () => {
+    const result = formatStyleMemory([
+      correction({ polarity: "positive", originalText: "sample" }),
+      correction({ polarity: "corrective", originalText: "fix", documentId: "doc-2" }),
+    ]);
+    expect(result).toContain("Writing Samples");
+    expect(result).toContain("Corrections (avoid this)");
+    expect(result).not.toContain("Other feedback");
   });
 });

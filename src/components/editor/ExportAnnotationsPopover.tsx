@@ -252,6 +252,12 @@ export function ExportAnnotationsPopover({
               {result.noteCount > 0 && (
                 <> · {result.noteCount} {result.noteCount === 1 ? "note" : "notes"}</>
               )}
+              {(result.positiveCount ?? 0) > 0 && (
+                <> · {result.positiveCount} positive</>
+              )}
+              {(result.correctiveCount ?? 0) > 0 && (
+                <> · {result.correctiveCount} corrective</>
+              )}
             </div>
 
             {/* Snippets */}
@@ -288,7 +294,8 @@ export function ExportAnnotationsPopover({
                   paddingTop: 10,
                 }}
               >
-                Corrections saved to {result.correctionsFile}
+                {((result.positiveCount ?? 0) > 0 || (result.correctiveCount ?? 0) > 0)
+                  ? "Voice signals" : "Corrections"} saved to {result.correctionsFile}
               </div>
             )}
 

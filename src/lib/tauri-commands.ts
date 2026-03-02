@@ -156,6 +156,32 @@ export async function bulkTagCorrections(highlightIds: string[], writingType: st
   return invoke<number>("bulk_tag_corrections", { highlightIds, writingType });
 }
 
+export async function bulkSetPolarity(highlightIds: string[], polarity: "positive" | "corrective"): Promise<number> {
+  return invoke<number>("bulk_set_polarity_corrections", { highlightIds, polarity });
+}
+
+export async function getVoiceSignals(polarity?: "positive" | "corrective", limit?: number): Promise<import("@/types/annotations").CorrectionDetail[]> {
+  return invoke<import("@/types/annotations").CorrectionDetail[]>(
+    "get_voice_signals",
+    {
+      ...(polarity !== undefined ? { polarity } : {}),
+      ...(limit !== undefined ? { limit } : {}),
+    },
+  );
+}
+
+export interface VoiceProfileExportResult {
+  path: string;
+  positiveCount: number;
+  correctiveCount: number;
+  unclassifiedCount: number;
+  ruleCount: number;
+}
+
+export async function exportVoiceProfile(): Promise<VoiceProfileExportResult> {
+  return invoke<VoiceProfileExportResult>("export_voice_profile");
+}
+
 export async function updateWritingRule(
   id: string,
   updates: {

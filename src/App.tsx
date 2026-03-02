@@ -4,6 +4,9 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
+const AgentationDev = import.meta.env.DEV
+  ? lazy(() => import("agentation").then((m) => ({ default: m.Agentation })))
+  : null;
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
@@ -106,6 +109,7 @@ export default function App() {
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
+  const [polarityMap, setPolarityMap] = useState<Map<string, "positive" | "corrective">>(new Map());
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [errorToast, setErrorToast] = useState<{ message: string; id: number } | null>(null);
   const errorIdRef = useRef(0);
@@ -903,6 +907,7 @@ export default function App() {
         editor,
         highlights,
         marginNotes,
+        polarityMap,
       });
 
       // Clipboard copy + best-effort MCP send (parallel, MCP failure won't block export)
@@ -940,6 +945,7 @@ export default function App() {
             notes,
             highlight_color: h.color,
             writing_type: writingType,
+            polarity: polarityMap.get(h.id) ?? null,
           });
         }
 
@@ -1003,6 +1009,15 @@ export default function App() {
         tabsHook.snapshotActive();
       }
 
+      // Count polarity stats and clear
+      let positiveCount = 0;
+      let correctiveCount = 0;
+      for (const p of polarityMap.values()) {
+        if (p === "positive") positiveCount++;
+        else if (p === "corrective") correctiveCount++;
+      }
+      setPolarityMap(new Map());
+
       return {
         highlightCount: highlights.length,
         noteCount: marginNotes.length,
@@ -1010,9 +1025,11 @@ export default function App() {
         correctionsSaved,
         correctionsFile,
         sentToClaude: mcpResult.sent,
+        positiveCount,
+        correctiveCount,
       };
     },
-    [editor, doc.currentDoc],
+    [editor, doc.currentDoc, polarityMap],
   );
 
   // Open a recent document from the sidebar (now goes through tabs)
@@ -1162,10 +1179,22 @@ export default function App() {
           <HighlightThread
             highlight={highlight}
             notes={notes}
+            polarity={polarityMap.get(highlight.id) ?? null}
             onAddNote={annotations.createMarginNote}
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
             onDeleteHighlight={handleDeleteHighlight}
+            onSetPolarity={(highlightId, polarity) => {
+              setPolarityMap((prev) => {
+                const next = new Map(prev);
+                if (polarity === null) {
+                  next.delete(highlightId);
+                } else {
+                  next.set(highlightId, polarity);
+                }
+                return next;
+              });
+            }}
             onClose={() => {
               setFocusHighlightId(null);
               setAnchorRect(null);
@@ -1383,6 +1412,11 @@ export default function App() {
             </span>
           )}
         </div>
+      )}
+      {AgentationDev && (
+        <Suspense fallback={null}>
+          <AgentationDev />
+        </Suspense>
       )}
     </AppShell>
   );

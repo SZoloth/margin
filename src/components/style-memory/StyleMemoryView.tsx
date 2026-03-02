@@ -19,6 +19,10 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
   const [ruleStats, setRuleStats] = useState({ ruleCount: 0 });
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const exportTimeoutRef = useRef<number | null>(null);
+  const correctionsTabId = "style-memory-tab-corrections";
+  const rulesTabId = "style-memory-tab-rules";
+  const correctionsPanelId = "style-memory-panel-corrections";
+  const rulesPanelId = "style-memory-panel-rules";
 
   // Escape to close
   useEffect(() => {
@@ -73,6 +77,9 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Style Memory"
       style={{
         position: "fixed",
         inset: 0,
@@ -103,6 +110,7 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
             type="button"
             onClick={onClose}
             aria-label="Back"
+            title="Back"
             style={{
               display: "flex",
               alignItems: "center",
@@ -126,7 +134,11 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {exportStatus && (
-            <span style={{ fontSize: 11, color: "var(--color-text-secondary)", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span
+              role="status"
+              aria-live="polite"
+              style={{ fontSize: 11, color: "var(--color-text-secondary)", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
               {exportStatus}
             </span>
           )}
@@ -184,22 +196,44 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
           background: "var(--color-page)",
         }}
       >
-        <TabButton active={activeTab === "corrections"} onClick={() => setActiveTab("corrections")}>
+        <TabButton
+          id={correctionsTabId}
+          controlsId={correctionsPanelId}
+          active={activeTab === "corrections"}
+          onClick={() => setActiveTab("corrections")}
+        >
           Corrections
         </TabButton>
-        <TabButton active={activeTab === "rules"} onClick={() => setActiveTab("rules")}>
+        <TabButton
+          id={rulesTabId}
+          controlsId={rulesPanelId}
+          active={activeTab === "rules"}
+          onClick={() => setActiveTab("rules")}
+        >
           Rules
         </TabButton>
       </div>
 
       {/* Tab content */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-        {activeTab === "corrections" ? (
+      {activeTab === "corrections" ? (
+        <div
+          role="tabpanel"
+          id={correctionsPanelId}
+          aria-labelledby={correctionsTabId}
+          style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
+        >
           <CorrectionsTab onStatsChange={handleCorrectionStatsChange} />
-        ) : (
+        </div>
+      ) : (
+        <div
+          role="tabpanel"
+          id={rulesPanelId}
+          aria-labelledby={rulesTabId}
+          style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
+        >
           <RulesTab onStatsChange={handleRuleStatsChange} />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -224,13 +258,28 @@ function Stat({ value, label, accent }: { value: number | string; label: string;
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({
+  id,
+  controlsId,
+  active,
+  onClick,
+  children,
+}: {
+  id: string;
+  controlsId: string;
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       role="tab"
+      id={id}
       aria-selected={active}
+      aria-controls={controlsId}
       onClick={onClick}
+      tabIndex={active ? 0 : -1}
       style={{
         padding: "12px 16px",
         fontSize: 14,

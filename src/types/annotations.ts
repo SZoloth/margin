@@ -28,6 +28,7 @@ export interface CorrectionInput {
   notes: string[];
   highlight_color: string;
   writing_type: string | null;
+  polarity: "positive" | "corrective" | null;
 }
 
 export interface CorrectionRecord {
@@ -38,6 +39,7 @@ export interface CorrectionRecord {
   documentId: string;
   createdAt: number;
   writingType: string | null;
+  polarity: "positive" | "corrective" | null;
 }
 
 export interface CorrectionDetail {
@@ -47,6 +49,7 @@ export interface CorrectionDetail {
   extendedContext: string | null;
   highlightColor: string;
   writingType: string | null;
+  polarity: "positive" | "corrective" | null;
   documentTitle: string | null;
   createdAt: number;
 }

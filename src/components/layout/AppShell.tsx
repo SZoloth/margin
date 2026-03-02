@@ -295,6 +295,7 @@ export function AppShell({
             <button
               type="button"
               onClick={onExport}
+              className="btn-sm"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -306,7 +307,7 @@ export function AppShell({
                 border: "1px solid var(--color-border)",
                 borderRadius: "var(--radius-sm)",
                 background: "none",
-                cursor: "pointer",
+                cursor: showExport ? "pointer" : "default",
                 opacity: exportBtn.isVisible ? 1 : 0,
                 transform: exportBtn.isVisible ? "scale(1)" : "scale(0.9)",
                 transition: exportBtn.isVisible
@@ -317,6 +318,7 @@ export function AppShell({
               aria-label="Export annotations"
               title="Export annotations (⌘⇧E)"
               aria-hidden={!showExport}
+              disabled={!showExport}
               tabIndex={showExport ? 0 : -1}
             >
               <HugeiconsIcon icon={Download01Icon} size={14} color="currentColor" strokeWidth={1.5} />

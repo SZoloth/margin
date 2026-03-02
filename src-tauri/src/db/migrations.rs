@@ -132,6 +132,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: create content_snapshots table
     migrate_add_content_snapshots_table(&conn)?;
 
+    // Migration: add polarity column to corrections
+    migrate_corrections_add_polarity(&conn)?;
+
     Ok(DbPool::new(conn))
 }
 
@@ -412,7 +415,8 @@ mod tests {
             highlight_color TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
-            writing_type TEXT
+            writing_type TEXT,
+            polarity TEXT CHECK(polarity IN ('positive', 'corrective'))
         );"
     }
 
@@ -714,6 +718,92 @@ mod tests {
     }
 
     #[test]
+    fn migrate_adds_polarity_column() {
+        // Start with a table WITHOUT polarity (but with writing_type)
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE corrections (
+                id TEXT PRIMARY KEY,
+                highlight_id TEXT NOT NULL UNIQUE,
+                document_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                original_text TEXT NOT NULL,
+                prefix_context TEXT,
+                suffix_context TEXT,
+                extended_context TEXT,
+                notes_json TEXT NOT NULL,
+                document_title TEXT,
+                document_source TEXT NOT NULL,
+                document_path TEXT,
+                category TEXT,
+                highlight_color TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                writing_type TEXT
+            );",
+        )
+        .unwrap();
+
+        // Insert a row before migration
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id1', 'h1', 'd1', 's1', 'text', '[]', 'file', 'yellow', 1000, 1000)",
+            [],
+        )
+        .unwrap();
+
+        // Run migration
+        migrate_corrections_add_polarity(&conn).unwrap();
+
+        // Existing row should have NULL polarity
+        let pol: Option<String> = conn
+            .query_row(
+                "SELECT polarity FROM corrections WHERE id = 'id1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pol, None);
+
+        // Should be able to insert with polarity = 'positive'
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id2', 'h2', 'd1', 's1', 'text2', '[]', 'file', 'yellow', 2000, 2000, 'positive')",
+            [],
+        )
+        .unwrap();
+
+        let pol2: Option<String> = conn
+            .query_row(
+                "SELECT polarity FROM corrections WHERE id = 'id2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pol2, Some("positive".to_string()));
+
+        // Should be able to insert with polarity = 'corrective'
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id3', 'h3', 'd1', 's1', 'text3', '[]', 'file', 'yellow', 3000, 3000, 'corrective')",
+            [],
+        )
+        .unwrap();
+
+        let pol3: Option<String> = conn
+            .query_row(
+                "SELECT polarity FROM corrections WHERE id = 'id3'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pol3, Some("corrective".to_string()));
+
+        // Running migration again is idempotent
+        migrate_corrections_add_polarity(&conn).unwrap();
+    }
+
+    #[test]
     fn writing_rules_stores_all_optional_fields() {
         let conn = Connection::open_in_memory().unwrap();
         migrate_add_writing_rules_table(&conn).unwrap();
@@ -803,6 +893,27 @@ pub fn migrate_add_content_snapshots_table(conn: &Connection) -> Result<(), Box<
         );
         CREATE INDEX IF NOT EXISTS idx_snapshots_document ON content_snapshots(document_id);",
     )?;
+    Ok(())
+}
+
+/// Adds a `polarity` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_polarity(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "polarity")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE corrections ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));
+             CREATE INDEX IF NOT EXISTS idx_corrections_polarity ON corrections(polarity);",
+        )?;
+    }
+
     Ok(())
 }
 

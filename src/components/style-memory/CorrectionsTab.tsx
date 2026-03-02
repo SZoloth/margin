@@ -75,6 +75,7 @@ function WritingTypeChips({
         <button
           key={wt.value}
           type="button"
+          aria-pressed={value === wt.value}
           onClick={(e) => {
             e.stopPropagation();
             onChange(wt.value);
@@ -120,6 +121,7 @@ function CorrectionCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showTypeChips, setShowTypeChips] = useState(false);
+  const typeChipsId = `writing-type-chips-${correction.highlightId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
   return (
     <div
@@ -175,6 +177,8 @@ function CorrectionCard({
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
           <button
             type="button"
+            aria-expanded={showTypeChips}
+            aria-controls={typeChipsId}
             onClick={(e) => {
               e.stopPropagation();
               setShowTypeChips(!showTypeChips);
@@ -223,7 +227,7 @@ function CorrectionCard({
         </div>
 
         {showTypeChips && (
-          <div style={{ marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
+          <div id={typeChipsId} style={{ marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
             <WritingTypeChips
               value={correction.writingType}
               onChange={(v) => {
@@ -418,13 +422,14 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
         }}
       >
         <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
-          <span style={{ position: "absolute", left: 8, top: 7, color: "var(--color-text-secondary)", fontSize: 12, pointerEvents: "none" }}>
+          <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 7, color: "var(--color-text-secondary)", fontSize: 12, pointerEvents: "none" }}>
             &#x1F50D;
           </span>
           <input
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Filter corrections..."
+            aria-label="Filter corrections"
             style={{
               width: "100%",
               padding: "6px 10px 6px 28px",
@@ -441,6 +446,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
           <button
             type="button"
             onClick={() => setActiveFilter(null)}
+            aria-pressed={!activeFilter}
             style={{
               padding: "3px 10px",
               fontSize: 11,
@@ -459,6 +465,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
               key={wt.value}
               type="button"
               onClick={() => setActiveFilter(activeFilter === wt.value ? null : wt.value)}
+              aria-pressed={activeFilter === wt.value}
               style={{
                 padding: "3px 10px",
                 fontSize: 11,
@@ -483,6 +490,8 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
               <button
                 type="button"
                 onClick={() => setShowBulkTypeChips(!showBulkTypeChips)}
+                aria-expanded={showBulkTypeChips}
+                aria-controls="corrections-bulk-tag-chips"
                 style={{
                   padding: "4px 10px",
                   fontSize: 11,
@@ -517,7 +526,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
 
       {/* Bulk tag chips */}
       {showBulkTypeChips && selectedIds.size > 0 && (
-        <div style={{ padding: "8px 32px", borderBottom: "1px solid var(--color-border)", background: "var(--color-page)" }}>
+        <div id="corrections-bulk-tag-chips" style={{ padding: "8px 32px", borderBottom: "1px solid var(--color-border)", background: "var(--color-page)" }}>
           <WritingTypeChips value={null} onChange={handleBulkTag} />
         </div>
       )}

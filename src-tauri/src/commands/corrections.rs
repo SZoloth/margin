@@ -16,6 +16,7 @@ pub struct CorrectionRecord {
     pub document_id: String,
     pub created_at: i64,
     pub writing_type: Option<String>,
+    pub polarity: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -36,6 +37,7 @@ pub struct CorrectionDetail {
     pub extended_context: Option<String>,
     pub highlight_color: String,
     pub writing_type: Option<String>,
+    pub polarity: Option<String>,
     pub document_title: Option<String>,
     pub created_at: i64,
 }
@@ -65,7 +67,7 @@ fn now_millis() -> Result<i64, String> {
 
 fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<CorrectionRecord>> {
     let mut stmt = conn.prepare(
-        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type
+        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity
          FROM corrections
          WHERE highlight_id != '__backfill_marker__'
          ORDER BY created_at DESC
@@ -80,6 +82,7 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
         let document_id: String = row.get(4)?;
         let created_at: i64 = row.get(5)?;
         let writing_type: Option<String> = row.get(6)?;
+        let polarity: Option<String> = row.get(7)?;
 
         let notes: Vec<String> = serde_json::from_str(&notes_json).unwrap_or_default();
 
@@ -91,6 +94,7 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
             document_id,
             created_at,
             writing_type,
+            polarity,
         })
     })?;
 
@@ -168,8 +172,8 @@ pub async fn persist_corrections(
                 (id, highlight_id, document_id, session_id, original_text,
                  prefix_context, suffix_context, extended_context, notes_json,
                  document_title, document_source, document_path, category,
-                 highlight_color, created_at, updated_at, writing_type)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                 highlight_color, created_at, updated_at, writing_type, polarity)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
              ON CONFLICT(highlight_id) DO UPDATE SET
                 session_id = excluded.session_id,
                 original_text = excluded.original_text,
@@ -182,7 +186,8 @@ pub async fn persist_corrections(
                 document_path = excluded.document_path,
                 highlight_color = excluded.highlight_color,
                 updated_at = excluded.updated_at,
-                writing_type = COALESCE(excluded.writing_type, corrections.writing_type)",
+                writing_type = COALESCE(excluded.writing_type, corrections.writing_type),
+                polarity = COALESCE(excluded.polarity, corrections.polarity)",
             rusqlite::params![
                 id,
                 input.highlight_id,
@@ -201,6 +206,7 @@ pub async fn persist_corrections(
                 now,
                 now,
                 input.writing_type,
+                input.polarity,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -221,6 +227,7 @@ pub async fn persist_corrections(
             "document_path": document_path,
             "highlight_color": input.highlight_color,
             "writing_type": input.writing_type,
+            "polarity": input.polarity,
             "exported_at": now,
         });
 
@@ -245,7 +252,7 @@ fn fetch_corrections_flat(
 ) -> rusqlite::Result<Vec<CorrectionDetail>> {
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
-                highlight_color, writing_type, document_title, created_at
+                highlight_color, writing_type, polarity, document_title, created_at
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -263,8 +270,9 @@ fn fetch_corrections_flat(
             extended_context: row.get(3)?,
             highlight_color: row.get(4)?,
             writing_type: row.get(5)?,
-            document_title: row.get(6)?,
-            created_at: row.get(7)?,
+            polarity: row.get(6)?,
+            document_title: row.get(7)?,
+            created_at: row.get(8)?,
         })
     })?;
 
@@ -332,7 +340,7 @@ fn fetch_corrections_by_document(
 ) -> rusqlite::Result<Vec<DocumentCorrections>> {
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
-                highlight_color, writing_type, document_title, document_id,
+                highlight_color, writing_type, polarity, document_title, document_id,
                 document_path, created_at
          FROM corrections
          WHERE session_id != '__backfilled__'
@@ -342,9 +350,9 @@ fn fetch_corrections_by_document(
 
     let rows = stmt.query_map([limit], |row| {
         Ok((
-            row.get::<_, String>(7)?,        // document_id
-            row.get::<_, Option<String>>(6)?, // document_title
-            row.get::<_, Option<String>>(8)?, // document_path
+            row.get::<_, String>(8)?,        // document_id
+            row.get::<_, Option<String>>(7)?, // document_title
+            row.get::<_, Option<String>>(9)?, // document_path
             CorrectionDetail {
                 highlight_id: row.get(0)?,
                 original_text: row.get(1)?,
@@ -355,8 +363,9 @@ fn fetch_corrections_by_document(
                 extended_context: row.get(3)?,
                 highlight_color: row.get(4)?,
                 writing_type: row.get(5)?,
-                document_title: row.get(6)?,
-                created_at: row.get(9)?,
+                polarity: row.get(6)?,
+                document_title: row.get(7)?,
+                created_at: row.get(10)?,
             },
         ))
     })?;
@@ -424,6 +433,7 @@ pub struct ExportedCorrection {
     pub notes: Vec<String>,
     pub extended_context: Option<String>,
     pub writing_type: Option<String>,
+    pub polarity: Option<String>,
     pub document_title: Option<String>,
     pub highlight_color: String,
     pub created_at: i64,
@@ -459,7 +469,7 @@ fn unix_secs_to_iso8601(secs: u64) -> String {
 
 fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsExport> {
     let mut stmt = conn.prepare(
-        "SELECT original_text, notes_json, extended_context, writing_type,
+        "SELECT original_text, notes_json, extended_context, writing_type, polarity,
                 document_title, highlight_color, created_at
          FROM corrections
          WHERE session_id != '__backfilled__'
@@ -476,9 +486,10 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
                 .unwrap_or_default(),
                 extended_context: row.get(2)?,
                 writing_type: row.get(3)?,
-                document_title: row.get(4)?,
-                highlight_color: row.get(5)?,
-                created_at: row.get(6)?,
+                polarity: row.get(4)?,
+                document_title: row.get(5)?,
+                highlight_color: row.get(6)?,
+                created_at: row.get(7)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -548,6 +559,108 @@ pub async fn bulk_tag_corrections(
     bulk_tag(&conn, &highlight_ids, &writing_type).map_err(|e| e.to_string())
 }
 
+fn bulk_set_polarity(
+    conn: &Connection,
+    highlight_ids: &[String],
+    polarity: &str,
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let now = now_millis().unwrap_or(0) as i64;
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 2) {
+        let placeholders: Vec<String> = (3..=chunk.len() + 2).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET polarity = ?1, updated_at = ?2 WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 2);
+        params.push(&polarity as &dyn rusqlite::types::ToSql);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for id in chunk {
+            params.push(id as &dyn rusqlite::types::ToSql);
+        }
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+#[tauri::command]
+pub async fn bulk_set_polarity_corrections(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+    polarity: String,
+) -> Result<u64, String> {
+    if polarity != "positive" && polarity != "corrective" {
+        return Err(format!("invalid polarity: {polarity:?} (expected \"positive\" or \"corrective\")"));
+    }
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    bulk_set_polarity(&conn, &highlight_ids, &polarity).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_voice_signals(
+    state: tauri::State<'_, DbPool>,
+    polarity: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<CorrectionDetail>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let limit = limit.unwrap_or(500).clamp(1, 2000);
+    fetch_voice_signals(&conn, polarity.as_deref(), limit).map_err(|e| e.to_string())
+}
+
+fn fetch_voice_signals(
+    conn: &Connection,
+    polarity: Option<&str>,
+    limit: i64,
+) -> rusqlite::Result<Vec<CorrectionDetail>> {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match polarity {
+        Some(p) => (
+            "SELECT highlight_id, original_text, notes_json, extended_context,
+                    highlight_color, writing_type, polarity, document_title, created_at
+             FROM corrections
+             WHERE session_id != '__backfilled__' AND polarity = ?1
+             ORDER BY created_at DESC
+             LIMIT ?2".to_string(),
+            vec![Box::new(p.to_string()) as Box<dyn rusqlite::types::ToSql>, Box::new(limit)],
+        ),
+        None => (
+            "SELECT highlight_id, original_text, notes_json, extended_context,
+                    highlight_color, writing_type, polarity, document_title, created_at
+             FROM corrections
+             WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
+             ORDER BY created_at DESC
+             LIMIT ?1".to_string(),
+            vec![Box::new(limit) as Box<dyn rusqlite::types::ToSql>],
+        ),
+    };
+
+    let mut stmt = conn.prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok(CorrectionDetail {
+            highlight_id: row.get(0)?,
+            original_text: row.get(1)?,
+            notes: serde_json::from_str::<Vec<String>>(
+                &row.get::<_, String>(2)?,
+            )
+            .unwrap_or_default(),
+            extended_context: row.get(3)?,
+            highlight_color: row.get(4)?,
+            writing_type: row.get(5)?,
+            polarity: row.get(6)?,
+            document_title: row.get(7)?,
+            created_at: row.get(8)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
 fn export_and_clear_corrections(conn: &Connection, path: &std::path::Path) -> Result<usize, String> {
     let export = build_corrections_export(conn).map_err(|e| e.to_string())?;
     let count = export.total_count;
@@ -610,7 +723,8 @@ mod tests {
             highlight_color TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
-            writing_type TEXT
+            writing_type TEXT,
+            polarity TEXT CHECK(polarity IN ('positive', 'corrective'))
         );"
     }
 
@@ -1090,5 +1204,131 @@ mod tests {
         let conn = setup_full_db();
         let tagged = bulk_tag(&conn, &[], "email").unwrap();
         assert_eq!(tagged, 0);
+    }
+
+    // --- polarity tests ---
+
+    #[test]
+    fn fetch_corrections_includes_polarity() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'good text', '[\"nice\"]', 'Test', 'file', 'yellow', 1000, 1000, 'positive')",
+            [],
+        ).unwrap();
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].polarity, Some("positive".to_string()));
+    }
+
+    #[test]
+    fn fetch_corrections_null_polarity() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records[0].polarity, None);
+    }
+
+    #[test]
+    fn bulk_set_polarity_updates_matching_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["n1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["n2"]"#);
+        insert_correction(&conn, "h3", "text3", r#"["n3"]"#);
+
+        let updated = bulk_set_polarity(&conn, &["h1".to_string(), "h2".to_string()], "positive").unwrap();
+        assert_eq!(updated, 2);
+
+        let pol1: Option<String> = conn
+            .query_row("SELECT polarity FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(pol1, Some("positive".to_string()));
+
+        let pol2: Option<String> = conn
+            .query_row("SELECT polarity FROM corrections WHERE highlight_id = 'h2'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(pol2, Some("positive".to_string()));
+
+        let pol3: Option<String> = conn
+            .query_row("SELECT polarity FROM corrections WHERE highlight_id = 'h3'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(pol3, None); // untouched
+    }
+
+    #[test]
+    fn bulk_set_polarity_empty_returns_zero() {
+        let conn = setup_full_db();
+        let updated = bulk_set_polarity(&conn, &[], "positive").unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn fetch_voice_signals_filters_by_polarity() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'good', '[\"nice\"]', 'Test', 'file', 'yellow', 1000, 1000, 'positive')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id2', 'h2', 'doc1', 'sess1', 'bad', '[\"fix\"]', 'Test', 'file', 'yellow', 2000, 2000, 'corrective')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id3', 'h3', 'doc1', 'sess1', 'untagged', '[\"meh\"]', 'Test', 'file', 'yellow', 3000, 3000)",
+            [],
+        ).unwrap();
+
+        let positive = fetch_voice_signals(&conn, Some("positive"), 100).unwrap();
+        assert_eq!(positive.len(), 1);
+        assert_eq!(positive[0].original_text, "good");
+
+        let corrective = fetch_voice_signals(&conn, Some("corrective"), 100).unwrap();
+        assert_eq!(corrective.len(), 1);
+        assert_eq!(corrective[0].original_text, "bad");
+    }
+
+    #[test]
+    fn fetch_voice_signals_all_non_null() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'good', '[\"nice\"]', 'Test', 'file', 'yellow', 1000, 1000, 'positive')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id2', 'h2', 'doc1', 'sess1', 'bad', '[\"fix\"]', 'Test', 'file', 'yellow', 2000, 2000, 'corrective')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id3', 'h3', 'doc1', 'sess1', 'untagged', '[\"meh\"]', 'Test', 'file', 'yellow', 3000, 3000)",
+            [],
+        ).unwrap();
+
+        // None polarity means "all non-null"
+        let all_tagged = fetch_voice_signals(&conn, None, 100).unwrap();
+        assert_eq!(all_tagged.len(), 2);
+        // Should not include the untagged one
+        assert!(all_tagged.iter().all(|c| c.polarity.is_some()));
     }
 }

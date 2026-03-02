@@ -252,6 +252,7 @@ export function Sidebar({
             style={{ color: "var(--color-text-primary)", minWidth: 0 }}
           />
           <button
+            type="button"
             onClick={onOpenFile}
             className="btn-sm flex-shrink-0 p-1"
             style={{ color: "var(--color-text-secondary)" }}
@@ -298,9 +299,11 @@ export function Sidebar({
               return (
                 <button
                   key={`fts-${result.documentId}`}
+                  type="button"
                   id={`search-option-${index}`}
                   role="option"
                   aria-selected={isActive}
+                  tabIndex={-1}
                   onClick={(e) => {
                     const doc = recentDocs.find((d) => d.id === result.documentId);
                     if (doc) {
@@ -347,9 +350,11 @@ export function Sidebar({
               return (
                 <button
                   key={file.path}
+                  type="button"
                   id={`search-option-${combinedIndex}`}
                   role="option"
                   aria-selected={isActive}
+                  tabIndex={-1}
                   onClick={(e) => {
                     onOpenFilePath(file.path, e.metaKey);
                     setIsFocused(false);
@@ -437,6 +442,7 @@ export function Sidebar({
                           return (
                             <button
                               key={doc.id}
+                              type="button"
                               onClick={(e) => {
                                 if (isRenaming) return;
                                 onSelectRecentDoc(doc, e.metaKey);

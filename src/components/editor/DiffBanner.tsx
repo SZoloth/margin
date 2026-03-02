@@ -37,13 +37,18 @@ export function DiffBanner({
     return () => clearInterval(id);
   }, [updatedAt]);
 
-  const label = isReviewing && pendingCount > 0
-    ? `${pendingCount} change${pendingCount === 1 ? "" : "s"} remaining`
-    : `${changeCount} change${changeCount === 1 ? "" : "s"} to review`;
+  const canAcceptAll = isReviewing ? pendingCount > 0 : changeCount > 0;
+  const label = isReviewing
+    ? (pendingCount > 0
+      ? `${pendingCount} change${pendingCount === 1 ? "" : "s"} remaining`
+      : "All changes reviewed")
+    : (changeCount > 0
+      ? `${changeCount} change${changeCount === 1 ? "" : "s"} to review`
+      : "No changes to review");
 
   return (
     <div className="diff-banner">
-      <div className="diff-banner__accent" />
+      <div className="diff-banner__accent" aria-hidden="true" />
       <span className="diff-banner__count">
         {label}
       </span>
@@ -57,6 +62,7 @@ export function DiffBanner({
           type="button"
           className="diff-banner__btn diff-banner__btn--accent"
           onClick={onAcceptAll}
+          disabled={!canAcceptAll}
         >
           Accept all
         </button>
@@ -74,8 +80,9 @@ export function DiffBanner({
           className="diff-banner__btn diff-banner__btn--icon"
           onClick={onDismiss}
           aria-label="Dismiss"
+          title="Dismiss"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" focusable="false">
             <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>

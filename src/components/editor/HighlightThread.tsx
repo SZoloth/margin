@@ -2,13 +2,17 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { Highlight, MarginNote } from "@/types/annotations";
 
+type Polarity = "positive" | "corrective" | null;
+
 interface HighlightThreadProps {
   highlight: Highlight;
   notes: MarginNote[];
+  polarity?: Polarity;
   onAddNote: (highlightId: string, content: string) => void;
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
   onDeleteHighlight: (id: string) => void;
+  onSetPolarity?: (highlightId: string, polarity: Polarity) => void;
   onClose: () => void;
   anchorRect: DOMRect | null;
   autoFocusNew?: boolean;
@@ -131,10 +135,12 @@ function ThreadMessage({
 export function HighlightThread({
   highlight,
   notes,
+  polarity,
   onAddNote,
   onUpdateNote,
   onDeleteNote,
   onDeleteHighlight,
+  onSetPolarity,
   onClose,
   anchorRect,
   autoFocusNew,
@@ -281,13 +287,49 @@ export function HighlightThread({
       {/* Header */}
       <div className="thread-header">
         <span className="thread-header-label">Notes</span>
-        <button
-          type="button"
-          onClick={() => onDeleteHighlight(highlight.id)}
-          className="note-action-btn note-action-btn--delete text-xs"
-        >
-          Remove
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {onSetPolarity && (
+            <>
+              <button
+                type="button"
+                onClick={() => onSetPolarity(highlight.id, polarity === "positive" ? null : "positive")}
+                className="note-action-btn text-xs"
+                title="Positive signal — do more of this"
+                style={{
+                  fontWeight: polarity === "positive" ? 600 : 400,
+                  color: polarity === "positive" ? "var(--color-positive, #2d8a4e)" : undefined,
+                  background: polarity === "positive" ? "var(--color-positive-bg, rgba(45, 138, 78, 0.1))" : undefined,
+                  borderRadius: "var(--radius-sm)",
+                  padding: "1px 6px",
+                }}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetPolarity(highlight.id, polarity === "corrective" ? null : "corrective")}
+                className="note-action-btn text-xs"
+                title="Corrective signal — avoid this"
+                style={{
+                  fontWeight: polarity === "corrective" ? 600 : 400,
+                  color: polarity === "corrective" ? "var(--color-corrective, #d97706)" : undefined,
+                  background: polarity === "corrective" ? "var(--color-corrective-bg, rgba(217, 119, 6, 0.1))" : undefined,
+                  borderRadius: "var(--radius-sm)",
+                  padding: "1px 6px",
+                }}
+              >
+                −
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => onDeleteHighlight(highlight.id)}
+            className="note-action-btn note-action-btn--delete text-xs"
+          >
+            Remove
+          </button>
+        </div>
       </div>
 
       {/* Highlight excerpt */}

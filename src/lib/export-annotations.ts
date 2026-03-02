@@ -7,6 +7,7 @@ interface ExportParams {
   editor: Editor;
   highlights: Highlight[];
   marginNotes: MarginNote[];
+  polarityMap?: Map<string, "positive" | "corrective">;
 }
 
 function posToLineNumber(editor: Editor, pos: number): number {
@@ -99,7 +100,7 @@ export function getExtendedContext(
 export async function formatAnnotationsMarkdown(
   params: ExportParams,
 ): Promise<string> {
-  const { document: doc, editor, highlights, marginNotes } = params;
+  const { document: doc, editor, highlights, marginNotes, polarityMap } = params;
 
   // Build note lookup: highlight_id -> MarginNote[]
   const notesByHighlight = new Map<string, MarginNote[]>();
@@ -150,11 +151,19 @@ export async function formatAnnotationsMarkdown(
     lines.push("");
 
     const lineRange = posToLineRange(editor, highlight.from_pos, highlight.to_pos);
-    lines.push(`### ${lineRange} -- ${highlight.color} highlight`);
+    const notes = notesByHighlight.get(highlight.id);
+    const hasNotes = notes && notes.length > 0;
+    const polarity = polarityMap?.get(highlight.id);
+    let polarityTag = "";
+    if (hasNotes && polarity) {
+      polarityTag = ` [+${polarity}]`;
+    } else if (hasNotes && !polarity) {
+      polarityTag = " [untagged — infer polarity from note]";
+    }
+    lines.push(`### ${lineRange} -- ${highlight.color} highlight${polarityTag}`);
     lines.push(quoteText(highlight.text_content));
 
-    const notes = notesByHighlight.get(highlight.id);
-    if (notes && notes.length > 0) {
+    if (hasNotes) {
       lines.push("");
       for (const note of notes) {
         lines.push(`**Note:** ${note.content}`);
@@ -239,31 +248,55 @@ export function formatStyleMemory(
   lines.push("");
   lines.push("Apply these editing patterns when writing for me:");
 
-  // Group by documentId, preserving order of first appearance
-  const groups: { docId: string; title: string | null; date: number; items: CorrectionRecord[] }[] = [];
-  const groupMap = new Map<string, (typeof groups)[number]>();
+  // Split by polarity first
+  const positiveSamples = limited.filter((c) => c.polarity === "positive");
+  const correctiveSamples = limited.filter((c) => c.polarity === "corrective");
+  const untagged = limited.filter((c) => !c.polarity);
 
-  for (const c of limited) {
-    let group = groupMap.get(c.documentId);
-    if (!group) {
-      group = { docId: c.documentId, title: c.documentTitle, date: c.createdAt, items: [] };
-      groupMap.set(c.documentId, group);
-      groups.push(group);
+  function renderGroup(items: CorrectionRecord[], header: string) {
+    if (items.length === 0) return;
+    lines.push("");
+    lines.push(`## ${header}`);
+
+    // Group by documentId, preserving order of first appearance
+    const groups: { docId: string; title: string | null; date: number; items: CorrectionRecord[] }[] = [];
+    const groupMap = new Map<string, (typeof groups)[number]>();
+
+    for (const c of items) {
+      let group = groupMap.get(c.documentId);
+      if (!group) {
+        group = { docId: c.documentId, title: c.documentTitle, date: c.createdAt, items: [] };
+        groupMap.set(c.documentId, group);
+        groups.push(group);
+      }
+      group.items.push(c);
     }
-    group.items.push(c);
+
+    for (const group of groups) {
+      const title = safeSnippet(group.title ?? "Untitled", 80).replaceAll("\"", "'");
+      lines.push("");
+      lines.push(`### From "${title}" (${formatDate(group.date)}):`);
+      const docItems = group.items.slice(0, maxPerDoc);
+      for (const c of docItems) {
+        const original = safeSnippet(c.originalText, 120);
+        const note = safeSnippet(c.notes.length > 0 ? c.notes.join("; ") : "flagged", 160);
+        const color = safeSnippet(c.highlightColor || "unknown", 24);
+        lines.push(`- ${original} \u2192 ${note} [${color}]`);
+      }
+    }
   }
 
-  for (const group of groups) {
-    const title = safeSnippet(group.title ?? "Untitled", 80).replaceAll("\"", "'");
-    lines.push("");
-    lines.push(`## From "${title}" (${formatDate(group.date)}):`);
-    const items = group.items.slice(0, maxPerDoc);
-    for (const c of items) {
-      const original = safeSnippet(c.originalText, 120);
-      const note = safeSnippet(c.notes.length > 0 ? c.notes.join("; ") : "flagged", 160);
-      const color = safeSnippet(c.highlightColor || "unknown", 24);
-      lines.push(`- ${original} \u2192 ${note} [${color}]`);
+  // When there are polarity-tagged items, group them separately
+  const hasPolarity = positiveSamples.length > 0 || correctiveSamples.length > 0;
+  if (hasPolarity) {
+    renderGroup(positiveSamples, "Writing Samples (do more of this)");
+    renderGroup(correctiveSamples, "Corrections (avoid this)");
+    if (untagged.length > 0) {
+      renderGroup(untagged, "Other feedback");
     }
+  } else {
+    // Legacy: no polarity data, render flat by document
+    renderGroup(limited, "Feedback by document");
   }
 
   lines.push("");

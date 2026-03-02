@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { ExportBridge } from "./export-bridge.js";
 import { openReadDb, openWriteDb } from "./db.js";
+import { startExportBridge } from "./startup.js";
 import {
   listDocuments,
   getDocument,
@@ -504,9 +505,20 @@ server.resource(
 // --- Start server ---
 
 async function main() {
-  await bridge.start();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  const enabled = (process.env.MARGIN_EXPORT_BRIDGE ?? "1") !== "0";
+  const preferredPort = process.env.MARGIN_EXPORT_BRIDGE_PORT
+    ? Number(process.env.MARGIN_EXPORT_BRIDGE_PORT)
+    : 24784;
+
+  void startExportBridge({
+    bridge,
+    enabled,
+    preferredPort,
+    log: (...args) => console.error(...args),
+  });
 }
 
 function shutdown() {

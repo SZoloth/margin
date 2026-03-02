@@ -94,5 +94,6 @@ pub struct CorrectionInput {
     pub notes: Vec<String>,
     pub highlight_color: String,
     pub writing_type: Option<String>,
+    pub polarity: Option<String>,
 }
 

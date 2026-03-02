@@ -92,6 +92,21 @@
   opacity: 0.7;
 }
 
+.diff-banner__btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.diff-banner__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.diff-banner__btn:disabled:hover {
+  opacity: 0.35;
+}
+
 .diff-banner__btn--accent {
   color: var(--color-accent);
 }
@@ -107,7 +122,8 @@
   justify-content: center;
   color: var(--color-text-primary);
   opacity: 0.35;
-  padding: 2px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .diff-banner__btn--icon:hover {
@@ -162,6 +178,20 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+.diff-nav-chip__btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.diff-nav-chip__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.diff-nav-chip__btn:disabled:hover {
+  background-color: transparent;
+}
+
 /* Per-change Keep/Revert controls */
 .diff-controls {
   position: fixed;
@@ -189,8 +219,14 @@
   transition: background-color var(--duration-fast) var(--ease-micro);
 }
 
+.diff-controls__btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
+}
+
 .diff-controls__btn--keep {
   color: var(--color-diff-add-border);
+  background-color: rgba(122, 148, 96, 0.1);
   background-color: color-mix(in srgb, var(--color-diff-add-border) 10%, transparent);
 }
 
