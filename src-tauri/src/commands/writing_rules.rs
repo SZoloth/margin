@@ -1,6 +1,13 @@
 use crate::db::migrations::DbPool;
 use rusqlite::Connection;
 
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WritingRule {
@@ -351,6 +358,118 @@ pub struct ExportResult {
     pub rule_count: usize,
 }
 
+fn update_rule(
+    conn: &Connection,
+    id: &str,
+    rule_text: Option<&str>,
+    severity: Option<&str>,
+    when_to_apply: Option<&str>,
+    why: Option<&str>,
+    example_before: Option<&str>,
+    example_after: Option<&str>,
+    notes: Option<&str>,
+) -> rusqlite::Result<()> {
+    let now = now_millis();
+
+    let mut set_parts = vec![format!("updated_at = ?1")];
+    let mut param_list: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(now)];
+    let mut param_idx = 2usize;
+
+    if let Some(v) = rule_text {
+        set_parts.push(format!("rule_text = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = severity {
+        set_parts.push(format!("severity = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = when_to_apply {
+        set_parts.push(format!("when_to_apply = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = why {
+        set_parts.push(format!("why = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = example_before {
+        set_parts.push(format!("example_before = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = example_after {
+        set_parts.push(format!("example_after = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = notes {
+        set_parts.push(format!("notes = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+
+    let sql = format!(
+        "UPDATE writing_rules SET {} WHERE id = ?{param_idx}",
+        set_parts.join(", ")
+    );
+    param_list.push(Box::new(id.to_string()));
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_list.iter().map(|p| p.as_ref()).collect();
+    let rows = conn.execute(&sql, param_refs.as_slice())?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+fn delete_rule(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    let rows = conn.execute("DELETE FROM writing_rules WHERE id = ?1", [id])?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_writing_rule(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    rule_text: Option<String>,
+    severity: Option<String>,
+    when_to_apply: Option<String>,
+    why: Option<String>,
+    example_before: Option<String>,
+    example_after: Option<String>,
+    notes: Option<String>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    update_rule(
+        &conn,
+        &id,
+        rule_text.as_deref(),
+        severity.as_deref(),
+        when_to_apply.as_deref(),
+        why.as_deref(),
+        example_before.as_deref(),
+        example_after.as_deref(),
+        notes.as_deref(),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_writing_rule(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    delete_rule(&conn, &id).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn get_writing_rules(
     state: tauri::State<'_, DbPool>,
@@ -577,5 +696,109 @@ mod tests {
         let json_str = &kill_line["KILL_WORDS = json.loads(r\"\"\"".len()..kill_line.len() - "\"\"\")".len()];
         let parsed: Vec<String> = serde_json::from_str(json_str).unwrap();
         assert_eq!(parsed, vec!["it's \"tricky\""]);
+    }
+
+    // --- update_rule tests ---
+
+    #[test]
+    fn update_rule_changes_rule_text() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        update_rule(&conn, "r1", Some("Be very direct"), None, None, None, None, None, None).unwrap();
+
+        let text: String = conn
+            .query_row("SELECT rule_text FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(text, "Be very direct");
+    }
+
+    #[test]
+    fn update_rule_changes_severity() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        update_rule(&conn, "r1", None, Some("must-fix"), None, None, None, None, None).unwrap();
+
+        let sev: String = conn
+            .query_row("SELECT severity FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sev, "must-fix");
+    }
+
+    #[test]
+    fn update_rule_changes_multiple_fields() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        update_rule(
+            &conn, "r1",
+            Some("Be concise"),
+            Some("must-fix"),
+            Some("Always"),
+            Some("Clarity"),
+            Some("Long sentence"),
+            Some("Short"),
+            Some("A note"),
+        ).unwrap();
+
+        let (text, sev, when, why): (String, String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT rule_text, severity, when_to_apply, why FROM writing_rules WHERE id = 'r1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(text, "Be concise");
+        assert_eq!(sev, "must-fix");
+        assert_eq!(when, Some("Always".to_string()));
+        assert_eq!(why, Some("Clarity".to_string()));
+    }
+
+    #[test]
+    fn update_rule_nonexistent_fails() {
+        let conn = setup_db();
+        let result = update_rule(&conn, "nonexistent", Some("text"), None, None, None, None, None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn update_rule_updates_timestamp() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        let old_ts: i64 = conn
+            .query_row("SELECT updated_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+
+        update_rule(&conn, "r1", Some("Be very direct"), None, None, None, None, None, None).unwrap();
+
+        let new_ts: i64 = conn
+            .query_row("SELECT updated_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(new_ts > old_ts);
+    }
+
+    // --- delete_rule tests ---
+
+    #[test]
+    fn delete_rule_removes_row() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+        insert_rule(&conn, "r2", "email", "tone", "Be brief", "should-fix");
+
+        delete_rule(&conn, "r1").unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn delete_rule_nonexistent_fails() {
+        let conn = setup_db();
+        let result = delete_rule(&conn, "nonexistent");
+        assert!(result.is_err());
     }
 }

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Document, FileEntry } from "@/types/document";
-import type { CorrectionInput, CorrectionRecord, DocumentCorrections } from "@/types/annotations";
+import type { CorrectionInput, CorrectionRecord, CorrectionDetail, DocumentCorrections } from "@/types/annotations";
 import type { PersistedTab } from "@/types/tab";
 import type { WritingType } from "@/lib/writing-types";
 
@@ -139,4 +139,47 @@ export async function getWritingRules(writingType?: WritingType): Promise<Writin
 
 export async function exportWritingRules(): Promise<WritingRulesExportResult> {
   return invoke<WritingRulesExportResult>("export_writing_rules");
+}
+
+export async function getCorrectionsFlat(limit?: number): Promise<CorrectionDetail[]> {
+  return invoke<CorrectionDetail[]>(
+    "get_corrections_flat",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function bulkDeleteCorrections(highlightIds: string[]): Promise<number> {
+  return invoke<number>("bulk_delete_corrections", { highlightIds });
+}
+
+export async function bulkTagCorrections(highlightIds: string[], writingType: string): Promise<number> {
+  return invoke<number>("bulk_tag_corrections", { highlightIds, writingType });
+}
+
+export async function updateWritingRule(
+  id: string,
+  updates: {
+    ruleText?: string;
+    severity?: WritingRuleSeverity;
+    whenToApply?: string;
+    why?: string;
+    exampleBefore?: string;
+    exampleAfter?: string;
+    notes?: string;
+  },
+): Promise<void> {
+  return invoke<void>("update_writing_rule", {
+    id,
+    ruleText: updates.ruleText,
+    severity: updates.severity,
+    whenToApply: updates.whenToApply,
+    why: updates.why,
+    exampleBefore: updates.exampleBefore,
+    exampleAfter: updates.exampleAfter,
+    notes: updates.notes,
+  });
+}
+
+export async function deleteWritingRule(id: string): Promise<void> {
+  return invoke<void>("delete_writing_rule", { id });
 }

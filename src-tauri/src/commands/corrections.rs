@@ -239,6 +239,93 @@ pub async fn persist_corrections(
     Ok(session_id)
 }
 
+fn fetch_corrections_flat(
+    conn: &Connection,
+    limit: i64,
+) -> rusqlite::Result<Vec<CorrectionDetail>> {
+    let mut stmt = conn.prepare(
+        "SELECT highlight_id, original_text, notes_json, extended_context,
+                highlight_color, writing_type, document_title, created_at
+         FROM corrections
+         WHERE session_id != '__backfilled__'
+         ORDER BY created_at DESC
+         LIMIT ?1",
+    )?;
+
+    let rows = stmt.query_map([limit], |row| {
+        Ok(CorrectionDetail {
+            highlight_id: row.get(0)?,
+            original_text: row.get(1)?,
+            notes: serde_json::from_str::<Vec<String>>(
+                &row.get::<_, String>(2)?,
+            )
+            .unwrap_or_default(),
+            extended_context: row.get(3)?,
+            highlight_color: row.get(4)?,
+            writing_type: row.get(5)?,
+            document_title: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
+const SQLITE_VAR_LIMIT: usize = 900;
+
+fn bulk_delete(conn: &Connection, highlight_ids: &[String]) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "DELETE FROM corrections WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+fn bulk_tag(
+    conn: &Connection,
+    highlight_ids: &[String],
+    writing_type: &str,
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let now = now_millis().unwrap_or(0) as i64;
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 2) {
+        let placeholders: Vec<String> = (3..=chunk.len() + 2).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET writing_type = ?1, updated_at = ?2 WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 2);
+        params.push(&writing_type as &dyn rusqlite::types::ToSql);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for id in chunk {
+            params.push(id as &dyn rusqlite::types::ToSql);
+        }
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
 fn fetch_corrections_by_document(
     conn: &Connection,
     limit: i64,
@@ -430,6 +517,35 @@ pub async fn update_correction_writing_type(
 pub async fn delete_correction(state: tauri::State<'_, DbPool>, highlight_id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     delete_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_corrections_flat(
+    state: tauri::State<'_, DbPool>,
+    limit: Option<i64>,
+) -> Result<Vec<CorrectionDetail>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let limit = limit.unwrap_or(500).max(1).min(2000);
+    fetch_corrections_flat(&conn, limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn bulk_delete_corrections(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<u64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    bulk_delete(&conn, &highlight_ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn bulk_tag_corrections(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+    writing_type: String,
+) -> Result<u64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    bulk_tag(&conn, &highlight_ids, &writing_type).map_err(|e| e.to_string())
 }
 
 fn export_and_clear_corrections(conn: &Connection, path: &std::path::Path) -> Result<usize, String> {
@@ -865,5 +981,114 @@ mod tests {
         // Should be valid JSON despite special chars
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed["corrections"][0]["originalText"].as_str().unwrap().contains("quotes"));
+    }
+
+    // --- fetch_corrections_flat tests ---
+
+    #[test]
+    fn fetch_corrections_flat_returns_ordered_list() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc A", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc2", "Doc B", "text2", r#"["n2"]"#, 3000);
+        insert_full_correction(&conn, "h3", "doc1", "Doc A", "text3", r#"["n3"]"#, 2000);
+
+        let results = fetch_corrections_flat(&conn, 10).unwrap();
+        assert_eq!(results.len(), 3);
+        // Most recent first
+        assert_eq!(results[0].highlight_id, "h2");
+        assert_eq!(results[0].created_at, 3000);
+        assert_eq!(results[1].highlight_id, "h3");
+        assert_eq!(results[2].highlight_id, "h1");
+    }
+
+    #[test]
+    fn fetch_corrections_flat_respects_limit() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+        insert_full_correction(&conn, "h3", "doc1", "Doc", "text3", r#"["n3"]"#, 3000);
+
+        let results = fetch_corrections_flat(&conn, 2).unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn fetch_corrections_flat_excludes_backfilled() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, document_path, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'old', '[\"old\"]', 'Doc', 'file', '/path', 'yellow', 500, 500)",
+            [],
+        ).unwrap();
+
+        let results = fetch_corrections_flat(&conn, 50).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].highlight_id, "h1");
+    }
+
+    // --- bulk_delete tests ---
+
+    #[test]
+    fn bulk_delete_removes_matching_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["n1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["n2"]"#);
+        insert_correction(&conn, "h3", "text3", r#"["n3"]"#);
+
+        let deleted = bulk_delete(&conn, &["h1".to_string(), "h3".to_string()]).unwrap();
+        assert_eq!(deleted, 2);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+
+        let remaining: String = conn
+            .query_row("SELECT highlight_id FROM corrections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remaining, "h2");
+    }
+
+    #[test]
+    fn bulk_delete_empty_returns_zero() {
+        let conn = setup_full_db();
+        let deleted = bulk_delete(&conn, &[]).unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[test]
+    fn bulk_delete_nonexistent_returns_zero() {
+        let conn = setup_full_db();
+        let deleted = bulk_delete(&conn, &["nonexistent".to_string()]).unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    // --- bulk_tag tests ---
+
+    #[test]
+    fn bulk_tag_updates_matching_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["n1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["n2"]"#);
+        insert_correction(&conn, "h3", "text3", r#"["n3"]"#);
+
+        let tagged = bulk_tag(&conn, &["h1".to_string(), "h2".to_string()], "email").unwrap();
+        assert_eq!(tagged, 2);
+
+        let wt1: Option<String> = conn
+            .query_row("SELECT writing_type FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(wt1, Some("email".to_string()));
+
+        let wt3: Option<String> = conn
+            .query_row("SELECT writing_type FROM corrections WHERE highlight_id = 'h3'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(wt3, None); // untouched
+    }
+
+    #[test]
+    fn bulk_tag_empty_returns_zero() {
+        let conn = setup_full_db();
+        let tagged = bulk_tag(&conn, &[], "email").unwrap();
+        assert_eq!(tagged, 0);
     }
 }

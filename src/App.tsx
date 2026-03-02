@@ -16,7 +16,7 @@ import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
 import { SettingsModal } from "@/components/layout/SettingsModal";
-import { CorrectionsPanel } from "@/components/corrections/CorrectionsPanel";
+import { StyleMemoryView } from "@/components/style-memory/StyleMemoryView";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
@@ -98,7 +98,7 @@ export default function App() {
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
   const [showExportPopover, setShowExportPopover] = useState(false);
-  const [showCorrectionsPanel, setShowCorrectionsPanel] = useState(false);
+  const [showStyleMemory, setShowStyleMemory] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
@@ -753,6 +753,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [doc.currentDoc, annotations.isLoaded]);
 
+  // Style Memory: Cmd+Shift+M
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        setShowStyleMemory(true);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleExportAnnotations = useCallback(
     async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
@@ -1134,12 +1146,12 @@ export default function App() {
         onClose={() => setShowSettings(false)}
         settings={settings}
         setSetting={setSetting}
-        onOpenCorrections={() => setShowCorrectionsPanel(true)}
+        onOpenCorrections={() => setShowStyleMemory(true)}
       />
 
-      <CorrectionsPanel
-        isOpen={showCorrectionsPanel}
-        onClose={() => setShowCorrectionsPanel(false)}
+      <StyleMemoryView
+        isOpen={showStyleMemory}
+        onClose={() => setShowStyleMemory(false)}
       />
 
       {updater.available && (
