@@ -35,6 +35,10 @@ import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { useUpdater } from "@/hooks/useUpdater";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
 import type { UndoAction } from "@/components/ui/UndoToast";
+import { useDiffReview } from "@/hooks/useDiffReview";
+import { DiffBanner } from "@/components/editor/DiffBanner";
+import { DiffNavChip } from "@/components/editor/DiffNavChip";
+import { DiffControls } from "@/components/editor/DiffControls";
 
 /**
  * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
@@ -106,6 +110,9 @@ export default function App() {
   const [errorToast, setErrorToast] = useState<{ message: string; id: number } | null>(null);
   const errorIdRef = useRef(0);
   const undoIdRef = useRef(0);
+  const diffReview = useDiffReview();
+  const [diffControlState, setDiffControlState] = useState<{ changeId: string; top: number; right: number } | null>(null);
+  const diffReviewDocIdRef = useRef<string | null>(null);
   const highlightThread = useAnimatedPresence(!!focusHighlightId, 200);
   const lastHighlightRef = useRef<{ highlight: import("@/types/annotations").Highlight; notes: import("@/types/annotations").MarginNote[]; anchorRect: DOMRect | null } | null>(null);
 
@@ -297,7 +304,18 @@ export default function App() {
   persistCorrectionsRef.current = settings.persistCorrections;
   const setContentExternalRef = useRef(doc.setContentExternal);
   setContentExternalRef.current = doc.setContentExternal;
+  const contentRef = useRef(doc.content);
+  contentRef.current = doc.content;
+  const diffReviewRef = useRef(diffReview);
+  diffReviewRef.current = diffReview;
   const isRestoringMarksRef = useRef(false);
+
+  // Avoid cross-document corruption: diff review state is scoped to a single doc
+  useEffect(() => {
+    diffReview.reset();
+    diffReviewDocIdRef.current = null;
+    setDiffControlState(null);
+  }, [diffReview.reset, doc.currentDoc?.id]);
 
   // Restore highlight marks in the editor when annotations load for a document.
   const lastRestoredDocId = useRef<string | null>(null);
@@ -417,6 +435,8 @@ export default function App() {
   // Wrap onUpdate to suppress dirty state during mark restoration
   const handleEditorUpdate = useCallback((md: string) => {
     if (isRestoringMarksRef.current) return;
+    // Prevent edits from being persisted while diff review is active
+    if (diffReviewRef.current.mode !== "idle") return;
     doc.setContent(md);
   }, [doc.setContent]);
 
@@ -432,7 +452,25 @@ export default function App() {
 
     try {
       const newContent = await readFile(path);
-      setContentExternalRef.current(newContent);
+      // Re-validate after async read — user may have switched tabs/docs
+      if (currentDocRef.current?.id !== currentDoc.id) return;
+      const oldContent = contentRef.current;
+      // Route through diff review instead of silently replacing
+      const wasActive = diffReviewRef.current.mode !== "idle";
+      const entered = diffReviewRef.current.enterPending(oldContent, newContent);
+      if (entered) {
+        diffReviewDocIdRef.current = currentDoc.id;
+      } else if (wasActive) {
+        // Don't get stuck showing an old diff banner when the latest update was auto-accepted
+        diffReviewRef.current.reset();
+        diffReviewDocIdRef.current = null;
+        setDiffControlState(null);
+      }
+      // Only apply immediately when diff review was NOT entered (auto-accepted).
+      // When in review, content is deferred until the user resolves changes.
+      if (!entered && newContent !== oldContent) {
+        setContentExternalRef.current(newContent);
+      }
       // Update mtime baseline so focus fallback doesn't redundantly reload
       stat(path)
         .then((info) => {
@@ -445,6 +483,82 @@ export default function App() {
   }, []);
 
   useFileWatcher(doc.filePath, handleFileChanged);
+
+  // When diff review resolves (accept/reject/dismiss), apply final content to the editor
+  const prevDiffModeRef = useRef(diffReview.mode);
+  useEffect(() => {
+    const prevMode = prevDiffModeRef.current;
+    prevDiffModeRef.current = diffReview.mode;
+
+    // Only act on transition TO idle FROM a non-idle state
+    if (diffReview.mode === "idle" && (prevMode === "pending" || prevMode === "reviewing")) {
+      const currentDoc = currentDocRef.current;
+      if (!currentDoc) return;
+      if (!diffReviewDocIdRef.current) return;
+      if (diffReviewDocIdRef.current && diffReviewDocIdRef.current !== currentDoc.id) {
+        return;
+      }
+      const finalContent = diffReview.getFinalContent();
+      const hasRejected = diffReview.changes.some((c) => c.status === "rejected");
+      if (hasRejected) {
+        // Rejected changes means the file on disk differs from what the user wants.
+        // Mark dirty so they can Cmd+S to persist the reverted content.
+        doc.setContent(finalContent);
+      } else {
+        // All accepted — file on disk already has this content, don't mark dirty.
+        setContentExternalRef.current(finalContent);
+      }
+      diffReviewDocIdRef.current = null;
+      diffReview.reset();
+      setDiffControlState(null);
+    }
+  }, [diffReview.mode, diffReview.getFinalContent, diffReview.reset, doc.setContent]);
+
+  // Disable editing while diff review is active (prevents saving markup to disk)
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(diffReview.mode === "idle");
+  }, [editor, diffReview.mode]);
+
+  // Scroll to current change when navigating
+  useEffect(() => {
+    if (diffReview.mode !== "reviewing") return;
+    const change = diffReview.changes[diffReview.currentIndex];
+    if (!change) return;
+    const scrollContainer = document.querySelector("[data-scroll-container]");
+    const el = scrollContainer?.querySelector(`[data-change-id="${change.id}"]`);
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ block: "center" });
+    }
+  }, [diffReview.mode, diffReview.currentIndex, diffReview.changes]);
+
+  // Handle diff-click events → show Keep/Revert controls
+  useEffect(() => {
+    if (diffReview.mode !== "reviewing") return;
+
+    const handleDiffClick = (e: Event) => {
+      const { changeId, element } = (e as CustomEvent).detail;
+      if (!changeId || !element) return;
+      const rect = (element as HTMLElement).getBoundingClientRect();
+      // Use viewport-relative coords for fixed positioning
+      setDiffControlState({
+        changeId,
+        top: rect.top,
+        right: window.innerWidth - rect.right + 8,
+      });
+    };
+
+    // Dismiss controls on scroll so they don't drift from the mark
+    const scrollContainer = document.querySelector("[data-scroll-container]");
+    const handleScroll = () => setDiffControlState(null);
+
+    window.addEventListener("margin:diff-click", handleDiffClick);
+    scrollContainer?.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("margin:diff-click", handleDiffClick);
+      scrollContainer?.removeEventListener("scroll", handleScroll);
+    };
+  }, [diffReview.mode]);
 
   // Focus-based fallback: stat the file on window focus and reload if mtime changed.
   // Safety net so a missed watcher event is never permanent.
@@ -975,9 +1089,21 @@ export default function App() {
         ) : undefined
       }
     >
+      {diffReview.mode !== "idle" && (
+        <DiffBanner
+          changeCount={diffReview.changes.length}
+          pendingCount={diffReview.pendingCount}
+          updatedAt={diffReview.updatedAt}
+          onAcceptAll={diffReview.acceptAll}
+          onReview={diffReview.startReview}
+          onDismiss={diffReview.dismiss}
+          isReviewing={diffReview.mode === "reviewing"}
+        />
+      )}
+
       <Suspense fallback={<div className="reader-content" style={{ opacity: 0.3 }} />}>
         <Reader
-          content={doc.content}
+          content={diffReview.reviewContent ?? doc.content}
           onUpdate={handleEditorUpdate}
           isLoading={doc.isLoading}
           onEditorReady={handleEditorReady}
@@ -990,6 +1116,31 @@ export default function App() {
         onNote={handleNote}
         defaultColor={settings.defaultHighlightColor}
       />
+
+      {diffReview.mode === "reviewing" && (
+        <DiffNavChip
+          currentIndex={diffReview.currentIndex}
+          totalCount={diffReview.changes.length}
+          onPrev={diffReview.navigatePrev}
+          onNext={diffReview.navigateNext}
+        />
+      )}
+
+      {diffReview.mode === "reviewing" && diffControlState && (
+        <DiffControls
+          changeId={diffControlState.changeId}
+          top={diffControlState.top}
+          right={diffControlState.right}
+          onKeep={(id) => {
+            diffReview.acceptChange(id);
+            setDiffControlState(null);
+          }}
+          onRevert={(id) => {
+            diffReview.rejectChange(id);
+            setDiffControlState(null);
+          }}
+        />
+      )}
 
       {highlightThread.isMounted && lastHighlightRef.current && (() => {
         const { highlight, notes, anchorRect: rect } = lastHighlightRef.current;

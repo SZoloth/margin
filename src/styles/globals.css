@@ -5,6 +5,7 @@
 @import "./interactions.css";
 @import "./tabs.css";
 @import "./toc.css";
+@import "./diff.css";
 
 @theme {
   --color-highlight-yellow: #f5edd2;

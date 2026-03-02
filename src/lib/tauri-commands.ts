@@ -183,3 +183,33 @@ export async function updateWritingRule(
 export async function deleteWritingRule(id: string): Promise<void> {
   return invoke<void>("delete_writing_rule", { id });
 }
+
+export type SnapshotType = "pre_external_edit" | "manual";
+
+export async function saveContentSnapshot(
+  documentId: string,
+  content: string,
+  snapshotType: SnapshotType = "pre_external_edit",
+): Promise<string> {
+  return invoke<string>("save_content_snapshot", { documentId, content, snapshotType });
+}
+
+export async function getContentSnapshot(
+  documentId: string,
+  snapshotType: SnapshotType = "pre_external_edit",
+): Promise<string | null> {
+  return invoke<string | null>("get_content_snapshot", { documentId, snapshotType });
+}
+
+export async function deleteContentSnapshot(
+  documentId: string,
+  snapshotType: SnapshotType = "pre_external_edit",
+): Promise<void> {
+  return invoke<void>("delete_content_snapshot", { documentId, snapshotType });
+}
+
+export async function updateHighlightPositions(
+  updates: [string, number, number][],
+): Promise<void> {
+  return invoke<void>("update_highlight_positions", { updates });
+}

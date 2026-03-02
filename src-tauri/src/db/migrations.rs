@@ -129,6 +129,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: create writing_rules table
     migrate_add_writing_rules_table(&conn)?;
 
+    // Migration: create content_snapshots table
+    migrate_add_content_snapshots_table(&conn)?;
+
     Ok(DbPool::new(conn))
 }
 
@@ -782,6 +785,23 @@ pub fn migrate_add_writing_rules_table(conn: &Connection) -> Result<(), Box<dyn 
             UNIQUE(writing_type, category, rule_text)
         );
         CREATE INDEX IF NOT EXISTS idx_writing_rules_type ON writing_rules(writing_type);",
+    )?;
+    Ok(())
+}
+
+/// Creates the `content_snapshots` table if it doesn't exist.
+pub fn migrate_add_content_snapshots_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS content_snapshots (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            snapshot_type TEXT NOT NULL DEFAULT 'pre_external_edit'
+                CHECK(snapshot_type IN ('pre_external_edit', 'manual')),
+            created_at INTEGER NOT NULL,
+            UNIQUE(document_id, snapshot_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_snapshots_document ON content_snapshots(document_id);",
     )?;
     Ok(())
 }

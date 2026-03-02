@@ -14,6 +14,7 @@ import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
 import { MultiColorHighlight } from "./extensions/highlight";
 import { MarginNote } from "./extensions/margin-note";
+import { DiffMark } from "./extensions/diff-mark";
 import "../../styles/editor.css";
 
 interface ReaderProps {
@@ -41,6 +42,7 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
       Image.configure({ inline: false, allowBase64: true }),
       MultiColorHighlight.configure({ multicolor: true }),
       MarginNote,
+      DiffMark,
       Markdown.configure({
         html: true,
         tightLists: true,

@@ -74,6 +74,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^2.11
         version: 2.27.2
+      diff-match-patch-ts:
+        specifier: ^0.8.0
+        version: 0.8.0
       react:
         specifier: ^19
         version: 19.2.4
@@ -1172,6 +1175,9 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  diff-match-patch-ts@0.8.0:
+    resolution: {integrity: sha512-Hor6jjh8bAkK+Yd1Aqrcx3Q5XXLTCr1CYdC05SO0OTV3KG6RCBZ1smHPMSusO5J/06bo7kdNeFwOoPc80Hs4pQ==}
 
   dom-accessibility-api@0.5.16:
     resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
@@ -2638,6 +2644,8 @@ snapshots:
   dequal@2.0.3: {}
 
   detect-libc@2.1.2: {}
+
+  diff-match-patch-ts@0.8.0: {}
 
   dom-accessibility-api@0.5.16: {}
 

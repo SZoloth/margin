@@ -151,6 +151,19 @@ fn remove_margin_note(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn bulk_update_highlight_positions(conn: &Connection, updates: &[(String, i64, i64)]) -> Result<(), String> {
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    for (id, from_pos, to_pos) in updates {
+        tx.execute(
+            "UPDATE highlights SET from_pos = ?1, to_pos = ?2, updated_at = ?3 WHERE id = ?4",
+            rusqlite::params![from_pos, to_pos, now_millis(), id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn remove_all_highlights_for_document(conn: &Connection, document_id: &str) -> Result<usize, String> {
     conn.execute(
         "DELETE FROM highlights WHERE document_id = ?1",
@@ -281,6 +294,15 @@ pub async fn delete_margin_note(state: tauri::State<'_, DbPool>, id: String) -> 
     touch_document(&conn, &doc_id)?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn update_highlight_positions(
+    state: tauri::State<'_, DbPool>,
+    updates: Vec<(String, i64, i64)>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    bulk_update_highlight_positions(&conn, &updates)
 }
 
 #[tauri::command]
@@ -577,6 +599,29 @@ mod tests {
         // doc2 untouched
         assert_eq!(fetch_highlights(&conn, "doc2").unwrap().len(), 1);
         assert_eq!(fetch_margin_notes(&conn, "doc2").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_bulk_update_highlight_positions() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "first", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "second", 10, 16, None, None, 1000).unwrap();
+
+        let updates = vec![
+            ("h1".to_string(), 100i64, 105i64),
+            ("h2".to_string(), 200i64, 206i64),
+        ];
+        bulk_update_highlight_positions(&conn, &updates).unwrap();
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        // Sorted by from_pos, so h1 (100) first, h2 (200) second
+        assert_eq!(highlights[0].from_pos, 100);
+        assert_eq!(highlights[0].to_pos, 105);
+        assert_eq!(highlights[1].from_pos, 200);
+        assert_eq!(highlights[1].to_pos, 206);
+        // updated_at should be newer than created_at
+        assert!(highlights[0].updated_at > highlights[0].created_at);
     }
 
     #[test]
