@@ -4,6 +4,12 @@ import type { Settings } from "@/hooks/useSettings";
 import { getAllCorrections, getCorrectionsCount } from "@/lib/tauri-commands";
 import { formatStyleMemory } from "@/lib/export-annotations";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
+import {
+  isMcpEnabledInClaude,
+  enableMcpInClaude,
+  disableMcpInClaude,
+  checkMcpConnection,
+} from "@/lib/mcp-bridge";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -311,6 +317,85 @@ function StyleMemoryRow({ onOpenCorrections }: { onOpenCorrections: () => void }
   );
 }
 
+function ClaudeIntegrationRow() {
+  const [enabled, setEnabled] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([isMcpEnabledInClaude(), checkMcpConnection()]).then(
+      ([enabledRes, connectedRes]) => {
+        if (cancelled) return;
+        setEnabled(enabledRes.status === "fulfilled" && enabledRes.value);
+        setConnected(connectedRes.status === "fulfilled" && connectedRes.value);
+        setLoading(false);
+      },
+    );
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleToggle = useCallback(async (next: boolean) => {
+    if (saving) return;
+    setSaving(true);
+    setEnabled(next);
+    try {
+      if (next) {
+        await enableMcpInClaude();
+      } else {
+        await disableMcpInClaude();
+      }
+      const nowConnected = await checkMcpConnection();
+      setConnected(nowConnected);
+    } catch {
+      setEnabled(!next);
+    } finally {
+      setSaving(false);
+    }
+  }, [saving]);
+
+  if (loading) return null;
+
+  return (
+    <div>
+      <SettingRow
+        label="Claude integration"
+        description="Let Claude read your documents and annotations directly"
+      >
+        <ToggleSwitch checked={enabled} onChange={handleToggle} />
+      </SettingRow>
+      {enabled && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "0 0 8px",
+            fontSize: 12,
+            color: "var(--color-text-secondary)",
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              backgroundColor: connected
+                ? "var(--color-success)"
+                : "var(--color-text-tertiary, var(--color-text-secondary))",
+              flexShrink: 0,
+            }}
+          />
+          {connected
+            ? "Connected"
+            : "Not connected \u2014 restart Claude to connect"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SettingsModal({
   isOpen,
   onClose,
@@ -517,6 +602,19 @@ export function SettingsModal({
           onClose();
           onOpenCorrections();
         }} />
+
+        {/* Divider */}
+        <div
+          style={{
+            height: 1,
+            backgroundColor: "var(--color-border)",
+            margin: "8px 0",
+          }}
+        />
+
+        {/* Claude section */}
+        <SectionHeader title="Claude" />
+        <ClaudeIntegrationRow />
       </div>
     </div>
   );

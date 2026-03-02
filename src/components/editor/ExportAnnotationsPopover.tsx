@@ -2,6 +2,54 @@ import { useEffect, useState, useRef } from "react";
 import type { ExportResult } from "@/types/export";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
+// Show the MCP setup hint once per app session
+let mcpHintShown = false;
+
+function McpHint({ onClose, onOpenSettings }: { onClose: () => void; onOpenSettings: () => void }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!mcpHintShown) {
+      mcpHintShown = true;
+      setVisible(true);
+    }
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      style={{
+        fontSize: 12,
+        color: "var(--color-text-tertiary)",
+        borderTop: "1px solid var(--color-border)",
+        paddingTop: 10,
+        lineHeight: 1.5,
+      }}
+    >
+      Tip: Connect to Claude for direct export.{" "}
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          onOpenSettings();
+        }}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          color: "var(--color-accent)",
+          fontSize: 12,
+          cursor: "pointer",
+          textDecoration: "underline",
+          textUnderlineOffset: 2,
+        }}
+      >
+        Set up in Settings
+      </button>
+    </div>
+  );
+}
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;
@@ -290,6 +338,23 @@ export function ExportAnnotationsPopover({
                 </button>
               </div>
             )}
+
+            {/* "Also copied" when sent to Claude */}
+            {result.sentToClaude && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--color-text-tertiary)",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                Also copied to clipboard
+              </div>
+            )}
+
+            {/* MCP discovery hint — once per session */}
+            {!result.sentToClaude && <McpHint onClose={onClose} onOpenSettings={onOpenSettings} />}
           </div>
         ) : null}
       </div>

@@ -7,6 +7,7 @@ import type { Tab } from "@/types/tab";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TabBar } from "@/components/layout/TabBar";
 import type { useSearch } from "@/hooks/useSearch";
+import { useMcpStatus } from "@/hooks/useMcpStatus";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -74,6 +75,8 @@ export function AppShell({
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
+
+  const { connected: mcpConnected } = useMcpStatus();
 
   const defaultWidth = isTablet ? 220 : 260;
   const MIN_WIDTH = 160;
@@ -308,6 +311,18 @@ export function AppShell({
             >
               <HugeiconsIcon icon={Download01Icon} size={18} color="currentColor" strokeWidth={1.5} />
             </button>
+          )}
+          {showExport && mcpConnected && (
+            <span
+              title="Connected to Claude"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                backgroundColor: "var(--color-success)",
+                flexShrink: 0,
+              }}
+            />
           )}
         </div>
 
