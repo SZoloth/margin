@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Harness Adapter Contract",
+  "description": "Input/output schema for review agent adapters",
+  "definitions": {
+    "input": {
+      "type": "object",
+      "required": ["diff", "tier", "changed_files", "diff_hash"],
+      "properties": {
+        "diff": {
+          "type": "string",
+          "description": "Unified diff content"
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["data-layer", "standard"],
+          "description": "Risk classification tier"
+        },
+        "changed_files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of changed file paths"
+        },
+        "diff_hash": {
+          "type": "string",
+          "description": "SHA-256 hash of the diff content"
+        }
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "required": ["status", "findings", "reviewed_at", "adapter"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail"],
+          "description": "Overall review result"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file", "line", "severity", "message"],
+            "properties": {
+              "file": {
+                "type": "string",
+                "description": "File path relative to repo root"
+              },
+              "line": {
+                "type": "number",
+                "description": "Line number of the finding"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["error", "warning", "info"],
+                "description": "Finding severity level"
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable description of the finding"
+              },
+              "rule": {
+                "type": "string",
+                "description": "Lint rule or check identifier (optional)"
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "List of findings from the adapter"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of when the review was performed"
+        },
+        "adapter": {
+          "type": "string",
+          "description": "Name of the adapter that produced this result"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

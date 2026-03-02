@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  check:
-    runs-on: macos-15
+  frontend:
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -23,14 +23,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
       - run: pnpm install --frozen-lockfile
 
       - name: TypeScript check
@@ -40,13 +32,57 @@ jobs:
         run: pnpm build
 
       - name: Frontend tests
-        run: pnpm test
+        run: |
+          mkdir -p test-results
+          pnpm test -- --reporter=default --reporter=json --outputFile=test-results/vitest.json
+
+      - name: MCP tests
+        run: |
+          mkdir -p test-results
+          pnpm --filter mcp test -- --reporter=default --reporter=json --outputFile=test-results/mcp-vitest.json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: test-results/
+          retention-days: 14
+
+  backend:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Rust check
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Rust clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+        run: |
+          mkdir -p evidence
+          cargo clippy --manifest-path src-tauri/Cargo.toml --message-format=json -- -D warnings \
+            2>&1 | tee evidence/clippy.json
 
       - name: Rust tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: |
+          mkdir -p evidence
+          cargo test --manifest-path src-tauri/Cargo.toml \
+            2>&1 | tee evidence/cargo-test.txt
+
+      - name: Upload backend evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-evidence
+          path: evidence/
+          retention-days: 14
