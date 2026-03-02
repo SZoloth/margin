@@ -15,6 +15,7 @@ import { useEffect, useRef } from "react";
 import { MultiColorHighlight } from "./extensions/highlight";
 import { MarginNote } from "./extensions/margin-note";
 import { DiffMark } from "./extensions/diff-mark";
+import { FrontMatter } from "./extensions/front-matter";
 import "../../styles/editor.css";
 
 interface ReaderProps {
@@ -30,6 +31,7 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
 
   const editor = useEditor({
     extensions: [
+      FrontMatter,
       StarterKit,
       Typography,
       Table.configure({ resizable: false }),

@@ -37,6 +37,7 @@
     "@tiptap/react": "^2.11",
     "@tiptap/starter-kit": "^2.11",
     "diff-match-patch-ts": "^0.8.0",
+    "markdown-it-front-matter": "^0.2.4",
     "react": "^19",
     "react-dom": "^19",
     "tiptap-markdown": "^0.8"
