@@ -13,3 +13,4 @@ tsconfig.tsbuildinfo
 *.p12
 *.pem
 *.mov
+dogfood-output/

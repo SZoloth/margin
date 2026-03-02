@@ -32,9 +32,11 @@ async function getConfigPath(): Promise<string> {
   return join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json");
 }
 
+declare const __MCP_DEV_PATH__: string;
+
 async function getMcpServerPath(): Promise<string> {
   if (import.meta.env.DEV) {
-    return import.meta.env.VITE_MCP_SERVER_PATH ?? join(await homeDir(), "Projects", "margin", "mcp", "dist", "index.js");
+    return import.meta.env.VITE_MCP_SERVER_PATH ?? __MCP_DEV_PATH__;
   }
   const res = await resourceDir();
   return join(res, "mcp", "dist", "index.js");
