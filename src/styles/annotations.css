@@ -5,8 +5,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   cursor: pointer;
   border-radius: 50%;
   background: none;
@@ -67,7 +67,7 @@
 }
 
 .thread-header-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -76,7 +76,7 @@
 
 .thread-excerpt {
   padding: 8px 12px;
-  border-left: 2px solid var(--highlight-yellow, #fde68a);
+  border-left: 2px solid var(--color-highlight-yellow);
   margin: 0 12px;
   margin-top: 8px;
 }

@@ -2,6 +2,14 @@ import { useEffect, useState, useCallback } from "react";
 import type { Highlight, MarginNote } from "@/types/annotations";
 import type { Editor } from "@tiptap/core";
 
+const DOT_COLORS: Record<string, string> = {
+  yellow: "#c9b463",
+  blue: "#8da8c4",
+  green: "#8bb07a",
+  pink: "#c48da8",
+  orange: "#c4a07a",
+};
+
 interface MarginIndicatorsProps {
   editor: Editor | null;
   highlights: Highlight[];
@@ -35,9 +43,13 @@ export function MarginIndicators({
     const containerRect = scrollContainer.getBoundingClientRect();
     const scrollTop = scrollContainer.scrollTop;
 
-    const highlightsWithNotes = highlights.filter((h) =>
-      marginNotes.some((n) => n.highlight_id === h.id),
-    );
+    // Pre-build note count map to avoid O(H×N) on every scroll frame
+    const noteCountByHighlight = new Map<string, number>();
+    for (const n of marginNotes) {
+      noteCountByHighlight.set(n.highlight_id, (noteCountByHighlight.get(n.highlight_id) ?? 0) + 1);
+    }
+
+    const highlightsWithNotes = highlights.filter((h) => noteCountByHighlight.has(h.id));
 
     const newPositions: IndicatorPosition[] = [];
 
@@ -52,11 +64,10 @@ export function MarginIndicators({
 
       const markRect = mark.getBoundingClientRect();
       const top = markRect.top - containerRect.top + scrollTop;
-      const noteCount = marginNotes.filter((n) => n.highlight_id === h.id).length;
       newPositions.push({
         highlightId: h.id,
         top,
-        noteCount,
+        noteCount: noteCountByHighlight.get(h.id) ?? 0,
         color: h.color,
       });
     }
@@ -114,11 +125,11 @@ export function MarginIndicators({
           <span
             style={{
               display: "block",
-              width: 6,
-              height: 6,
+              width: 10,
+              height: 10,
               borderRadius: "50%",
-              backgroundColor: `var(--color-highlight-${pos.color})`,
-              opacity: 0.8,
+              backgroundColor: DOT_COLORS[pos.color] ?? `var(--color-highlight-${pos.color})`,
+              opacity: 1.0,
             }}
           />
         </button>

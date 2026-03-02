@@ -35,7 +35,19 @@
   --color-danger: #ef4444;
   --color-danger-text: #dc2626;
   --color-warning: #eab308;
-  --color-accent: #b5972f;
+  --color-accent: #8a6e1a;
+  --color-text-tertiary: #9e9892;
+
+  /* Severity badge tokens */
+  --color-severity-must-fix-bg: #fef2f2;
+  --color-severity-must-fix-text: #b91c1c;
+  --color-severity-must-fix-border: #fecaca;
+  --color-severity-should-fix-bg: #fffbeb;
+  --color-severity-should-fix-text: #92400e;
+  --color-severity-should-fix-border: #fde68a;
+  --color-severity-nice-to-fix-bg: #f0fdf4;
+  --color-severity-nice-to-fix-text: #166534;
+  --color-severity-nice-to-fix-border: #bbf7d0;
 
   /* Elevation — barely there */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -73,12 +85,31 @@
   --color-danger-text: #f87171;
   --color-warning: #facc15;
   --color-accent: #facc15;
+  --color-text-tertiary: #6e6e6e;
+
+  /* Severity badge tokens */
+  --color-severity-must-fix-bg: #3b1c1c;
+  --color-severity-must-fix-text: #f87171;
+  --color-severity-must-fix-border: #5c2020;
+  --color-severity-should-fix-bg: #3b3520;
+  --color-severity-should-fix-text: #facc15;
+  --color-severity-should-fix-border: #5c4a20;
+  --color-severity-nice-to-fix-bg: #1c3b25;
+  --color-severity-nice-to-fix-text: #4ade80;
+  --color-severity-nice-to-fix-border: #205c30;
+
+  /* Dark-mode highlight colors */
+  --color-highlight-yellow-dark: rgba(245, 190, 30, 0.28);
+  --color-highlight-green-dark: rgba(72, 190, 100, 0.22);
+  --color-highlight-blue-dark: rgba(90, 150, 220, 0.22);
+  --color-highlight-pink-dark: rgba(220, 90, 150, 0.22);
+  --color-highlight-orange-dark: rgba(240, 130, 40, 0.25);
 }
 
 body {
   background-color: var(--color-page);
   color: var(--color-text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
   margin: 0;
   padding: 0;
   height: 100vh;

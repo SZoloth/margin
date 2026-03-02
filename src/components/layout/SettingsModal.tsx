@@ -50,13 +50,17 @@ function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
+  ariaLabel,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  ariaLabel?: string;
 }) {
   return (
     <div
+      role="radiogroup"
+      aria-label={ariaLabel}
       style={{
         display: "flex",
         gap: 1,
@@ -69,13 +73,14 @@ function SegmentedControl<T extends string>({
         <button
           key={opt.value}
           type="button"
+          role="radio"
+          aria-checked={value === opt.value}
           onClick={() => onChange(opt.value)}
           style={{
             flex: 1,
             padding: "5px 10px",
             fontSize: 12,
             fontWeight: value === opt.value ? 600 : 400,
-            fontFamily: "'Inter', system-ui, sans-serif",
             color: value === opt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
             backgroundColor: value === opt.value ? "var(--color-page)" : "transparent",
             border: value === opt.value ? "1px solid var(--color-border)" : "1px solid transparent",
@@ -185,7 +190,7 @@ function SectionHeader({ title }: { title: string }) {
   return (
     <div
       style={{
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         textTransform: "uppercase",
         letterSpacing: "0.05em",
@@ -267,7 +272,6 @@ function StyleMemoryRow({ onOpenCorrections }: { onOpenCorrections: () => void }
               padding: "5px 14px",
               fontSize: 12,
               fontWeight: 500,
-              fontFamily: "'Inter', system-ui, sans-serif",
               color: "var(--color-text-primary)",
               backgroundColor: "var(--hover-bg)",
               border: "1px solid var(--color-border)",
@@ -288,7 +292,6 @@ function StyleMemoryRow({ onOpenCorrections }: { onOpenCorrections: () => void }
             padding: "5px 14px",
             fontSize: 12,
             fontWeight: 500,
-            fontFamily: "'Inter', system-ui, sans-serif",
             color: hasCorrections
               ? "var(--color-text-primary)"
               : "var(--color-text-secondary)",
@@ -369,7 +372,6 @@ export function SettingsModal({
           maxHeight: "calc(100vh - 64px)",
           overflowY: "auto",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-          fontFamily: "'Inter', system-ui, sans-serif",
           opacity: isVisible ? 1 : 0,
           transform: isVisible ? "scale(1) translateY(0)" : "scale(0.97) translateY(4px)",
           transition: isVisible
@@ -422,6 +424,7 @@ export function SettingsModal({
             options={THEME_OPTIONS}
             value={settings.theme}
             onChange={(v) => setSetting("theme", v)}
+            ariaLabel="Theme"
           />
         </SettingRow>
 
@@ -430,6 +433,7 @@ export function SettingsModal({
             options={FONT_SIZE_OPTIONS}
             value={settings.fontSize}
             onChange={(v) => setSetting("fontSize", v)}
+            ariaLabel="Font size"
           />
         </SettingRow>
 
@@ -438,6 +442,7 @@ export function SettingsModal({
             options={LINE_SPACING_OPTIONS}
             value={settings.lineSpacing}
             onChange={(v) => setSetting("lineSpacing", v)}
+            ariaLabel="Line spacing"
           />
         </SettingRow>
 
@@ -446,6 +451,7 @@ export function SettingsModal({
             options={READER_WIDTH_OPTIONS}
             value={settings.readerWidth}
             onChange={(v) => setSetting("readerWidth", v)}
+            ariaLabel="Reader width"
           />
         </SettingRow>
 

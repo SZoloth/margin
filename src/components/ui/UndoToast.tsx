@@ -87,7 +87,7 @@ export function UndoToast({ action, duration = 5000 }: UndoToastProps) {
     >
       <span
         className="text-sm"
-        style={{ color: "var(--color-text-primary)", fontFamily: "'Inter', system-ui, sans-serif" }}
+        style={{ color: "var(--color-text-primary)" }}
       >
         {current.message}
       </span>

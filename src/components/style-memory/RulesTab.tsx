@@ -11,44 +11,30 @@ interface RulesTabProps {
   onStatsChange: (stats: { ruleCount: number }) => void;
 }
 
-interface SeverityStyle {
-  bg: string;
-  color: string;
-  border: string;
-  darkBg: string;
-  darkColor: string;
-  darkBorder: string;
-}
-
-const DEFAULT_SEVERITY: SeverityStyle = { bg: "#fffbeb", color: "#92400e", border: "#fde68a", darkBg: "#3b3520", darkColor: "#facc15", darkBorder: "#5c4a20" };
-
 const SEVERITY_VALUES: WritingRuleSeverity[] = ["must-fix", "should-fix", "nice-to-fix"];
 
-const SEVERITY_STYLES: Record<string, SeverityStyle> = {
-  "must-fix": { bg: "#fef2f2", color: "#b91c1c", border: "#fecaca", darkBg: "#3b1c1c", darkColor: "#f87171", darkBorder: "#5c2020" },
-  "should-fix": DEFAULT_SEVERITY,
-  "nice-to-fix": { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0", darkBg: "#1c3b25", darkColor: "#4ade80", darkBorder: "#205c30" },
-};
-
-const darkModeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
 function SeverityBadge({ severity }: { severity: string }) {
-  const style = SEVERITY_STYLES[severity] ?? DEFAULT_SEVERITY;
-  const isDark = document.documentElement.classList.contains("dark") || darkModeQuery.matches;
+  // Map severity to CSS token key, falling back to should-fix
+  const key = SEVERITY_VALUES.includes(severity as WritingRuleSeverity)
+    ? severity
+    : "should-fix";
 
   return (
     <span
+      data-severity-badge
       style={{
         padding: "2px 8px",
-        fontSize: 9,
+        fontSize: 12,
         fontWeight: 600,
         borderRadius: 100,
         textTransform: "uppercase",
         letterSpacing: "0.3px",
         flexShrink: 0,
-        background: isDark ? style.darkBg : style.bg,
-        color: isDark ? style.darkColor : style.color,
-        border: `1px solid ${isDark ? style.darkBorder : style.border}`,
+        background: `var(--color-severity-${key}-bg)`,
+        color: `var(--color-severity-${key}-text)`,
+        borderColor: `var(--color-severity-${key}-border)`,
+        borderWidth: 1,
+        borderStyle: "solid",
       }}
     >
       {severity}
@@ -132,7 +118,6 @@ function RuleCard({
     width: "100%",
     padding: "4px 8px",
     fontSize: 12,
-    fontFamily: "'Inter', system-ui, sans-serif",
     border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-sm)",
     background: "var(--color-page)",
@@ -181,10 +166,10 @@ function RuleCard({
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button type="button" onClick={handleSave} style={{ padding: "4px 12px", fontSize: 11, fontFamily: "'Inter', system-ui, sans-serif", background: "var(--color-text-primary)", color: "var(--color-page)", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+            <button type="button" onClick={handleSave} style={{ padding: "4px 12px", fontSize: 11, background: "var(--color-text-primary)", color: "var(--color-page)", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
               Save
             </button>
-            <button type="button" onClick={handleCancel} style={{ padding: "4px 12px", fontSize: 11, fontFamily: "'Inter', system-ui, sans-serif", background: "var(--color-page)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+            <button type="button" onClick={handleCancel} style={{ padding: "4px 12px", fontSize: 11, background: "var(--color-page)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -258,7 +243,6 @@ function RuleCard({
             cursor: "pointer",
             textDecoration: "underline",
             textUnderlineOffset: 2,
-            fontFamily: "'Inter', system-ui, sans-serif",
             padding: 0,
           }}
         >
@@ -276,7 +260,6 @@ function RuleCard({
               cursor: "pointer",
               textDecoration: "underline",
               textUnderlineOffset: 2,
-              fontFamily: "'Inter', system-ui, sans-serif",
               padding: 0,
             }}
           >
@@ -297,7 +280,6 @@ function RuleCard({
                 border: "none",
                 cursor: "pointer",
                 fontWeight: 600,
-                fontFamily: "'Inter', system-ui, sans-serif",
                 padding: 0,
               }}
             >
@@ -312,7 +294,6 @@ function RuleCard({
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                fontFamily: "'Inter', system-ui, sans-serif",
                 padding: 0,
               }}
             >
@@ -469,7 +450,6 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
             style={{
               padding: "3px 10px",
               fontSize: 11,
-              fontFamily: "'Inter', system-ui, sans-serif",
               border: "1px solid var(--color-border)",
               borderRadius: 100,
               background: !severityFilter ? "var(--color-text-primary)" : "var(--color-page)",
@@ -487,7 +467,6 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
               style={{
                 padding: "3px 10px",
                 fontSize: 11,
-                fontFamily: "'Inter', system-ui, sans-serif",
                 border: "1px solid var(--color-border)",
                 borderRadius: 100,
                 background: severityFilter === sev ? "var(--color-text-primary)" : "var(--color-page)",
@@ -512,7 +491,6 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
               padding: "4px 12px",
               fontSize: 11,
               fontWeight: 500,
-              fontFamily: "'Inter', system-ui, sans-serif",
               background: "var(--color-text-primary)",
               color: "var(--color-page)",
               border: "1px solid var(--color-text-primary)",
@@ -559,7 +537,6 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                     justifyContent: "space-between",
                     background: "none",
                     cursor: "pointer",
-                    fontFamily: "'Inter', system-ui, sans-serif",
                     textAlign: "left",
                   }}
                 >

@@ -699,6 +699,9 @@ export default function App() {
     const highlight = annotations.highlights.find((h) => h.id === id);
     if (!highlight) return;
 
+    // Capture margin notes before deletion so they can be restored on undo
+    const capturedNotes = annotations.marginNotes.filter((n) => n.highlight_id === id);
+
     // Delete immediately
     await annotations.deleteHighlight(id);
 
@@ -742,6 +745,12 @@ export default function App() {
             prefixContext: highlight.prefix_context,
             suffixContext: highlight.suffix_context,
           });
+          // Re-create captured margin notes with the new highlight ID
+          await Promise.all(
+            capturedNotes.map((note) =>
+              annotationsRef.current.createMarginNote(restored.id, note.content),
+            ),
+          );
           // Re-apply mark in editor
           if (currentEditor) {
             const restoreMarkType = currentEditor.state.schema.marks.highlight;
@@ -1316,7 +1325,7 @@ export default function App() {
             gap: 10,
             padding: "8px 14px",
             fontSize: 12,
-            fontFamily: "'Inter', system-ui, sans-serif",
+
             color: "var(--color-text-primary)",
             backgroundColor: "var(--color-page)",
             border: "1px solid var(--color-border)",
@@ -1334,7 +1343,7 @@ export default function App() {
               padding: "3px 10px",
               fontSize: 11,
               fontWeight: 500,
-              fontFamily: "'Inter', system-ui, sans-serif",
+  
               color: "var(--color-text-primary)",
               backgroundColor: "var(--hover-bg)",
               border: "1px solid var(--color-border)",
@@ -1364,7 +1373,7 @@ export default function App() {
             </button>
           )}
           {updater.error && (
-            <span style={{ color: "var(--color-highlight-red)", fontSize: 11 }}>
+            <span style={{ color: "var(--color-danger, #ef4444)", fontSize: 11 }}>
               {updater.error}
             </span>
           )}

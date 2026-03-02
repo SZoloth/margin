@@ -162,7 +162,7 @@ export function ExportAnnotationsPopover({
                 fontWeight: 500,
               }}
             >
-              <span style={{ color: "var(--color-accent, #4a9)" }}>✓</span>
+              <span style={{ color: "var(--color-accent)" }}>✓</span>
               Copied to clipboard
             </div>
 
@@ -252,7 +252,7 @@ export function ExportAnnotationsPopover({
                     background: "none",
                     border: "none",
                     padding: 0,
-                    color: "var(--color-accent, #4a9)",
+                    color: "var(--color-accent)",
                     fontSize: 12,
                     cursor: "pointer",
                     textDecoration: "underline",

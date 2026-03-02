@@ -81,7 +81,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
 }
 
 .toc-dot {
@@ -139,7 +139,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 0.7rem;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
     color: var(--color-text-primary);
     background-color: var(--color-sidebar);
     border: 1px solid var(--color-border);

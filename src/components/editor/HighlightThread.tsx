@@ -291,7 +291,10 @@ export function HighlightThread({
       </div>
 
       {/* Highlight excerpt */}
-      <div className="thread-excerpt">
+      <div
+        className="thread-excerpt"
+        style={{ borderLeftColor: `var(--color-highlight-${highlight.color})` }}
+      >
         <p>{highlight.text_content}</p>
       </div>
 

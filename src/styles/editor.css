@@ -66,27 +66,27 @@
 
 :root[data-theme="dark"] .tiptap mark[data-color="yellow"],
 :root[data-theme="dark"] .tiptap mark.highlight--yellow {
-  background-color: rgba(245, 190, 30, 0.28);
+  background-color: var(--color-highlight-yellow-dark);
 }
 
 :root[data-theme="dark"] .tiptap mark[data-color="green"],
 :root[data-theme="dark"] .tiptap mark.highlight--green {
-  background-color: rgba(72, 190, 100, 0.22);
+  background-color: var(--color-highlight-green-dark);
 }
 
 :root[data-theme="dark"] .tiptap mark[data-color="blue"],
 :root[data-theme="dark"] .tiptap mark.highlight--blue {
-  background-color: rgba(90, 150, 220, 0.22);
+  background-color: var(--color-highlight-blue-dark);
 }
 
 :root[data-theme="dark"] .tiptap mark[data-color="pink"],
 :root[data-theme="dark"] .tiptap mark.highlight--pink {
-  background-color: rgba(220, 90, 150, 0.22);
+  background-color: var(--color-highlight-pink-dark);
 }
 
 :root[data-theme="dark"] .tiptap mark[data-color="orange"],
 :root[data-theme="dark"] .tiptap mark.highlight--orange {
-  background-color: rgba(240, 130, 40, 0.25);
+  background-color: var(--color-highlight-orange-dark);
 }
 
 /* Smooth highlight color transitions */
@@ -130,8 +130,8 @@
   align-items: center;
   justify-content: center;
   padding: 4px;
-  min-width: 28px;
-  min-height: 28px;
+  min-width: 36px;
+  min-height: 36px;
   border-radius: var(--radius-md);
   background-color: transparent;
   cursor: pointer;

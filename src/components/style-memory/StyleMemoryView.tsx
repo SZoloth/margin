@@ -113,7 +113,6 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
               background: "none",
               border: "none",
               cursor: "pointer",
-              fontFamily: "'Inter', system-ui, sans-serif",
               padding: "4px 8px",
               borderRadius: "var(--radius-sm)",
               transition: "all 100ms",
@@ -125,7 +124,7 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
             Back
           </button>
           <span style={{ width: 1, height: 20, background: "var(--color-border)" }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)" }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)", fontFamily: "'Newsreader', Georgia, serif" }}>
             Style Memory
           </span>
         </div>
@@ -143,7 +142,6 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
                 padding: "5px 12px",
                 fontSize: 12,
                 fontWeight: 500,
-                fontFamily: "'Inter', system-ui, sans-serif",
                 background: "var(--hover-bg)",
                 color: "var(--color-text-secondary)",
                 border: "1px solid var(--color-border)",
@@ -184,6 +182,8 @@ export function StyleMemoryView({ isOpen, onClose }: StyleMemoryViewProps) {
 
       {/* Tab bar */}
       <div
+        role="tablist"
+        aria-label="Style Memory sections"
         style={{
           display: "flex",
           gap: 0,
@@ -217,14 +217,15 @@ function Stat({ value, label, small }: { value: number | string; label: string; 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <span style={{
-        fontSize: small ? 14 : 20,
+        fontSize: small ? 14 : 36,
         fontWeight: small ? 500 : 700,
+        fontFamily: small ? undefined : "'Newsreader', Georgia, serif",
         color: small ? "var(--color-text-secondary)" : "var(--color-text-primary)",
         lineHeight: 1.2,
       }}>
         {value}
       </span>
-      <span style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px", marginTop: 2 }}>
+      <span style={{ fontSize: 12, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px", marginTop: 2 }}>
         {label}
       </span>
     </div>
@@ -239,6 +240,8 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       style={{
         padding: "10px 16px",
@@ -251,12 +254,11 @@ function TabButton({ active, onClick, count, children }: { active: boolean; onCl
         borderTop: "none",
         borderLeft: "none",
         borderRight: "none",
-        fontFamily: "'Inter', system-ui, sans-serif",
         transition: "color 150ms, border-color 150ms",
       }}
     >
       {children}
-      <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)", marginLeft: 4 }}>
+      <span style={{ fontSize: 12, fontWeight: 400, color: "var(--color-text-secondary)", marginLeft: 4 }}>
         {count}
       </span>
     </button>

@@ -83,6 +83,18 @@ export function FloatingToolbar({
     }
   }, [editor, isMounted]);
 
+  // Unmount after exit animation completes
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el || isVisible) return;
+
+    const handleTransitionEnd = (e: TransitionEvent) => {
+      if (e.propertyName === "opacity" && !isVisible) setIsMounted(false);
+    };
+    el.addEventListener("transitionend", handleTransitionEnd);
+    return () => el.removeEventListener("transitionend", handleTransitionEnd);
+  }, [isVisible]);
+
   useEffect(() => {
     if (!editor) return;
 
@@ -118,6 +130,8 @@ export function FloatingToolbar({
   return createPortal(
     <div
       ref={toolbarRef}
+      role="toolbar"
+      aria-label="Text formatting"
       className="fixed z-50 flex items-center gap-1 border px-2 py-1.5 shadow-md"
       style={{
         top: position.top,
@@ -151,8 +165,8 @@ export function FloatingToolbar({
           <span
             style={{
               display: "block",
-              width: 16,
-              height: 16,
+              width: 20,
+              height: 20,
               borderRadius: "50%",
               backgroundColor: c.css,
               border: c.name === defaultColor

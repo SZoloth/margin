@@ -172,7 +172,7 @@ export function AppShell({
   }, [activeTabId]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       {/* Mobile overlay backdrop */}
       {backdrop.isMounted && (
         <div
@@ -199,7 +199,6 @@ export function AppShell({
           width: sidebarWidth,
           backgroundColor: "var(--color-sidebar)",
           borderColor: "var(--color-border)",
-          willChange: "transform",
           transform: sidebarOpen ? "translateX(0)" : `translateX(-${sidebarWidth}px)`,
           transition: sidebarOpen
             ? "transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
@@ -333,10 +332,10 @@ export function AppShell({
             >
               <div className="text-center" style={{ maxWidth: 320 }}>
                 <p
-                  className="text-base"
                   style={{
                     fontFamily: "'Newsreader', Georgia, serif",
                     fontStyle: "italic",
+                    fontSize: "1.25rem",
                     letterSpacing: "-0.01em",
                     lineHeight: 1.6,
                     opacity: 0.5,
@@ -347,7 +346,6 @@ export function AppShell({
                 <p
                   className="mt-1"
                   style={{
-                    fontFamily: "'Inter', system-ui, sans-serif",
                     fontSize: "0.6875rem",
                     letterSpacing: "0.04em",
                     textTransform: "uppercase",
@@ -370,12 +368,11 @@ export function AppShell({
                 <p
                   className="mt-2 opacity-50"
                   style={{
-                    fontFamily: "'Inter', system-ui, sans-serif",
                     fontSize: "0.8125rem",
                     letterSpacing: "0.01em",
                   }}
                 >
-                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd> to open a file
+                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd> to open a file, or drag one here
                 </p>
               </div>
             </div>

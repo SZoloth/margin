@@ -71,7 +71,6 @@ function WritingTypeChips({
           style={{
             padding: "1px 6px",
             fontSize: 10,
-            fontFamily: "'Inter', system-ui, sans-serif",
             fontWeight: value === wt.value ? 600 : 400,
             color:
               value === wt.value
@@ -172,7 +171,6 @@ function CorrectionCard({
             style={{
               padding: "1px 7px",
               fontSize: 10,
-              fontFamily: "'Inter', system-ui, sans-serif",
               color: "var(--color-text-secondary)",
               backgroundColor: correction.writingType ? "var(--hover-bg)" : "transparent",
               border: correction.writingType
@@ -200,7 +198,6 @@ function CorrectionCard({
             style={{
               padding: 0,
               fontSize: 10,
-              fontFamily: "'Inter', system-ui, sans-serif",
               color: "var(--color-text-secondary)",
               background: "none",
               border: "none",
@@ -421,7 +418,6 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
               width: "100%",
               padding: "6px 10px 6px 28px",
               fontSize: 12,
-              fontFamily: "'Inter', system-ui, sans-serif",
               border: "1px solid var(--color-border)",
               borderRadius: "var(--radius-sm)",
               background: "var(--color-page)",
@@ -437,7 +433,6 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
             style={{
               padding: "3px 10px",
               fontSize: 11,
-              fontFamily: "'Inter', system-ui, sans-serif",
               border: "1px solid var(--color-border)",
               borderRadius: 100,
               background: !activeFilter ? "var(--color-text-primary)" : "var(--color-page)",
@@ -456,7 +451,6 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
               style={{
                 padding: "3px 10px",
                 fontSize: 11,
-                fontFamily: "'Inter', system-ui, sans-serif",
                 border: "1px solid var(--color-border)",
                 borderRadius: 100,
                 background: activeFilter === wt.value ? "var(--color-text-primary)" : "var(--color-page)",
@@ -481,7 +475,6 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                 style={{
                   padding: "4px 10px",
                   fontSize: 11,
-                  fontFamily: "'Inter', system-ui, sans-serif",
                   border: "1px solid var(--color-border)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
@@ -497,7 +490,6 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                 style={{
                   padding: "4px 10px",
                   fontSize: 11,
-                  fontFamily: "'Inter', system-ui, sans-serif",
                   border: "1px solid var(--color-danger, #ef4444)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
@@ -577,7 +569,6 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                     margin: "16px auto",
                     padding: "8px 24px",
                     fontSize: 12,
-                    fontFamily: "'Inter', system-ui, sans-serif",
                     color: "var(--color-text-secondary)",
                     backgroundColor: "var(--hover-bg)",
                     border: "1px solid var(--color-border)",
