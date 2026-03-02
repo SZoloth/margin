@@ -1,1 +1,3 @@
-approveBuilds: esbuild
+onlyBuiltDependencies:
+  - esbuild
+  - better-sqlite3

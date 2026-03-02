@@ -4,4 +4,5 @@ export interface ExportResult {
   snippets: string[];
   correctionsSaved: boolean;
   correctionsFile: string;
+  sentToClaude?: boolean;
 }

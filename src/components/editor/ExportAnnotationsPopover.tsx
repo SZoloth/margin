@@ -163,7 +163,7 @@ export function ExportAnnotationsPopover({
               }}
             >
               <span style={{ color: "var(--color-accent)" }}>✓</span>
-              Copied to clipboard
+              {result.sentToClaude ? "Sent to Claude" : "Copied to clipboard"}
             </div>
 
             {/* Stats */}

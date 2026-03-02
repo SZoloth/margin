@@ -865,7 +865,7 @@ export default function App() {
   // Export annotations: Cmd+Shift+E
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === "KeyE") {
         e.preventDefault();
         if (doc.currentDoc && annotations.isLoaded) {
           setShowExportPopover(true);
@@ -905,7 +905,11 @@ export default function App() {
         marginNotes,
       });
 
-      await writeText(markdown);
+      // Clipboard copy + best-effort MCP send (parallel, MCP failure won't block export)
+      const [, mcpResult] = await Promise.all([
+        writeText(markdown),
+        import("@/lib/mcp-export").then(({ sendToMcpServer }) => sendToMcpServer(markdown)),
+      ]);
 
       const snippets = highlights.slice(0, 3).map((h) =>
         h.text_content.length > 60 ? h.text_content.slice(0, 57) + "..." : h.text_content,
@@ -1005,6 +1009,7 @@ export default function App() {
         snippets,
         correctionsSaved,
         correctionsFile,
+        sentToClaude: mcpResult.sent,
       };
     },
     [editor, doc.currentDoc],
