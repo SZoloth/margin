@@ -6,7 +6,6 @@
   font-size: var(--reader-font-size, 1.125rem);
   line-height: var(--reader-line-height, 1.72);
   color: var(--color-text-primary);
-  -webkit-font-smoothing: antialiased;
 }
 
 /* Headings */
