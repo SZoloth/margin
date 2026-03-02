@@ -317,6 +317,15 @@ function StyleMemoryRow({ onOpenCorrections }: { onOpenCorrections: () => void }
   );
 }
 
+const CLAUDE_CODE_SNIPPET = `{
+  "mcpServers": {
+    "margin": {
+      "command": "node",
+      "args": ["/Applications/Margin.app/Contents/Resources/mcp/dist/index.js"]
+    }
+  }
+}`;
+
 function ClaudeIntegrationRow() {
   const [enabled, setEnabled] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -360,8 +369,8 @@ function ClaudeIntegrationRow() {
   return (
     <div>
       <SettingRow
-        label="Claude integration"
-        description="Let Claude read your documents and annotations directly"
+        label="Claude Desktop"
+        description="Auto-configured \u2014 toggle to enable or disable"
       >
         <ToggleSwitch checked={enabled} onChange={handleToggle} />
       </SettingRow>
@@ -392,6 +401,77 @@ function ClaudeIntegrationRow() {
             : "Not connected \u2014 restart Claude to connect"}
         </div>
       )}
+    </div>
+  );
+}
+
+function ClaudeCodeRow() {
+  const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current !== null) {
+        window.clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await writeText(CLAUDE_CODE_SNIPPET);
+      setCopied(true);
+      if (copiedTimeoutRef.current !== null) {
+        window.clearTimeout(copiedTimeoutRef.current);
+      }
+      copiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard write failed
+    }
+  }, []);
+
+  return (
+    <div>
+      <SettingRow
+        label="Claude Code"
+        description="Add to ~/.claude.json, then restart Claude Code"
+      >
+        <button
+          type="button"
+          onClick={handleCopy}
+          style={{
+            padding: "5px 14px",
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--color-text-primary)",
+            backgroundColor: "var(--hover-bg)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-sm)",
+            cursor: "pointer",
+            transition: "all 150ms ease",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {copied ? "Copied" : "Copy config"}
+        </button>
+      </SettingRow>
+      <div
+        style={{
+          fontFamily: "ui-monospace, 'SF Mono', SFMono-Regular, monospace",
+          fontSize: 11,
+          lineHeight: 1.5,
+          color: "var(--color-text-secondary)",
+          backgroundColor: "var(--hover-bg)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-sm)",
+          padding: "8px 10px",
+          marginBottom: 8,
+          whiteSpace: "pre",
+          overflow: "auto",
+        }}
+      >
+        {CLAUDE_CODE_SNIPPET}
+      </div>
     </div>
   );
 }
@@ -615,6 +695,7 @@ export function SettingsModal({
         {/* Claude section */}
         <SectionHeader title="Claude" />
         <ClaudeIntegrationRow />
+        <ClaudeCodeRow />
       </div>
     </div>
   );
