@@ -125,11 +125,6 @@
   background-color: var(--color-highlight-orange-dark);
 }
 
-/* Smooth highlight color transitions */
-.tiptap mark[data-color] {
-  transition: background-color var(--duration-normal) var(--ease-micro);
-}
-
 /* Floating toolbar button states */
 .toolbar-btn {
   display: flex;

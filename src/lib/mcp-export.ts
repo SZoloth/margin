@@ -4,6 +4,7 @@ export async function sendToMcpServer(
   try {
     const res = await fetch("http://localhost:24784/export", {
       method: "POST",
+      headers: { "Content-Type": "text/plain" },
       body: markdown,
       signal: AbortSignal.timeout(3000),
     });
