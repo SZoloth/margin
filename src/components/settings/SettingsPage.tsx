@@ -1,11 +1,9 @@
 import { useState } from "react";
 import type { Settings } from "@/hooks/useSettings";
-import { SettingsNav } from "./SettingsNav";
+import { SettingsNav, type Section } from "./SettingsNav";
 import { ReadingSection } from "./ReadingSection";
 import { WritingSection } from "./WritingSection";
 import { IntegrationsSection } from "./IntegrationsSection";
-
-type Section = "reading" | "writing" | "integrations";
 
 interface SettingsPageProps {
   settings: Settings;
@@ -26,7 +24,7 @@ export function SettingsPage({
     <div className="flex h-full">
       <SettingsNav
         activeSection={activeSection}
-        onSelect={(s) => setActiveSection(s as Section)}
+        onSelect={setActiveSection}
         onClose={onClose}
       />
 
@@ -38,23 +36,17 @@ export function SettingsPage({
             Settings
           </h2>
 
-          <div
-            style={{
-              transition: "opacity 150ms var(--ease-micro)",
-            }}
-          >
-            {activeSection === "reading" && (
-              <ReadingSection settings={settings} setSetting={setSetting} />
-            )}
-            {activeSection === "writing" && (
-              <WritingSection
-                settings={settings}
-                setSetting={setSetting}
-                onOpenCorrections={onOpenCorrections}
-              />
-            )}
-            {activeSection === "integrations" && <IntegrationsSection />}
-          </div>
+          {activeSection === "reading" && (
+            <ReadingSection settings={settings} setSetting={setSetting} />
+          )}
+          {activeSection === "writing" && (
+            <WritingSection
+              settings={settings}
+              setSetting={setSetting}
+              onOpenCorrections={onOpenCorrections}
+            />
+          )}
+          {activeSection === "integrations" && <IntegrationsSection />}
         </div>
       </div>
     </div>

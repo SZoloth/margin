@@ -1,15 +1,17 @@
 import { useEffect } from "react";
 import { cn } from "@/lib/cn";
 
-const SECTIONS = [
+export type Section = "reading" | "writing" | "integrations";
+
+const SECTIONS: { id: Section; label: string }[] = [
   { id: "reading", label: "Reading" },
   { id: "writing", label: "Writing" },
   { id: "integrations", label: "Integrations" },
-] as const;
+];
 
 interface SettingsNavProps {
-  activeSection: string;
-  onSelect: (section: string) => void;
+  activeSection: Section;
+  onSelect: (section: Section) => void;
   onClose: () => void;
 }
 

@@ -28,7 +28,7 @@ export function ToggleSwitch({
       <span
         className={cn(
           "pointer-events-none block h-5 w-5 rounded-full bg-white shadow-[var(--shadow-sm)]",
-          checked ? "translate-x-5" : "translate-x-0.5",
+          checked ? "translate-x-[22px]" : "translate-x-[2px]",
         )}
         style={{
           transition: "transform 250ms var(--ease-spring)",

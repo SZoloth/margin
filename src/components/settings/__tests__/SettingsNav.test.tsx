@@ -2,12 +2,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { SettingsNav } from "../SettingsNav";
+import { SettingsNav, type Section } from "../SettingsNav";
 
 describe("SettingsNav", () => {
   const defaultProps = {
-    activeSection: "reading",
-    onSelect: vi.fn(),
+    activeSection: "reading" as Section,
+    onSelect: vi.fn<(section: Section) => void>(),
     onClose: vi.fn(),
   };
 

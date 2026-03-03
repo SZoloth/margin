@@ -21,9 +21,9 @@ export function ColorPicker({ colors, value, onChange }: ColorPickerProps) {
           aria-label={color.value}
           onClick={() => onChange(color.value)}
           className={cn(
-            "h-7 w-7 rounded-full transition-transform duration-200 hover:scale-110",
+            "h-7 w-7 rounded-full hover:scale-110",
             color.value === value &&
-              "ring-2 ring-[var(--color-text-primary)] ring-offset-2",
+              "ring-2 ring-[var(--color-text-primary)] ring-offset-2 ring-offset-[var(--color-sidebar)]",
           )}
           style={{
             backgroundColor: color.css,

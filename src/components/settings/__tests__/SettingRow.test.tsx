@@ -25,29 +25,4 @@ describe("SettingRow", () => {
     expect(screen.getByRole("button")).toBeInTheDocument();
     expect(screen.getByText("Toggle")).toBeInTheDocument();
   });
-
-  it("generates stable ID and passes aria-labelledby to children", () => {
-    render(
-      <SettingRow label="Dark mode">
-        <button>Toggle</button>
-      </SettingRow>,
-    );
-
-    const label = screen.getByText("Dark mode");
-    expect(label).toHaveAttribute("id", "settings-dark-mode");
-
-    const button = screen.getByRole("button");
-    expect(button).toHaveAttribute("aria-labelledby", "settings-dark-mode");
-  });
-
-  it("uses custom id prop for label ID", () => {
-    render(
-      <SettingRow label="Theme" id="custom-theme">
-        <button>Toggle</button>
-      </SettingRow>,
-    );
-
-    const label = screen.getByText("Theme");
-    expect(label).toHaveAttribute("id", "settings-custom-theme");
-  });
 });

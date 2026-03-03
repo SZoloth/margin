@@ -42,6 +42,11 @@ export function SegmentedControl<T extends string>({
 
   useEffect(() => {
     updateIndicator();
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(updateIndicator);
+    ro.observe(container);
+    return () => ro.disconnect();
   }, [updateIndicator]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
