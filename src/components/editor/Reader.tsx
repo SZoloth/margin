@@ -89,6 +89,19 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
     },
     onUpdate: ({ editor: ed }) => {
       if (isExternalUpdate.current) return;
+      // Defense-in-depth: never serialize content that contains diff marks.
+      // If diff marks leak into markdown, deleted text persists as plain text
+      // (or ~~text~~ if Strike somehow claims <del> tags).
+      let hasDiffMarks = false;
+      ed.state.doc.descendants((node) => {
+        if (hasDiffMarks) return false;
+        if (node.marks.some((m) => m.type.name === "diffMark")) {
+          hasDiffMarks = true;
+          return false;
+        }
+      });
+      if (hasDiffMarks) return;
+
       const md = ed.storage.markdown.getMarkdown() as string;
       lastEmittedMarkdownRef.current = md;
       onUpdate(md);
