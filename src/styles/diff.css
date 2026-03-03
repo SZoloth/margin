@@ -116,6 +116,10 @@
   font-weight: 500;
 }
 
+.diff-banner__btn--revert {
+  color: var(--color-diff-del-border);
+}
+
 .diff-banner__btn--icon {
   display: flex;
   align-items: center;

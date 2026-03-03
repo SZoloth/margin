@@ -7,6 +7,7 @@ interface DiffBannerProps {
   onAcceptAll: () => void;
   onReview: () => void;
   onDismiss: () => void;
+  onRevertAll: () => void;
   isReviewing: boolean;
 }
 
@@ -27,6 +28,7 @@ export function DiffBanner({
   onAcceptAll,
   onReview,
   onDismiss,
+  onRevertAll,
   isReviewing,
 }: DiffBannerProps) {
   // Re-render periodically so the relative timestamp stays fresh
@@ -75,17 +77,27 @@ export function DiffBanner({
             Review
           </button>
         )}
-        <button
-          type="button"
-          className="diff-banner__btn diff-banner__btn--icon"
-          onClick={onDismiss}
-          aria-label="Dismiss"
-          title="Dismiss"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" focusable="false">
-            <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
+        {isReviewing ? (
+          <button
+            type="button"
+            className="diff-banner__btn diff-banner__btn--revert"
+            onClick={onRevertAll}
+          >
+            Revert all
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="diff-banner__btn diff-banner__btn--icon"
+            onClick={onDismiss}
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" focusable="false">
+              <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

@@ -503,6 +503,7 @@ export default function App() {
         return;
       }
       const finalContent = diffReview.getFinalContent();
+      const hasAccepted = diffReview.changes.some((c) => c.status === "accepted");
       const hasRejected = diffReview.changes.some((c) => c.status === "rejected");
       if (hasRejected) {
         // Rejected changes means the file on disk differs from what the user wants.
@@ -528,6 +529,14 @@ export default function App() {
         }
       }
 
+      // If any changes were accepted, the document content differs from when
+      // highlights were originally created. Prevent the mark-restoration
+      // effect from re-applying highlights onto changed content — they'll
+      // be visually orphaned (correct per design: highlights stay in DB).
+      if (hasAccepted) {
+        lastRestoredDocId.current = currentDoc.id;
+      }
+
       diffReviewDocIdRef.current = null;
       diffReview.reset();
       setDiffControlState(null);
@@ -540,19 +549,35 @@ export default function App() {
     editor.setEditable(diffReview.mode === "idle");
   }, [editor, diffReview.mode]);
 
-  // Scroll to current change when navigating
+  // Scroll to current change and auto-show Keep/Revert controls.
+  // Uses rAF to ensure DOM has rendered diff marks (especially on mode transition).
+  // Depends only on mode + currentIndex — NOT changes — so accepting/rejecting
+  // a single change doesn't re-trigger (which would flicker the controls).
   useEffect(() => {
     if (diffReview.mode !== "reviewing") return;
-    const change = diffReview.changes[diffReview.currentIndex];
+    const change = diffReviewRef.current.changes[diffReview.currentIndex];
     if (!change) return;
-    const scrollContainer = document.querySelector("[data-scroll-container]");
-    const el = scrollContainer?.querySelector(`[data-change-id="${change.id}"]`);
-    if (el instanceof HTMLElement) {
-      el.scrollIntoView({ block: "center" });
-    }
-  }, [diffReview.mode, diffReview.currentIndex, diffReview.changes]);
 
-  // Handle diff-click events → show Keep/Revert controls
+    const frameId = requestAnimationFrame(() => {
+      const scrollContainer = document.querySelector("[data-scroll-container]");
+      const el = scrollContainer?.querySelector(`[data-change-id="${change.id}"]`);
+      if (el instanceof HTMLElement) {
+        el.scrollIntoView({ block: "center" });
+        // Position Keep/Revert controls next to the mark
+        const rect = el.getBoundingClientRect();
+        setDiffControlState({
+          changeId: change.id,
+          top: rect.top,
+          right: window.innerWidth - rect.right + 8,
+        });
+      } else {
+        setDiffControlState(null);
+      }
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [diffReview.mode, diffReview.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle diff-click events → show Keep/Revert controls (manual clicks)
   useEffect(() => {
     if (diffReview.mode !== "reviewing") return;
 
@@ -560,7 +585,6 @@ export default function App() {
       const { changeId, element } = (e as CustomEvent).detail;
       if (!changeId || !element) return;
       const rect = (element as HTMLElement).getBoundingClientRect();
-      // Use viewport-relative coords for fixed positioning
       setDiffControlState({
         changeId,
         top: rect.top,
@@ -1149,6 +1173,7 @@ export default function App() {
           onAcceptAll={diffReview.acceptAll}
           onReview={diffReview.startReview}
           onDismiss={diffReview.dismiss}
+          onRevertAll={diffReview.revertAll}
           isReviewing={diffReview.mode === "reviewing"}
         />
       )}

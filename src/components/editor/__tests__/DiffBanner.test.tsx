@@ -18,6 +18,7 @@ describe("DiffBanner", () => {
         onAcceptAll={vi.fn()}
         onReview={vi.fn()}
         onDismiss={vi.fn()}
+        onRevertAll={vi.fn()}
         isReviewing={false}
       />,
     );
@@ -36,6 +37,7 @@ describe("DiffBanner", () => {
         onAcceptAll={vi.fn()}
         onReview={vi.fn()}
         onDismiss={vi.fn()}
+        onRevertAll={vi.fn()}
         isReviewing={true}
       />,
     );
@@ -54,6 +56,7 @@ describe("DiffBanner", () => {
         onAcceptAll={vi.fn()}
         onReview={vi.fn()}
         onDismiss={vi.fn()}
+        onRevertAll={vi.fn()}
         isReviewing={true}
       />,
     );
@@ -61,6 +64,40 @@ describe("DiffBanner", () => {
     expect(screen.getByText("All changes reviewed")).toBeTruthy();
     const acceptAll = screen.getByRole("button", { name: "Accept all" }) as HTMLButtonElement;
     expect(acceptAll.disabled).toBe(true);
+  });
+
+  it("shows Revert all button when reviewing, dismiss X when not", () => {
+    const { rerender } = render(
+      <DiffBanner
+        changeCount={3}
+        pendingCount={2}
+        updatedAt={null}
+        onAcceptAll={vi.fn()}
+        onReview={vi.fn()}
+        onDismiss={vi.fn()}
+        onRevertAll={vi.fn()}
+        isReviewing={true}
+      />,
+    );
+
+    expect(screen.getByText("Revert all")).toBeTruthy();
+    expect(screen.queryByLabelText("Dismiss")).toBeNull();
+
+    rerender(
+      <DiffBanner
+        changeCount={3}
+        pendingCount={0}
+        updatedAt={null}
+        onAcceptAll={vi.fn()}
+        onReview={vi.fn()}
+        onDismiss={vi.fn()}
+        onRevertAll={vi.fn()}
+        isReviewing={false}
+      />,
+    );
+
+    expect(screen.queryByText("Revert all")).toBeNull();
+    expect(screen.getByLabelText("Dismiss")).toBeTruthy();
   });
 
   it("includes an Updated timestamp when updatedAt is set", () => {
@@ -75,6 +112,7 @@ describe("DiffBanner", () => {
         onAcceptAll={vi.fn()}
         onReview={vi.fn()}
         onDismiss={vi.fn()}
+        onRevertAll={vi.fn()}
         isReviewing={false}
       />,
     );

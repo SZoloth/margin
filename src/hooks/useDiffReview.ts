@@ -24,6 +24,7 @@ export interface UseDiffReviewReturn {
   acceptChange(id: string): void;
   rejectChange(id: string): void;
   acceptAll(): void;
+  revertAll(): void;
   dismiss(): void;
   reset(): void;
   navigateNext(): void;
@@ -123,8 +124,14 @@ export function useDiffReview(): UseDiffReviewReturn {
     setMode("idle");
   }, []);
 
+  const revertAll = useCallback(() => {
+    // Reject all — restore pre-edit content
+    setChanges((prev) => prev.map((c) => ({ ...c, status: "rejected" as const })));
+    setMode("idle");
+  }, []);
+
   const dismiss = useCallback(() => {
-    // Accept all implicitly — the new content is applied
+    // Accept all implicitly — the new content is applied (used in pending mode)
     setChanges((prev) => prev.map((c) => ({ ...c, status: "accepted" as const })));
     setMode("idle");
   }, []);
@@ -174,6 +181,7 @@ export function useDiffReview(): UseDiffReviewReturn {
     acceptChange,
     rejectChange,
     acceptAll,
+    revertAll,
     dismiss,
     reset,
     navigateNext,
