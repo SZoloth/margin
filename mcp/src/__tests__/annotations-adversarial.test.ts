@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
-import { writeFileSync, unlinkSync, mkdtempSync } from "fs";
+import { writeFileSync, unlinkSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { createTestDb } from "../db.js";
@@ -35,7 +35,7 @@ beforeEach(() => {
 afterEach(() => {
   db.close();
   try {
-    unlinkSync(tmpFile);
+    rmSync(tmpDir, { recursive: true, force: true });
   } catch {}
 });
 

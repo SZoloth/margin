@@ -133,7 +133,7 @@ describe("schema parity sentinels", () => {
     db.prepare(
       `INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text,
         notes_json, document_source, highlight_color, created_at, updated_at, polarity)
-       VALUES ('c1', 'h1', 'd1', 's1', 'orig', '[{"text":"note"}]', 'file', 'yellow', ?, ?, 'positive')`,
+       VALUES ('c1', 'h1', 'd1', 's1', 'orig', '["a note"]', 'file', 'yellow', ?, ?, 'positive')`,
     ).run(now, now);
     const results = getCorrections(db, "d1");
     expect(results).toHaveLength(1);
