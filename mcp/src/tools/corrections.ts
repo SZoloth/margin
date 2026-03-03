@@ -62,6 +62,24 @@ export function getCorrections(
   return rows.map(parseRow);
 }
 
+/** Uncapped fetch for profile export — matches Rust's fetch_all_corrections_for_profile. */
+export function getAllCorrectionsForProfile(
+  db: Database.Database,
+): CorrectionRecord[] {
+  const rows = db
+    .prepare(
+      `SELECT original_text as originalText, notes_json as notesJson, highlight_color as highlightColor,
+              document_title as documentTitle, document_id as documentId, created_at as createdAt,
+              writing_type as writingType, polarity, prefix_context as prefixContext,
+              suffix_context as suffixContext, extended_context as extendedContext
+       FROM corrections
+       WHERE session_id != '__backfilled__'
+       ORDER BY created_at DESC`,
+    )
+    .all() as RawCorrectionRow[];
+  return rows.map(parseRow);
+}
+
 export function getCorrectionsSummary(
   db: Database.Database,
 ): CorrectionsSummary {

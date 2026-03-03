@@ -26,6 +26,7 @@ import {
 } from "./tools/annotations.js";
 import {
   getCorrections,
+  getAllCorrectionsForProfile,
   getCorrectionsSummary,
   createCorrection,
   deleteCorrection,
@@ -93,7 +94,7 @@ async function autoExportWritingProfile(): Promise<void> {
     // Use the write DB so we see the just-committed mutation (WAL visibility).
     const db = getWriteDb();
     const rules = getWritingRules(db);
-    const corrections = getCorrections(db, undefined, 2000);
+    const corrections = getAllCorrectionsForProfile(db);
     const md = getWritingProfileMarkdown(rules, corrections);
     const hookPy = getWritingGuardPy(rules);
 
