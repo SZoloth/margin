@@ -622,7 +622,7 @@ describe("useTabs", () => {
           content: "snapshotted-content",
           filePath: null,
           isDirty: false,
-          highlights: [{ id: "h1", color: "yellow" }],
+          highlights: [{ id: "h1", document_id: "doc1", color: "yellow", text_content: "test", from_pos: 0, to_pos: 4, prefix_context: null, suffix_context: null, created_at: 1000, updated_at: 1000 }],
           marginNotes: [],
           annotationsLoaded: true,
           scrollPosition: 42,
