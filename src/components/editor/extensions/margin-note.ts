@@ -27,6 +27,15 @@ export const MarginNote = Mark.create({
     };
   },
 
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: "", close: "" },
+        parse: {},
+      },
+    };
+  },
+
   parseHTML() {
     return [{ tag: "span[data-note-id]" }];
   },

@@ -41,6 +41,15 @@ export const DiffMark = Mark.create({
     return [tag, HTMLAttributes, 0];
   },
 
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: "", close: "" },
+        parse: {},
+      },
+    };
+  },
+
   addProseMirrorPlugins() {
     return [
       new Plugin({

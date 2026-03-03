@@ -32,6 +32,15 @@ export const MultiColorHighlight = Highlight.extend({
     };
   },
 
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: "", close: "" },
+        parse: {},
+      },
+    };
+  },
+
   addProseMirrorPlugins() {
     return [
       ...(this.parent?.() ?? []),
