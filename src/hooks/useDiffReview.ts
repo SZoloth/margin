@@ -46,28 +46,34 @@ export function useDiffReview(): UseDiffReviewReturn {
 
   const enterPending = useCallback(
     (oldContent: string, newContent: string) => {
-      if (oldContent === newContent) {
+      // Strip highlight markup before diffing — highlights live in the database,
+      // not the file. Without this, <mark> tags appear as raw HTML in the diff.
+      const clean = (s: string) => s.replace(/<\/?mark[^>]*>/g, "");
+      const cleanOld = clean(oldContent);
+      const cleanNew = clean(newContent);
+
+      if (cleanOld === cleanNew) {
         setReviewContent(null);
         return false;
       }
 
-      const pct = changePercentage(oldContent, newContent);
+      const pct = changePercentage(cleanOld, cleanNew);
       if (pct < AUTO_ACCEPT_THRESHOLD) {
         // Auto-accept minor changes — stay idle
         setReviewContent(null);
         return false;
       }
 
-      const computed = computeDiffChanges(oldContent, newContent);
+      const computed = computeDiffChanges(cleanOld, cleanNew);
       if (computed.length === 0) {
         setReviewContent(null);
         return false;
       }
 
-      oldContentRef.current = oldContent;
-      newContentRef.current = newContent;
+      oldContentRef.current = cleanOld;
+      newContentRef.current = cleanNew;
       setChanges(computed);
-      setReviewContent(buildDiffReviewMarkup(oldContent, newContent));
+      setReviewContent(buildDiffReviewMarkup(cleanOld, cleanNew));
       setCurrentIndex(0);
       setUpdatedAt(Date.now());
       setMode("pending");

@@ -236,4 +236,87 @@ describe("useDiffReview", () => {
     });
     expect(result.current.updatedAt).toBeTypeOf("number");
   });
+
+  describe("mark tag stripping", () => {
+    it("strips <mark> tags from oldContent before diffing", () => {
+      const { result } = renderHook(() => useDiffReview());
+      // Old content has highlight marks (from editor), new content is the same text without marks
+      const oldWithMarks =
+        'Some text <mark data-color="yellow" class="highlight-yellow" data-highlight-id="abc123">highlighted</mark> and more.';
+      const newClean = "Some text highlighted and more.";
+      act(() => {
+        result.current.enterPending(oldWithMarks, newClean);
+      });
+      // Should stay idle — the text content is identical once marks are stripped
+      expect(result.current.mode).toBe("idle");
+    });
+
+    it("strips <mark> tags from both sides and diffs only text changes", () => {
+      const { result } = renderHook(() => useDiffReview());
+      const oldWithMarks =
+        'Some text <mark data-color="yellow" class="highlight-yellow" data-highlight-id="abc123">highlighted</mark> and more content here.';
+      const newChanged = "Some text highlighted and CHANGED content here.";
+      act(() => {
+        result.current.enterPending(oldWithMarks, newChanged);
+      });
+      // Should detect the real text change (more → CHANGED)
+      expect(result.current.mode).toBe("pending");
+      expect(result.current.changes.length).toBeGreaterThan(0);
+      // The diff should NOT contain escaped mark tags
+      expect(result.current.reviewContent).not.toContain("&lt;mark");
+      expect(result.current.reviewContent).not.toContain("&lt;/mark");
+    });
+
+    it("getFinalContent returns clean text without mark tags", () => {
+      const { result } = renderHook(() => useDiffReview());
+      const oldWithMarks =
+        '<mark data-color="yellow">First</mark> paragraph.\n\nSecond paragraph.';
+      const newContent = "First paragraph.\n\nSecond paragraph MODIFIED.";
+      act(() => {
+        result.current.enterPending(oldWithMarks, newContent);
+      });
+      act(() => {
+        result.current.acceptAll();
+      });
+      const final = result.current.getFinalContent();
+      expect(final).not.toContain("<mark");
+      expect(final).toBe(newContent);
+    });
+
+    it("strips <mark> tags from newContent too", () => {
+      const { result } = renderHook(() => useDiffReview());
+      // Both sides have marks — only the real text difference should be diffed
+      const oldWithMarks =
+        '<mark data-color="yellow">Same</mark> text here with more content.';
+      const newWithMarks =
+        '<mark data-color="blue">Same</mark> text here with more content.';
+      act(() => {
+        result.current.enterPending(oldWithMarks, newWithMarks);
+      });
+      // Text is identical after stripping — should stay idle
+      expect(result.current.mode).toBe("idle");
+    });
+
+    it("getFinalContent with rejection restores clean old text (no mark tags)", () => {
+      const { result } = renderHook(() => useDiffReview());
+      const oldWithMarks =
+        '<mark data-color="yellow">First</mark> paragraph.\n\nSecond paragraph.';
+      const newContent = "First paragraph.\n\nSecond paragraph MODIFIED.";
+      act(() => {
+        result.current.enterPending(oldWithMarks, newContent);
+      });
+      act(() => {
+        result.current.startReview();
+      });
+      for (const change of result.current.changes) {
+        act(() => {
+          result.current.rejectChange(change.id);
+        });
+      }
+      const final = result.current.getFinalContent();
+      // Should be the clean old text, not the version with <mark> tags
+      expect(final).not.toContain("<mark");
+      expect(final).toBe("First paragraph.\n\nSecond paragraph.");
+    });
+  });
 });
