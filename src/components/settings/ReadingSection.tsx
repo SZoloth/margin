@@ -1,0 +1,120 @@
+import type { Settings } from "@/hooks/useSettings";
+import { SectionHeader } from "./SectionHeader";
+import { SettingRow } from "./SettingRow";
+import { SegmentedControl } from "./SegmentedControl";
+import { ColorPicker } from "./ColorPicker";
+
+interface ReadingSectionProps {
+  settings: Settings;
+  setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
+}
+
+const THEME_OPTIONS = [
+  { value: "light" as const, label: "Light" },
+  { value: "dark" as const, label: "Dark" },
+  { value: "system" as const, label: "System" },
+];
+
+const FONT_SIZE_OPTIONS = [
+  { value: "small" as const, label: "Small" },
+  { value: "default" as const, label: "Default" },
+  { value: "large" as const, label: "Large" },
+  { value: "xl" as const, label: "X-Large" },
+];
+
+const LINE_SPACING_OPTIONS = [
+  { value: "compact" as const, label: "Compact" },
+  { value: "default" as const, label: "Default" },
+  { value: "relaxed" as const, label: "Relaxed" },
+];
+
+const READER_WIDTH_OPTIONS = [
+  { value: "narrow" as const, label: "Narrow" },
+  { value: "default" as const, label: "Default" },
+  { value: "wide" as const, label: "Wide" },
+];
+
+const HIGHLIGHT_COLORS = [
+  { value: "yellow", css: "var(--color-highlight-yellow)" },
+  { value: "green", css: "var(--color-highlight-green)" },
+  { value: "blue", css: "var(--color-highlight-blue)" },
+  { value: "pink", css: "var(--color-highlight-pink)" },
+  { value: "orange", css: "var(--color-highlight-orange)" },
+];
+
+export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Preview card */}
+      <div
+        data-testid="reading-preview"
+        className="rounded-xl bg-[var(--color-sidebar)] p-6"
+      >
+        <p
+          className="text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-secondary)]"
+          style={{
+            fontFamily: "'Newsreader', Georgia, serif",
+            fontStyle: "italic",
+          }}
+        >
+          One must be careful of books, and what is inside them, for words have
+          the power to change us.
+        </p>
+      </div>
+
+      {/* Controls card */}
+      <div className="rounded-xl bg-[var(--color-sidebar)] p-6">
+        <SectionHeader title="Reading" />
+
+        <SettingRow label="Theme">
+          <SegmentedControl
+            options={THEME_OPTIONS}
+            value={settings.theme}
+            onChange={(v) => setSetting("theme", v)}
+            ariaLabel="Theme"
+          />
+        </SettingRow>
+
+        <SettingRow label="Font size">
+          <SegmentedControl
+            options={FONT_SIZE_OPTIONS}
+            value={settings.fontSize}
+            onChange={(v) => setSetting("fontSize", v)}
+            ariaLabel="Font size"
+          />
+        </SettingRow>
+
+        <SettingRow label="Line spacing">
+          <SegmentedControl
+            options={LINE_SPACING_OPTIONS}
+            value={settings.lineSpacing}
+            onChange={(v) => setSetting("lineSpacing", v)}
+            ariaLabel="Line spacing"
+          />
+        </SettingRow>
+
+        <SettingRow label="Reader width">
+          <SegmentedControl
+            options={READER_WIDTH_OPTIONS}
+            value={settings.readerWidth}
+            onChange={(v) => setSetting("readerWidth", v)}
+            ariaLabel="Reader width"
+          />
+        </SettingRow>
+
+        <SettingRow label="Default highlight color">
+          <ColorPicker
+            colors={HIGHLIGHT_COLORS}
+            value={settings.defaultHighlightColor}
+            onChange={(v) =>
+              setSetting(
+                "defaultHighlightColor",
+                v as Settings["defaultHighlightColor"],
+              )
+            }
+          />
+        </SettingRow>
+      </div>
+    </div>
+  );
+}

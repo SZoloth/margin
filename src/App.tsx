@@ -18,7 +18,7 @@ import { useSearch } from "@/hooks/useSearch";
 import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
-import { SettingsModal } from "@/components/layout/SettingsModal";
+import { SettingsPage } from "@/components/settings/SettingsPage";
 import { StyleMemoryView } from "@/components/style-memory/StyleMemoryView";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
@@ -512,6 +512,19 @@ export default function App() {
         // All accepted — file on disk already has this content, don't mark dirty.
         setContentExternalRef.current(finalContent);
       }
+      // Force-clear diff marks from the editor. The markdown serializer drops
+      // DiffMark (no markdown representation), so Reader's content equality
+      // check passes and skips setContent — leaving green/red marks in the DOM.
+      const ed = editorRef.current;
+      if (ed && !ed.isDestroyed) {
+        const diffMarkType = ed.schema.marks.diffMark;
+        if (diffMarkType) {
+          const { tr } = ed.state;
+          tr.removeMark(0, ed.state.doc.content.size, diffMarkType);
+          if (tr.docChanged) ed.view.dispatch(tr);
+        }
+      }
+
       diffReviewDocIdRef.current = null;
       diffReview.reset();
       setDiffControlState(null);
@@ -1335,13 +1348,22 @@ export default function App() {
         );
       })()}
 
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        settings={settings}
-        setSetting={setSetting}
-        onOpenCorrections={() => setShowStyleMemory(true)}
-      />
+      {showSettings && (
+        <div
+          className="fixed inset-0 z-50"
+          style={{ backgroundColor: "var(--color-page)" }}
+        >
+          <SettingsPage
+            settings={settings}
+            setSetting={setSetting}
+            onClose={() => setShowSettings(false)}
+            onOpenCorrections={() => {
+              setShowSettings(false);
+              setShowStyleMemory(true);
+            }}
+          />
+        </div>
+      )}
 
       <StyleMemoryView
         isOpen={showStyleMemory}

@@ -37,10 +37,12 @@
     "@tiptap/pm": "^2.11",
     "@tiptap/react": "^2.11",
     "@tiptap/starter-kit": "^2.11",
+    "clsx": "^2.1.1",
     "diff-match-patch-ts": "^0.8.0",
     "markdown-it-front-matter": "^0.2.4",
     "react": "^19",
     "react-dom": "^19",
+    "tailwind-merge": "^3.5.0",
     "tiptap-markdown": "^0.8"
   },
   "devDependencies": {
@@ -48,6 +50,7 @@
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
