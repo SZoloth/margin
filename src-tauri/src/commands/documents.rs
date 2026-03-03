@@ -1,6 +1,7 @@
 use crate::db::migrations::DbPool;
 use crate::db::models::Document;
 use rusqlite::Connection;
+use std::path::Path;
 use uuid::Uuid;
 
 // === Inner functions (testable with &Connection) ===
@@ -86,8 +87,20 @@ fn upsert_document_inner(conn: &Connection, mut doc: Document) -> Result<Documen
 
 #[tauri::command]
 pub async fn get_recent_documents(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<Document>, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    fetch_recent_documents(&conn, limit.unwrap_or(20))
+    // Drop the DB lock before doing filesystem I/O to avoid blocking other commands
+    let docs = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        fetch_recent_documents(&conn, limit.unwrap_or(20))?
+    };
+    // Filter out file-backed documents whose files no longer exist on disk.
+    // May return fewer than `limit` results — acceptable for a recent docs list.
+    Ok(docs
+        .into_iter()
+        .filter(|d| match (&d.source, &d.file_path) {
+            (s, Some(fp)) if s == "file" => Path::new(fp).exists(),
+            _ => true,
+        })
+        .collect())
 }
 
 #[tauri::command]
