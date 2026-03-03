@@ -1,4 +1,5 @@
 import type { Settings } from "@/hooks/useSettings";
+import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 import { SectionHeader } from "./SectionHeader";
 import { SettingRow } from "./SettingRow";
 import { SegmentedControl } from "./SegmentedControl";
@@ -34,13 +35,6 @@ const READER_WIDTH_OPTIONS = [
   { value: "wide" as const, label: "Wide" },
 ];
 
-const HIGHLIGHT_COLORS = [
-  { value: "yellow", css: "var(--color-highlight-yellow)" },
-  { value: "green", css: "var(--color-highlight-green)" },
-  { value: "blue", css: "var(--color-highlight-blue)" },
-  { value: "pink", css: "var(--color-highlight-pink)" },
-  { value: "orange", css: "var(--color-highlight-orange)" },
-];
 
 export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
   return (
@@ -106,12 +100,7 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
           <ColorPicker
             colors={HIGHLIGHT_COLORS}
             value={settings.defaultHighlightColor}
-            onChange={(v) =>
-              setSetting(
-                "defaultHighlightColor",
-                v as Settings["defaultHighlightColor"],
-              )
-            }
+            onChange={(v) => setSetting("defaultHighlightColor", v)}
           />
         </SettingRow>
       </div>

@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Settings } from "@/hooks/useSettings";
+import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { SectionHeader } from "./SectionHeader";
 import { SettingRow } from "./SettingRow";
 import { ToggleSwitch } from "./ToggleSwitch";
+import { SettingsButton } from "./SettingsButton";
 import { getCorrectionsCount, getAllCorrections } from "@/lib/tauri-commands";
 import { formatStyleMemory } from "@/lib/export-annotations";
 
@@ -19,8 +21,7 @@ export function WritingSection({
   onOpenCorrections,
 }: WritingSectionProps) {
   const [correctionCount, setCorrectionCount] = useState<number | null>(null);
-  const [copied, setCopied] = useState(false);
-  const copiedTimeoutRef = useRef<number | null>(null);
+  const { copied, triggerCopied } = useCopyFeedback();
 
   useEffect(() => {
     let cancelled = false;
@@ -36,41 +37,19 @@ export function WritingSection({
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (copiedTimeoutRef.current !== null) {
-        window.clearTimeout(copiedTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const handleCopy = useCallback(async () => {
     try {
-      const [countRes, correctionsRes] = await Promise.allSettled([
-        getCorrectionsCount(),
-        getAllCorrections(200),
-      ]);
-
-      if (correctionsRes.status !== "fulfilled") return;
-      const corrections = correctionsRes.value;
-      const totalCount =
-        countRes.status === "fulfilled" ? countRes.value : corrections.length;
-
-      const text = formatStyleMemory(corrections, { totalCount });
+      const corrections = await getAllCorrections(200);
+      const text = formatStyleMemory(corrections, {
+        totalCount: correctionCount ?? corrections.length,
+      });
       if (!text) return;
       await writeText(text);
-      setCopied(true);
-      if (copiedTimeoutRef.current !== null) {
-        window.clearTimeout(copiedTimeoutRef.current);
-      }
-      copiedTimeoutRef.current = window.setTimeout(
-        () => setCopied(false),
-        1500,
-      );
+      triggerCopied();
     } catch {
       // clipboard write failed silently
     }
-  }, []);
+  }, [correctionCount, triggerCopied]);
 
   const count = correctionCount ?? 0;
   const hasCorrections = count > 0;
@@ -96,27 +75,16 @@ export function WritingSection({
         <SettingRow label="Style Memory" description={description}>
           <div className="flex gap-1.5">
             {hasCorrections && (
-              <button
-                type="button"
-                onClick={onOpenCorrections}
-                className="shrink-0 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3.5 py-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-surface-muted)]"
-              >
+              <SettingsButton onClick={onOpenCorrections}>
                 View all
-              </button>
+              </SettingsButton>
             )}
-            <button
-              type="button"
+            <SettingsButton
               disabled={!hasCorrections}
               onClick={handleCopy}
-              className="shrink-0 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3.5 py-1.5 text-[length:var(--text-xs)] font-medium transition-colors duration-150 hover:bg-[var(--color-surface-muted)] disabled:cursor-default disabled:opacity-50"
-              style={{
-                color: hasCorrections
-                  ? "var(--color-text-primary)"
-                  : "var(--color-text-secondary)",
-              }}
             >
               {copied ? "Copied" : "Copy"}
-            </button>
+            </SettingsButton>
           </div>
         </SettingRow>
       </div>

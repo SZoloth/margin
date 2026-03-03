@@ -4,13 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Comment01Icon } from "@hugeicons/core-free-icons";
 import type { Editor } from "@tiptap/core";
 
-const HIGHLIGHT_COLORS = [
-  { name: "yellow", css: "var(--color-highlight-yellow)" },
-  { name: "green", css: "var(--color-highlight-green)" },
-  { name: "blue", css: "var(--color-highlight-blue)" },
-  { name: "pink", css: "var(--color-highlight-pink)" },
-  { name: "orange", css: "var(--color-highlight-orange)" },
-] as const;
+import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 
 interface FloatingToolbarProps {
   editor: Editor | null;

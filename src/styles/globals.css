@@ -14,16 +14,6 @@
   --color-highlight-pink: #ecdde3;
   --color-highlight-orange: #f0e2cf;
 
-  /* Spacing scale (4px grid) */
-  --spacing-1: 4px;
-  --spacing-2: 8px;
-  --spacing-3: 12px;
-  --spacing-4: 16px;
-  --spacing-5: 20px;
-  --spacing-6: 24px;
-  --spacing-8: 32px;
-  --spacing-10: 40px;
-  --spacing-12: 48px;
 }
 
 /* Light theme (default) — Tufte-inspired warm cream */
@@ -78,15 +68,6 @@
   --text-xl: 20px;
   --text-2xl: 28px;
 
-  /* UI Font Weights */
-  --font-light: 300;
-  --font-normal: 400;
-  --font-medium: 500;
-  --font-semibold: 600;
-
-  /* UI Line Heights */
-  --leading-tight: 1.25;
-  --leading-normal: 1.5;
 
   /* Easing system */
   --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);

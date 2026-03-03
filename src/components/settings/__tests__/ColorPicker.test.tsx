@@ -5,9 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { ColorPicker } from "../ColorPicker";
 
 const colors = [
-  { value: "yellow", css: "var(--color-highlight-yellow)" },
-  { value: "green", css: "var(--color-highlight-green)" },
-  { value: "blue", css: "var(--color-highlight-blue)" },
+  { name: "yellow" as const, css: "var(--color-highlight-yellow)" },
+  { name: "green" as const, css: "var(--color-highlight-green)" },
+  { name: "blue" as const, css: "var(--color-highlight-blue)" },
 ];
 
 describe("ColorPicker", () => {
@@ -26,9 +26,7 @@ describe("ColorPicker", () => {
     );
 
     const buttons = screen.getAllByRole("button");
-    // Selected button (green, index 1) should have ring classes
     expect(buttons[1]!.className).toMatch(/ring-2/);
-    // Non-selected should not
     expect(buttons[0]!.className).not.toMatch(/ring-2/);
   });
 
@@ -52,7 +50,7 @@ describe("ColorPicker", () => {
 
     const buttons = screen.getAllByRole("button");
     for (let i = 0; i < colors.length; i++) {
-      expect(buttons[i]!).toHaveAttribute("aria-label", colors[i]!.value);
+      expect(buttons[i]!).toHaveAttribute("aria-label", colors[i]!.name);
     }
   });
 });

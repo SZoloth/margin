@@ -3,20 +3,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ReadingSection } from "../ReadingSection";
-import type { Settings } from "@/hooks/useSettings";
-
-const defaultSettings: Settings = {
-  theme: "system",
-  fontSize: "default",
-  lineSpacing: "default",
-  readerWidth: "default",
-  defaultHighlightColor: "yellow",
-  persistCorrections: false,
-};
+import { DEFAULT_SETTINGS } from "@/hooks/useSettings";
 
 describe("ReadingSection", () => {
   const defaultProps = {
-    settings: defaultSettings,
+    settings: DEFAULT_SETTINGS,
     setSetting: vi.fn(),
   };
 

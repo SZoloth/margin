@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WritingSection } from "../WritingSection";
-import type { Settings } from "@/hooks/useSettings";
+import { DEFAULT_SETTINGS } from "@/hooks/useSettings";
 
 vi.mock("@/lib/tauri-commands", () => ({
   getCorrectionsCount: vi.fn().mockResolvedValue(5),
@@ -14,18 +14,9 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
 
-const defaultSettings: Settings = {
-  theme: "system",
-  fontSize: "default",
-  lineSpacing: "default",
-  readerWidth: "default",
-  defaultHighlightColor: "yellow",
-  persistCorrections: false,
-};
-
 describe("WritingSection", () => {
   const defaultProps = {
-    settings: defaultSettings,
+    settings: DEFAULT_SETTINGS,
     setSetting: vi.fn(),
     onOpenCorrections: vi.fn(),
   };

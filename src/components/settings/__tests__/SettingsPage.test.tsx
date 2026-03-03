@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SettingsPage } from "../SettingsPage";
-import type { Settings } from "@/hooks/useSettings";
+import { DEFAULT_SETTINGS } from "@/hooks/useSettings";
 
 // Mock Tauri commands used by child components
 vi.mock("@/lib/tauri-commands", () => ({
@@ -22,18 +22,9 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
 
-const defaultSettings: Settings = {
-  theme: "system",
-  fontSize: "default",
-  lineSpacing: "default",
-  readerWidth: "default",
-  defaultHighlightColor: "yellow",
-  persistCorrections: false,
-};
-
 describe("SettingsPage", () => {
   const defaultProps = {
-    settings: defaultSettings,
+    settings: DEFAULT_SETTINGS,
     setSetting: vi.fn(),
     onClose: vi.fn(),
     onOpenCorrections: vi.fn(),

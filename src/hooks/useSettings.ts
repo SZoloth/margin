@@ -9,7 +9,7 @@ export interface Settings {
   defaultHighlightColor: "yellow" | "green" | "blue" | "pink" | "orange";
 }
 
-const DEFAULTS: Settings = {
+export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   persistCorrections: false,
   fontSize: "default",
@@ -56,7 +56,7 @@ function loadSettings(): Settings {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...DEFAULTS, ...parsed };
+      return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch {
     // Corrupt storage — use defaults
@@ -65,13 +65,13 @@ function loadSettings(): Settings {
   // Migrate from old theme-only key
   const oldTheme = localStorage.getItem("margin-theme");
   if (oldTheme === "light" || oldTheme === "dark" || oldTheme === "system") {
-    const migrated: Settings = { ...DEFAULTS, theme: oldTheme };
+    const migrated: Settings = { ...DEFAULT_SETTINGS, theme: oldTheme };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     localStorage.removeItem("margin-theme");
     return migrated;
   }
 
-  return DEFAULTS;
+  return DEFAULT_SETTINGS;
 }
 
 function applyToDOM(settings: Settings) {
@@ -116,9 +116,9 @@ export function useSettings() {
   }, []);
 
   const resetSettings = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULTS));
-    setSettings(DEFAULTS);
-    applyToDOM(DEFAULTS);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
+    setSettings(DEFAULT_SETTINGS);
+    applyToDOM(DEFAULT_SETTINGS);
   }, []);
 
   return { settings, setSetting, resetSettings } as const;

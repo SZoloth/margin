@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { SectionHeader } from "./SectionHeader";
 import { SettingRow } from "./SettingRow";
+import { SettingsButton } from "./SettingsButton";
 import { ToggleSwitch } from "./ToggleSwitch";
 import {
   isMcpEnabledInClaude,
@@ -23,10 +25,9 @@ export function IntegrationsSection() {
   const [enabled, setEnabled] = useState(false);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showSnippet, setShowSnippet] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copiedTimeoutRef = useRef<number | null>(null);
+  const savingRef = useRef(false);
+  const { copied, triggerCopied } = useCopyFeedback();
 
   useEffect(() => {
     let cancelled = false;
@@ -43,51 +44,33 @@ export function IntegrationsSection() {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (copiedTimeoutRef.current !== null) {
-        window.clearTimeout(copiedTimeoutRef.current);
+  const handleToggle = useCallback(async (next: boolean) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setEnabled(next);
+    try {
+      if (next) {
+        await enableMcpInClaude();
+      } else {
+        await disableMcpInClaude();
       }
-    };
+      const nowConnected = await checkMcpConnection();
+      setConnected(nowConnected);
+    } catch {
+      setEnabled(!next);
+    } finally {
+      savingRef.current = false;
+    }
   }, []);
-
-  const handleToggle = useCallback(
-    async (next: boolean) => {
-      if (saving) return;
-      setSaving(true);
-      setEnabled(next);
-      try {
-        if (next) {
-          await enableMcpInClaude();
-        } else {
-          await disableMcpInClaude();
-        }
-        const nowConnected = await checkMcpConnection();
-        setConnected(nowConnected);
-      } catch {
-        setEnabled(!next);
-      } finally {
-        setSaving(false);
-      }
-    },
-    [saving],
-  );
 
   const handleCopy = useCallback(async () => {
     try {
       await writeText(CLAUDE_CODE_SNIPPET);
-      setCopied(true);
-      if (copiedTimeoutRef.current !== null) {
-        window.clearTimeout(copiedTimeoutRef.current);
-      }
-      copiedTimeoutRef.current = window.setTimeout(
-        () => setCopied(false),
-        1500,
-      );
+      triggerCopied();
     } catch {
       // clipboard write failed
     }
-  }, []);
+  }, [triggerCopied]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -127,13 +110,9 @@ export function IntegrationsSection() {
               label="Claude Code"
               description="Add to ~/.claude.json, then restart Claude Code"
             >
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="shrink-0 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3.5 py-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-surface-muted)]"
-              >
+              <SettingsButton onClick={handleCopy}>
                 {copied ? "Copied" : "Copy config"}
-              </button>
+              </SettingsButton>
             </SettingRow>
 
             <div className="mt-1">
