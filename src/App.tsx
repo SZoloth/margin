@@ -24,7 +24,7 @@ import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
-import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -966,7 +966,6 @@ export default function App() {
         if (correctionInputs.length > 0) {
           const today = new Date().toISOString().slice(0, 10);
           correctionsFile = `corrections-${today}.jsonl`;
-          const { persistCorrections } = await import("@/lib/tauri-commands");
           try {
             await persistCorrections(
               correctionInputs,
@@ -977,6 +976,11 @@ export default function App() {
               today,
             );
             correctionsSaved = true;
+
+            // Auto-export writing rules after corrections persist
+            exportWritingRules().catch((err: unknown) =>
+              console.error("Auto-export writing rules failed:", err),
+            );
           } catch (err) {
             console.error("Failed to persist corrections:", err);
           }

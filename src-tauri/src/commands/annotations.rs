@@ -1,15 +1,8 @@
+use crate::commands::now_millis;
 use crate::db::migrations::DbPool;
 use crate::db::models::{Highlight, MarginNote};
 use rusqlite::Connection;
-use std::time::SystemTime;
 use uuid::Uuid;
-
-fn now_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64
-}
 
 fn touch_document(conn: &Connection, document_id: &str) -> Result<(), String> {
     conn.execute(

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { SectionHeader } from "./SectionHeader";
+import { SettingsCard } from "./SettingsCard";
 import { SettingRow } from "./SettingRow";
 import { SettingsButton } from "./SettingsButton";
 import { ToggleSwitch } from "./ToggleSwitch";
@@ -74,7 +75,7 @@ export function IntegrationsSection() {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="rounded-xl bg-[var(--color-sidebar)] p-6">
+      <SettingsCard>
         <SectionHeader title="Integrations" />
 
         <p className="mt-2 mb-2 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
@@ -132,7 +133,7 @@ export function IntegrationsSection() {
             </div>
           </>
         )}
-      </div>
+      </SettingsCard>
     </div>
   );
 }

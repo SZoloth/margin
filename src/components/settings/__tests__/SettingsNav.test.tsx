@@ -11,12 +11,15 @@ describe("SettingsNav", () => {
     onClose: vi.fn(),
   };
 
-  it("renders 3 section links: Reading, Writing, Integrations", () => {
+  it("renders all section links", () => {
     render(<SettingsNav {...defaultProps} />);
 
     expect(screen.getByText("Reading")).toBeInTheDocument();
     expect(screen.getByText("Writing")).toBeInTheDocument();
+    expect(screen.getByText("Style Memory")).toBeInTheDocument();
     expect(screen.getByText("Integrations")).toBeInTheDocument();
+    expect(screen.getByText("Help")).toBeInTheDocument();
+    expect(screen.getByText("About")).toBeInTheDocument();
   });
 
   it("highlights the active section", () => {

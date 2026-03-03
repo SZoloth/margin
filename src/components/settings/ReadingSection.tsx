@@ -1,6 +1,7 @@
 import type { Settings } from "@/hooks/useSettings";
 import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 import { SectionHeader } from "./SectionHeader";
+import { SettingsCard } from "./SettingsCard";
 import { SettingRow } from "./SettingRow";
 import { SegmentedControl } from "./SegmentedControl";
 import { ColorPicker } from "./ColorPicker";
@@ -40,10 +41,7 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
   return (
     <div className="flex flex-col gap-2">
       {/* Preview card */}
-      <div
-        data-testid="reading-preview"
-        className="rounded-xl bg-[var(--color-sidebar)] p-6"
-      >
+      <SettingsCard data-testid="reading-preview">
         <p
           className="text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-secondary)]"
           style={{
@@ -54,10 +52,10 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
           One must be careful of books, and what is inside them, for words have
           the power to change us.
         </p>
-      </div>
+      </SettingsCard>
 
       {/* Controls card */}
-      <div className="rounded-xl bg-[var(--color-sidebar)] p-6">
+      <SettingsCard>
         <SectionHeader title="Reading" />
 
         <SettingRow label="Theme">
@@ -103,7 +101,7 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
             onChange={(v) => setSetting("defaultHighlightColor", v)}
           />
         </SettingRow>
-      </div>
+      </SettingsCard>
     </div>
   );
 }

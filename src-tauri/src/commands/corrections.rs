@@ -1,3 +1,4 @@
+use crate::commands::now_millis;
 use crate::db::migrations::DbPool;
 use crate::db::models::CorrectionInput;
 use rusqlite::Connection;
@@ -56,13 +57,6 @@ fn sanitize_filename_component(input: &str) -> String {
     } else {
         out
     }
-}
-
-fn now_millis() -> Result<i64, String> {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|e| e.to_string())
-        .map(|d| d.as_millis() as i64)
 }
 
 fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<CorrectionRecord>> {
@@ -138,7 +132,7 @@ pub async fn persist_corrections(
 ) -> Result<String, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let session_id = Uuid::new_v4().to_string();
-    let now = now_millis()?;
+    let now = now_millis();
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
     let safe_export_date = sanitize_filename_component(&export_date);
@@ -313,7 +307,7 @@ fn bulk_tag(
         return Ok(0);
     }
     let tx = conn.unchecked_transaction()?;
-    let now = now_millis().unwrap_or(0) as i64;
+    let now = now_millis();
     let mut total = 0u64;
     for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 2) {
         let placeholders: Vec<String> = (3..=chunk.len() + 2).map(|i| format!("?{i}")).collect();
@@ -399,7 +393,7 @@ fn update_writing_type(
 ) -> rusqlite::Result<()> {
     let rows = conn.execute(
         "UPDATE corrections SET writing_type = ?1, updated_at = ?2 WHERE highlight_id = ?3",
-        rusqlite::params![writing_type, now_millis().unwrap_or(0), highlight_id],
+        rusqlite::params![writing_type, now_millis(), highlight_id],
     )?;
     if rows == 0 {
         return Err(rusqlite::Error::QueryReturnedNoRows);
@@ -568,7 +562,7 @@ fn bulk_set_polarity(
         return Ok(0);
     }
     let tx = conn.unchecked_transaction()?;
-    let now = now_millis().unwrap_or(0) as i64;
+    let now = now_millis();
     let mut total = 0u64;
     for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 2) {
         let placeholders: Vec<String> = (3..=chunk.len() + 2).map(|i| format!("?{i}")).collect();

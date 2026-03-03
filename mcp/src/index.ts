@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { mkdir, writeFile } from "fs/promises";
+import { homedir } from "os";
+import { join } from "path";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -33,6 +36,8 @@ import {
 import {
   getWritingRules,
   getWritingRulesMarkdown,
+  getWritingProfileMarkdown,
+  getWritingGuardPy,
   updateWritingRule,
   deleteWritingRule,
 } from "./tools/writing-rules.js";
@@ -79,12 +84,48 @@ function dbErrorMessage(err: unknown): string {
   return `Database error: ${msg}`;
 }
 
+/**
+ * Auto-export unified writing profile (voice calibration + corrections + rules)
+ * after a mutation. Fire-and-forget — errors are logged but don't fail the mutation.
+ */
+async function autoExportWritingProfile(): Promise<void> {
+  try {
+    // Use the write DB so we see the just-committed mutation (WAL visibility).
+    const db = getWriteDb();
+    const rules = getWritingRules(db);
+    const corrections = getCorrections(db, undefined, 2000);
+    const md = getWritingProfileMarkdown(rules, corrections);
+    const hookPy = getWritingGuardPy(rules);
+
+    const home = homedir();
+    if (!home) return;
+
+    const mdDir = join(home, ".margin");
+    const hookDir = join(home, ".claude", "hooks");
+    await Promise.all([mkdir(mdDir, { recursive: true }), mkdir(hookDir, { recursive: true })]);
+    await Promise.all([
+      writeFile(join(mdDir, "writing-rules.md"), md),
+      writeFile(join(hookDir, "writing_guard.py"), hookPy, { mode: 0o755 }),
+    ]);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Auto-export writing profile failed:", err);
+  }
+}
+
 async function withDb(fn: () => ToolResult | Promise<ToolResult>): Promise<ToolResult> {
   try {
     return await fn();
   } catch (err) {
     return { content: [{ type: "text", text: dbErrorMessage(err) }], isError: true };
   }
+}
+
+/** Like withDb but also auto-exports the unified writing profile on success. */
+async function withDbAndExport(fn: () => ToolResult | Promise<ToolResult>): Promise<ToolResult> {
+  const result = await withDb(fn);
+  if (!result.isError) void autoExportWritingProfile();
+  return result;
 }
 
 // --- Read Tools ---
@@ -269,7 +310,7 @@ server.tool(
     writing_type: z.string().optional().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
     color: z.enum(["yellow", "green", "blue", "pink", "purple", "orange"]).optional().describe("Highlight color (default: yellow)"),
   },
-  async (params) => withDb(() => {
+  async (params) => withDbAndExport(() => {
     const result = createCorrection(getWriteDb(), params);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
@@ -282,7 +323,7 @@ server.tool(
   "margin_delete_correction",
   "Delete a correction and its associated highlight by highlight_id.",
   { highlight_id: z.string().describe("Highlight ID of the correction to delete") },
-  async ({ highlight_id }) => withDb(() => {
+  async ({ highlight_id }) => withDbAndExport(() => {
     const result = deleteCorrection(getWriteDb(), highlight_id);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
@@ -298,7 +339,7 @@ server.tool(
     highlight_id: z.string().describe("Highlight ID of the correction"),
     writing_type: z.string().describe("New writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
   },
-  async ({ highlight_id, writing_type }) => withDb(() => {
+  async ({ highlight_id, writing_type }) => withDbAndExport(() => {
     const result = updateCorrectionWritingType(getWriteDb(), highlight_id, writing_type);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
@@ -359,7 +400,7 @@ server.tool(
     highlight_id: z.string().describe("Highlight ID of the correction"),
     polarity: z.enum(["positive", "corrective"]).describe("Voice signal polarity"),
   },
-  async ({ highlight_id, polarity }) => withDb(() => {
+  async ({ highlight_id, polarity }) => withDbAndExport(() => {
     const result = setCorrectionPolarity(getWriteDb(), highlight_id, polarity);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
@@ -394,7 +435,7 @@ server.tool(
     notes: z.string().nullable().optional().describe("Additional notes"),
     writing_type: z.string().optional().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
   },
-  async (params) => withDb(() => {
+  async (params) => withDbAndExport(() => {
     const result = updateWritingRule(getWriteDb(), params);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
@@ -407,7 +448,7 @@ server.tool(
   "margin_delete_writing_rule",
   "Delete a writing rule by ID.",
   { id: z.string().describe("Writing rule ID to delete") },
-  async ({ id }) => withDb(() => {
+  async ({ id }) => withDbAndExport(() => {
     const result = deleteWritingRule(getWriteDb(), id);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };

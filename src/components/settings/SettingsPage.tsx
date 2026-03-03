@@ -7,6 +7,7 @@ import { WritingSection } from "./WritingSection";
 import { StyleMemorySection } from "./StyleMemorySection";
 import { IntegrationsSection } from "./IntegrationsSection";
 import { AboutSection } from "./AboutSection";
+import { HelpSection } from "./HelpSection";
 
 interface SettingsPageProps {
   settings: Settings;
@@ -55,6 +56,7 @@ export function SettingsPage({
           )}
           {activeSection === "style-memory" && <StyleMemorySection />}
           {activeSection === "integrations" && <IntegrationsSection />}
+          {activeSection === "help" && <HelpSection />}
           {activeSection === "about" && <AboutSection updater={updater} />}
         </div>
       </div>

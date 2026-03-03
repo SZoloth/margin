@@ -135,6 +135,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add polarity column to corrections
     migrate_corrections_add_polarity(&conn)?;
 
+    // Seed: voice calibration + editorial rules into writing_rules table
+    seed_voice_and_editorial_rules(&conn)?;
+
     Ok(DbPool::new(conn))
 }
 
@@ -914,6 +917,158 @@ fn migrate_corrections_add_polarity(conn: &Connection) -> Result<(), Box<dyn std
         )?;
     }
 
+    Ok(())
+}
+
+/// Seeds voice calibration and editorial rules into the writing_rules table.
+/// Idempotent: uses INSERT OR IGNORE so duplicate (writing_type, category, rule_text) combos are skipped.
+/// Source content was previously split across ~/.claude/voice-corpus/voice-profile.md and ~/.claude/writing-rules.md.
+pub fn seed_voice_and_editorial_rules(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Check sentinel to avoid re-running on every startup.
+    // To add new seed rules in a future release, bump to 'seed-v2' (new sentinel + new block).
+    let already_seeded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM writing_rules WHERE source = 'seed-v1' LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_seeded {
+        return Ok(());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Each tuple: (writing_type, category, rule_text, severity, when_to_apply, why, signal_count)
+    let rules: Vec<(&str, &str, &str, &str, Option<&str>, Option<&str>, i64)> = vec![
+        // === Voice calibration (from voice-profile.md) ===
+
+        // Punctuation invariants
+        ("general", "voice-calibration", "Almost never end messages with periods (~0.8%). This is the single strongest voice signal.", "must-fix",
+         Some("All casual and semi-formal writing"), Some("Periods on short messages are the #1 AI tell for this voice"), 10),
+        ("general", "voice-calibration", "Questions get question marks (~13%). Excitement gets exclamation marks (~4%). Everything else just ends.", "should-fix",
+         Some("End-of-sentence punctuation"), Some("Matches natural punctuation distribution"), 5),
+        ("general", "voice-calibration", "Ellipsis for trailing off or softening. Em-dashes for asides and pivots.", "nice-to-fix",
+         Some("Mid-sentence punctuation"), None, 3),
+        ("general", "voice-calibration", "Double exclamation (!!) for genuine excitement, not performative energy. Interrobang (!? or ?!) for comedic disbelief.", "nice-to-fix",
+         Some("Emphasis punctuation"), None, 2),
+
+        // Capitalization
+        ("general", "voice-calibration", "Standard capitalization at sentence start (~99%). Selective ALL CAPS for emphasis on single words, not whole phrases.", "should-fix",
+         Some("All writing"), Some("Shifted from lowercase circa 2018, now consistent"), 5),
+
+        // Length and rhythm
+        ("general", "voice-calibration", "Median message: 27 characters / 5 words. Short is default. 23.5% of messages are fragments (≤3 words).", "should-fix",
+         Some("Casual and logistics registers"), Some("Length calibration from 168k messages"), 8),
+        ("general", "voice-calibration", "Prefers sending multiple short messages over one long one. Long messages (80+ chars) reserved for explaining, storytelling, or logistics.", "should-fix",
+         Some("Message length decisions"), None, 5),
+
+        // Hedging
+        ("general", "voice-calibration", "Hedges 3.6x more than declares. 'I think', 'probably', 'maybe', 'kinda' are load-bearing words — calibrated social softening, not uncertainty.", "must-fix",
+         Some("All writing"), Some("The hedge creates room for the other person"), 8),
+        ("general", "voice-calibration", "Declaratives reserved for things actually known or felt strongly: 'definitely', 'for sure', '100%'.", "should-fix",
+         Some("Strong assertions"), None, 3),
+
+        // Register rules
+        ("general", "voice-calibration", "Casual/banter: opens with Yo/Hey/So/Dude/Wait, closes with no punctuation (76%), contractions always (gonna/wanna/kinda), humor through absurd escalation and self-deprecation.", "should-fix",
+         Some("Default register"), None, 5),
+        ("general", "voice-calibration", "Logistics/planning: direct but warm. Softened asks ('Any chance you could...', 'Mind if I...'). 'Let me know' to close open loops. 'Sweet' as acknowledgment.", "should-fix",
+         Some("Scheduling and coordination"), None, 4),
+        ("general", "voice-calibration", "Explaining/persuading: longer messages (80-200 chars), 'I mean' as pivot not filler, em-dashes and parentheticals increase, additive structure (also/and/plus).", "should-fix",
+         Some("Making arguments or explaining"), None, 4),
+        ("general", "voice-calibration", "Emotional/heartfelt: 'I appreciate [specific thing]', vulnerability through understatement not overwrought language, 'Really' as sincerity intensifier.", "should-fix",
+         Some("Emotional or supportive contexts"), None, 3),
+        ("general", "voice-calibration", "Professional/outreach: capitalization and punctuation more conventional, still avoids periods on casual messages, 'I'd love to' not 'I would love to', specificity over generality.", "should-fix",
+         Some("Work contacts and networking"), None, 4),
+
+        // Forbidden patterns
+        ("general", "voice-calibration", "Never use 'I hope this message finds you well' or any corporate opener.", "must-fix",
+         Some("Message openings"), Some("Corporate-speak tell"), 5),
+        ("general", "voice-calibration", "Never write 'utilize' — it's 'use'. Never write 'I wanted to reach out' — just reach out.", "must-fix",
+         Some("Word choice"), Some("Inflated language tells"), 5),
+        ("general", "voice-calibration", "Never use 'that being said', 'having said that', 'furthermore', 'moreover', 'additionally'.", "must-fix",
+         Some("Transitions"), Some("AI transition word tells"), 5),
+        ("general", "voice-calibration", "Never use 'folks' — it's 'people', 'y'all', or 'everyone'. Never use 'feel free to' — just tell them they can.", "should-fix",
+         Some("Word choice"), None, 3),
+        ("general", "voice-calibration", "Never use 'absolutely' as agreement — it's 'yeah', 'for sure', or 'definitely'. Never write 'apologies for the delay' — just respond.", "should-fix",
+         Some("Response patterns"), None, 3),
+        ("general", "voice-calibration", "'Haha' > 'lol' > 'lmao' for laugh markers. Almost never emoji alone for laughter.", "nice-to-fix",
+         Some("Humor markers"), None, 3),
+        ("general", "voice-calibration", "No sign-off — messages just end. 'Let me know' to leave the ball in their court. Rarely says goodbye.", "should-fix",
+         Some("Message closings"), None, 4),
+
+        // === Editorial rules (from writing-rules.md) ===
+
+        // Voice test
+        ("general", "editorial", "Read aloud — would you say this at a coffee shop? If it sounds like a press release, rewrite.", "must-fix",
+         Some("All prose"), Some("Core voice authenticity test"), 10),
+
+        // AI content tells
+        ("general", "editorial", "Avoid rule of three unless genuine enumeration.", "should-fix",
+         Some("Sentence structure"), Some("Common AI rhetorical pattern"), 5),
+        ("general", "editorial", "Use em dashes sparingly, not as a crutch.", "nice-to-fix",
+         Some("Punctuation"), Some("AI overuses em dashes"), 3),
+        ("general", "editorial", "Prefer physical, tactile verbs over abstract process verbs: 'sanded down' not 'improved', 'bolted on' not 'added', 'stripped back' not 'simplified'.", "should-fix",
+         Some("Verb choice"), Some("Makes prose concrete and harder to fake"), 6),
+
+        // Editorial rules
+        ("general", "editorial", "NEVER modify user/stakeholder quotes — apply kill words only to Claude's prose.", "must-fix",
+         Some("When editing text containing quotes"), Some("Quotes are sacrosanct"), 10),
+        ("general", "editorial", "Requirements docs: write use cases in user language ('I'm looking for X'), not analyst jargon ('semantic search', 'concept retrieval').", "should-fix",
+         Some("PRDs and requirements"), None, 3),
+
+        // Professional content
+        ("general", "editorial", "Professional/portfolio content: NO emojis, prefer editorial magazine quality.", "should-fix",
+         Some("Cover letters, outreach, portfolio"), None, 3),
+        ("general", "editorial", "Run /writing-quality-gate on all professional content before submission.", "should-fix",
+         Some("Professional and external-facing writing"), None, 5),
+
+        // Outcome framing
+        ("general", "editorial", "Always filter through 'did behavior change?' before claiming an outcome. Artifacts (frameworks, decks) ≠ outcomes.", "should-fix",
+         Some("Outcome claims in resumes, case studies, portfolios"), Some("Vanity metrics without behavior explanation = noise"), 4),
+
+        // Argument depth (from corrections — 6 signals)
+        ("general", "argument-rigor", "Don't name-drop frameworks you haven't digested. Research first, cite second.", "must-fix",
+         Some("Any reference to external frameworks or theories"), Some("Strongest correction signal — 6 instances"), 6),
+        ("general", "argument-rigor", "Examples must support the actual thesis, not just a related point.", "should-fix",
+         Some("Using examples to support arguments"), None, 4),
+        ("general", "argument-rigor", "Don't flatten nuance into a punchline. Say what's actually happening in concrete terms.", "should-fix",
+         Some("Conclusions and summaries"), None, 3),
+        ("general", "argument-rigor", "Cover the full argument space. Partial coverage weakens the argument.", "should-fix",
+         Some("Making comprehensive arguments"), None, 3),
+
+        // Structural craft
+        ("general", "structural-craft", "Claims need evidence. Unsupported assertions lose the reader.", "should-fix",
+         Some("Making claims in essays and articles"), None, 2),
+        ("general", "structural-craft", "Add links for referenced work. Readers who want depth should be able to follow the thread.", "nice-to-fix",
+         Some("Citing external frameworks or articles"), None, 2),
+    ];
+
+    for (writing_type, category, rule_text, severity, when_to_apply, why, signal_count) in &rules {
+        conn.execute(
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, when_to_apply, why, source, signal_count, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'seed-v1', ?8, ?9, ?9)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                writing_type,
+                category,
+                rule_text,
+                severity,
+                when_to_apply,
+                why,
+                signal_count,
+                now,
+            ],
+        )?;
+    }
+
+    tx.commit()?;
     Ok(())
 }
 

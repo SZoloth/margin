@@ -3,6 +3,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { Settings } from "@/hooks/useSettings";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { SectionHeader } from "./SectionHeader";
+import { SettingsCard } from "./SettingsCard";
 import { SettingRow } from "./SettingRow";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { SettingsButton } from "./SettingsButton";
@@ -59,7 +60,7 @@ export function WritingSection({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="rounded-xl bg-[var(--color-sidebar)] p-6">
+      <SettingsCard>
         <SectionHeader title="Writing" />
 
         <SettingRow
@@ -87,7 +88,7 @@ export function WritingSection({
             </SettingsButton>
           </div>
         </SettingRow>
-      </div>
+      </SettingsCard>
     </div>
   );
 }

@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { cn } from "@/lib/cn";
 
-export type Section = "reading" | "writing" | "style-memory" | "integrations" | "about";
+export type Section = "reading" | "writing" | "style-memory" | "integrations" | "help" | "about";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "reading", label: "Reading" },
   { id: "writing", label: "Writing" },
   { id: "style-memory", label: "Style Memory" },
   { id: "integrations", label: "Integrations" },
+  { id: "help", label: "Help" },
   { id: "about", label: "About" },
 ];
 
