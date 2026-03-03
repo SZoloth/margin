@@ -23,11 +23,22 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 
 describe("SettingsPage", () => {
+  const mockUpdater = {
+    available: false,
+    version: null,
+    installing: false,
+    checking: false,
+    error: null,
+    install: vi.fn(),
+    dismiss: vi.fn(),
+    recheck: vi.fn(),
+  };
+
   const defaultProps = {
     settings: DEFAULT_SETTINGS,
     setSetting: vi.fn(),
     onClose: vi.fn(),
-    onOpenCorrections: vi.fn(),
+    updater: mockUpdater,
   };
 
   it("renders SettingsNav and content area", () => {

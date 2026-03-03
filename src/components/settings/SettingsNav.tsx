@@ -1,12 +1,14 @@
 import { useEffect } from "react";
 import { cn } from "@/lib/cn";
 
-export type Section = "reading" | "writing" | "integrations";
+export type Section = "reading" | "writing" | "style-memory" | "integrations" | "about";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "reading", label: "Reading" },
   { id: "writing", label: "Writing" },
+  { id: "style-memory", label: "Style Memory" },
   { id: "integrations", label: "Integrations" },
+  { id: "about", label: "About" },
 ];
 
 interface SettingsNavProps {

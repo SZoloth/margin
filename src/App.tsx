@@ -19,7 +19,7 @@ import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
 import { SettingsPage } from "@/components/settings/SettingsPage";
-import { StyleMemoryView } from "@/components/style-memory/StyleMemoryView";
+import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
@@ -104,8 +104,8 @@ export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<Section | undefined>();
   const [showExportPopover, setShowExportPopover] = useState(false);
-  const [showStyleMemory, setShowStyleMemory] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
@@ -893,12 +893,13 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [doc.currentDoc, annotations.isLoaded]);
 
-  // Style Memory: Cmd+Shift+M
+  // Style Memory: Cmd+Shift+M — opens Settings at Style Memory section
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "m") {
         e.preventDefault();
-        setShowStyleMemory(true);
+        setSettingsSection("style-memory");
+        setShowSettings(true);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -1356,19 +1357,15 @@ export default function App() {
           <SettingsPage
             settings={settings}
             setSetting={setSetting}
-            onClose={() => setShowSettings(false)}
-            onOpenCorrections={() => {
+            onClose={() => {
               setShowSettings(false);
-              setShowStyleMemory(true);
+              setSettingsSection(undefined);
             }}
+            updater={updater}
+            initialSection={settingsSection}
           />
         </div>
       )}
-
-      <StyleMemoryView
-        isOpen={showStyleMemory}
-        onClose={() => setShowStyleMemory(false)}
-      />
 
       {updater.available && (
         <div

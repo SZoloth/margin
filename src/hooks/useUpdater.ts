@@ -6,6 +6,7 @@ interface UpdateState {
   available: boolean;
   version: string | null;
   installing: boolean;
+  checking: boolean;
   error: string | null;
 }
 
@@ -14,6 +15,7 @@ export function useUpdater() {
     available: false,
     version: null,
     installing: false,
+    checking: false,
     error: null,
   });
   const [update, setUpdate] = useState<Update | null>(null);
@@ -59,5 +61,29 @@ export function useUpdater() {
     setState((prev) => ({ ...prev, available: false }));
   }, []);
 
-  return { ...state, install, dismiss };
+  const recheck = useCallback(async () => {
+    setState((prev) => ({ ...prev, checking: true, error: null }));
+    try {
+      const result = await check();
+      if (result) {
+        setUpdate(result);
+        setState((prev) => ({
+          ...prev,
+          checking: false,
+          available: true,
+          version: result.version,
+        }));
+      } else {
+        setState((prev) => ({ ...prev, checking: false }));
+      }
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        checking: false,
+        error: err instanceof Error ? err.message : "Update check failed",
+      }));
+    }
+  }, []);
+
+  return { ...state, install, dismiss, recheck };
 }

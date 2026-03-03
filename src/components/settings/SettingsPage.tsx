@@ -1,24 +1,31 @@
 import { useState } from "react";
 import type { Settings } from "@/hooks/useSettings";
+import type { useUpdater } from "@/hooks/useUpdater";
 import { SettingsNav, type Section } from "./SettingsNav";
 import { ReadingSection } from "./ReadingSection";
 import { WritingSection } from "./WritingSection";
+import { StyleMemorySection } from "./StyleMemorySection";
 import { IntegrationsSection } from "./IntegrationsSection";
+import { AboutSection } from "./AboutSection";
 
 interface SettingsPageProps {
   settings: Settings;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   onClose: () => void;
-  onOpenCorrections: () => void;
+  updater: ReturnType<typeof useUpdater>;
+  initialSection?: Section;
 }
 
 export function SettingsPage({
   settings,
   setSetting,
   onClose,
-  onOpenCorrections,
+  updater,
+  initialSection,
 }: SettingsPageProps) {
-  const [activeSection, setActiveSection] = useState<Section>("reading");
+  const [activeSection, setActiveSection] = useState<Section>(
+    initialSection || "reading",
+  );
 
   return (
     <div className="flex h-full">
@@ -43,10 +50,12 @@ export function SettingsPage({
             <WritingSection
               settings={settings}
               setSetting={setSetting}
-              onOpenCorrections={onOpenCorrections}
+              onOpenCorrections={() => setActiveSection("style-memory")}
             />
           )}
+          {activeSection === "style-memory" && <StyleMemorySection />}
           {activeSection === "integrations" && <IntegrationsSection />}
+          {activeSection === "about" && <AboutSection updater={updater} />}
         </div>
       </div>
     </div>
