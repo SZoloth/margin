@@ -103,7 +103,7 @@
 /* Collapsed mode — dots only (<1200px) */
 @media (max-width: 1199px) {
   .toc {
-    padding: 0 0.75rem 0 0;
+    padding: 0 0.75rem 0 0.5rem;
   }
 
   .toc-label {

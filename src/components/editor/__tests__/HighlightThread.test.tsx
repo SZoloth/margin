@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent } from "@testing-library/react";
 import { HighlightThread } from "../HighlightThread";
 import type { Highlight, MarginNote } from "@/types/annotations";
 
@@ -65,5 +65,51 @@ describe("HighlightThread", () => {
     expect((excerpt as HTMLElement).style.borderLeftColor).toBe(
       "var(--color-highlight-yellow)",
     );
+  });
+
+  it("thread header label has thread-header-label class for 11px/0.08em styling", () => {
+    render(
+      <HighlightThread
+        highlight={mockHighlight}
+        notes={mockNotes}
+        onAddNote={vi.fn()}
+        onUpdateNote={vi.fn()}
+        onDeleteNote={vi.fn()}
+        onDeleteHighlight={vi.fn()}
+        onClose={vi.fn()}
+        anchorRect={new DOMRect(100, 100, 200, 20)}
+        isVisible={true}
+      />,
+    );
+
+    const label = document.body.querySelector(".thread-header-label");
+    expect(label).toBeTruthy();
+    expect(label?.textContent).toBe("Notes");
+  });
+
+  it("save button has note-action-btn--primary class", () => {
+    render(
+      <HighlightThread
+        highlight={mockHighlight}
+        notes={mockNotes}
+        onAddNote={vi.fn()}
+        onUpdateNote={vi.fn()}
+        onDeleteNote={vi.fn()}
+        onDeleteHighlight={vi.fn()}
+        onClose={vi.fn()}
+        anchorRect={new DOMRect(100, 100, 200, 20)}
+        isVisible={true}
+      />,
+    );
+
+    // Type into the textarea to reveal the Save button
+    const textarea = document.body.querySelector(".thread-textarea") as HTMLTextAreaElement;
+    expect(textarea).toBeTruthy();
+
+    fireEvent.change(textarea, { target: { value: "test note" } });
+
+    const saveBtn = document.body.querySelector(".note-action-btn--primary");
+    expect(saveBtn).toBeTruthy();
+    expect(saveBtn?.textContent).toBe("Save");
   });
 });

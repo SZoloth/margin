@@ -89,4 +89,50 @@ describe("FloatingToolbar", () => {
       expect(toolbarAfter.getAttribute("style")).toContain("opacity: 0");
     }
   });
+
+  it("applies toolbar-color-btn--selected class to default color button", () => {
+    const editor = createMockEditor(true);
+    render(
+      <FloatingToolbar
+        editor={editor}
+        onHighlight={vi.fn()}
+        onNote={vi.fn()}
+        defaultColor="yellow"
+      />,
+    );
+
+    act(() => {
+      editor._trigger("selectionUpdate");
+    });
+
+    const yellowBtn = document.body.querySelector("[aria-label='Highlight yellow']");
+    expect(yellowBtn).toBeTruthy();
+    expect(yellowBtn?.className).toContain("toolbar-color-btn--selected");
+
+    // Non-default buttons should NOT have the selected class
+    const blueBtn = document.body.querySelector("[aria-label='Highlight blue']");
+    expect(blueBtn?.className).not.toContain("toolbar-color-btn--selected");
+  });
+
+  it("uses CSS variable references for entrance easing", () => {
+    const editor = createMockEditor(true);
+    render(
+      <FloatingToolbar
+        editor={editor}
+        onHighlight={vi.fn()}
+        onNote={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      editor._trigger("selectionUpdate");
+    });
+
+    const toolbar = document.body.querySelector("[role='toolbar']") as HTMLElement;
+    expect(toolbar).toBeTruthy();
+    // Toolbar may start with exit easing (not yet visible) or entrance easing
+    // Either way, it should use CSS variables, not hardcoded cubic-bezier
+    expect(toolbar.style.transition).toMatch(/var\(--ease-(entrance|exit)\)/);
+    expect(toolbar.style.transition).not.toContain("cubic-bezier");
+  });
 });

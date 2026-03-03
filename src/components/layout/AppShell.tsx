@@ -184,8 +184,8 @@ export function AppShell({
           style={{
             opacity: backdrop.isVisible ? 1 : 0,
             transition: backdrop.isVisible
-              ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1)"
-              : "opacity 150ms cubic-bezier(0.4, 0, 1, 1)",
+              ? "opacity 200ms var(--ease-entrance)"
+              : "opacity 150ms var(--ease-exit)",
           }}
         />
       )}
@@ -204,12 +204,12 @@ export function AppShell({
           borderColor: "var(--color-border)",
           transform: sidebarOpen ? "translateX(0)" : `translateX(-${sidebarWidth}px)`,
           transition: sidebarOpen
-            ? "transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
-            : "transform 150ms cubic-bezier(0.4, 0, 1, 1)",
+            ? "transform 200ms var(--ease-entrance)"
+            : "transform 150ms var(--ease-exit)",
           ...(isMobile ? { boxShadow: sidebarOpen ? "var(--shadow-lg)" : "none" } : {}),
         }}
       >
-        <div className="flex flex-col flex-1 min-w-0 border-r" style={{ borderColor: "var(--color-border)" }}>
+        <div className="flex flex-col flex-1 min-w-0">
         <Sidebar
           onOpenFile={() => { onOpenFile(); closeSidebar(); }}
           onSelectRecentDoc={(doc, newTab) => { onSelectRecentDoc(doc, newTab); closeSidebar(); }}
@@ -248,7 +248,7 @@ export function AppShell({
                 width: 2,
                 borderRadius: 1,
                 backgroundColor: "var(--color-text-secondary)",
-                opacity: 0,
+                opacity: 0.15,
                 transition: "opacity 120ms ease",
               }}
               className="resize-handle-line"

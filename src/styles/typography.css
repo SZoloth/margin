@@ -2,7 +2,7 @@
   max-width: var(--reader-max-width, 65ch);
   margin: 0 auto;
   padding: 3rem 3rem 6rem 1.5rem;
-  font-family: 'Newsreader', 'Georgia', serif;
+  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: var(--reader-font-size, 1.125rem);
   line-height: var(--reader-line-height, 1.72);
   color: var(--color-text-primary);
@@ -10,7 +10,7 @@
 
 /* Headings */
 .reader-content h1 {
-  font-family: 'Newsreader', 'Georgia', serif;
+  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: 2.25rem;
   font-weight: 700;
   line-height: 1.2;
@@ -20,7 +20,7 @@
 }
 
 .reader-content h2 {
-  font-family: 'Newsreader', 'Georgia', serif;
+  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: 1.625rem;
   font-weight: 600;
   line-height: 1.3;
@@ -30,7 +30,7 @@
 }
 
 .reader-content h3 {
-  font-family: 'Newsreader', 'Georgia', serif;
+  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.4;

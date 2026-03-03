@@ -76,8 +76,8 @@ export function UndoToast({ action, duration = 5000 }: UndoToastProps) {
         transform: `translateX(-50%) translateY(${isVisible ? "0" : "12px"})`,
         opacity: isVisible ? 1 : 0,
         transition: isVisible
-          ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
-          : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
+          ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+          : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
         borderColor: "var(--color-border)",
         backgroundColor: "var(--color-sidebar)",
         borderRadius: "var(--radius-lg)",

@@ -1,3 +1,4 @@
+use crate::commands::now_millis;
 use crate::db::migrations::DbPool;
 use rusqlite::Connection;
 use std::process::Command;
@@ -237,10 +238,7 @@ fn index_all_documents_inner(conn: &Connection) -> Result<IndexAllResult, String
     let mut skipped = 0;
     let mut errors = 0;
 
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64;
+    let now_ms = now_millis();
 
     for (doc_id, file_path, title, indexed_at) in &docs {
         // Check file mtime
@@ -345,10 +343,7 @@ pub fn index_all_documents(state: tauri::State<'_, DbPool>) -> Result<IndexAllRe
         result
     }; // lock dropped here
 
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64;
+    let now_ms = now_millis();
 
     let mut indexed = 0usize;
     let mut skipped = 0usize;
@@ -641,10 +636,7 @@ mod tests {
     #[test]
     fn frecency_recently_opened_ranks_higher() {
         let conn = setup_db_with_documents();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let now = now_millis();
         let one_year_ago = now - 365 * 24 * 60 * 60 * 1000;
 
         // d1: opened recently, access_count=1
@@ -673,10 +665,7 @@ mod tests {
     #[test]
     fn frecency_frequently_opened_ranks_higher() {
         let conn = setup_db_with_documents();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let now = now_millis();
 
         // d1: opened frequently (50 times)
         conn.execute(
@@ -703,10 +692,7 @@ mod tests {
     #[test]
     fn frecency_score_decays_over_time() {
         let conn = setup_db_with_documents();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let now = now_millis();
         let two_years_ago = now - 2 * 365 * 24 * 60 * 60 * 1000;
 
         // d1: recent with low access count

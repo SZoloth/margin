@@ -30,8 +30,9 @@ A local-first desktop app for reading, annotating, and learning from your own wr
 - **Corrections** — mark problematic text with notes and a writing type
 - **Voice signals** — tag corrections as positive (writing to emulate) or corrective (patterns to avoid)
 - **Writing rules** — synthesized rules with severity, examples, and category
-- **Voice profile export** — generates `~/.margin/voice-profile.md` from your correction history
+- **Unified profile export** — generates `~/.margin/writing-rules.md` with voice calibration, corrections, and synthesized rules in one file
 - **Writing guard** — auto-generates a Claude Code hook that enforces your rules on prose edits
+- **Auto-export** — writing rules automatically re-export after correction or rule changes
 - 9 writing types: general, email, PRD, blog, cover letter, resume, Slack, pitch, outreach
 
 ### Search

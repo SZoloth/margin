@@ -137,7 +137,7 @@
   color: var(--color-text-secondary);
   background-color: transparent;
   cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-micro), color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
+  transition: background-color var(--duration-fast) var(--ease-micro), color var(--duration-fast) var(--ease-micro), transform 200ms var(--ease-spring);
 }
 
 .toolbar-btn:hover {
@@ -147,7 +147,7 @@
 
 .toolbar-btn:active {
   background-color: var(--active-bg);
-  transform: scale(0.92);
+  transform: scale(0.95);
 }
 
 .toolbar-btn:focus-visible {
@@ -166,16 +166,23 @@
   border-radius: var(--radius-md);
   background-color: transparent;
   cursor: pointer;
-  transition: background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
+  transition: background-color var(--duration-fast) var(--ease-micro), transform 200ms var(--ease-spring);
 }
 
 .toolbar-color-btn:hover {
   background-color: var(--hover-bg);
+  transform: scale(1.1);
 }
 
 .toolbar-color-btn:active {
   background-color: var(--active-bg);
   transform: scale(0.92);
+}
+
+/* Selected color in floating toolbar */
+.toolbar-color-btn--selected {
+  box-shadow: 0 0 0 2px var(--color-page), 0 0 0 4px var(--color-text-secondary);
+  border-radius: var(--radius-md);
 }
 
 .toolbar-color-btn:focus-visible {
@@ -202,7 +209,7 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: color var(--duration-fast) var(--ease-micro), background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
+  transition: color var(--duration-fast) var(--ease-micro), background-color var(--duration-fast) var(--ease-micro), transform 200ms var(--ease-spring);
 }
 
 .toolbar-hamburger:hover {
@@ -212,7 +219,7 @@
 
 .toolbar-hamburger:active {
   background-color: var(--active-bg);
-  transform: scale(0.92);
+  transform: scale(0.95);
 }
 
 .toolbar-hamburger:focus-visible {

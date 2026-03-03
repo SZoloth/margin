@@ -22,6 +22,16 @@ describe("ReadingSection", () => {
     expect(screen.getByText("System")).toBeInTheDocument();
   });
 
+  it("renders font family control with Serif/Sans", () => {
+    render(<ReadingSection {...defaultProps} />);
+
+    const fontGroup = screen.getByRole("radiogroup", { name: "Font" });
+    expect(fontGroup).toBeInTheDocument();
+
+    expect(screen.getByText("Serif")).toBeInTheDocument();
+    expect(screen.getByText("Sans")).toBeInTheDocument();
+  });
+
   it("renders font size control with Small/Default/Large/XL", () => {
     render(<ReadingSection {...defaultProps} />);
 

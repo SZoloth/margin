@@ -270,8 +270,8 @@ export function HighlightThread({
         transformOrigin: "bottom center",
         pointerEvents: isVisible ? "auto" : "none",
         transition: isVisible
-          ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
-          : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
+          ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+          : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
       } : {
         top,
         left: Math.max(8, left),
@@ -280,8 +280,8 @@ export function HighlightThread({
         transformOrigin: "left top",
         pointerEvents: isVisible ? "auto" : "none",
         transition: isVisible
-          ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
-          : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
+          ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+          : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
       }}
     >
       {/* Header */}
@@ -372,8 +372,7 @@ export function HighlightThread({
             <button
               type="button"
               onClick={handleAddNote}
-              className="note-action-btn text-xs"
-              style={{ fontWeight: 500 }}
+              className="note-action-btn note-action-btn--primary text-xs"
             >
               Save
             </button>

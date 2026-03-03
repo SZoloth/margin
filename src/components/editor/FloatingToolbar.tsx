@@ -137,8 +137,8 @@ export function FloatingToolbar({
         transformOrigin: isFlipped ? "center top" : "center bottom",
         transform: isVisible ? "translateY(0) scale(1)" : "translateY(4px) scale(0.97)",
         transition: isVisible
-          ? "opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)"
-          : "opacity 150ms cubic-bezier(0.4, 0, 1, 1), transform 150ms cubic-bezier(0.4, 0, 1, 1)",
+          ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+          : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
         pointerEvents: isVisible ? "auto" : "none",
       }}
       onMouseDown={(e) => {
@@ -153,7 +153,7 @@ export function FloatingToolbar({
           key={c.name}
           type="button"
           onClick={() => onHighlight(c.name)}
-          className="toolbar-color-btn"
+          className={`toolbar-color-btn${c.name === defaultColor ? " toolbar-color-btn--selected" : ""}`}
           aria-label={`Highlight ${c.name}`}
         >
           <span

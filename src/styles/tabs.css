@@ -32,7 +32,7 @@
   color: var(--color-text-secondary);
   font-size: 13px;
   font-weight: 500;
-  transition: background-color var(--duration-fast) var(--ease-micro), color var(--duration-fast) var(--ease-micro);
+  transition: background-color 150ms var(--ease-micro), color 150ms var(--ease-micro);
 }
 
 .tab-item:hover {
@@ -46,9 +46,17 @@
 
 .tab-item.tab-active {
   color: var(--color-text-primary);
-  /* Active tab: accent underline per Paper design */
-  border-bottom: 2px solid var(--color-accent);
-  margin-bottom: -1px;
+}
+
+.tab-item.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background-color: var(--color-accent);
+  border-radius: 1px;
 }
 
 .tab-item.tab-dragging {
@@ -68,11 +76,12 @@
 }
 
 .tab-dirty {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background-color: var(--color-text-secondary);
   flex-shrink: 0;
+  transition: opacity var(--duration-fast) var(--ease-micro);
 }
 
 .tab-close {
@@ -88,7 +97,11 @@
   cursor: pointer;
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-micro), background-color var(--duration-fast) var(--ease-micro);
+  transition: opacity var(--duration-fast) var(--ease-micro), background-color var(--duration-fast) var(--ease-micro), transform 200ms var(--ease-spring);
+}
+
+.tab-close:active {
+  transform: scale(0.85);
 }
 
 .tab-item:hover .tab-close {
@@ -117,8 +130,8 @@
   width: 36px;
   height: 36px;
   margin: 4px;
-  border: none;
-  background: none;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-subtle, transparent);
   color: var(--color-text-secondary);
   border-radius: var(--radius-sm);
   cursor: pointer;

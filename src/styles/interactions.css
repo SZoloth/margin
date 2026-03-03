@@ -4,7 +4,7 @@
 .interactive-item {
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
+  transition: background-color var(--duration-fast) var(--ease-micro), transform 200ms var(--ease-spring);
 }
 
 .interactive-item:hover {
@@ -13,18 +13,20 @@
 
 .interactive-item:active {
   background-color: var(--active-bg);
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 /* Small action buttons (cancel, save, edit, delete) */
 .btn-sm {
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background-color var(--duration-fast) var(--ease-micro), transform var(--duration-fast) var(--ease-micro);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-subtle, transparent);
+  transition: background-color 150ms var(--ease-micro), transform 200ms var(--ease-spring);
 }
 
 .btn-sm:hover {
-  background-color: var(--hover-bg);
+  background-color: var(--color-surface-muted, var(--hover-bg));
 }
 
 .btn-sm:active {

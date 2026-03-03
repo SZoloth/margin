@@ -30,6 +30,11 @@ const LINE_SPACING_OPTIONS = [
   { value: "relaxed" as const, label: "Relaxed" },
 ];
 
+const FONT_FAMILY_OPTIONS = [
+  { value: "serif" as const, label: "Serif" },
+  { value: "sans" as const, label: "Sans" },
+];
+
 const READER_WIDTH_OPTIONS = [
   { value: "narrow" as const, label: "Narrow" },
   { value: "default" as const, label: "Default" },
@@ -45,7 +50,9 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
         <p
           className="text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-secondary)]"
           style={{
-            fontFamily: "'Newsreader', Georgia, serif",
+            fontFamily: settings.fontFamily === "sans"
+              ? "'Instrument Sans', system-ui, sans-serif"
+              : "'Newsreader', Georgia, serif",
             fontStyle: "italic",
           }}
         >
@@ -64,6 +71,15 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
             value={settings.theme}
             onChange={(v) => setSetting("theme", v)}
             ariaLabel="Theme"
+          />
+        </SettingRow>
+
+        <SettingRow label="Font">
+          <SegmentedControl
+            options={FONT_FAMILY_OPTIONS}
+            value={settings.fontFamily}
+            onChange={(v) => setSetting("fontFamily", v)}
+            ariaLabel="Font"
           />
         </SettingRow>
 

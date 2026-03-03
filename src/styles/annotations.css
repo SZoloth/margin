@@ -67,9 +67,9 @@
 }
 
 .thread-header-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
 }
@@ -82,7 +82,7 @@
 }
 
 .thread-excerpt p {
-  font-family: 'Newsreader', Georgia, serif;
+  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-text-secondary);
@@ -117,7 +117,7 @@
 }
 
 .thread-message-content {
-  font-family: 'Newsreader', Georgia, serif;
+  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: 13px;
   font-style: italic;
   line-height: 1.5;
@@ -140,7 +140,7 @@
   resize: none;
   border: none;
   background: transparent;
-  font-family: 'Newsreader', Georgia, serif;
+  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: 13px;
   font-style: italic;
   line-height: 1.5;
@@ -174,6 +174,17 @@
 .note-action-btn:focus-visible {
   outline: 2px solid var(--color-text-secondary);
   outline-offset: -1px;
+}
+
+.note-action-btn--primary {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-subtle, transparent);
+  border: 1px solid var(--color-border);
+}
+
+.note-action-btn--primary:hover {
+  background-color: var(--color-surface-muted, var(--hover-bg));
 }
 
 .note-action-btn--delete {

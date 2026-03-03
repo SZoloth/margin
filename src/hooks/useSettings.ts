@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 export interface Settings {
   theme: "light" | "dark" | "system";
   persistCorrections: boolean;
+  fontFamily: "serif" | "sans";
   fontSize: "small" | "default" | "large" | "xl";
   lineSpacing: "compact" | "default" | "relaxed";
   readerWidth: "narrow" | "default" | "wide";
@@ -12,6 +13,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   persistCorrections: false,
+  fontFamily: "serif",
   fontSize: "default",
   lineSpacing: "default",
   readerWidth: "default",
@@ -19,6 +21,11 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 const STORAGE_KEY = "margin-settings";
+
+const FONT_FAMILY_MAP: Record<Settings["fontFamily"], string> = {
+  serif: "'Newsreader', Georgia, serif",
+  sans: "'Instrument Sans', system-ui, sans-serif",
+};
 
 const FONT_SIZE_MAP: Record<Settings["fontSize"], string> = {
   small: "1rem",
@@ -81,6 +88,7 @@ function applyToDOM(settings: Settings) {
   root.setAttribute("data-theme", resolveTheme(settings.theme));
 
   // Reader typography
+  root.style.setProperty("--reader-font-family", FONT_FAMILY_MAP[settings.fontFamily]);
   root.style.setProperty("--reader-font-size", FONT_SIZE_MAP[settings.fontSize]);
   root.style.setProperty("--reader-line-height", LINE_SPACING_MAP[settings.lineSpacing]);
   root.style.setProperty("--reader-max-width", READER_WIDTH_MAP[settings.readerWidth]);

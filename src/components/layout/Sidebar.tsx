@@ -221,7 +221,7 @@ export function Sidebar({
       {/* Search + Open File row */}
       <div ref={containerRef} className="relative px-4 mb-3">
         <div
-          className="flex items-center gap-1.5 px-2.5 py-1.5 border"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 border transition-colors duration-150"
           style={{
             borderColor: isFocused ? "var(--color-text-secondary)" : "var(--color-border)",
             backgroundColor: "var(--color-page)",
@@ -408,7 +408,7 @@ export function Sidebar({
                     <div key={group.label}>
                       <h2
                         className="text-xs font-semibold uppercase tracking-wider mb-2 px-3"
-                        style={{ color: "var(--color-text-tertiary)" }}
+                        style={{ color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "0.08em" }}
                       >
                         {group.label}
                       </h2>
@@ -456,7 +456,7 @@ export function Sidebar({
                                 setRenamingDocId(doc.id);
                                 requestAnimationFrame(() => renameInputRef.current?.select());
                               }}
-                              className="interactive-item sidebar-list-item flex items-start gap-2 px-3 py-1.5 text-sm text-left"
+                              className="interactive-item sidebar-list-item flex items-start gap-2 px-3 py-2 text-sm text-left"
                               style={{
                                 color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
                                 backgroundColor: isActive ? "var(--active-bg)" : "transparent",
@@ -477,6 +477,7 @@ export function Sidebar({
                                     flexShrink: 0,
                                     marginTop: 6,
                                     opacity: 0.7,
+                                    transition: "transform 200ms var(--ease-spring)",
                                   }}
                                 />
                               )}
