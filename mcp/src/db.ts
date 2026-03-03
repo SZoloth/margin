@@ -108,11 +108,24 @@ export const SCHEMA_SQL = `
     highlight_color TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    writing_type TEXT
+    writing_type TEXT,
+    polarity TEXT CHECK(polarity IN ('positive', 'corrective'))
   );
 
   CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
   CREATE INDEX IF NOT EXISTS idx_corrections_session ON corrections(session_id);
+
+  CREATE TABLE IF NOT EXISTS content_snapshots (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    snapshot_type TEXT NOT NULL DEFAULT 'pre_external_edit'
+        CHECK(snapshot_type IN ('pre_external_edit', 'manual')),
+    created_at INTEGER NOT NULL,
+    UNIQUE(document_id, snapshot_type)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_snapshots_document ON content_snapshots(document_id);
 
   CREATE TABLE IF NOT EXISTS open_tabs (
     id TEXT PRIMARY KEY,

@@ -565,4 +565,86 @@ describe("useTabs", () => {
       expect(result.current.activeTabId).toBe(tabC!.id);
     });
   });
+
+  // ── Tab-switch annotation isolation ───────────────────────────
+
+  describe("tab-switch annotation isolation", () => {
+    it("tab switch preserves per-tab cached data", async () => {
+      // snapshotFn simulates what the editor would return for the active tab.
+      // When switching away from tab B, the snapshot must return B's data so
+      // the cache is preserved correctly.
+      let currentContent = "";
+      const snapshotFn = (): SnapshotData => ({
+        document: null,
+        content: currentContent,
+        filePath: null,
+        isDirty: false,
+        highlights: [],
+        marginNotes: [],
+        annotationsLoaded: false,
+        scrollPosition: 0,
+      });
+
+      const { result } = renderHook(() => useTabs(snapshotFn));
+      await flushMount();
+
+      const docA = makeDoc("a", "Alpha");
+      const docB = makeDoc("b", "Beta");
+
+      act(() => {
+        result.current.openTab(docA, "Content A", "/tmp/a.md");
+      });
+      const tabAId = result.current.tabs[0]!.id;
+
+      act(() => {
+        result.current.openTab(docB, "Content B", "/tmp/b.md");
+      });
+      const tabBId = result.current.tabs[1]!.id;
+
+      // Simulate the editor currently showing tab B's content
+      currentContent = "Content B";
+
+      // Switch back to tab A — snapshotActive captures B's state
+      act(() => {
+        result.current.switchTab(tabAId);
+      });
+
+      expect(result.current.getCachedTab(tabAId)!.content).toBe("Content A");
+      expect(result.current.getCachedTab(tabBId)!.content).toBe("Content B");
+    });
+
+    it("snapshot captures state before switch", async () => {
+      let snapshotCalls = 0;
+      const snapshotFn = () => {
+        snapshotCalls++;
+        return {
+          document: null,
+          content: "snapshotted-content",
+          filePath: null,
+          isDirty: false,
+          highlights: [{ id: "h1", color: "yellow" }],
+          marginNotes: [],
+          annotationsLoaded: true,
+          scrollPosition: 42,
+        };
+      };
+
+      const { result } = renderHook(() => useTabs(snapshotFn));
+      await flushMount();
+
+      const docA = makeDoc("a", "Alpha");
+      const docB = makeDoc("b", "Beta");
+      act(() => result.current.openTab(docA, "a", null));
+      act(() => result.current.openTab(docB, "b", null));
+
+      snapshotCalls = 0;
+
+      // Switch from tab B to tab A
+      act(() => {
+        result.current.switchTab(result.current.tabs[0]!.id);
+      });
+
+      expect(snapshotCalls).toBe(1);
+    });
+  });
 });

@@ -1085,4 +1085,66 @@ mod tests {
         assert!(md.contains("## Unclassified"));
         assert!(md.contains('…'));
     }
+
+    #[test]
+    fn voice_profile_writing_samples_before_corrections() {
+        let corrections = vec![
+            CorrectionRecord {
+                original_text: "Good sentence.".to_string(),
+                notes: vec!["Nice rhythm".to_string()],
+                highlight_color: "green".to_string(),
+                document_title: Some("Essay".to_string()),
+                document_id: "doc1".to_string(),
+                created_at: 1000,
+                writing_type: None,
+                polarity: Some("positive".to_string()),
+            },
+            CorrectionRecord {
+                original_text: "Bad sentence.".to_string(),
+                notes: vec!["Rewrite this".to_string()],
+                highlight_color: "yellow".to_string(),
+                document_title: Some("Essay".to_string()),
+                document_id: "doc1".to_string(),
+                created_at: 2000,
+                writing_type: None,
+                polarity: Some("corrective".to_string()),
+            },
+        ];
+        let md = generate_voice_profile_markdown(&corrections, &[]);
+
+        let samples_pos = md.find("## Writing Samples").expect("Writing Samples section missing");
+        let corrections_pos = md.find("## Corrections").expect("Corrections section missing");
+        assert!(samples_pos < corrections_pos, "Writing Samples must appear before Corrections");
+    }
+
+    #[test]
+    fn voice_profile_no_polarity_shows_unclassified() {
+        let corrections = vec![
+            CorrectionRecord {
+                original_text: "Some text.".to_string(),
+                notes: vec!["flagged".to_string()],
+                highlight_color: "yellow".to_string(),
+                document_title: Some("Essay".to_string()),
+                document_id: "doc1".to_string(),
+                created_at: 1000,
+                writing_type: None,
+                polarity: None,
+            },
+            CorrectionRecord {
+                original_text: "Another text.".to_string(),
+                notes: vec![],
+                highlight_color: "yellow".to_string(),
+                document_title: Some("Essay".to_string()),
+                document_id: "doc1".to_string(),
+                created_at: 2000,
+                writing_type: None,
+                polarity: None,
+            },
+        ];
+        let md = generate_voice_profile_markdown(&corrections, &[]);
+
+        assert!(md.contains("## Unclassified"), "Unclassified section should be present");
+        assert!(!md.contains("## Writing Samples"), "Writing Samples should be absent when no positive polarity");
+        assert!(!md.contains("## Corrections"), "Corrections should be absent when no corrective polarity");
+    }
 }

@@ -17,6 +17,9 @@ import {
   createMarginNote,
   deleteHighlight,
   highlightByText,
+  updateMarginNote,
+  deleteMarginNote,
+  updateHighlightColor,
 } from "./tools/annotations.js";
 import {
   getCorrections,
@@ -24,10 +27,14 @@ import {
   createCorrection,
   deleteCorrection,
   updateCorrectionWritingType,
+  setCorrectionPolarity,
+  getVoiceSignals,
 } from "./tools/corrections.js";
 import {
   getWritingRules,
   getWritingRulesMarkdown,
+  updateWritingRule,
+  deleteWritingRule,
 } from "./tools/writing-rules.js";
 
 const server = new McpServer({
@@ -36,6 +43,18 @@ const server = new McpServer({
 });
 
 const bridge = new ExportBridge();
+
+// Push notifications to Claude Code when exports arrive
+bridge.onExport((prompt) => {
+  // 1. Resource-updated notification — tells the client margin://latest-export changed
+  server.server.sendResourceUpdated({ uri: "margin://latest-export" }).catch(() => {});
+
+  // 2. Logging notification — surfaces in Claude Code's output as an alert
+  server.sendLoggingMessage({
+    level: "alert",
+    data: `New annotations exported from Margin. Call margin_wait_for_export to receive them, or read the margin://latest-export resource.`,
+  }).catch(() => {});
+});
 
 let readDb: ReturnType<typeof openReadDb> | undefined;
 let writeDb: ReturnType<typeof openWriteDb> | undefined;
@@ -288,6 +307,115 @@ server.tool(
   }),
 );
 
+server.tool(
+  "margin_update_margin_note",
+  "Update the content of an existing margin note. Returns the updated note record.",
+  {
+    note_id: z.string().describe("Margin note ID"),
+    content: z.string().describe("New note content"),
+  },
+  async ({ note_id, content }) => withDb(() => {
+    const result = updateMarginNote(getWriteDb(), note_id, content);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }),
+);
+
+server.tool(
+  "margin_delete_margin_note",
+  "Delete a single margin note without deleting its parent highlight.",
+  { note_id: z.string().describe("Margin note ID to delete") },
+  async ({ note_id }) => withDb(() => {
+    const result = deleteMarginNote(getWriteDb(), note_id);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: "Margin note deleted." }] };
+  }),
+);
+
+server.tool(
+  "margin_update_highlight_color",
+  "Update the color of an existing highlight.",
+  {
+    highlight_id: z.string().describe("Highlight ID"),
+    color: z.enum(["yellow", "green", "blue", "pink", "purple", "orange"]).describe("New highlight color"),
+  },
+  async ({ highlight_id, color }) => withDb(() => {
+    const result = updateHighlightColor(getWriteDb(), highlight_id, color);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: "Highlight color updated." }] };
+  }),
+);
+
+server.tool(
+  "margin_set_correction_polarity",
+  "Set the polarity (voice signal) of a correction. Polarity indicates whether a correction marks something positive (to reinforce) or corrective (to fix).",
+  {
+    highlight_id: z.string().describe("Highlight ID of the correction"),
+    polarity: z.enum(["positive", "corrective"]).describe("Voice signal polarity"),
+  },
+  async ({ highlight_id, polarity }) => withDb(() => {
+    const result = setCorrectionPolarity(getWriteDb(), highlight_id, polarity);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: "Polarity updated." }] };
+  }),
+);
+
+server.tool(
+  "margin_get_voice_signals",
+  "Get corrections that have been tagged with a voice signal polarity. Optionally filter by polarity (positive or corrective). Without a filter, returns all corrections with any polarity set.",
+  {
+    polarity: z.enum(["positive", "corrective"]).optional().describe("Filter by polarity"),
+    limit: z.number().optional().describe("Max results (default 500, max 2000)"),
+  },
+  async ({ polarity, limit }) => withDb(() => ({
+    content: [{ type: "text", text: JSON.stringify(getVoiceSignals(getReadDb(), polarity, limit), null, 2) }],
+  })),
+);
+
+server.tool(
+  "margin_update_writing_rule",
+  "Update fields of an existing writing rule. Only provided fields are updated.",
+  {
+    id: z.string().describe("Writing rule ID"),
+    rule_text: z.string().optional().describe("New rule text"),
+    severity: z.enum(["must-fix", "should-fix", "nice-to-fix"]).optional().describe("New severity"),
+    when_to_apply: z.string().nullable().optional().describe("When to apply this rule"),
+    why: z.string().nullable().optional().describe("Why this rule exists"),
+    example_before: z.string().nullable().optional().describe("Example of text before applying the rule"),
+    example_after: z.string().nullable().optional().describe("Example of text after applying the rule"),
+    notes: z.string().nullable().optional().describe("Additional notes"),
+    writing_type: z.string().optional().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
+  },
+  async (params) => withDb(() => {
+    const result = updateWritingRule(getWriteDb(), params);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }),
+);
+
+server.tool(
+  "margin_delete_writing_rule",
+  "Delete a writing rule by ID.",
+  { id: z.string().describe("Writing rule ID to delete") },
+  async ({ id }) => withDb(() => {
+    const result = deleteWritingRule(getWriteDb(), id);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: "Writing rule deleted." }] };
+  }),
+);
+
 // --- Export Bridge Tool ---
 
 server.tool(
@@ -497,6 +625,31 @@ server.resource(
         uri: "margin://corrections/summary",
         mimeType: "application/json",
         text: JSON.stringify(summary, null, 2),
+      }],
+    };
+  },
+);
+
+server.resource(
+  "latest-export",
+  "margin://latest-export",
+  { description: "The most recent annotation export from Margin. Updated in real-time via notifications." },
+  async () => {
+    const content = bridge.latestExport;
+    if (!content) {
+      return {
+        contents: [{
+          uri: "margin://latest-export",
+          mimeType: "text/plain",
+          text: "No exports yet. The user hasn't exported annotations from Margin.",
+        }],
+      };
+    }
+    return {
+      contents: [{
+        uri: "margin://latest-export",
+        mimeType: "text/markdown",
+        text: content,
       }],
     };
   },

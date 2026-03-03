@@ -10,6 +10,8 @@ import {
   createCorrection,
   deleteCorrection,
   updateCorrectionWritingType,
+  setCorrectionPolarity,
+  getVoiceSignals,
 } from "../tools/corrections.js";
 
 let db: Database.Database;
@@ -274,5 +276,120 @@ describe("updateCorrectionWritingType", () => {
   it("errors for nonexistent correction", () => {
     const result = updateCorrectionWritingType(db, "nonexistent", "email");
     expect(result).toHaveProperty("error");
+  });
+});
+
+describe("setCorrectionPolarity", () => {
+  function setupCorrection() {
+    db.prepare(
+      "INSERT INTO documents (id, source, title, last_opened_at, created_at) VALUES ('doc1', 'file', 'Test', 1000, 1000)",
+    ).run();
+    db.prepare(
+      "INSERT INTO highlights (id, document_id, color, text_content, from_pos, to_pos, created_at, updated_at) VALUES ('h1', 'doc1', 'yellow', 'text', 0, 4, 1000, 1000)",
+    ).run();
+    db.prepare(
+      `INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at) VALUES ('c1', 'h1', 'doc1', 'sess1', 'text', '["note"]', 'file', 'yellow', 1000, 1000)`,
+    ).run();
+  }
+
+  it("sets polarity to positive", () => {
+    setupCorrection();
+    const result = setCorrectionPolarity(db, "h1", "positive");
+    expect(result).toHaveProperty("success");
+
+    const row = db.prepare("SELECT polarity FROM corrections WHERE highlight_id = 'h1'").get() as { polarity: string };
+    expect(row.polarity).toBe("positive");
+  });
+
+  it("sets polarity to corrective", () => {
+    setupCorrection();
+    const result = setCorrectionPolarity(db, "h1", "corrective");
+    expect(result).toHaveProperty("success");
+
+    const row = db.prepare("SELECT polarity FROM corrections WHERE highlight_id = 'h1'").get() as { polarity: string };
+    expect(row.polarity).toBe("corrective");
+  });
+
+  it("rejects invalid polarity", () => {
+    setupCorrection();
+    const result = setCorrectionPolarity(db, "h1", "invalid");
+    expect(result).toHaveProperty("error");
+  });
+
+  it("errors for nonexistent correction", () => {
+    const result = setCorrectionPolarity(db, "nonexistent", "positive");
+    expect(result).toHaveProperty("error");
+  });
+});
+
+describe("getVoiceSignals", () => {
+  function insertCorrectionWithPolarity(
+    highlightId: string,
+    text: string,
+    polarity: string | null,
+    createdAt: number = 1000,
+  ) {
+    db.prepare(
+      `INSERT INTO corrections
+         (id, highlight_id, document_id, session_id, original_text, notes_json,
+          document_title, document_source, highlight_color, created_at, updated_at, polarity)
+       VALUES (?, ?, 'doc1', 'sess1', ?, '["note"]', 'Test', 'file', 'yellow', ?, ?, ?)`,
+    ).run(`id-${highlightId}`, highlightId, text, createdAt, createdAt, polarity);
+  }
+
+  it("returns only corrections with polarity set", () => {
+    insertCorrectionWithPolarity("h1", "good text", "positive");
+    insertCorrectionWithPolarity("h2", "bad text", "corrective");
+    insertCorrectionWithPolarity("h3", "untagged", null);
+
+    const results = getVoiceSignals(db);
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.polarity !== null)).toBe(true);
+  });
+
+  it("filters by polarity", () => {
+    insertCorrectionWithPolarity("h1", "good text", "positive");
+    insertCorrectionWithPolarity("h2", "bad text", "corrective");
+
+    const positive = getVoiceSignals(db, "positive");
+    expect(positive).toHaveLength(1);
+    expect(positive[0].polarity).toBe("positive");
+
+    const corrective = getVoiceSignals(db, "corrective");
+    expect(corrective).toHaveLength(1);
+    expect(corrective[0].polarity).toBe("corrective");
+  });
+
+  it("respects limit", () => {
+    for (let i = 0; i < 5; i++) {
+      insertCorrectionWithPolarity(`h${i}`, `text${i}`, "positive", i);
+    }
+    expect(getVoiceSignals(db, undefined, 2)).toHaveLength(2);
+  });
+
+  it("returns empty array when no polarity set", () => {
+    insertCorrectionWithPolarity("h1", "untagged", null);
+    expect(getVoiceSignals(db)).toHaveLength(0);
+  });
+});
+
+describe("getCorrections polarity field", () => {
+  it("includes polarity in returned records", () => {
+    db.prepare(
+      `INSERT INTO corrections
+         (id, highlight_id, document_id, session_id, original_text, notes_json,
+          document_title, document_source, highlight_color, created_at, updated_at, polarity)
+       VALUES ('c1', 'h1', 'doc1', 'sess1', 'text', '["note"]', 'Test', 'file', 'yellow', 1000, 1000, 'positive')`,
+    ).run();
+
+    const results = getCorrections(db);
+    expect(results).toHaveLength(1);
+    expect(results[0].polarity).toBe("positive");
+  });
+
+  it("returns null polarity when not set", () => {
+    insertCorrection("h1", "text", '["note"]');
+    const results = getCorrections(db);
+    expect(results[0].polarity).toBeNull();
   });
 });

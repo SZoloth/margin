@@ -12,6 +12,7 @@ export interface CorrectionRecord {
   documentId: string;
   createdAt: number;
   writingType: string | null;
+  polarity: string | null;
   prefixContext: string | null;
   suffixContext: string | null;
   extendedContext: string | null;
@@ -35,8 +36,8 @@ export function getCorrections(
       .prepare(
         `SELECT original_text as originalText, notes_json as notesJson, highlight_color as highlightColor,
                 document_title as documentTitle, document_id as documentId, created_at as createdAt,
-                writing_type as writingType, prefix_context as prefixContext, suffix_context as suffixContext,
-                extended_context as extendedContext
+                writing_type as writingType, polarity, prefix_context as prefixContext,
+                suffix_context as suffixContext, extended_context as extendedContext
          FROM corrections
          WHERE document_id = ? AND session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -50,8 +51,8 @@ export function getCorrections(
     .prepare(
       `SELECT original_text as originalText, notes_json as notesJson, highlight_color as highlightColor,
               document_title as documentTitle, document_id as documentId, created_at as createdAt,
-              writing_type as writingType, prefix_context as prefixContext, suffix_context as suffixContext,
-              extended_context as extendedContext
+              writing_type as writingType, polarity, prefix_context as prefixContext,
+              suffix_context as suffixContext, extended_context as extendedContext
        FROM corrections
        WHERE session_id != '__backfilled__'
        ORDER BY created_at DESC
@@ -107,6 +108,7 @@ interface RawCorrectionRow {
   documentId: string;
   createdAt: number;
   writingType: string | null;
+  polarity: string | null;
   prefixContext: string | null;
   suffixContext: string | null;
   extendedContext: string | null;
@@ -219,24 +221,126 @@ export function updateCorrectionWritingType(
   return { success: true };
 }
 
-function parseRow(row: RawCorrectionRow): CorrectionRecord {
-  let notes: string[] = [];
+const VALID_POLARITIES = ["positive", "corrective"] as const;
+
+export function setCorrectionPolarity(
+  db: Database.Database,
+  highlightId: string,
+  polarity: string,
+): { success: true } | { error: string } {
+  if (!VALID_POLARITIES.includes(polarity as (typeof VALID_POLARITIES)[number])) {
+    return { error: `Invalid polarity "${polarity}". Allowed: ${VALID_POLARITIES.join(", ")}` };
+  }
+
+  const result = db
+    .prepare("UPDATE corrections SET polarity = ?, updated_at = ? WHERE highlight_id = ?")
+    .run(polarity, nowMillis(), highlightId);
+
+  if (result.changes === 0) {
+    return { error: `Correction not found for highlight: ${highlightId}` };
+  }
+
+  return { success: true };
+}
+
+export interface VoiceSignalRecord {
+  highlightId: string;
+  originalText: string;
+  notes: string[];
+  extendedContext: string | null;
+  highlightColor: string;
+  writingType: string | null;
+  polarity: string;
+  documentTitle: string | null;
+  createdAt: number;
+}
+
+export function getVoiceSignals(
+  db: Database.Database,
+  polarity?: string,
+  limit: number = 500,
+): VoiceSignalRecord[] {
+  const clampedLimit = Math.min(Math.max(limit, 1), 2000);
+
+  if (polarity) {
+    const rows = db
+      .prepare(
+        `SELECT highlight_id as highlightId, original_text as originalText, notes_json as notesJson,
+                extended_context as extendedContext, highlight_color as highlightColor,
+                writing_type as writingType, polarity, document_title as documentTitle,
+                created_at as createdAt
+         FROM corrections
+         WHERE session_id != '__backfilled__' AND polarity = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      )
+      .all(polarity, clampedLimit) as RawVoiceSignalRow[];
+    return rows.map(parseVoiceSignalRow);
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT highlight_id as highlightId, original_text as originalText, notes_json as notesJson,
+              extended_context as extendedContext, highlight_color as highlightColor,
+              writing_type as writingType, polarity, document_title as documentTitle,
+              created_at as createdAt
+       FROM corrections
+       WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT ?`,
+    )
+    .all(clampedLimit) as RawVoiceSignalRow[];
+  return rows.map(parseVoiceSignalRow);
+}
+
+interface RawVoiceSignalRow {
+  highlightId: string;
+  originalText: string;
+  notesJson: string;
+  extendedContext: string | null;
+  highlightColor: string;
+  writingType: string | null;
+  polarity: string;
+  documentTitle: string | null;
+  createdAt: number;
+}
+
+function parseNotesJson(notesJson: string): string[] {
   try {
-    const parsed: unknown = JSON.parse(row.notesJson);
+    const parsed: unknown = JSON.parse(notesJson);
     if (Array.isArray(parsed)) {
-      notes = parsed.filter((v): v is string => typeof v === "string");
+      return parsed.filter((v): v is string => typeof v === "string");
     }
   } catch {
     // ignore
   }
+  return [];
+}
+
+function parseVoiceSignalRow(row: RawVoiceSignalRow): VoiceSignalRecord {
+  return {
+    highlightId: row.highlightId,
+    originalText: row.originalText,
+    notes: parseNotesJson(row.notesJson),
+    extendedContext: row.extendedContext,
+    highlightColor: row.highlightColor,
+    writingType: row.writingType,
+    polarity: row.polarity,
+    documentTitle: row.documentTitle,
+    createdAt: row.createdAt,
+  };
+}
+
+function parseRow(row: RawCorrectionRow): CorrectionRecord {
   return {
     originalText: row.originalText,
-    notes,
+    notes: parseNotesJson(row.notesJson),
     highlightColor: row.highlightColor,
     documentTitle: row.documentTitle,
     documentId: row.documentId,
     createdAt: row.createdAt,
     writingType: row.writingType,
+    polarity: row.polarity,
     prefixContext: row.prefixContext,
     suffixContext: row.suffixContext,
     extendedContext: row.extendedContext,

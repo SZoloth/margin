@@ -11,6 +11,9 @@ import {
   deleteHighlight,
   findTextInDocument,
   highlightByText,
+  updateMarginNote,
+  deleteMarginNote,
+  updateHighlightColor,
 } from "../tools/annotations.js";
 
 let db: Database.Database;
@@ -358,5 +361,75 @@ describe("highlightByText", () => {
       expect(result.note).toBeDefined();
       expect(result.note!.content).toBe("Opening line");
     }
+  });
+});
+
+describe("updateMarginNote", () => {
+  it("updates note content and returns updated record", () => {
+    insertDoc("doc1");
+    insertHighlight("h1", "doc1", 0, 5);
+    insertNote("n1", "h1", "original note");
+
+    const result = updateMarginNote(db, "n1", "updated note");
+    expect(result).not.toHaveProperty("error");
+    if (!("error" in result)) {
+      expect(result.id).toBe("n1");
+      expect(result.content).toBe("updated note");
+    }
+  });
+
+  it("errors for nonexistent note", () => {
+    const result = updateMarginNote(db, "nonexistent", "content");
+    expect(result).toHaveProperty("error");
+  });
+});
+
+describe("deleteMarginNote", () => {
+  it("deletes note without deleting highlight", () => {
+    insertDoc("doc1");
+    insertHighlight("h1", "doc1", 0, 5);
+    insertNote("n1", "h1", "my note");
+
+    const result = deleteMarginNote(db, "n1");
+    expect(result).toHaveProperty("success");
+
+    // Note should be gone
+    const noteCount = (db.prepare("SELECT COUNT(*) as c FROM margin_notes").get() as { c: number }).c;
+    expect(noteCount).toBe(0);
+
+    // Highlight should still exist
+    const highlight = db.prepare("SELECT id FROM highlights WHERE id = 'h1'").get();
+    expect(highlight).toBeTruthy();
+  });
+
+  it("errors for nonexistent note", () => {
+    const result = deleteMarginNote(db, "nonexistent");
+    expect(result).toHaveProperty("error");
+  });
+});
+
+describe("updateHighlightColor", () => {
+  it("updates highlight color", () => {
+    insertDoc("doc1");
+    insertHighlight("h1", "doc1", 0, 5, "yellow");
+
+    const result = updateHighlightColor(db, "h1", "green");
+    expect(result).toHaveProperty("success");
+
+    const row = db.prepare("SELECT color FROM highlights WHERE id = 'h1'").get() as { color: string };
+    expect(row.color).toBe("green");
+  });
+
+  it("rejects invalid color", () => {
+    insertDoc("doc1");
+    insertHighlight("h1", "doc1", 0, 5);
+
+    const result = updateHighlightColor(db, "h1", "red");
+    expect(result).toHaveProperty("error");
+  });
+
+  it("errors for nonexistent highlight", () => {
+    const result = updateHighlightColor(db, "nonexistent", "yellow");
+    expect(result).toHaveProperty("error");
   });
 });

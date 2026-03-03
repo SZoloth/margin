@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { nowMillis } from "../db.js";
 
 export interface WritingRule {
   id: string;
@@ -42,6 +43,90 @@ export function getWritingRules(
        ORDER BY writing_type, signal_count DESC, created_at DESC`,
     )
     .all() as WritingRule[];
+}
+
+const VALID_SEVERITIES = ["must-fix", "should-fix", "nice-to-fix"] as const;
+const VALID_WRITING_TYPES = [
+  "general", "email", "prd", "blog", "cover-letter",
+  "resume", "slack", "pitch", "outreach",
+] as const;
+
+export interface UpdateWritingRuleParams {
+  id: string;
+  rule_text?: string;
+  severity?: string;
+  when_to_apply?: string | null;
+  why?: string | null;
+  example_before?: string | null;
+  example_after?: string | null;
+  notes?: string | null;
+  writing_type?: string;
+}
+
+export function updateWritingRule(
+  db: Database.Database,
+  params: UpdateWritingRuleParams,
+): WritingRule | { error: string } {
+  const existing = db
+    .prepare("SELECT id FROM writing_rules WHERE id = ?")
+    .get(params.id) as { id: string } | undefined;
+
+  if (!existing) {
+    return { error: `Writing rule not found: ${params.id}` };
+  }
+
+  if (params.severity && !VALID_SEVERITIES.includes(params.severity as (typeof VALID_SEVERITIES)[number])) {
+    return { error: `Invalid severity "${params.severity}". Allowed: ${VALID_SEVERITIES.join(", ")}` };
+  }
+
+  if (params.writing_type && !VALID_WRITING_TYPES.includes(params.writing_type as (typeof VALID_WRITING_TYPES)[number])) {
+    return { error: `Invalid writing_type "${params.writing_type}". Allowed: ${VALID_WRITING_TYPES.join(", ")}` };
+  }
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  if (params.rule_text !== undefined) { sets.push("rule_text = ?"); values.push(params.rule_text); }
+  if (params.severity !== undefined) { sets.push("severity = ?"); values.push(params.severity); }
+  if (params.when_to_apply !== undefined) { sets.push("when_to_apply = ?"); values.push(params.when_to_apply); }
+  if (params.why !== undefined) { sets.push("why = ?"); values.push(params.why); }
+  if (params.example_before !== undefined) { sets.push("example_before = ?"); values.push(params.example_before); }
+  if (params.example_after !== undefined) { sets.push("example_after = ?"); values.push(params.example_after); }
+  if (params.notes !== undefined) { sets.push("notes = ?"); values.push(params.notes); }
+  if (params.writing_type !== undefined) { sets.push("writing_type = ?"); values.push(params.writing_type); }
+
+  if (sets.length === 0) {
+    return { error: "No fields to update" };
+  }
+
+  const now = nowMillis();
+  sets.push("updated_at = ?");
+  values.push(now);
+  values.push(params.id);
+
+  db.prepare(`UPDATE writing_rules SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+
+  return db
+    .prepare(
+      `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
+              why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt
+       FROM writing_rules WHERE id = ?`,
+    )
+    .get(params.id) as WritingRule;
+}
+
+export function deleteWritingRule(
+  db: Database.Database,
+  ruleId: string,
+): { success: true } | { error: string } {
+  const result = db.prepare("DELETE FROM writing_rules WHERE id = ?").run(ruleId);
+
+  if (result.changes === 0) {
+    return { error: `Writing rule not found: ${ruleId}` };
+  }
+
+  return { success: true };
 }
 
 const TYPE_LABELS: Record<string, string> = {

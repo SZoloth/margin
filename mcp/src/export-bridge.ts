@@ -16,8 +16,22 @@ export class ExportBridge {
   private waiterQueue: Waiter[] = [];
   private server: Server | null = null;
   private port: number | null = null;
+  private _latestExport: string | null = null;
+  private _onExport: ((prompt: string) => void) | null = null;
+
+  /** Register a callback fired every time an export arrives. */
+  onExport(cb: (prompt: string) => void): void {
+    this._onExport = cb;
+  }
+
+  /** The most recent export payload, if any. */
+  get latestExport(): string | null {
+    return this._latestExport;
+  }
 
   enqueue(prompt: string): void {
+    this._latestExport = prompt;
+
     // Direct handoff to a waiting consumer if available
     const waiter = this.waiterQueue.shift();
     if (waiter) {
@@ -26,6 +40,9 @@ export class ExportBridge {
     } else {
       this.exportQueue.push(prompt);
     }
+
+    // Notify listener (MCP server push notifications)
+    this._onExport?.(prompt);
   }
 
   waitForExport(timeoutMs = 300_000): Promise<string> {

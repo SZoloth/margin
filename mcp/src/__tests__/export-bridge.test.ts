@@ -46,6 +46,31 @@ describe("ExportBridge queue rendezvous", () => {
     bridge.enqueue("after-timeout");
     expect(await bridge.waitForExport(5000)).toBe("after-timeout");
   });
+
+  it("onExport callback fires on enqueue", async () => {
+    const received: string[] = [];
+    bridge.onExport((prompt) => received.push(prompt));
+    bridge.enqueue("first");
+    bridge.enqueue("second");
+    expect(received).toEqual(["first", "second"]);
+  });
+
+  it("latestExport tracks the most recent export", async () => {
+    expect(bridge.latestExport).toBeNull();
+    bridge.enqueue("one");
+    expect(bridge.latestExport).toBe("one");
+    bridge.enqueue("two");
+    expect(bridge.latestExport).toBe("two");
+  });
+
+  it("onExport fires even when a waiter consumes the export", async () => {
+    const received: string[] = [];
+    bridge.onExport((prompt) => received.push(prompt));
+    const waiter = bridge.waitForExport(5000);
+    bridge.enqueue("delivered");
+    expect(await waiter).toBe("delivered");
+    expect(received).toEqual(["delivered"]);
+  });
 });
 
 class MockReq extends EventEmitter {

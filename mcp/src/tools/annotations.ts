@@ -208,6 +208,95 @@ export function deleteHighlight(
   return { success: true };
 }
 
+export function updateMarginNote(
+  db: Database.Database,
+  noteId: string,
+  content: string,
+): MarginNoteRecord | { error: string } {
+  const existing = db
+    .prepare(
+      `SELECT mn.id, mn.highlight_id, mn.created_at, h.document_id
+       FROM margin_notes mn
+       JOIN highlights h ON mn.highlight_id = h.id
+       WHERE mn.id = ?`,
+    )
+    .get(noteId) as { id: string; highlight_id: string; created_at: number; document_id: string } | undefined;
+
+  if (!existing) {
+    return { error: `Margin note not found: ${noteId}` };
+  }
+
+  const now = nowMillis();
+  db.prepare("UPDATE margin_notes SET content = ?, updated_at = ? WHERE id = ?").run(
+    content,
+    now,
+    noteId,
+  );
+
+  touchDocument(db, existing.document_id);
+
+  return {
+    id: noteId,
+    highlight_id: existing.highlight_id,
+    content,
+    created_at: existing.created_at,
+    updated_at: now,
+  };
+}
+
+export function deleteMarginNote(
+  db: Database.Database,
+  noteId: string,
+): { success: true } | { error: string } {
+  const existing = db
+    .prepare(
+      `SELECT mn.id, h.document_id
+       FROM margin_notes mn
+       JOIN highlights h ON mn.highlight_id = h.id
+       WHERE mn.id = ?`,
+    )
+    .get(noteId) as { id: string; document_id: string } | undefined;
+
+  if (!existing) {
+    return { error: `Margin note not found: ${noteId}` };
+  }
+
+  db.prepare("DELETE FROM margin_notes WHERE id = ?").run(noteId);
+  touchDocument(db, existing.document_id);
+
+  return { success: true };
+}
+
+export function updateHighlightColor(
+  db: Database.Database,
+  highlightId: string,
+  color: string,
+): { success: true } | { error: string } {
+  if (!ALLOWED_COLORS.includes(color as (typeof ALLOWED_COLORS)[number])) {
+    return {
+      error: `Invalid color "${color}". Allowed: ${ALLOWED_COLORS.join(", ")}`,
+    };
+  }
+
+  const highlight = db
+    .prepare("SELECT document_id FROM highlights WHERE id = ?")
+    .get(highlightId) as { document_id: string } | undefined;
+
+  if (!highlight) {
+    return { error: `Highlight not found: ${highlightId}` };
+  }
+
+  db.prepare("UPDATE highlights SET color = ?, updated_at = ? WHERE id = ?").run(
+    color,
+    nowMillis(),
+    highlightId,
+  );
+
+  touchDocument(db, highlight.document_id);
+
+  return { success: true };
+}
+
 export interface TextLocation {
   from_pos: number;
   to_pos: number;
