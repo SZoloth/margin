@@ -1,6 +1,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
+import Strike from "@tiptap/extension-strike";
 import Typography from "@tiptap/extension-typography";
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -18,6 +19,26 @@ import { DiffMark } from "./extensions/diff-mark";
 import { FrontMatter } from "./extensions/front-matter";
 import "../../styles/editor.css";
 
+// Prevent Strike from claiming <del> tags used by DiffMark.
+// Without this, deleted text gets both a diffMark and a strike mark;
+// the strike serializes to ~~text~~ in markdown, which persists after
+// diff cleanup and shows strikethrough on content that should be removed.
+const SafeStrike = Strike.extend({
+  parseHTML() {
+    return [
+      { tag: "s" },
+      { tag: "del:not([data-change-id])" },
+      { tag: "strike" },
+      {
+        style: "text-decoration",
+        consuming: false,
+        getAttrs: (style) =>
+          (style as string).includes("line-through") ? {} : false,
+      },
+    ];
+  },
+});
+
 interface ReaderProps {
   content: string;
   onUpdate: (content: string) => void;
@@ -32,7 +53,8 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
   const editor = useEditor({
     extensions: [
       FrontMatter,
-      StarterKit,
+      StarterKit.configure({ strike: false }),
+      SafeStrike,
       Typography,
       Table.configure({ resizable: false }),
       TableRow,

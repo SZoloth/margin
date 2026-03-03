@@ -18,6 +18,12 @@ vi.mock("@/lib/tauri-commands", () => ({
   readFile: (...args: unknown[]) => mockReadFile(...args),
 }));
 
+// Mock @tauri-apps/plugin-fs — stat resolves by default (file exists)
+const mockStat = vi.fn().mockResolvedValue({ mtime: new Date() });
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  stat: (...args: unknown[]) => mockStat(...args),
+}));
+
 // Deterministic UUIDs
 let uuidCounter = 0;
 vi.stubGlobal("crypto", { randomUUID: () => `uuid-${++uuidCounter}` });
@@ -103,7 +109,7 @@ describe("useTabs", () => {
       ]);
       mockGetRecentDocuments.mockResolvedValue([docA, docB]);
 
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       expect(result.current.tabs).toHaveLength(2);
@@ -121,7 +127,7 @@ describe("useTabs", () => {
       ]);
       mockGetRecentDocuments.mockResolvedValue([docA]);
 
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       expect(result.current.tabs).toHaveLength(1);
@@ -132,7 +138,7 @@ describe("useTabs", () => {
     it("empty persisted tabs sets isReady immediately", async () => {
       mockGetOpenTabs.mockResolvedValue([]);
 
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       expect(result.current.isReady).toBe(true);
@@ -147,7 +153,7 @@ describe("useTabs", () => {
       mockGetRecentDocuments.mockResolvedValue([docA]);
       mockReadFile.mockResolvedValue("# Hello World");
 
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const cached = result.current.getCachedTab("t1");
@@ -161,7 +167,7 @@ describe("useTabs", () => {
 
   describe("openTab", () => {
     it("creates a new tab", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const doc = makeDoc("a", "Alpha");
@@ -175,7 +181,7 @@ describe("useTabs", () => {
     });
 
     it("deduplicates existing tab (switches + updates cache)", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const doc = makeDoc("a", "Alpha");
@@ -196,7 +202,7 @@ describe("useTabs", () => {
 
   describe("openInActiveTab", () => {
     it("replaces active tab content", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const docA = makeDoc("a", "Alpha");
@@ -218,7 +224,7 @@ describe("useTabs", () => {
     });
 
     it("deduplicates (switches to existing tab)", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const docA = makeDoc("a", "Alpha");
@@ -264,7 +270,7 @@ describe("useTabs", () => {
         };
       };
 
-      const { result } = renderHook(() => useTabs(snapshotFn));
+      const { result } = renderHook(() => useTabs({ snapshotFn }));
       await flushMount();
 
       const docA = makeDoc("a");
@@ -296,7 +302,7 @@ describe("useTabs", () => {
         };
       };
 
-      const { result } = renderHook(() => useTabs(snapshotFn));
+      const { result } = renderHook(() => useTabs({ snapshotFn }));
       await flushMount();
 
       const doc = makeDoc("a");
@@ -315,7 +321,7 @@ describe("useTabs", () => {
 
   describe("closeTab", () => {
     it("clean tab closes immediately", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const doc = makeDoc("a");
@@ -330,7 +336,7 @@ describe("useTabs", () => {
     });
 
     it("dirty tab sets pendingCloseTabId", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const doc = makeDoc("a");
@@ -347,7 +353,7 @@ describe("useTabs", () => {
 
   describe("forceCloseTab", () => {
     it("removes tab + cache, selects adjacent", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const docA = makeDoc("a");
@@ -371,7 +377,7 @@ describe("useTabs", () => {
     });
 
     it("handles last tab (activeTabId becomes null)", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const doc = makeDoc("a");
@@ -387,7 +393,7 @@ describe("useTabs", () => {
 
   describe("cancelCloseTab", () => {
     it("clears pendingCloseTabId", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       const doc = makeDoc("a");
@@ -406,7 +412,7 @@ describe("useTabs", () => {
 
   describe("reorderTabs", () => {
     it("moves tab and reassigns sequential order values", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       act(() => result.current.openTab(makeDoc("a", "A"), "a", null));
@@ -427,7 +433,7 @@ describe("useTabs", () => {
 
   describe("updateActiveTabDirty", () => {
     it("updates isDirty on active tab", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       act(() => result.current.openTab(makeDoc("a"), "a", null));
@@ -438,7 +444,7 @@ describe("useTabs", () => {
     });
 
     it("no-ops when no active tab", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       // No tabs open — should not throw
@@ -449,7 +455,7 @@ describe("useTabs", () => {
 
   describe("updateActiveTabTitle", () => {
     it("updates title on active tab", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       act(() => result.current.openTab(makeDoc("a", "Old"), "a", null));
@@ -463,7 +469,7 @@ describe("useTabs", () => {
 
   describe("persist debounce", () => {
     it("saveOpenTabs called after 500ms, rapid ops coalesce", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       act(() => result.current.openTab(makeDoc("a"), "a", null));
@@ -484,7 +490,7 @@ describe("useTabs", () => {
 
   describe("keyboard shortcuts", () => {
     it("Cmd+W closes active tab", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       act(() => result.current.openTab(makeDoc("a"), "a", null));
@@ -500,7 +506,7 @@ describe("useTabs", () => {
     });
 
     it("Ctrl+Tab cycles forward (wraps)", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       act(() => result.current.openTab(makeDoc("a", "A"), "a", null));
@@ -539,7 +545,7 @@ describe("useTabs", () => {
     });
 
     it("Ctrl+Shift+Tab cycles backward", async () => {
-      const { result } = renderHook(() => useTabs(makeSnapshotFn()));
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
       await flushMount();
 
       act(() => result.current.openTab(makeDoc("a", "A"), "a", null));
@@ -585,7 +591,7 @@ describe("useTabs", () => {
         scrollPosition: 0,
       });
 
-      const { result } = renderHook(() => useTabs(snapshotFn));
+      const { result } = renderHook(() => useTabs({ snapshotFn }));
       await flushMount();
 
       const docA = makeDoc("a", "Alpha");
@@ -629,7 +635,7 @@ describe("useTabs", () => {
         };
       };
 
-      const { result } = renderHook(() => useTabs(snapshotFn));
+      const { result } = renderHook(() => useTabs({ snapshotFn }));
       await flushMount();
 
       const docA = makeDoc("a", "Alpha");

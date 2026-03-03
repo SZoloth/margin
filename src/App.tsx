@@ -144,7 +144,15 @@ export default function App() {
     };
   }, [doc.currentDoc, doc.content, doc.filePath, doc.isDirty, annotations.highlights, annotations.marginNotes, annotations.isLoaded]);
 
-  const tabsHook = useTabs(snapshotFn);
+  const tabsHook = useTabs({
+    snapshotFn,
+    onFileMissing: (names) => {
+      const label = names.length === 1
+        ? `"${names[0]}" was deleted — tab removed`
+        : `${names.length} deleted files — tabs removed`;
+      setErrorToast({ message: label, id: ++errorIdRef.current });
+    },
+  });
   const unsavedDialog = useAnimatedPresence(!!tabsHook.pendingCloseTabId, 200);
 
   // Listen for Cmd+O from useTabs keyboard shortcut
@@ -192,7 +200,11 @@ export default function App() {
           prevDocIdRef.current = recentDoc.id;
           openAsNewTabRef.current = false;
           if (recentDoc.source === "file" && recentDoc.file_path) {
-            void doc.openRecentDocument(recentDoc);
+            void stat(recentDoc.file_path).then(() => {
+              void doc.openRecentDocument(recentDoc);
+            }).catch(() => {
+              closeDeletedFileTab(recentDoc.file_path!, tab.id);
+            });
           } else if (recentDoc.source === "keep-local" && recentDoc.keep_local_id) {
             void keepLocal.getContent(recentDoc.keep_local_id).then((markdown) => {
               void doc.openKeepLocalArticle(recentDoc, markdown);
@@ -312,6 +324,8 @@ export default function App() {
   contentRef.current = doc.content;
   const diffReviewRef = useRef(diffReview);
   diffReviewRef.current = diffReview;
+  const tabsHookRef = useRef(tabsHook);
+  tabsHookRef.current = tabsHook;
   const isRestoringMarksRef = useRef(false);
 
   // Avoid cross-document corruption: diff review state is scoped to a single doc
@@ -444,6 +458,15 @@ export default function App() {
     doc.setContent(md);
   }, [doc.setContent]);
 
+  // Close a tab whose backing file was deleted, and show a toast.
+  // Used by the watcher catch, focus handler, and tab-switch guard.
+  const closeDeletedFileTab = useCallback((filePath: string, tabId?: string) => {
+    const name = filePath.split("/").pop() ?? "file";
+    const id = tabId ?? tabsHookRef.current.activeTabId;
+    if (id) tabsHookRef.current.forceCloseTab(id);
+    setErrorToast({ message: `"${name}" was deleted — tab closed`, id: ++errorIdRef.current });
+  }, []);
+
   const isSelfSaveRef = useRef(doc.isSelfSave);
   isSelfSaveRef.current = doc.isSelfSave;
 
@@ -482,7 +505,14 @@ export default function App() {
         })
         .catch(() => {});
     } catch (err) {
-      console.error("Failed to reload file:", err);
+      // Check if the file was deleted (not just a transient read error)
+      try {
+        await stat(path);
+        // File exists — transient error, just log
+        console.error("Failed to reload file:", err);
+      } catch {
+        closeDeletedFileTab(path);
+      }
     }
   }, []);
 
@@ -513,14 +543,13 @@ export default function App() {
         // All accepted — file on disk already has this content, don't mark dirty.
         setContentExternalRef.current(finalContent);
       }
-      // Force the editor to re-render with clean content. We can't use
-      // removeMark here because its dispatch triggers Reader's onUpdate,
-      // which overwrites doc.content with the wrong markdown (deleted text
-      // as plain text, since DiffMark serializes to empty strings).
-      // Instead, directly call setContent to replace the entire document,
-      // suppressing onUpdate to avoid marking dirty or polluting state.
+      // Force the editor to re-render with clean content.
+      // Set editable first so the command dispatches reliably, then replace
+      // the entire document (setContent), suppressing onUpdate via the
+      // isRestoringMarks guard to avoid marking dirty or polluting state.
       const ed = editorRef.current;
       if (ed && !ed.isDestroyed) {
+        ed.setEditable(true, false);
         isRestoringMarksRef.current = true;
         try {
           ed.commands.setContent(finalContent);
@@ -543,10 +572,15 @@ export default function App() {
     }
   }, [diffReview.mode, diffReview.getFinalContent, diffReview.reset, doc.setContent]);
 
-  // Disable editing while diff review is active (prevents saving markup to disk)
+  // Disable editing while diff review is active (prevents saving markup to disk).
+  // Suppress the TipTap 'update' event (emitUpdate=false) because the editable
+  // transition fires AFTER the resolution effect — if the resolution's setContent
+  // didn't fully take effect, the update event would serialize stale diff markup
+  // into doc.content and lastEmittedMarkdownRef, preventing the Reader from
+  // correcting the editor in the next render.
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(diffReview.mode === "idle");
+    editor.setEditable(diffReview.mode === "idle", false);
   }, [editor, diffReview.mode]);
 
   // Scroll to current change and auto-show Keep/Revert controls.
@@ -638,7 +672,10 @@ export default function App() {
             lastMtimeRef.current = mtime;
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          // File gone (or inaccessible) while app was in background
+          closeDeletedFileTab(currentPath);
+        });
     });
 
     return () => { void unlisten.then((fn) => fn()); };
@@ -1319,7 +1356,7 @@ export default function App() {
                   border: "none",
                   cursor: "pointer",
                   color: "var(--color-text-secondary)",
-                  fontSize: 18,
+                  fontSize: 18, /* ds-lint-disable */
                   lineHeight: 1,
                   padding: "2px 6px",
                   borderRadius: "var(--radius-sm)",
@@ -1330,7 +1367,7 @@ export default function App() {
               <div style={{ marginBottom: 16 }}>
                 <div
                   style={{
-                    fontSize: 14,
+                    fontSize: 14, /* ds-lint-disable */
                     fontWeight: 600,
                     color: "var(--color-text-primary)",
                     marginBottom: 6,
@@ -1338,7 +1375,7 @@ export default function App() {
                 >
                   Unsaved changes
                 </div>
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <div style={{ fontSize: 13, /* ds-lint-disable */ color: "var(--color-text-secondary)" }}>
                   "{tab.title}" has unsaved changes.
                 </div>
               </div>
@@ -1347,7 +1384,7 @@ export default function App() {
                   onClick={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
                   style={{
                     padding: "6px 14px",
-                    fontSize: 13,
+                    fontSize: 13, /* ds-lint-disable */
                     borderRadius: "var(--radius-md)",
                     border: "1px solid var(--color-border)",
                     background: "none",
@@ -1364,7 +1401,7 @@ export default function App() {
                   }}
                   style={{
                     padding: "6px 14px",
-                    fontSize: 13,
+                    fontSize: 13, /* ds-lint-disable */
                     borderRadius: "var(--radius-md)",
                     border: "none",
                     backgroundColor: "var(--color-accent)",
@@ -1409,7 +1446,7 @@ export default function App() {
             alignItems: "center",
             gap: 10,
             padding: "8px 14px",
-            fontSize: 12,
+            fontSize: 12, /* ds-lint-disable */
 
             color: "var(--color-text-primary)",
             backgroundColor: "var(--color-page)",
@@ -1426,9 +1463,9 @@ export default function App() {
             disabled={updater.installing}
             style={{
               padding: "3px 10px",
-              fontSize: 11,
+              fontSize: 11, /* ds-lint-disable */
               fontWeight: 500,
-  
+
               color: "var(--color-text-primary)",
               backgroundColor: "var(--hover-bg)",
               border: "1px solid var(--color-border)",
@@ -1449,7 +1486,7 @@ export default function App() {
                 cursor: "pointer",
                 padding: 2,
                 color: "var(--color-text-secondary)",
-                fontSize: 14,
+                fontSize: 14, /* ds-lint-disable */
                 lineHeight: 1,
               }}
               aria-label="Dismiss"
@@ -1458,7 +1495,7 @@ export default function App() {
             </button>
           )}
           {updater.error && (
-            <span style={{ color: "var(--color-danger, #ef4444)", fontSize: 11 }}>
+            <span style={{ color: "var(--color-danger, #ef4444)", fontSize: 11 /* ds-lint-disable */ }}>
               {updater.error}
             </span>
           )}

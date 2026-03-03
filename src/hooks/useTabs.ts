@@ -3,6 +3,7 @@ import type { Tab, TabCache, PersistedTab } from "@/types/tab";
 import type { Document } from "@/types/document";
 import type { Highlight, MarginNote } from "@/types/annotations";
 import { getOpenTabs, saveOpenTabs, getRecentDocuments, readFile } from "@/lib/tauri-commands";
+import { stat } from "@tauri-apps/plugin-fs";
 
 export interface SnapshotData {
   document: Document | null;
@@ -33,7 +34,12 @@ export interface UseTabsReturn {
   isReady: boolean;
 }
 
-export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
+export interface UseTabsOptions {
+  snapshotFn: () => SnapshotData;
+  onFileMissing?: (names: string[]) => void;
+}
+
+export function useTabs({ snapshotFn, onFileMissing }: UseTabsOptions): UseTabsReturn {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -76,12 +82,35 @@ export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
         const recentDocs = await getRecentDocuments(100);
         const docMap = new Map(recentDocs.map((d) => [d.id, d]));
 
+        // Check file existence in parallel (non-file and active tabs skip stat)
+        const candidates = persisted
+          .map((pt) => ({ pt, doc: docMap.get(pt.document_id) }))
+          .filter((c): c is { pt: PersistedTab; doc: Document } => !!c.doc);
+
+        const existsResults = await Promise.all(
+          candidates.map(async ({ pt, doc }) => {
+            // Skip stat for the active tab — readFile below is the authoritative check
+            if (doc.source === "file" && doc.file_path && !pt.is_active) {
+              try {
+                await stat(doc.file_path);
+              } catch {
+                return { pt, doc, missing: true };
+              }
+            }
+            return { pt, doc, missing: false };
+          }),
+        );
+
         const restoredTabs: Tab[] = [];
         let activeId: string | null = null;
+        const missingFiles: string[] = [];
 
-        for (const pt of persisted) {
-          const doc = docMap.get(pt.document_id);
-          if (!doc) continue;
+        for (const { pt, doc, missing } of existsResults) {
+          if (missing) {
+            const name = doc.file_path?.split("/").pop() ?? doc.title ?? "Untitled";
+            missingFiles.push(name);
+            continue;
+          }
 
           const tab: Tab = {
             id: pt.id,
@@ -99,7 +128,7 @@ export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
           setTabs(restoredTabs);
           setActiveTabId(activeId);
 
-          // Pre-load the active tab's content
+          // Pre-load the active tab's content (also serves as existence check)
           const activeTab = restoredTabs.find((t) => t.id === activeId);
           if (activeTab?.documentId) {
             const doc = docMap.get(activeTab.documentId);
@@ -109,7 +138,18 @@ export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
                 try {
                   content = await readFile(doc.file_path);
                 } catch {
-                  // File may have been deleted
+                  // File deleted — remove active tab and pick a new one
+                  const name = doc.file_path.split("/").pop() ?? doc.title ?? "Untitled";
+                  missingFiles.push(name);
+                  const idx = restoredTabs.indexOf(activeTab);
+                  if (idx !== -1) restoredTabs.splice(idx, 1);
+                  activeId = restoredTabs[0]?.id ?? null;
+                  setTabs([...restoredTabs]);
+                  setActiveTabId(activeId);
+                  // Skip caching since the file is gone
+                  if (missingFiles.length > 0) onFileMissing?.(missingFiles);
+                  if (!cancelled) setIsReady(true);
+                  return;
                 }
               }
               tabCaches.current.set(activeTab.id, {
@@ -123,6 +163,9 @@ export function useTabs(snapshotFn: () => SnapshotData): UseTabsReturn {
               });
             }
           }
+        }
+        if (missingFiles.length > 0) {
+          onFileMissing?.(missingFiles);
         }
       } catch (err) {
         console.error("Failed to restore tabs:", err);
