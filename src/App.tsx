@@ -512,16 +512,19 @@ export default function App() {
         // All accepted — file on disk already has this content, don't mark dirty.
         setContentExternalRef.current(finalContent);
       }
-      // Force-clear diff marks from the editor. The markdown serializer drops
-      // DiffMark (no markdown representation), so Reader's content equality
-      // check passes and skips setContent — leaving green/red marks in the DOM.
+      // Force the editor to re-render with clean content. We can't use
+      // removeMark here because its dispatch triggers Reader's onUpdate,
+      // which overwrites doc.content with the wrong markdown (deleted text
+      // as plain text, since DiffMark serializes to empty strings).
+      // Instead, directly call setContent to replace the entire document,
+      // suppressing onUpdate to avoid marking dirty or polluting state.
       const ed = editorRef.current;
       if (ed && !ed.isDestroyed) {
-        const diffMarkType = ed.schema.marks.diffMark;
-        if (diffMarkType) {
-          const { tr } = ed.state;
-          tr.removeMark(0, ed.state.doc.content.size, diffMarkType);
-          if (tr.docChanged) ed.view.dispatch(tr);
+        isRestoringMarksRef.current = true;
+        try {
+          ed.commands.setContent(finalContent);
+        } finally {
+          isRestoringMarksRef.current = false;
         }
       }
 
