@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "tokens": "npx tsx scripts/extract-tokens.ts",
-    "version:sync": "bash scripts/sync-version.sh"
+    "version:sync": "bash scripts/sync-version.sh",
+    "lint:tokens": "node --experimental-strip-types scripts/lint-tokens.ts --all",
+    "lint:tokens:staged": "node --experimental-strip-types scripts/lint-tokens.ts"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^3.1.1",
