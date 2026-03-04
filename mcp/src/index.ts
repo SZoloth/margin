@@ -437,7 +437,7 @@ server.tool(
     example_after: z.string().optional().describe("Example of text after applying the rule"),
     notes: z.string().optional().describe("Additional notes"),
     source: z.string().optional().describe("Source of the rule (default: synthesis)"),
-    signal_count: z.number().optional().describe("How many times this pattern was observed (default: 1)"),
+    signal_count: z.number().int().min(1).optional().describe("How many times this pattern was observed (default: 1)"),
   },
   async (params) => withDbAndExport(() => {
     const result = createWritingRule(getWriteDb(), params);
@@ -461,6 +461,7 @@ server.tool(
     example_after: z.string().nullable().optional().describe("Example of text after applying the rule"),
     notes: z.string().nullable().optional().describe("Additional notes"),
     writing_type: z.string().optional().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
+    signal_count: z.number().int().min(1).optional().describe("Number of times this pattern was observed"),
   },
   async (params) => withDbAndExport(() => {
     const result = updateWritingRule(getWriteDb(), params);

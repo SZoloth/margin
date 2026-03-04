@@ -113,6 +113,7 @@ export interface UpdateWritingRuleParams {
   example_after?: string | null;
   notes?: string | null;
   writing_type?: string;
+  signal_count?: number;
 }
 
 export function updateWritingRule(
@@ -146,6 +147,7 @@ export function updateWritingRule(
   if (params.example_after !== undefined) { sets.push("example_after = ?"); values.push(params.example_after); }
   if (params.notes !== undefined) { sets.push("notes = ?"); values.push(params.notes); }
   if (params.writing_type !== undefined) { sets.push("writing_type = ?"); values.push(params.writing_type); }
+  if (params.signal_count !== undefined) { sets.push("signal_count = ?"); values.push(params.signal_count); }
 
   if (sets.length === 0) {
     return { error: "No fields to update" };
