@@ -64,8 +64,5 @@
     "typescript": "^5.7",
     "vite": "^6",
     "vitest": "^4.0.18"
-  },
-  "optionalDependencies": {
-    "vite-plugin-design-playground": "link:../vite-plugin-design-playground"
   }
 }

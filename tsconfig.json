@@ -17,9 +17,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "vite-plugin-design-playground/client/*": ["../vite-plugin-design-playground/client/*"]
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "vitest.setup.ts"]
+  "include": ["src", "vitest.setup.ts"],
+  "exclude": ["src/playground"]
 }
