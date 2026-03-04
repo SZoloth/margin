@@ -21,6 +21,7 @@ pub struct WritingRule {
     pub created_at: i64,
     pub updated_at: i64,
     pub reviewed_at: Option<i64>,
+    pub register: Option<String>,
 }
 
 fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
@@ -40,13 +41,14 @@ fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
         created_at: row.get(12)?,
         updated_at: row.get(13)?,
         reviewed_at: row.get(14)?,
+        register: row.get(15)?,
     })
 }
 
 const RULES_SELECT: &str =
     "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
             example_before, example_after, source, signal_count, notes, created_at, updated_at,
-            reviewed_at
+            reviewed_at, register
      FROM writing_rules";
 
 fn fetch_writing_rules(
@@ -196,15 +198,68 @@ fn generate_writing_profile_markdown(
         lines.push(String::new());
         lines.push("_Statistical voice fingerprint. These are constraints, not suggestions._".to_string());
 
-        for rule in &voice_rules {
+        // Group by register: "all" first, then "casual", then "professional"
+        let universal: Vec<&&WritingRule> = voice_rules.iter()
+            .filter(|r| r.register.as_deref() != Some("casual") && r.register.as_deref() != Some("professional"))
+            .collect();
+        let casual: Vec<&&WritingRule> = voice_rules.iter()
+            .filter(|r| r.register.as_deref() == Some("casual"))
+            .collect();
+        let professional: Vec<&&WritingRule> = voice_rules.iter()
+            .filter(|r| r.register.as_deref() == Some("professional"))
+            .collect();
+
+        if !universal.is_empty() {
             lines.push(String::new());
-            lines.push(format!("- **{}**", rule.rule_text));
-            if let Some(when) = &rule.when_to_apply {
-                lines.push(format!("  - When: {when}"));
+            lines.push("### Universal (all registers)".to_string());
+            for rule in &universal {
+                lines.push(String::new());
+                lines.push(format!("- **{}**", rule.rule_text));
+                if let Some(when) = &rule.when_to_apply {
+                    lines.push(format!("  - When: {when}"));
+                }
+                if let Some(why) = &rule.why {
+                    lines.push(format!("  - Why: {why}"));
+                }
             }
-            if let Some(why) = &rule.why {
-                lines.push(format!("  - Why: {why}"));
+        }
+
+        if !casual.is_empty() {
+            lines.push(String::new());
+            lines.push("### Casual register (slack, outreach, email, general chat)".to_string());
+            for rule in &casual {
+                lines.push(String::new());
+                lines.push(format!("- **{}**", rule.rule_text));
+                if let Some(when) = &rule.when_to_apply {
+                    lines.push(format!("  - When: {when}"));
+                }
+                if let Some(why) = &rule.why {
+                    lines.push(format!("  - Why: {why}"));
+                }
             }
+        }
+
+        if !professional.is_empty() {
+            lines.push(String::new());
+            lines.push("### Professional register (pitch, prd, cover-letter, resume, blog)".to_string());
+            lines.push("_These rules DO NOT apply to casual writing. Use complete sentences, standard punctuation._".to_string());
+            for rule in &professional {
+                lines.push(String::new());
+                lines.push(format!("- **{}**", rule.rule_text));
+                if let Some(when) = &rule.when_to_apply {
+                    lines.push(format!("  - When: {when}"));
+                }
+                if let Some(why) = &rule.why {
+                    lines.push(format!("  - Why: {why}"));
+                }
+            }
+        }
+
+        // If there are casual rules, add explicit scoping note for professional types
+        if !casual.is_empty() && professional.is_empty() {
+            lines.push(String::new());
+            lines.push("### Professional register (pitch, prd, cover-letter, resume, blog)".to_string());
+            lines.push("_Casual-register rules above DO NOT apply. Use complete sentences, standard punctuation._".to_string());
         }
     }
 
@@ -779,6 +834,16 @@ mod tests {
         if !has_col {
             conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN reviewed_at INTEGER;").unwrap();
         }
+        // Add register column (matches production migration)
+        let has_register: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)").unwrap();
+            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap()
+                .filter_map(|r| r.ok()).collect();
+            cols.iter().any(|c| c == "register")
+        };
+        if !has_register {
+            conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN register TEXT;").unwrap();
+        }
         conn
     }
 
@@ -994,6 +1059,12 @@ mod tests {
         assert_eq!(parsed, vec!["it's \"tricky\""]);
     }
 
+    #[test]
+    fn hook_get_extension_has_single_empty_path_guard() {
+        let py = generate_writing_guard_py(&[]);
+        assert_eq!(py.matches("if not path:").count(), 1);
+    }
+
     // --- update_rule tests ---
 
     #[test]
@@ -1112,6 +1183,60 @@ mod tests {
         // Editorial rules should be in the Writing Rules section, not voice calibration
         assert!(md.contains("# Writing Rules"));
         assert!(md.contains("Read aloud test"));
+    }
+
+    #[test]
+    fn unified_profile_groups_voice_rules_by_register() {
+        let conn = setup_db();
+        // Universal rule
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v1', 'general', 'voice-calibration', 'Hedges 3.6x more than declares', 'must-fix', 'manual', 1, 'all', 1000, 1000)",
+            [],
+        ).unwrap();
+        // Casual rule
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v2', 'general', 'voice-calibration', 'Almost never end messages with periods', 'must-fix', 'manual', 1, 'casual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_profile_markdown(&rules, &[]);
+
+        assert!(md.contains("### Universal (all registers)"));
+        assert!(md.contains("Hedges 3.6x more than declares"));
+        assert!(md.contains("### Casual register (slack, outreach, email, general chat)"));
+        assert!(md.contains("Almost never end messages with periods"));
+        // Should have the professional scoping note since there are casual rules
+        assert!(md.contains("### Professional register"));
+        assert!(md.contains("DO NOT apply"));
+
+        // Universal should come before casual
+        let uni_pos = md.find("### Universal").unwrap();
+        let cas_pos = md.find("### Casual register").unwrap();
+        assert!(uni_pos < cas_pos);
+    }
+
+    #[test]
+    fn unified_profile_casual_rules_are_not_duplicated() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v1', 'general', 'voice-calibration', 'Casual rule A', 'must-fix', 'manual', 1, 'casual', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v2', 'general', 'voice-calibration', 'Casual rule B', 'must-fix', 'manual', 1, 'casual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_profile_markdown(&rules, &[]);
+
+        assert_eq!(md.matches("- **Casual rule A**").count(), 1);
+        assert_eq!(md.matches("- **Casual rule B**").count(), 1);
     }
 
     #[test]

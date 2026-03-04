@@ -153,6 +153,7 @@ export const SCHEMA_SQL = `
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     reviewed_at INTEGER,
+    register TEXT,
     UNIQUE(writing_type, category, rule_text)
   );
 

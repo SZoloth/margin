@@ -1,0 +1,704 @@
+{
+  "timestamp": "2026-03-04T05:43:51.737Z",
+  "results": [
+    {
+      "writingType": "general",
+      "samples": [
+        {
+          "prompt": "Write a 200-word blog intro about why product managers should learn to code",
+          "text": "**Draft:**\n\nThe most useful thing a PM can do in an engineering sprint isn't write the spec. It's being able to sit down, read the code, and ask a real question instead of a hand-wavy one.\n\nNot \"can we add this?\" but \"this function is doing three things — which one is the expensive part?\"\n\nThat shift changes the room. When you can read a pull request, you stop needing everything translated. You stop being the person who generates requirements and waits for a verdict. Engineers notice. Conversations get shorter. Decisions get made in the room instead of in the next meeting.\n\nThe sharper version of this: AI is collapsing how long it takes to go from idea to working prototype. PMs who can prompt, iterate, and stress-test a rough build before it ever touches engineering are compressing cycles that used to take weeks. That's not a productivity flex. It changes what you're expected to bring to the table.\n\nYou don't need to write production code. But the gap between \"I could never\" and \"I built a rough version to prove the concept\" is smaller than it's ever been.\n\nThat gap is worth closing.\n\n---\n\n**Critique pass:**\n\nParagraph 3 has three short declarative sentences in a row with the same rhythm — \"Engineers notice. Conversations get shorter. Decisions get made...\" — monotonous cadence, consider combining two of them. Otherwise: no press-release language, no AI tells I can catch, claims are grounded, argument earns each paragraph.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~5 words): \"That's not a productivity flex.\" / \"It changes what you're expected to bring to the table.\" / \"You don't need to write production code.\""
+                }
+              ],
+              "structuralTells": [
+                {
+                  "pattern": "Negative parallelism (isn't X. It's Y)",
+                  "matches": [
+                    "... engineering sprint isn't write the spec. It's being able to sit d..."
+                  ]
+                }
+              ]
+            },
+            "summary": {
+              "mechanicalIssues": 2,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write a 200-word blog intro about why product managers should learn to code",
+          "text": "---\n\nThe best PMs I've worked with don't necessarily ship code. But they can read it. They know when an engineer is underselling complexity, when an estimate is padded, and when a \"two-week feature\" is actually three different problems held together with optimism.\n\nLearning to code won't make you a better writer or a sharper designer. It tunes your calibration. You stop asking \"is this hard?\" and start asking \"hard compared to what?\" You stop treating technical debt as background noise and start seeing it as the specific, compounding drag it puts on every sprint that follows.\n\nThe PM who can't read code isn't lost — they're just dependent. Every technical conversation runs through a translator. And translators, however good, bring their own frame.\n\nThere's also something harder to name: writing code changes how you think. You get comfortable with ambiguity resolving slowly. With systems that fail in boring, unglamorous ways. With getting something mostly right and still completely wrong.\n\nThat tolerance for iteration, for incompleteness, for debugging something you built — that's the actual skill. The code is just the resistance you train against.\n\n---\n\n**Critique pass:** The \"two-week feature held together with optimism\" line does real work without padding. Last line lands. Cut-check: nothing in here that doesn't earn its place. \"Tunes your calibration\" is still a touch abstract — if you want to go more concrete, swap it for something like \"sharpens your ear for bullshit\" depending on the publication's register.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "repetitive-structure",
+                  "detail": "10 consecutive sentences with similar length (~12 words): \"The PM who can't read code isn't lost — they're just depende...\" / \"Every technical conversation runs through a translator.\" / \"And translators, however good, bring their own frame.\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 1,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write a 200-word blog intro about why product managers should learn to code",
+          "text": "**Draft:**\n\n---\n\nThe argument for PMs learning to code usually goes: you'll communicate better with engineers, earn more respect, write better specs. That's all true, but it undersells the real shift.\n\nWhen you can read a pull request, you stop taking estimates on faith. When you've written a SQL query against your own product's database, you know exactly what questions are answerable and which ones require a two-week data project. When you've shipped a small feature yourself — even a janky internal tool — you develop an instinct for what's genuinely hard and what's just unfamiliar.\n\nThis isn't about PMs becoming engineers. Most won't, and that's fine. It's about closing the interpretive gap between what you imagine and what gets built. Specs written by people who've never coded tend to be confident about the wrong things — precise on UI copy, vague on data dependencies.\n\nThe PMs I've watched grow fastest weren't necessarily the strongest strategists. They were the ones who got curious about how the thing actually worked, opened the terminal, broke something, fixed it, and came back to the next sprint with sharper questions.\n\nThat curiosity compounds.\n\n---\n\n**Critique pass** (copy editor mode):\n\n- \"That's all true, but it undersells the real shift\" — borderline negative parallelism setup, but it earns it by delivering the shift immediately after. Keep.\n- \"This isn't about PMs becoming engineers\" — necessary guardrail for the audience, earns its place.\n- \"The PMs I've watched grow fastest\" — strongest line, should probably open the piece. Consider restructuring.\n- Rule of three check: \"opened the terminal, broke something, fixed it\" — genuine enumeration, not padding. Keep.\n- \"That curiosity compounds.\" — punchy closer. Keep as-is.\n- Word count: ~210. Trim \"Most won't, and that's fine\" to tighten.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "repetitive-structure",
+                  "detail": "4 consecutive sentences with similar length (~7 words): \"- \"That curiosity compounds.\" — punchy closer.\" / \"Keep as-is.\" / \"- Word count: ~210.\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 1,
+              "pass": false
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 1.3,
+        "systematicViolations": [
+          "Voice: repetitive-structure"
+        ]
+      }
+    },
+    {
+      "writingType": "email",
+      "samples": [
+        {
+          "prompt": "Draft a follow-up email after a job interview at a company you're excited about",
+          "text": "A few questions before I draft — specifics make the difference between generic and good:\n\n1. What role/company?\n2. What's one specific thing from the interview you're still thinking about — a problem they mentioned, a product decision, something that surprised you?\n3. Who are you sending it to — hiring manager, recruiter, or both?\n4. How long ago was the interview?",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        },
+        {
+          "prompt": "Draft a follow-up email after a job interview at a company you're excited about",
+          "text": "To write something that doesn't sound like a template, I need a few details. Can you share:\n\n1. **Who are you writing to** — hiring manager's name, company, and role?\n2. **One specific thing from the interview** to reference — a problem they described, something that surprised you, a topic you got animated about. The more specific, the less it reads as a form letter.\n3. **How warm was the rapport?** (casual first names vs. more formal senior exec)",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        },
+        {
+          "prompt": "Draft a follow-up email after a job interview at a company you're excited about",
+          "text": "A few questions before I draft — the specifics make or break a follow-up:\n\n1. **Who are you emailing?** (Hiring manager? Recruiter? Panel member?)\n2. **What role / company?**\n3. **What's one thing from the conversation that genuinely stuck with you** — a problem they mentioned, a direction they're thinking about, something you disagreed with internally?\n4. **Did you leave anything on the table** — a point you didn't fully land, something you wish you'd said?\n5. **Tone target:** warm-but-professional, or more peer-level (like you'd write to a PM peer)?\n\nThe best follow-ups reference something real from the room. Without that, I'll write you a generic \"thank you for your time\" email, which does nothing.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "repetitive-structure",
+                  "detail": "4 consecutive sentences with similar length (~6 words): \"**Who are you emailing?** (Hiring manager?\" / \"Recruiter?\" / \"Panel member?)\n2.\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~13 words): \"**Tone target:** warm-but-professional, or more peer-level (...\" / \"The best follow-ups reference something real from the room.\" / \"Without that, I'll write you a generic \"thank you for your t...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 2,
+              "pass": false
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 0.7,
+        "systematicViolations": []
+      }
+    },
+    {
+      "writingType": "cover-letter",
+      "samples": [
+        {
+          "prompt": "Write an opening paragraph for a PM role at Stripe",
+          "text": "Here's a draft, followed by my critique pass.\n\n---\n\n**Draft:**\n\nThe DreamWorks production platform I built analytics for served over 1,000 artists who never thought about it — which meant my job was to make it legible to leadership. I instrumented adoption by department, measured workflow impact, and built the layer that told decision-makers which tools justified continued investment and which didn't. The product was invisible; the PM work was in what it enabled downstream. At Stripe, product judgment shows up the same way — in someone else's conversion rate, years later. That's the work I want to do.\n\n---\n\n**Critique pass:**\n\n- \"I instrumented... measured... built\" — three genuine items, not padding. Passes.\n- \"The product was invisible; the PM work was in what it enabled downstream\" — strong. Keep.\n- \"At Stripe, product judgment shows up the same way\" — assumes the reader will agree with the analogy. Risky if the specific role is farther from infrastructure (e.g., a consumer-facing Stripe product). Verify the role before keeping this framing.\n- \"That's the work I want to do\" — frames it as what you want, not what they get. Consider flipping: \"That's what I'd bring to Stripe's product org\" or just cut the last sentence entirely — the paragraph already lands.\n- No AI tells, no negative parallelisms, no explaining Stripe back to Stripe. Clean.\n\n**One flag:** \"over 1,000 artists\" — confirm this number is accurate before sending.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        },
+        {
+          "prompt": "Write an opening paragraph for a PM role at Stripe",
+          "text": "At DreamWorks, I spent three years on a platform used by a thousand artists — close enough to an internal API that the same questions kept surfacing: which tools get deep adoption versus passive tolerance, which usage patterns actually predict continued investment. I built the analytics layer that made those distinctions legible, and it changed which products leadership kept funding and which they cut. That problem is harder and more interesting at Stripe's scale, which is why I'm here.\n\n---\n\n**Critique pass:**\n\n- The DWA-to-Stripe bridge is explicit but stays in your lane — doesn't explain Stripe back to them\n- \"passive tolerance\" is doing real work; keep it\n- \"harder and more interesting at Stripe's scale\" is a little thin as a closer — if you know the specific role, replace with something more targeted (e.g., \"at the infrastructure layer, with real pricing stakes attached\")\n- Consider whether \"which is why I'm here\" is too casual for a Stripe cover letter — they tend to respect directness, so it probably works, but you know the register better than I do\n- No AI tells spotted; rhythm is solid (long → medium → short)",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "42 words: \"At DreamWorks, I spent three years on a platform used by a thousand artists — cl...\""
+                },
+                {
+                  "type": "long-sentence",
+                  "detail": "115 words: \"---\n\n**Critique pass:**\n\n- The DWA-to-Stripe bridge is explicit but stays in you...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 2,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write an opening paragraph for a PM role at Stripe",
+          "text": "Here's a draft:\n\n---\n\nI've been a Stripe user longer than I've been a PM. That order matters — the opinions I'd bring here are grounded in years of building on the API, hitting its edges, and noticing where the experience frays before an error message catches up. At DreamWorks, I spent five years on the other side of that dynamic: building internal platforms that 1,000+ artists depended on and couldn't opt out of. That pressure — ship something that breaks, and a thousand people notice — is the clearest training I've had for what platform PM at Stripe requires.\n\n---\n\n**Critique pass:** The opener earns its second sentence — the \"order matters\" beat sets up something specific, not a platitude. \"Frays before an error message catches up\" is a concrete Stripe-user observation, not a generic compliment about their API. The DWA pivot is explicit and bridged. The closing sentence names the stakes without explaining Stripe's business back to them.\n\nOne watch: \"couldn't opt out of\" is doing real work — it distinguishes internal platform pressure from consumer product PM work. Keep it.\n\nWhat role/team at Stripe? The second paragraph will need to be anchored to something specific.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [
+                {
+                  "word": "dynamic",
+                  "severity": "medium",
+                  "count": 1
+                }
+              ],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~26 words): \"At DreamWorks, I spent five years on the other side of that ...\" / \"That pressure — ship something that breaks, and a thousand p...\" / \"---\n\n**Critique pass:** The opener earns its second sentence...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 2,
+              "pass": false
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 1.3,
+        "systematicViolations": []
+      }
+    },
+    {
+      "writingType": "outreach",
+      "samples": [
+        {
+          "prompt": "Draft a cold LinkedIn message to a VP of Product at a Series B startup",
+          "text": "A few things I need before drafting:\n\n1. **Who is this?** Company name, what they do, anything you know about this VP specifically\n2. **What's the angle?** Job interest, genuine curiosity about their work, a specific idea you have about their space?\n3. **Your hook** — what's the real reason you're reaching out? Best cold messages have a genuine observation or shared context, not just \"I admire your company\"",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        },
+        {
+          "prompt": "Draft a cold LinkedIn message to a VP of Product at a Series B startup",
+          "text": "What's the angle — job interest, advice, or idea-sharing? And which company/startup (or at least their space)? \n\nThe rules are strict about not explaining a company's business back to them, and making claims grounded in real experience — so I need enough to write something that isn't a generic template with `[INSERT COMPANY HERE]` placeholders",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        },
+        {
+          "prompt": "Draft a cold LinkedIn message to a VP of Product at a Series B startup",
+          "text": "A few quick things I need to make this non-generic:\n\n1. **Who is this person / what company?** (or at least the space — AI tools, B2B SaaS, etc.)\n2. **What's the hook?** Shared connection, their recent post, a product decision you have a take on?\n3. **What do you want from it?** Advice conversation, job interest, or just to get on their radar?\n\nThe outreach rules are pretty clear that \"genuine curiosity over pitch\" only works if the curiosity is real — a generic VP of Product message will just read as template-y",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 0,
+        "systematicViolations": []
+      }
+    },
+    {
+      "writingType": "prd",
+      "samples": [
+        {
+          "prompt": "Write the problem statement section for a feature that adds dark mode",
+          "text": "## Problem statement\n\nMargin is a reading app. People read in it for long stretches — sometimes late at night, sometimes in low-light environments. Right now, the app forces a bright white background regardless of system preference or ambient conditions.\n\n**The friction:**\n\n- I'm reading at 11pm and the screen is blinding\n- I switched my whole Mac to dark mode and Margin stayed white\n- I can't read comfortably in dim environments without straining\n- Every other app on my machine respects my system preference — Margin doesn't\n\nUsers who do deep reading sessions are disproportionately affected. A reading app that ignores ambient conditions is fighting its own use case.\n\n**What we're not solving here:** custom color themes, per-document display settings, or reader-mode typography controls. This is specifically about honoring `prefers-color-scheme` and giving users a manual override when they want it.\n\n**Success looks like:** a user switches their Mac to dark mode and Margin follows without them having to think about it.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "58 words: \"**The friction:**\n\n- I'm reading at 11pm and the screen is blinding\n- I switched...\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~13 words): \"A reading app that ignores ambient conditions is fighting it...\" / \"**What we're not solving here:** custom color themes, per-do...\" / \"This is specifically about honoring `prefers-color-scheme` a...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 2,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write the problem statement section for a feature that adds dark mode",
+          "text": "## Problem Statement\n\nMargin is a reading app. People use it at night, in dim rooms, on planes. A white canvas at full brightness in those conditions is physically uncomfortable — it causes eye strain and breaks the focus the app is supposed to support.\n\nRight now there is no way to change the color scheme. The app renders in light mode regardless of the user's system preference.\n\n**User language:**\n\n- \"I'm reading in bed and the screen is blinding\"\n- \"I have dark mode on everything — why is this app white?\"\n- \"I want to read at night without waking my partner\"\n\n**What's broken:**\n\nmacOS respects `prefers-color-scheme` and most apps follow it automatically. Margin doesn't. A user who has set their system to dark mode opens Margin and gets a jarring white interface. They either read uncomfortably or they don't use the app at night.\n\n**Scope:**\n\nThis is a display preference, not a new feature. The infrastructure for CSS variables and theming already exists in `globals.css`. The work is defining a dark color palette and ensuring the toggle (or system-preference follow) applies it consistently across the editor, sidebar, and annotation surfaces.\n\n**Out of scope:**\n\nCustom color themes. Per-document preferences. The goal is a clean, readable dark mode that follows system preference — nothing more.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "47 words: \"**User language:**\n\n- \"I'm reading in bed and the screen is blinding\"\n- \"I have ...\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~12 words): \"They either read uncomfortably or they don't use the app at ...\" / \"**Scope:**\n\nThis is a display preference, not a new feature.\" / \"The infrastructure for CSS variables and theming already exi...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 2,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write the problem statement section for a feature that adds dark mode",
+          "text": "## Problem statement\n\nMargin users read for extended periods — articles, papers, research, long-form drafts. Many do this in low-light environments: late at night, in dim offices, on flights. The app currently renders only in light mode, with a white background and dark text throughout.\n\nUser pain shows up in three situations:\n\n- \"I'm reading at night and Margin is way too bright compared to everything else on my screen\"\n- \"I switched my whole Mac to dark mode but Margin stays white — it's jarring every time I open it\"\n- \"I read for 2-3 hours at a stretch and the bright background gives me eye strain\"\n\nThe gap is simple: every other reading tool on macOS (Safari Reader, Kindle, Instapaper, even Notes) respects `prefers-color-scheme`. Margin doesn't. Users who've made a system-level choice to use dark mode have that preference actively overridden every time they open the app.\n\nThis isn't a cosmetic request. It's a trust signal — an app that ignores system preferences reads as unfinished. For a tool people use daily for deep reading, that friction compounds.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "81 words: \"User pain shows up in three situations:\n\n- \"I'm reading at night and Margin is w...\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~15 words): \"## Problem statement\n\nMargin users read for extended periods...\" / \"Many do this in low-light environments: late at night, in di...\" / \"The app currently renders only in light mode, with a white b...\""
+                }
+              ],
+              "structuralTells": [
+                {
+                  "pattern": "Negative parallelism (isn't X. It's Y)",
+                  "matches": [
+                    "...open the app.  This isn't a cosmetic request. It's a trust signal — an..."
+                  ]
+                }
+              ]
+            },
+            "summary": {
+              "mechanicalIssues": 3,
+              "pass": false
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 2.3,
+        "systematicViolations": [
+          "Voice: long-sentence",
+          "Voice: repetitive-structure"
+        ]
+      }
+    },
+    {
+      "writingType": "blog",
+      "samples": [
+        {
+          "prompt": "Write a paragraph arguing that most product roadmaps are theater",
+          "text": "Most product roadmaps are a negotiation artifact dressed up as a strategy document. The rows and columns give everyone something to point at in a quarterly review, but the actual decisions — what ships, what gets cut, what quietly dies in sprint planning — happen in Slack threads and hallway conversations that never touch the doc. The roadmap reflects what the team agreed to say publicly, not what they believe privately. And everyone knows this. The PM knows it, the eng lead knows it, the stakeholders who approved it know it. So you end up with a ritual where everyone performs alignment around a document nobody fully believes in, because the alternative — admitting that the future is genuinely uncertain and priorities shift weekly — feels too chaotic to say out loud in a room with a VP.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "43 words: \"The rows and columns give everyone something to point at in a quarterly review, ...\""
+                },
+                {
+                  "type": "long-sentence",
+                  "detail": "47 words: \"So you end up with a ritual where everyone performs alignment around a document ...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 2,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write a paragraph arguing that most product roadmaps are theater",
+          "text": "Most product roadmaps are a confidence game — something between a weather forecast and a horoscope, dressed up in quarterly columns and color-coded priority labels. The artifact exists to manage anxiety, not to drive decisions. Someone in a meeting asked \"what are we building next year?\" and nobody wanted to say \"we don't know yet,\" so a slide got made. That slide became a doc. That doc became a review cycle. Now twelve people spend three days a quarter updating a spreadsheet that will be wrong before the ink dries, and everyone nods along because the alternative — admitting that strategy is inherently probabilistic and most of your bets won't pan out — feels like a failure of leadership. It isn't. The roadmap theater is. Real planning happens in the next conversation with a user who tells you something that breaks your assumptions. The roadmap is what you show the org so the quarterly business review doesn't go sideways.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "48 words: \"Now twelve people spend three days a quarter updating a spreadsheet that will be...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 1,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write a paragraph arguing that most product roadmaps are theater",
+          "text": "Most product roadmaps are a confidence trick — a Gantt chart dressed up as a strategy, designed to absorb stakeholder anxiety rather than guide actual work. The quarter-by-quarter layout implies precision that doesn't exist. Features get slotted in because someone senior asked, because a competitor shipped something similar, or because the team needed something to show leadership. Discovery gets skipped. The roadmap hardens before anyone's talked to a user. And then it becomes load-bearing — teams plan sprints around it, executives align on it, sales promises it — until the artifact is so deeply embedded that questioning it reads as insubordination rather than good product sense. What started as a planning tool becomes a paper trail proving the team has a plan, which is a completely different thing.",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 1,
+        "systematicViolations": [
+          "Voice: long-sentence"
+        ]
+      }
+    },
+    {
+      "writingType": "resume",
+      "samples": [
+        {
+          "prompt": "Write a bullet point for leading a product redesign that increased retention 15%",
+          "text": "Led end-to-end redesign of [product/feature], cutting [friction point] and lifting 30-day retention 15%\n\n---\n\nA few variations depending on what you actually did:\n\n**If you drove the research:**\nIdentified [specific drop-off] through session analysis and user interviews, then redesigned [feature] — resulting in 15% retention lift over [timeframe]\n\n**If you led a cross-functional team:**\nPartnered with design and eng to rebuild [onboarding/core flow/etc.], reducing [specific friction] and improving 30-day retention by 15%\n\n**Tightest version:**\nRebuilt [feature] around [insight] — 15% retention lift in [timeframe]\n\n---\n\nFill in the bracketed parts before using any of these. The bullet only lands if the mechanism is specific — what actually changed, and why that drove retention up. What was the redesign?",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "95 words: \"Led end-to-end redesign of [product/feature], cutting [friction point] and lifti...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 1,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write a bullet point for leading a product redesign that increased retention 15%",
+          "text": "Led end-to-end redesign of onboarding flow — resequenced activation milestones based on cohort drop-off analysis — driving 15% lift in 30-day retention\n\n---\n\nA few variants depending on what you want to emphasize:\n\n**If the analysis angle is the story:**\nIdentified critical drop-off point in onboarding via cohort analysis, redesigned activation sequence, and shipped iteratively over 6 weeks — 15% retention lift in 30 days\n\n**If cross-functional leadership is the story:**\nPartnered with design and engineering to redesign onboarding from scratch — reanchored the flow around first-value moments surfaced through cohort data — 15% retention improvement at 30 days\n\n---\n\nTwo things I'd want to verify before you use any of these: (1) what specifically drove the redesign decision (cohort analysis? user interviews? both?), and (2) was 30-day retention the measure, or something else? The bullet gets sharper when the mechanism is precise",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "121 words: \"Led end-to-end redesign of onboarding flow — resequenced activation milestones b...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 1,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write a bullet point for leading a product redesign that increased retention 15%",
+          "text": "Led end-to-end redesign of [feature/flow], cutting [specific friction point] and lifting 30-day retention 15% across [segment]\n\n---\n\nA few notes before you use this:\n\n- Replace `[feature/flow]` with what you actually redesigned — the specificity is the proof\n- Replace `[specific friction point]` with the actual problem you sanded down (drop-off at onboarding step 3, abandoned carts, whatever it was) — \"cutting X\" needs a concrete X or it reads as padding\n- Replace `[segment]` with who: new users, paid tier, mobile — retention across what?\n- \"Led end-to-end\" is doing a lot of work — if you drove research, design, and shipped it, keep it; if you owned one phase, say that instead\n\nThe bone structure is right: verb → mechanism → outcome → scope. Fill in what you actually did and it'll hold up in an interview",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "86 words: \"Led end-to-end redesign of [feature/flow], cutting [specific friction point] and...\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 1,
+              "pass": false
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 1,
+        "systematicViolations": [
+          "Voice: long-sentence"
+        ]
+      }
+    },
+    {
+      "writingType": "slack",
+      "samples": [
+        {
+          "prompt": "Write a message asking your team to review a doc before Friday",
+          "text": "Hey team — can y'all take a look at [doc] before Friday? Lmk if you have questions or if anything feels off",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        },
+        {
+          "prompt": "Write a message asking your team to review a doc before Friday",
+          "text": "Hey y'all — any chance you could take a look at [doc] before Friday? Lmk if you have questions",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        },
+        {
+          "prompt": "Write a message asking your team to review a doc before Friday",
+          "text": "Hey y'all — can you take a look at [doc] before Friday? Just need a quick pass, nothing major\n\nLet me know if you have questions",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 0,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 0,
+        "systematicViolations": []
+      }
+    },
+    {
+      "writingType": "pitch",
+      "samples": [
+        {
+          "prompt": "Write the opening of a pitch deck for a reading annotation tool",
+          "text": "Here's a pitch deck opening for Margin:\n\n---\n\n**Slide 1 — The hook**\n\n> You read to think.\n> Your annotations go nowhere.\n\n---\n\n**Slide 2 — The problem**\n\nEvery serious reader has a graveyard: highlights in Kindle that never left Kindle, PDF comments stuck in Dropbox, Notion pages they stopped maintaining after week two.\n\nThe tools that help you annotate your reading don't help you *own* it. They lock it behind accounts, sync it to servers, and charge you to export what you wrote.\n\n---\n\n**Slide 3 — The insight**\n\nAnnotation isn't a feature. It's the work.\n\nThe highlight is where comprehension happens. The margin note is where you argue back. If that layer lives in someone else's infrastructure, you don't own your reading — you're renting it.\n\n---\n\n**Slide 4 — The product**\n\nMargin is a desktop reading app for people who take their reading seriously. Open any markdown file or article. Highlight. Write margin notes. Export your annotations in any format you want.\n\nEverything lives on your machine. No account. No sync. No subscription tax on your own thinking.\n\n---\n\n**Slide 5 — The pull**\n\nBuilt with Tauri and SQLite. Ships as a native Mac app. The database is a file you can back up, inspect, and move.\n\nIt's your reading. It should be on your hard drive.\n\n---\n\nA few notes on this draft:\n\n- \"You read to think / your annotations go nowhere\" — short, asymmetric opener that earns attention without explaining the product yet\n- \"Graveyard\" is doing work — concrete and slightly dark, avoids the AI-feel of \"siloed data\"\n- Slide 3 is the riskiest — \"annotation isn't a feature, it's the work\" is a strong claim that needs defending in the Q&A\n- Slide 5 is intentionally terse; the technical proof comes fast and stops\n\nWant me to continue with the market / traction / ask slides?",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "94 words: \"---\n\nA few notes on this draft:\n\n- \"You read to think / your annotations go nowh...\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~13 words): \"The tools that help you annotate your reading don't help you...\" / \"They lock it behind accounts, sync it to servers, and charge...\" / \"---\n\n**Slide 3 — The insight**\n\nAnnotation isn't a feature.\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~3 words): \"It's the work.\" / \"The highlight is where comprehension happens.\" / \"The margin note is where you argue back.\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "10 consecutive sentences with similar length (~6 words): \"Open any markdown file or article.\" / \"Highlight.\" / \"Write margin notes.\""
+                }
+              ],
+              "structuralTells": [
+                {
+                  "pattern": "Negative parallelism (isn't X. It's Y)",
+                  "matches": [
+                    "...sight**  Annotation isn't a feature. It's the work.  The high..."
+                  ]
+                }
+              ]
+            },
+            "summary": {
+              "mechanicalIssues": 5,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write the opening of a pitch deck for a reading annotation tool",
+          "text": "---\n\n**Slide 1 — Cover**\n\n# Margin\n*The space where reading becomes thinking*\n\n---\n\n**Slide 2 — The Problem**\n\nYou read something that changes how you think.\n\nTwo weeks later, you can't find it. You remember it vaguely. You go back to the source, scroll past where you were, and give up.\n\nThis isn't a memory problem. It's an infrastructure problem.\n\nThe tools that exist are built for consumption — not for the moments when you stop and push back. Kindle locks your highlights to Amazon. Notion pulls you out of the text. Readwise sends you somewhere else to actually think.\n\nThe margin — the blank space next to the words — has been waiting for a tool that actually lives there.\n\n---\n\n**Editorial critique pass:**\n\nThe second slide opens mid-scene, which is good. \"Two weeks later\" earns its place — it makes the failure concrete. \"Infrastructure problem\" lands clean without over-explaining.\n\nOne flag: \"The tools that exist are built for consumption\" is borderline assertion without evidence — consider naming one tool and one specific failure mode to ground it. The Notion pull-quote is doing real work; keep it.\n\n\"Has been waiting\" is slightly passive. Consider: \"The margin has always been there. Nobody built for it.\"",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "repetitive-structure",
+                  "detail": "3 consecutive sentences with similar length (~6 words): \"Kindle locks your highlights to Amazon.\" / \"Notion pulls you out of the text.\" / \"Readwise sends you somewhere else to actually think.\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "4 consecutive sentences with similar length (~9 words): \"The Notion pull-quote is doing real work; keep it.\" / \"\"Has been waiting\" is slightly passive.\" / \"Consider: \"The margin has always been there.\""
+                }
+              ],
+              "structuralTells": [
+                {
+                  "pattern": "Negative parallelism (isn't X. It's Y)",
+                  "matches": [
+                    "... and give up.  This isn't a memory problem. It's an infrastructure p..."
+                  ]
+                }
+              ]
+            },
+            "summary": {
+              "mechanicalIssues": 3,
+              "pass": false
+            }
+          }
+        },
+        {
+          "prompt": "Write the opening of a pitch deck for a reading annotation tool",
+          "text": "Here's a draft for the opening slides:\n\n---\n\n**Slide 1 — Cover**\n\n# Margin\n*The reading app that keeps your thinking.*\n\n---\n\n**Slide 2 — Problem**\n\n**Most readers lose their thinking twice.**\n\nTo the tool — highlights stranded in apps they stop using, notes buried in databases they never open.\n\nTo the platform — proprietary formats, expiring subscriptions, servers that go dark.\n\nWhat survives a decade of serious reading? Almost nothing.\n\n---\n\n**Slide 3 — Insight**\n\nEvery reading tool is optimized for capturing text.\n\nNone of them are designed for a library you keep for life.\n\n---\n\n**Slide 4 — Solution**\n\n**Margin** is a local-first reading and annotation app for people who read to think.\n\nOpen any markdown file. Highlight. Write margin notes. Export whenever — in formats you control.\n\nYour files. Your database. Your machine.\n\n---\n\n**Critique pass:** The \"twice\" framing on slide 2 earns its parallel structure — it's not padding, it maps to two real failure modes. \"Servers that go dark\" is concrete and avoids the abstract \"reliability\" non-word. The slide 3 claim (\"none of them\") is the softest link — Readwise Reader and Obsidian both have local-first modes, so if this is going in front of a sharp audience you'll want to sharpen that to something like \"none of them treat your annotations as a permanent personal asset\" or cut it and let the solution slide do the work",
+          "compliance": {
+            "mechanical": {
+              "killWords": [],
+              "slopPatterns": [],
+              "voiceViolations": [
+                {
+                  "type": "long-sentence",
+                  "detail": "50 words: \"Here's a draft for the opening slides:\n\n---\n\n**Slide 1 — Cover**\n\n# Margin\n*The ...\""
+                },
+                {
+                  "type": "long-sentence",
+                  "detail": "61 words: \"The slide 3 claim (\"none of them\") is the softest link — Readwise Reader and Obs...\""
+                },
+                {
+                  "type": "repetitive-structure",
+                  "detail": "7 consecutive sentences with similar length (~4 words): \"Open any markdown file.\" / \"Highlight.\" / \"Write margin notes.\""
+                }
+              ],
+              "structuralTells": []
+            },
+            "summary": {
+              "mechanicalIssues": 3,
+              "pass": false
+            }
+          }
+        }
+      ],
+      "aggregated": {
+        "avgMechanicalIssues": 3.7,
+        "systematicViolations": [
+          "Voice: long-sentence",
+          "Voice: repetitive-structure",
+          "Structural: Negative parallelism (isn't X. It's Y)"
+        ]
+      }
+    }
+  ],
+  "overall": {
+    "totalSamples": 27,
+    "avgMechanicalIssues": 1.3,
+    "worstType": "pitch",
+    "bestType": "outreach"
+  }
+}

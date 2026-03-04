@@ -36,6 +36,7 @@ import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { findAllMatches } from "@/components/editor/extensions/search";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
+import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
@@ -999,6 +1000,7 @@ export default function App() {
 
       let correctionsSaved = false;
       let correctionsFile = "";
+      let attemptedCorrectionPersist = false;
 
       if (persistCorrectionsRef.current && highlights.length > 0 && marginNotes.length > 0) {
         const notesByHighlight = new Map<string, string[]>();
@@ -1027,6 +1029,7 @@ export default function App() {
         }
 
         if (correctionInputs.length > 0) {
+          attemptedCorrectionPersist = true;
           const today = new Date().toISOString().slice(0, 10);
           correctionsFile = `corrections-${today}.jsonl`;
           try {
@@ -1051,7 +1054,12 @@ export default function App() {
       }
 
       // Clear annotations from editor and DB after export
-      if (highlights.length > 0) {
+      const shouldClearAnnotations = shouldClearAnnotationsAfterExport({
+        highlightCount: highlights.length,
+        attemptedCorrectionPersist,
+        correctionsSaved,
+      });
+      if (shouldClearAnnotations) {
         // Strip highlight and marginNote marks from the editor
         const { state } = editor;
         const { tr } = state;

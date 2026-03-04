@@ -26,13 +26,14 @@ function insertRule(
     exampleAfter?: string;
     signalCount?: number;
     notes?: string;
+    register?: string | null;
   } = {},
 ) {
   db.prepare(
     `INSERT INTO writing_rules
        (id, writing_type, category, rule_text, when_to_apply, why, severity,
-        example_before, example_after, source, signal_count, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, 1000, 1000)`,
+        example_before, example_after, source, signal_count, notes, created_at, updated_at, register)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, 1000, 1000, ?)`,
   ).run(
     id,
     writingType,
@@ -45,7 +46,12 @@ function insertRule(
     opts.exampleAfter ?? null,
     opts.signalCount ?? 1,
     opts.notes ?? null,
+    opts.register ?? null,
   );
+}
+
+function countMatches(text: string, needle: string): number {
+  return text.split(needle).length - 1;
 }
 
 beforeEach(() => {
@@ -90,6 +96,16 @@ describe("getWritingRules", () => {
     const rules = getWritingRules(db, "general");
     expect(rules[0].ruleText).toBe("Rule B");
     expect(rules[1].ruleText).toBe("Rule A");
+  });
+
+  it("includes register field in unfiltered rule reads", () => {
+    insertRule("r1", "general", "voice-calibration", "No periods in casual chat", "must-fix", {
+      register: "casual",
+    });
+
+    const rules = getWritingRules(db);
+    expect(rules).toHaveLength(1);
+    expect(rules[0].register).toBe("casual");
   });
 });
 
@@ -379,6 +395,22 @@ describe("getWritingProfileMarkdown", () => {
     expect(md).toContain("## Voice Calibration");
     expect(md).not.toContain("## Writing Rules");
     expect(md).toContain("Short sentences preferred");
+  });
+
+  it("renders casual voice rules once each (no duplicate bullets)", () => {
+    insertRule("v1", "general", "voice-calibration", "Casual rule A", "must-fix", {
+      register: "casual",
+    });
+    insertRule("v2", "general", "voice-calibration", "Casual rule B", "must-fix", {
+      register: "casual",
+    });
+
+    const rules = getWritingRules(db);
+    const md = getWritingProfileMarkdown(rules, []);
+
+    expect(md).toContain("### Casual register (slack, outreach, email, general chat)");
+    expect(countMatches(md, "- **Casual rule A**")).toBe(1);
+    expect(countMatches(md, "- **Casual rule B**")).toBe(1);
   });
 
   it("produces Writing Samples section for positive corrections", () => {

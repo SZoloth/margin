@@ -17,6 +17,7 @@ export interface WritingRule {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  register: string | null;
 }
 
 export function getWritingRules(
@@ -28,7 +29,8 @@ export function getWritingRules(
       .prepare(
         `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
                 why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
-                signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt
+                signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+                register
          FROM writing_rules WHERE writing_type = ?
          ORDER BY signal_count DESC, created_at DESC`,
       )
@@ -39,7 +41,8 @@ export function getWritingRules(
     .prepare(
       `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
               why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
-              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+              register
        FROM writing_rules
        ORDER BY writing_type, signal_count DESC, created_at DESC`,
     )
@@ -64,6 +67,7 @@ export interface CreateWritingRuleParams {
   notes?: string | null;
   source?: string;
   signal_count?: number;
+  register?: string | null;
 }
 
 export function createWritingRule(
@@ -87,8 +91,8 @@ export function createWritingRule(
   }
 
   db.prepare(
-    `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at, register)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(writing_type, category, rule_text) DO UPDATE SET
        when_to_apply = COALESCE(excluded.when_to_apply, writing_rules.when_to_apply),
        why = COALESCE(excluded.why, writing_rules.why),
@@ -101,19 +105,22 @@ export function createWritingRule(
        example_after = COALESCE(excluded.example_after, writing_rules.example_after),
        signal_count = writing_rules.signal_count + excluded.signal_count,
        notes = COALESCE(excluded.notes, writing_rules.notes),
+       register = COALESCE(excluded.register, writing_rules.register),
        updated_at = excluded.updated_at`,
   ).run(
     id, params.writing_type, params.category, params.rule_text,
     params.when_to_apply ?? null, params.why ?? null, params.severity,
     params.example_before ?? null, params.example_after ?? null,
     source, signalCount, params.notes ?? null, now, now,
+    params.register ?? null,
   );
 
   return db
     .prepare(
       `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
               why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
-              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+              register
        FROM writing_rules WHERE writing_type = ? AND category = ? AND rule_text = ?`,
     )
     .get(params.writing_type, params.category, params.rule_text) as WritingRule;
@@ -130,6 +137,7 @@ export interface UpdateWritingRuleParams {
   notes?: string | null;
   writing_type?: string;
   signal_count?: number;
+  register?: string | null;
 }
 
 export function updateWritingRule(
@@ -164,6 +172,7 @@ export function updateWritingRule(
   if (params.notes !== undefined) { sets.push("notes = ?"); values.push(params.notes); }
   if (params.writing_type !== undefined) { sets.push("writing_type = ?"); values.push(params.writing_type); }
   if (params.signal_count !== undefined) { sets.push("signal_count = ?"); values.push(params.signal_count); }
+  if (params.register !== undefined) { sets.push("register = ?"); values.push(params.register); }
 
   if (sets.length === 0) {
     return { error: "No fields to update" };
@@ -180,7 +189,8 @@ export function updateWritingRule(
     .prepare(
       `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
               why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
-              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+              register
        FROM writing_rules WHERE id = ?`,
     )
     .get(params.id) as WritingRule;
@@ -248,15 +258,48 @@ export function getWritingProfileMarkdown(
   lines.push("_Generated by Margin. Voice calibration + corrections + writing rules in one file._");
   lines.push("_For AI agents: apply rules matching the writing type. General rules always apply._");
 
-  // Voice calibration section
+  // Voice calibration section — grouped by register
   const voiceRules = rules.filter((r) => r.category === "voice-calibration");
   if (voiceRules.length > 0) {
     lines.push("", "---", "", "## Voice Calibration", "");
     lines.push("_Statistical voice fingerprint. These are constraints, not suggestions._");
-    for (const rule of voiceRules) {
-      lines.push("", `- **${rule.ruleText}**`);
-      if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
-      if (rule.why) lines.push(`  - Why: ${rule.why}`);
+
+    const universal = voiceRules.filter((r) => r.register !== "casual" && r.register !== "professional");
+    const casual = voiceRules.filter((r) => r.register === "casual");
+    const professional = voiceRules.filter((r) => r.register === "professional");
+
+    if (universal.length > 0) {
+      lines.push("", "### Universal (all registers)");
+      for (const rule of universal) {
+        lines.push("", `- **${rule.ruleText}**`);
+        if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+        if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      }
+    }
+
+    if (casual.length > 0) {
+      lines.push("", "### Casual register (slack, outreach, email, general chat)");
+      for (const rule of casual) {
+        lines.push("", `- **${rule.ruleText}**`);
+        if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+        if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      }
+    }
+
+    if (professional.length > 0) {
+      lines.push("", "### Professional register (pitch, prd, cover-letter, resume, blog)");
+      lines.push("_These rules DO NOT apply to casual writing. Use complete sentences, standard punctuation._");
+      for (const rule of professional) {
+        lines.push("", `- **${rule.ruleText}**`);
+        if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+        if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      }
+    }
+
+    // If there are casual rules but no professional rules, add explicit scoping note
+    if (casual.length > 0 && professional.length === 0) {
+      lines.push("", "### Professional register (pitch, prd, cover-letter, resume, blog)");
+      lines.push("_Casual-register rules above DO NOT apply. Use complete sentences, standard punctuation._");
     }
   }
 

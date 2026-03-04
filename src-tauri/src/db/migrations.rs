@@ -141,6 +141,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add reviewed_at column to writing_rules
     migrate_writing_rules_add_reviewed_at(&conn)?;
 
+    // Migration: add register column to writing_rules
+    migrate_writing_rules_add_register(&conn)?;
+
     // Seed: voice calibration + editorial rules into writing_rules table
     seed_voice_and_editorial_rules(&conn)?;
 
@@ -1134,6 +1137,38 @@ fn migrate_writing_rules_add_reviewed_at(conn: &Connection) -> Result<(), Box<dy
         // Pre-seeded rules start as reviewed
         conn.execute_batch(
             "UPDATE writing_rules SET reviewed_at = created_at WHERE source IN ('voice-calibration', 'editorial', 'seed-v1');",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `register` column to the writing_rules table and backfills voice-calibration rules.
+fn migrate_writing_rules_add_register(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "register")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN register TEXT;")?;
+
+        // Backfill voice-calibration rules: casual-only rules
+        conn.execute_batch(
+            "UPDATE writing_rules SET register = 'casual' WHERE category = 'voice-calibration'
+             AND (when_to_apply LIKE '%casual%' OR when_to_apply LIKE '%Casual%'
+                  OR when_to_apply LIKE '%Default register%' OR when_to_apply LIKE '%Message%'
+                  OR when_to_apply LIKE '%banter%');",
+        )?;
+
+        // Backfill voice-calibration rules: everything else defaults to 'all'
+        conn.execute_batch(
+            "UPDATE writing_rules SET register = 'all' WHERE category = 'voice-calibration'
+             AND register IS NULL;",
         )?;
     }
 

@@ -438,6 +438,7 @@ server.tool(
     notes: z.string().optional().describe("Additional notes"),
     source: z.string().optional().describe("Source of the rule (default: synthesis)"),
     signal_count: z.number().int().min(1).optional().describe("How many times this pattern was observed (default: 1)"),
+    register: z.string().nullable().optional().describe("Register scope: 'all' (universal), 'casual' (slack/outreach/email), 'professional' (pitch/prd/blog/resume/cover-letter)"),
   },
   async (params) => withDbAndExport(() => {
     const result = createWritingRule(getWriteDb(), params);
@@ -462,6 +463,7 @@ server.tool(
     notes: z.string().nullable().optional().describe("Additional notes"),
     writing_type: z.string().optional().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
     signal_count: z.number().int().min(1).optional().describe("Number of times this pattern was observed"),
+    register: z.string().nullable().optional().describe("Register scope: 'all' (universal), 'casual' (slack/outreach/email), 'professional' (pitch/prd/blog/resume/cover-letter)"),
   },
   async (params) => withDbAndExport(() => {
     const result = updateWritingRule(getWriteDb(), params);
