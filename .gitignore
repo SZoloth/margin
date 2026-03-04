@@ -14,3 +14,4 @@ tsconfig.tsbuildinfo
 *.pem
 *.mov
 dogfood-output/
+docs/ai-integration-exploration.md
