@@ -34,6 +34,7 @@ import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
+import { findAllMatches } from "@/components/editor/extensions/search";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
@@ -54,56 +55,6 @@ import { DiffBanner } from "@/components/editor/DiffBanner";
 import { DiffNavChip } from "@/components/editor/DiffNavChip";
 import { DiffControls } from "@/components/editor/DiffControls";
 
-/**
- * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
- * Unlike flat-string indexOf, this accounts for block node boundaries that add
- * positional offsets not present in the text content.
- */
-function findTextInDoc(
-  doc: import("@tiptap/pm/model").Node,
-  search: string,
-): { from: number; to: number } | null {
-  // Collect text segments with their TipTap start positions
-  const segments: Array<{ text: string; pos: number }> = [];
-  doc.descendants((node, pos) => {
-    if (node.isText && node.text) {
-      segments.push({ text: node.text, pos });
-    }
-  });
-
-  if (segments.length === 0) return null;
-
-  // Build a flat string and a mapping from flat offset → TipTap position
-  let flat = "";
-  const offsetToPos: Array<{ flatStart: number; tiptapStart: number; length: number }> = [];
-  for (const seg of segments) {
-    offsetToPos.push({ flatStart: flat.length, tiptapStart: seg.pos, length: seg.text.length });
-    flat += seg.text;
-  }
-
-  const idx = flat.indexOf(search);
-  if (idx === -1) return null;
-
-  const fromFlat = idx;
-  const toFlat = idx + search.length;
-
-  // Convert flat offsets to TipTap positions
-  let from = -1;
-  let to = -1;
-  for (const map of offsetToPos) {
-    const segEnd = map.flatStart + map.length;
-    if (from === -1 && fromFlat >= map.flatStart && fromFlat < segEnd) {
-      from = map.tiptapStart + (fromFlat - map.flatStart);
-    }
-    if (toFlat >= map.flatStart && toFlat <= segEnd) {
-      to = map.tiptapStart + (toFlat - map.flatStart);
-      break;
-    }
-  }
-
-  if (from === -1 || to === -1) return null;
-  return { from, to };
-}
 
 export default function App() {
   const { settings, setSetting } = useSettings();
@@ -126,6 +77,7 @@ export default function App() {
   const errorIdRef = useRef(0);
   const undoIdRef = useRef(0);
   const diffReview = useDiffReview();
+  const [findBarOpen, setFindBarOpen] = useState(false);
   const [diffControlState, setDiffControlState] = useState<{ changeId: string; top: number; right: number } | null>(null);
   const diffReviewDocIdRef = useRef<string | null>(null);
   const highlightThread = useAnimatedPresence(!!focusHighlightId, 200);
@@ -439,7 +391,7 @@ export default function App() {
         // Positions out of range
       }
 
-      const found = findTextInDoc(state.doc, h.text_content);
+      const found = findAllMatches(state.doc, h.text_content)[0];
       if (found) {
         try {
           tr.addMark(found.from, found.to, markType.create({ color: h.color, highlightId: h.id }));
@@ -1005,6 +957,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Find in document: Cmd+F
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === "KeyF") {
+        e.preventDefault();
+        setFindBarOpen(true);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleExportAnnotations = useCallback(
     async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
@@ -1213,6 +1177,9 @@ export default function App() {
       onCloseTab={tabsHook.closeTab}
       onReorderTabs={tabsHook.reorderTabs}
       onNewTab={doc.openFile}
+      editor={editor}
+      findBarOpen={findBarOpen}
+      onCloseFindBar={() => setFindBarOpen(false)}
       tocElement={
         doc.currentDoc && toc.headings.length > 0 ? (
           <TableOfContents

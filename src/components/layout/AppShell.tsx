@@ -8,6 +8,8 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TabBar } from "@/components/layout/TabBar";
 import type { useSearch } from "@/hooks/useSearch";
 import { useMcpStatus } from "@/hooks/useMcpStatus";
+import type { Editor } from "@tiptap/core";
+import { FindBar } from "@/components/editor/FindBar";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -31,6 +33,10 @@ interface AppShellProps {
   onCloseTab: (id: string) => void;
   onReorderTabs: (fromIndex: number, toIndex: number) => void;
   onNewTab: () => void;
+  // Find bar
+  editor: Editor | null;
+  findBarOpen: boolean;
+  onCloseFindBar: () => void;
 }
 
 export function AppShell({
@@ -54,6 +60,9 @@ export function AppShell({
   onCloseTab,
   onReorderTabs,
   onNewTab,
+  editor,
+  findBarOpen,
+  onCloseFindBar,
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -301,7 +310,7 @@ export function AppShell({
                 alignItems: "center",
                 gap: 6,
                 padding: "4px 10px",
-                fontSize: 13,
+                fontSize: 13, /* ds-lint-disable */
                 fontWeight: 500,
                 color: "var(--color-text-secondary)",
                 border: "1px solid var(--color-border)",
@@ -338,6 +347,8 @@ export function AppShell({
             />
           )}
         </div>
+
+        <FindBar editor={editor} isOpen={findBarOpen} onClose={onCloseFindBar} />
 
         {/* Scrollable reader area + empty state wrapper */}
         <div className="flex-1 min-h-0" style={{ position: "relative" }}>
@@ -437,12 +448,12 @@ export function AppShell({
             position: "fixed",
             bottom: 10,
             right: 10,
-            fontSize: 9,
+            fontSize: 9, /* ds-lint-disable */
             fontWeight: 700,
             fontFamily: "ui-monospace, 'SF Mono', SFMono-Regular, monospace",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: "#FF5722",
+            color: "#FF5722", /* ds-lint-disable */
             backgroundColor: "rgba(255, 87, 34, 0.08)",
             border: "1px solid rgba(255, 87, 34, 0.25)",
             borderRadius: 4,

@@ -226,3 +226,45 @@
   outline: 2px solid var(--color-text-secondary);
   outline-offset: -1px;
 }
+
+/* In-document find (Cmd+F) */
+.find-match {
+  background-color: var(--color-find-match, rgba(255, 213, 79, 0.4));
+  border-radius: 2px;
+}
+
+.find-match-active {
+  background-color: var(--color-find-match-active, rgba(255, 152, 0, 0.6));
+  border-radius: 2px;
+}
+
+:root[data-theme="dark"] .find-match {
+  --color-find-match: rgba(255, 213, 79, 0.3);
+}
+
+:root[data-theme="dark"] .find-match-active {
+  --color-find-match-active: rgba(255, 152, 0, 0.5);
+}
+
+/* Find bar buttons */
+.find-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: none;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-micro), background-color var(--duration-fast) var(--ease-micro);
+}
+
+.find-bar-btn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background-color: var(--hover-bg);
+}
+
+.find-bar-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}

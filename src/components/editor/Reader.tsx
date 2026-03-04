@@ -17,6 +17,7 @@ import { MultiColorHighlight } from "./extensions/highlight";
 import { MarginNote } from "./extensions/margin-note";
 import { DiffMark } from "./extensions/diff-mark";
 import { FrontMatter } from "./extensions/front-matter";
+import { Search } from "./extensions/search";
 import "../../styles/editor.css";
 
 // Prevent Strike from claiming <del> tags used by DiffMark.
@@ -67,6 +68,7 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
       MultiColorHighlight.configure({ multicolor: true }),
       MarginNote,
       DiffMark,
+      Search,
       Markdown.configure({
         html: true,
         tightLists: true,
