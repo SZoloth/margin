@@ -632,9 +632,8 @@ fn fetch_all_corrections_for_profile(conn: &Connection) -> rusqlite::Result<Vec<
     let mut stmt = conn.prepare(
         "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity
          FROM corrections
-         WHERE highlight_id != '__backfill_marker__'
-         ORDER BY created_at DESC
-         LIMIT 2000",
+         WHERE session_id != '__backfilled__'
+         ORDER BY created_at DESC",
     )?;
 
     let rows = stmt.query_map([], |row| {
@@ -781,6 +780,25 @@ mod tests {
             conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN reviewed_at INTEGER;").unwrap();
         }
         conn
+    }
+
+    fn create_corrections_table(conn: &Connection) {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS corrections (
+                id TEXT PRIMARY KEY,
+                highlight_id TEXT NOT NULL UNIQUE,
+                document_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                original_text TEXT NOT NULL,
+                notes_json TEXT NOT NULL,
+                document_title TEXT,
+                highlight_color TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                writing_type TEXT,
+                polarity TEXT
+            );",
+        )
+        .unwrap();
     }
 
     fn insert_rule(conn: &Connection, id: &str, writing_type: &str, category: &str, rule_text: &str, severity: &str) {
@@ -1244,6 +1262,57 @@ mod tests {
         let conn = setup_db();
         let updated = mark_unreviewed(&conn, &[]).unwrap();
         assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn fetch_all_corrections_for_profile_excludes_backfilled_session_rows() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, highlight_color, created_at)
+             VALUES
+                ('c1', '__backfill_marker__', 'd1', '__backfilled__', 'marker', '[]', 'Doc', 'yellow', 1),
+                ('c2', 'h-backfilled', 'd1', '__backfilled__', 'legacy', '[]', 'Doc', 'yellow', 2),
+                ('c3', 'h-live', 'd1', 'session-1', 'current', '[]', 'Doc', 'yellow', 3)",
+            [],
+        )
+        .unwrap();
+
+        let corrections = fetch_all_corrections_for_profile(&conn).unwrap();
+
+        assert_eq!(corrections.len(), 1);
+        assert_eq!(corrections[0].original_text, "current");
+    }
+
+    #[test]
+    fn fetch_all_corrections_for_profile_is_not_capped_at_2000() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+
+        let tx = conn.unchecked_transaction().unwrap();
+        for i in 0..2005 {
+            tx.execute(
+                "INSERT INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text, notes_json,
+                     document_title, highlight_color, created_at)
+                 VALUES (?1, ?2, 'd1', 'session-live', ?3, '[]', 'Doc', 'yellow', ?4)",
+                rusqlite::params![
+                    format!("c{i}"),
+                    format!("h{i}"),
+                    format!("text{i}"),
+                    i as i64,
+                ],
+            )
+            .unwrap();
+        }
+        tx.commit().unwrap();
+
+        let corrections = fetch_all_corrections_for_profile(&conn).unwrap();
+
+        assert_eq!(corrections.len(), 2005);
     }
 
 }

@@ -152,6 +152,7 @@ export const SCHEMA_SQL = `
     notes TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
+    reviewed_at INTEGER,
     UNIQUE(writing_type, category, rule_text)
   );
 

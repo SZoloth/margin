@@ -12,6 +12,7 @@ import {
   updateCorrectionWritingType,
   setCorrectionPolarity,
   getVoiceSignals,
+  getAllCorrectionsForProfile,
 } from "../tools/corrections.js";
 
 let db: Database.Database;
@@ -391,5 +392,35 @@ describe("getCorrections polarity field", () => {
     insertCorrection("h1", "text", '["note"]');
     const results = getCorrections(db);
     expect(results[0].polarity).toBeNull();
+  });
+});
+
+describe("getAllCorrectionsForProfile", () => {
+  it("returns all non-backfilled corrections without limit", () => {
+    for (let i = 0; i < 10; i++) {
+      insertCorrection(`h${i}`, `text${i}`, '["note"]', { createdAt: i });
+    }
+
+    const results = getAllCorrectionsForProfile(db);
+    expect(results).toHaveLength(10);
+  });
+
+  it("excludes backfilled rows", () => {
+    insertCorrection("h1", "real correction", '["note"]');
+    db.prepare(
+      `INSERT INTO corrections
+         (id, highlight_id, document_id, session_id, original_text, notes_json,
+          document_source, highlight_color, created_at, updated_at)
+       VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'old', '["old"]', 'file', 'yellow', 500, 500)`,
+    ).run();
+
+    const results = getAllCorrectionsForProfile(db);
+    expect(results).toHaveLength(1);
+    expect(results[0].originalText).toBe("real correction");
+  });
+
+  it("returns empty array for empty table", () => {
+    const results = getAllCorrectionsForProfile(db);
+    expect(results).toHaveLength(0);
   });
 });

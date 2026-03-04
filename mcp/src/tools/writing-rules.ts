@@ -82,10 +82,26 @@ export function createWritingRule(
   const now = nowMillis();
   const source = params.source ?? "synthesis";
   const signalCount = params.signal_count ?? 1;
+  if (!Number.isInteger(signalCount) || signalCount < 1) {
+    return { error: `Invalid signal_count "${String(params.signal_count)}". Must be an integer >= 1.` };
+  }
 
   db.prepare(
     `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(writing_type, category, rule_text) DO UPDATE SET
+       when_to_apply = COALESCE(excluded.when_to_apply, writing_rules.when_to_apply),
+       why = COALESCE(excluded.why, writing_rules.why),
+       severity = CASE
+         WHEN writing_rules.severity = 'must-fix' OR excluded.severity = 'must-fix' THEN 'must-fix'
+         WHEN writing_rules.severity = 'should-fix' OR excluded.severity = 'should-fix' THEN 'should-fix'
+         ELSE 'nice-to-fix'
+       END,
+       example_before = COALESCE(excluded.example_before, writing_rules.example_before),
+       example_after = COALESCE(excluded.example_after, writing_rules.example_after),
+       signal_count = writing_rules.signal_count + excluded.signal_count,
+       notes = COALESCE(excluded.notes, writing_rules.notes),
+       updated_at = excluded.updated_at`,
   ).run(
     id, params.writing_type, params.category, params.rule_text,
     params.when_to_apply ?? null, params.why ?? null, params.severity,
@@ -98,9 +114,9 @@ export function createWritingRule(
       `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
               why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
               signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt
-       FROM writing_rules WHERE id = ?`,
+       FROM writing_rules WHERE writing_type = ? AND category = ? AND rule_text = ?`,
     )
-    .get(id) as WritingRule;
+    .get(params.writing_type, params.category, params.rule_text) as WritingRule;
 }
 
 export interface UpdateWritingRuleParams {

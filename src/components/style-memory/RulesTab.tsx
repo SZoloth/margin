@@ -476,6 +476,14 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
 
   const categoryGroups = useMemo(() => groupByCategory(filtered), [filtered]);
 
+  const autoExportAfterRuleMutation = useCallback(async () => {
+    try {
+      await exportWritingRules();
+    } catch (err) {
+      console.error("Auto-export after rule mutation failed:", err);
+    }
+  }, []);
+
   const handleUpdate = useCallback(async (id: string, updates: Partial<WritingRule>) => {
     try {
       await updateWritingRule(id, {
@@ -490,11 +498,12 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       setRules((prev) =>
         prev.map((r) => (r.id === id ? { ...r, ...updates } : r)),
       );
+      void autoExportAfterRuleMutation();
     } catch (err) {
       console.error("Failed to update rule:", err);
       throw err;
     }
-  }, []);
+  }, [autoExportAfterRuleMutation]);
 
   const handleDelete = useCallback(async (id: string) => {
     try {
@@ -505,10 +514,11 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
         next.delete(id);
         return next;
       });
+      void autoExportAfterRuleMutation();
     } catch (err) {
       console.error("Failed to delete rule:", err);
     }
-  }, []);
+  }, [autoExportAfterRuleMutation]);
 
   const handleMarkReviewed = useCallback(async (id: string) => {
     try {
@@ -623,7 +633,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
             onClick={() => setSeverityFilter(null)}
             style={{
               padding: "3px 10px",
-              fontSize: 11,
+              fontSize: "var(--text-xs)",
               border: "1px solid var(--color-border)",
               borderRadius: 100,
               background: !severityFilter ? "var(--color-text-primary)" : "var(--color-page)",
@@ -640,7 +650,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
               onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}
               style={{
                 padding: "3px 10px",
-                fontSize: 11,
+                fontSize: "var(--text-xs)",
                 border: "1px solid var(--color-border)",
                 borderRadius: 100,
                 background: severityFilter === sev ? "var(--color-text-primary)" : "var(--color-page)",
@@ -655,7 +665,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           {selectedIds.size > 0 && effectiveView === "unreviewed" && (
             <>
-              <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
                 {selectedIds.size} selected
               </span>
               <button
@@ -663,7 +673,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                 onClick={handleBulkMarkReviewed}
                 style={{
                   padding: "4px 10px",
-                  fontSize: 11,
+                  fontSize: "var(--text-xs)",
                   border: "1px solid var(--color-border)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
@@ -676,7 +686,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
             </>
           )}
           {exportStatus && (
-            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+            <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
               {exportStatus}
             </span>
           )}
@@ -685,7 +695,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
             onClick={handleExport}
             style={{
               padding: "4px 12px",
-              fontSize: 11,
+              fontSize: "var(--text-xs)",
               fontWeight: 500,
               background: "var(--color-text-primary)",
               color: "var(--color-page)",
@@ -703,11 +713,11 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
         <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 32px 64px" }}>
           {loading && rules.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px" }}>
+            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px" }}>
               Loading...
             </div>
           ) : emptyMessage ? (
-            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px", lineHeight: 1.6 }}>
+            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px", lineHeight: 1.6 }}>
               {emptyMessage}
             </div>
           ) : (
@@ -718,7 +728,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                   onClick={() => toggleCategory(category)}
                   style={{
                     width: "100%",
-                    fontSize: 14,
+                    fontSize: "var(--text-base)",
                     fontWeight: 600,
                     color: "var(--color-text-primary)",
                     padding: "20px 0 8px",
@@ -735,16 +745,16 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                   }}
                 >
                   <span>{formatCategoryLabel(category)}</span>
-                  <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)" }}>
+                  <span style={{ fontSize: "var(--text-xs)", fontWeight: 400, color: "var(--color-text-secondary)" }}>
                     {categoryRules.length} rule{categoryRules.length === 1 ? "" : "s"}
                     <span style={{
                       display: "inline-block",
                       marginLeft: 6,
-                      fontSize: 10,
+                      fontSize: "var(--text-xs)",
                       transform: collapsedCategories.has(category) ? "rotate(-90deg)" : "rotate(0deg)",
                       transition: "transform 150ms ease",
                     }}>
-                      &#9660;
+                      {"\u25BE"}
                     </span>
                   </span>
                 </button>

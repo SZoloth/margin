@@ -64,7 +64,7 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
     let mut stmt = conn.prepare(
         "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity
          FROM corrections
-         WHERE highlight_id != '__backfill_marker__'
+         WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC
          LIMIT ?1",
     )?;
@@ -102,7 +102,7 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
 
 fn count_corrections(conn: &Connection) -> rusqlite::Result<i64> {
     conn.query_row(
-        "SELECT COUNT(*) FROM corrections WHERE highlight_id != '__backfill_marker__'",
+        "SELECT COUNT(*) FROM corrections WHERE session_id != '__backfilled__'",
         [],
         |row| row.get(0),
     )
@@ -827,6 +827,22 @@ mod tests {
     }
 
     #[test]
+    fn count_corrections_excludes_backfilled_session_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "live text", r#"["note1"]"#);
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'legacy text', '[\"legacy\"]', 'Doc', 'file', 'yellow', 500, 500)",
+            [],
+        )
+        .unwrap();
+
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+    }
+
+    #[test]
     fn fetch_corrections_deserializes_notes_json() {
         let conn = setup_full_db();
         insert_correction(&conn, "h1", "bad phrase", r#"["use X instead","also Y"]"#);
@@ -835,6 +851,24 @@ mod tests {
         assert_eq!(records[0].original_text, "bad phrase");
         assert_eq!(records[0].notes, vec!["use X instead", "also Y"]);
         assert_eq!(records[0].highlight_color, "yellow");
+    }
+
+    #[test]
+    fn fetch_corrections_excludes_backfilled_session_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "live text", r#"["note1"]"#);
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'legacy text', '[\"legacy\"]', 'Doc', 'file', 'yellow', 500, 500)",
+            [],
+        )
+        .unwrap();
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].original_text, "live text");
     }
 
     #[test]
@@ -1113,14 +1147,24 @@ mod tests {
              VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'old text', '[\"old\"]', 'Doc', 'file', 'yellow', 500, 500)",
             [],
         ).unwrap();
-        assert_eq!(count_corrections(&conn).unwrap(), 2);
+        // UI-facing counts exclude backfilled rows.
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+        // Physical rows are still preserved in SQLite.
+        let total_rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(total_rows, 2);
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("export.json");
         let count = export_and_mark_synthesized(&conn, &path).unwrap();
 
         assert_eq!(count, 1); // only non-backfilled exported
-        assert_eq!(count_corrections(&conn).unwrap(), 2); // all rows preserved
+        assert_eq!(count_corrections(&conn).unwrap(), 1); // backfilled excluded from user-facing count
+        let total_rows_after: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(total_rows_after, 2); // all rows preserved physically
         // Backfilled row should still have NULL synthesized_at
         let bf_synth: Option<i64> = conn
             .query_row("SELECT synthesized_at FROM corrections WHERE session_id = '__backfilled__'", [], |r| r.get(0))
