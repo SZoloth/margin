@@ -34,7 +34,9 @@ Claude writes prose → guard intercepts Write/Edit on .md files
 User reads AI output → annotates → corrections feed back into rules
 ```
 
-Every technical decision is evaluated against: **does this make the pipeline more reliable, the enforcement stronger, or the verification more rigorous?**
+Every technical decision is evaluated against: **does this make the pipeline more reliable, the enforcement stronger, the verification more rigorous, or the friction lower?**
+
+**Constraint: Claude Code subscription only.** The entire system works within a standard Claude Code subscription. No fine-tuning. No custom model hosting. No external LLM APIs. Rules travel as structured markdown in context windows, not as trained weights. Synthesis uses `claude --print`. The guard hook is a local Python script — no API calls at enforcement time. Voice calibration is statistical data, not a trained embedding. This constraint keeps the system simple, portable, and accessible.
 
 ---
 
@@ -58,6 +60,29 @@ Prompt instructions ("don't use leverage") are suggestions the AI can ignore. To
 - The guard hook is the highest-value artifact. Its reliability is non-negotiable.
 - Guard logic must fail-open (hook errors don't block all writes) but fail-visible (violations are reported, not swallowed).
 - Data embedded in the guard (kill-words, slop patterns) is serialized as JSON, not interpolated as Python strings — prevents code injection via rule text containing `"""`.
+
+### 2b. Signal-driven severity (from PIPELINE-AUDIT.md)
+
+Rule severity should be determined by user behavior, not manual classification. Every rule has a `signal_count` — the number of times the user has given that correction. Signal count drives enforcement strength:
+- 1-2 signals → guidance only (loaded in profile, not in hook)
+- 3-5 signals → soft enforcement (hook asks for confirmation)
+- 6+ signals → hard enforcement (hook blocks)
+
+The user never classifies severity manually. Give the same correction three times, it becomes a soft gate. Give it six times, it becomes a hard gate. This eliminates a friction point (manual severity dropdown) while making enforcement smarter.
+
+**Implications:**
+- The guard hook reads signal_count, not just severity, when deciding enforcement behavior.
+- Rule seeding (from KILL_WORDS.md) should set signal_count to reflect the rule's established importance, not start at 1.
+- Override tracking: when a user overrides a guard block, that's a signal the rule may need context scoping (writing_type/register), not removal.
+
+### 2c. Context-aware rule loading
+
+Rules are scoped by `writing_type` and `register` in the schema. The agent should load only the relevant subset for the current task — cover letter rules for cover letters, casual voice for text messages, professional register for outreach. The full profile dump is a fallback, not the default.
+
+**Implications:**
+- The writing profile needs an index or fast-path for "give me rules for writing_type=cover-letter, register=professional."
+- Token efficiency: scoped loading keeps the context window focused. As the rule set grows, this becomes mandatory, not optional.
+- The `/writing-voice` skill should detect context and load scoped rules. The MCP resource should support type filtering.
 
 ### 3. Test the chain, not the links
 
@@ -145,6 +170,24 @@ When text anchoring degrades, it reports confidence (exact/fuzzy/orphaned). When
 - **Single-writer for artifacts:** MCP should trigger Rust export, not run its own generation logic.
 - **`reviewed_at` has no MCP write path.** Column exists in Rust, dead on MCP surface.
 
+### Friction Reduction Architecture (not yet built)
+
+**From PIPELINE-AUDIT.md Layer 2 — these are the technical challenges behind the UX north star.**
+
+**Auto-classification at correction time:**
+The system should infer polarity (corrective/positive) from the gesture (strikethrough = corrective, highlight with praise = positive) and writing_type from document metadata. This is a local heuristic, not an LLM call — the document already has a type tag, and the annotation gesture carries semantic meaning. Fallback to manual tagging for ambiguous cases.
+
+**Continuous synthesis for common cases:**
+When a correction persists, check if it matches an existing rule's `rule_text` (exact or fuzzy match). If yes, increment `signal_count` and re-export — no agent session needed. If no match, queue for synthesis review. The common case (reinforcing a known pattern) should be fully automatic. Novel pattern detection is the only step that needs LLM involvement.
+
+**In-place rewrite (open architectural question):**
+The UX vision calls for corrections to immediately fix the paragraph being edited. This requires either:
+- **(a)** Margin calls Claude (via `claude --print` or MCP) to regenerate the paragraph with the correction applied. This means Margin becomes an AI writing surface — significant scope expansion, favors Tauri/TipTap.
+- **(b)** Simple text replacement where the correction is a direct substitution. Simpler, works on any platform, but less flexible for structural corrections like "too pitchy, close with curiosity not a CTA."
+- **(c)** Hybrid: text replacement for kill-word corrections, LLM rewrite for structural corrections.
+
+This decision affects the platform choice (Priority 4 in product strategy). If (a), TipTap's content AI and tracked changes extensions become load-bearing. If (b), NSTextView suffices.
+
 ### Adversarial Testing (built, never run)
 
 **What exists:**
@@ -229,6 +272,10 @@ Working: GitHub Actions builds, signs, notarizes DMG on tag push. Auto-update vi
 | **Adversarial baseline missing** | No proof the loop works. The product hypothesis is untested. | Medium — run the scripts that already exist |
 | **Enforcement policy undefined** | No documented decision about what auto-enforces vs. what advises. | Low — write the policy |
 | **`synthesized_at` ignored by MCP** | Dead semantics. Field exists but one consumer ignores it. | Low — enforce or remove |
+| **Editorial rules in 3-6 places** | Same rules scattered across CLAUDE.md, editorial.md, writing-rules.md, KILL_WORDS.md, AI_TELLS.md, rules.json. Drift guaranteed. | Medium — auto-generate editorial.md from DB, retire manual copies |
+| **Reference files disconnected from DB** | KILL_WORDS.md, AI_TELLS.md, STYLE_GUIDE.md manually curated, never synced with Margin DB. Two independent rule stores covering same concerns. | Medium — generate from DB or fold content into rules table |
+| **Full profile dump on every invocation** | `/writing-voice` loads entire writing-rules.md (~480 lines). As rules grow, token cost grows linearly. No scoping by writing_type or register at load time. | Medium — add scoped loading path |
+| **Voice eval never scored** | voice-eval.md has 25 test prompts with empty scorecards. No evidence the voice profile improves output. | Low — run the eval |
 | **App.tsx at 1,526 lines** | Frontend complexity ceiling. Not urgent but limits iteration speed. | Medium — extract coordination logic |
 
 ---
@@ -256,4 +303,7 @@ Working: GitHub Actions builds, signs, notarizes DMG on tag push. Auto-update vi
 **Minimum viable observability:**
 1. Structured logging to `~/.margin/logs/` for debugging user-reported issues
 2. Pipeline health check: a script reporting rule count, correction count, last synthesis date, guard rule count, profile completeness. For the developer, not the user.
-3. Post-ship: Sentry-Tauri for crash reports, tauri-plugin-aptabase for anonymous feature adoption signals.
+3. **Correction rate tracking:** corrections per document over time, grouped by `writing_type`. This is the product metric — if the system works, this number goes down. The data already exists in the corrections table (timestamps, document_id, writing_type). Needs a query and a visualization.
+4. **Graduation detection:** surface when a writing type has had zero corrections for N days. "Text messages: zero corrections in 30 days — writing type learned." This is the ultimate proof the loop compounds.
+5. **Override tracking:** when the guard hook fires and the user overrides, log it. High-override rules need context scoping (wrong writing_type or register), not removal. Overrides are feedback too.
+6. Post-ship: Sentry-Tauri for crash reports, tauri-plugin-aptabase for anonymous feature adoption signals.

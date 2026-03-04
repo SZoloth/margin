@@ -439,5 +439,30 @@ The existing 129+ tests form the foundation. They verify:
 | Before/after portfolio artifact | "First cover letter: 12 corrections → latest: 2 corrections" |
 | Graduation milestone | "Text messages: zero corrections in 30 days — writing type learned" |
 
-- DESIGN PRINCPLES: simplicity, elegance, efficiency, performance, consitency, frictionless
-- it should work with the users claude code subscription, ideally
+### Design principles
+
+The target architecture is governed by six principles. Every design decision should pass through them.
+
+1. **Simplicity.** One source of truth (Margin DB). One guard hook. One generator. One profile file. Eliminate every parallel system, manual copy, and redundant store. If something exists in two places, one of them is wrong.
+
+2. **Frictionless.** The distance between giving feedback and seeing its effect should approach zero. Auto-classify from context. Synthesize continuously, not in batches. Apply corrections to the current document immediately. The user's only job is to highlight and annotate — everything downstream is automatic.
+
+3. **Elegance.** Signal count drives severity. Writing type drives scoping. Correction rate measures success. Graduation detects mastery. The system's behavior emerges from a few clean primitives, not from manual configuration.
+
+4. **Efficiency.** The entire pipeline should work within a user's Claude Code subscription — no fine-tuning, no custom models, no external APIs beyond what Claude Code already provides. Rules travel as structured text in context windows, not as model weights. The MCP server reads a local SQLite file. The guard hook is a Python script. Token cost matters: load scoped rules for the writing type, not the full profile every time.
+
+5. **Consistency.** Same DB state produces same artifacts, regardless of whether the Rust or MCP path generates them. Same rule produces same enforcement, regardless of which surface loads it. Parity tests verify this. No behavioral differences between export paths.
+
+6. **Performance.** Export completes in milliseconds (SQLite queries + string formatting). Guard hook runs in milliseconds (JSON parse + word/regex scan). Profile loading adds minimal tokens to the context window. The system should be imperceptible in the writing workflow — never a bottleneck, never a reason to skip the feedback step.
+
+### Constraint: Claude Code subscription only
+
+The fully realized system should work within a standard Claude Code subscription. No fine-tuning infrastructure. No custom model hosting. No external LLM APIs.
+
+What this means in practice:
+- Rules travel as structured markdown in Claude's context window, not as trained weights
+- Synthesis uses Claude Code's existing agent capabilities (MCP tools, `claude --print`)
+- The guard hook is a local Python script — no API calls at enforcement time
+- Voice calibration is statistical data (from iMessage corpus), not a trained model
+- The adversarial compliance checker uses `claude --print --model sonnet` — within subscription
+- Auto-classification at correction time can use local heuristics (document metadata, gesture type) rather than an LLM call for every annotation

@@ -8,7 +8,13 @@
 
 AI writing has a quality problem that nobody is solving structurally. Every LLM produces prose with the same tells — hedge words, negative parallelism, corporate jargon, uniform cadence, absence of personal voice. Users notice. Hiring managers notice. Readers notice. The tools that claim to fix this either detect AI text after the fact (useless) or apply generic style rules that aren't yours (Grammarly).
 
-Margin exists to fix this. It captures editorial judgment from reading, synthesizes it into enforceable writing rules, and mechanically prevents Claude from writing patterns you've flagged. The system is at v1.10.0 — the full pipeline (corrections → rules → voice profile → enforcement hook) is functionally complete but under-verified and under-loaded.
+Margin exists to fix this — not by detecting AI text, but by preventing AI tells at the source. It captures editorial judgment from reading, synthesizes it into enforceable writing rules, and mechanically prevents Claude from writing patterns you've flagged.
+
+**The product thesis:** Every correction you give should immediately improve the document you're working on, propagate to all future documents of the same type, and never need to be given again. The system creates compounding returns on feedback — the more you use it, the fewer corrections you need to give, until AI writes content that doesn't need your feedback.
+
+**UX north star:** Minimum friction between feedback and effect. The distance between "I corrected this" and "the system learned it" should approach zero. Today that distance is 5 manual steps (classify → export → synthesize → re-export → re-invoke). The target is zero manual steps for common cases.
+
+**Constraint:** The entire system should work within a user's Claude Code subscription. No fine-tuning, no custom models, no external APIs. Rules travel as structured text in context windows, not as model weights.
 
 **The single most important open question:** Does the loop actually work? The adversarial testing infrastructure exists (27 prompts, compliance scoring, regression diffing) but has never been run. The writing guard is mechanically sound but has zero kill-word rules loaded. The voice profile generates correctly but has thin signal. Until there's a measured compliance delta between coached and uncoached Claude, everything else is premature.
 
@@ -47,23 +53,28 @@ Margin exists to fix this. It captures editorial judgment from reading, synthesi
 
 ### Priority 2: Harden the Pipeline
 
-**Goal:** Make the corrections → rules → profile → enforcement chain transactionally safe.
+**Goal:** Make the corrections → rules → profile → enforcement chain transactionally safe, and eliminate the redundancy that causes drift.
 
-**Why second:** The pipeline audit (2026-03-03) found three open issues that can cause silent data loss. If the loop is proven to work (Priority 1), these become critical — you can't lose corrections that have proven value.
+**Why second:** The pipeline audit (2026-03-03, updated 2026-03-04) found 13 structural disconnects. If the loop is proven to work (Priority 1), these become critical — you can't lose corrections that have proven value, and you can't have rules scattered across 6 locations with no sync.
 
-**Open issues from audit:**
+**Critical issues from audit:**
 
 | Issue | Severity | Problem | Fix |
 |-------|----------|---------|-----|
 | Synthesis not transactional | P1 | `export_corrections_json` marks rows `synthesized_at = now()` before rules are confirmed created. Failed synthesis = lost corrections (marked done, rules never made). | Wrap in SQLite transaction; don't mark synthesized until rules are confirmed persisted. |
 | Dual artifact generators | P2 | Rust (`export_writing_rules`) and MCP (`autoExportWritingProfile`) both generate `writing-rules.md` and `writing_guard.py` independently. Same intent, duplicated formatting logic, structural drift risk. | Single writer: MCP mutations trigger Rust export command. Or: golden parity test ensuring both produce identical output for same fixture data. |
-| Enforcement coverage undefined | P2 | Only `kill-words` and `ai-slop` categories auto-enforce via guard hook. Other categories (tone, structure, voice-calibration) are advisory with no defined policy about what *should* be enforced. | Define explicit enforcement policy: which categories are hard-gated (auto-reject) vs. advisory (profile guidance only). |
+| Enforcement coverage undefined | P2 | Only `kill-words` and `ai-slop` categories auto-enforce via guard hook. Other categories (tone, structure, voice-calibration) are advisory with no defined policy about what *should* be enforced. | Define explicit enforcement policy. Consider signal-driven severity: signal_count drives enforcement strength automatically (1-2 = guidance, 3-5 = soft gate, 6+ = hard gate). User behavior classifies severity, not manual tagging. |
+| Editorial rules in 3-6 places | P2 | Same rules exist in `~/.claude/CLAUDE.md`, `~/.claude/rules/editorial.md`, `~/.margin/writing-rules.md`, `KILL_WORDS.md`, `AI_TELLS.md`, and `rules.json`. No sync. Already drifted. | Margin DB is source of truth. `editorial.md` auto-generated on export. CLAUDE.md defers. Reference files generated or retired. See PIPELINE-AUDIT.md §7, §10. |
+| Guard hook nearly empty | P1 | `writing_guard.py` has `KILL_WORDS = []` and 1 slop pattern. The enforcement layer works but catches nothing. | Seed kill-words into DB. Populate slop patterns from must-fix rules with before/after examples. |
+| Unclassified corrections pollute profile | P2 | Corrections without polarity set end up in "Unclassified" section. | Filter for `polarity IS NOT NULL` in profile export. |
 
 **Additional hardening:**
 - MCP schema parity: `SCHEMA_SQL` in `mcp/src/db.ts` must match Rust migrations mechanically. Schema drift has already caused a bug (`reviewed_at` column missing in test DB).
 - `synthesized_at` semantics: MCP tools ignore this field, re-reading full correction history every time. Enforce the semantics or remove the field.
+- Retire `word_guard.py`: merge its single banned word into DB, one guard hook not two.
+- `reviewed_at` needs MCP write path: agents synthesizing rules via MCP can't mark them reviewed.
 
-**Success signal:** Zero pipeline data loss. All corrections entering synthesis produce corresponding rules. Rust and MCP artifact outputs identical for same input.
+**Success signal:** Zero pipeline data loss. All corrections entering synthesis produce corresponding rules. Rust and MCP artifact outputs identical for same input. Editorial rules exist in exactly one place (Margin DB) with generated artifacts downstream.
 
 ---
 
@@ -81,12 +92,17 @@ Margin exists to fix this. It captures editorial judgment from reading, synthesi
 - Writing samples section of the profile populated with positive-polarity excerpts
 
 **How to get there:**
-- **Seed from existing reference material:** KILL_WORDS.md, existing ai-slop patterns, any manual corrections already in the database
-- **Active reading sessions:** Read AI-generated prose (Claude drafts, blog posts, cover letters) in Margin and annotate aggressively — flag every AI tell, every corporate cliché, every structural pattern that smells generic
+- **Seed from existing reference material:** KILL_WORDS.md, existing ai-slop patterns, any manual corrections already in the database.
+- **Active reading sessions:** Read AI-generated prose (Claude drafts, blog posts, cover letters) in Margin and annotate — flag AI tells, corporate clichés, structural patterns that smell generic.
 - **Read your own best writing:** Highlight passages with positive polarity to populate the "writing samples" section. Claude needs examples of what *to* do, not just what to avoid.
-- **Cross-document synthesis:** After 5-10 annotation sessions, run the synthesis flow. Duplicate rules merge (signal_count increments), indicating patterns you flag consistently.
+- **Cross-document synthesis:** After 5-10 annotation sessions, run synthesis. Duplicate rules merge (signal_count increments), indicating patterns you flag consistently.
 
-**Success signal:** Voice profile that feels like a genuine editorial fingerprint — specific to your voice, not a generic style guide. Adversarial compliance score improves measurably from Priority 1 baseline.
+**Friction reduction that accelerates loading (from PIPELINE-AUDIT.md Layer 2):**
+- **Auto-classification from context:** Polarity and writing type inferred from gesture + document metadata. If you cross out a word, that's corrective polarity. If the document is tagged as `cover-letter`, the correction inherits that type. Manual tagging becomes a fallback, not the default.
+- **Continuous synthesis for common cases:** When a correction matches an existing rule exactly, increment signal_count automatically — no manual synthesis step needed. Novel patterns still surface for review.
+- **Context-aware rule loading:** Agent detects writing type from task and loads only the relevant subset. Cover letter rules fire for cover letters, not for text messages. This is the difference between a generic style guide and a context-aware voice model.
+
+**Success signal:** Voice profile that feels like a genuine editorial fingerprint — specific to your voice, not a generic style guide. Adversarial compliance score improves measurably from Priority 1 baseline. Loading velocity increases as friction decreases (auto-classification and continuous synthesis reduce the manual work per correction).
 
 ---
 
@@ -104,7 +120,9 @@ Margin exists to fix this. It captures editorial judgment from reading, synthesi
 | AI writes inside Margin (inline suggestions, tracked changes, AI editor) | **Tauri.** TipTap's extension system supports Content AI, tracked changes, agent editing. NSTextView can't match this. 50+ deps but justified. |
 | Unsure | Stay on Tauri until Priority 1 clarifies the interaction model. Don't migrate speculatively. |
 
-**Current assessment:** The writing quality system works through enforcement hooks and voice profiles that travel to Claude's context, not through in-editor AI features. This points toward Swift. But the assessment should come from Priority 1 data, not speculation.
+**New consideration from pipeline audit (Layer 2 — in-place rewrite):** The UX north star calls for corrections to immediately fix the paragraph you're looking at, not just persist for future drafts. If this is in scope, it means Margin needs to call Claude to rewrite corrected paragraphs — making Margin an AI writing surface, not just a reading surface. This significantly favors Tauri (TipTap content AI, tracked changes) and weakens the Swift case. The platform decision should weigh this: is in-place rewrite a core UX requirement or a nice-to-have?
+
+**Current assessment:** The writing quality system works through enforcement hooks and voice profiles that travel to Claude's context, not through in-editor AI features. This points toward Swift. But in-place rewrite changes the calculus — if frictionless feedback requires the corrected paragraph to be rewritten immediately, the app needs AI editing capabilities. Assessment should come from Priority 1 data and UX testing, not speculation.
 
 ---
 
@@ -120,7 +138,13 @@ Margin exists to fix this. It captures editorial judgment from reading, synthesi
 - Case study: architecture decisions, the feedback loop theory, adversarial testing methodology, measured results
 - Distribution: auto-update pipeline (Tauri updater or Sparkle), code signing, notarization, download link
 
-**What makes this case study different from "I built an app":** It has a thesis (editorial judgment compounds into AI writing quality), a measurement (adversarial compliance scoring), and a result (the delta). This is engineering + product thinking, not just shipping features.
+**What makes this case study different from "I built an app":** It has a thesis (editorial judgment compounds into AI writing quality), two measurements (adversarial compliance delta AND correction rate over time per writing type), and a result. The compliance delta proves the rules work. The correction rate proves the system *learns* — fewer corrections needed over time. The graduation milestone ("text messages: zero corrections in 30 days") is the ultimate proof point.
+
+**The case study story:**
+1. **Problem:** AI writes generic content. You correct it. You correct the same things again. The feedback never compounds.
+2. **Insight:** Every correction is training data. The missing piece is the feedback UX — no tool captures structured feedback at the point of reading and routes it back to AI in a way that persists and compounds.
+3. **Solution:** Margin captures corrections in the most natural gesture (highlight + annotate), infers context automatically, synthesizes into scoped rules, enforces across every surface where AI writes.
+4. **Result:** Correction rate dropped from X to Y per document. The goal isn't zero corrections forever — voice evolves. The goal is zero *repeated* corrections.
 
 ---
 
@@ -171,7 +195,8 @@ Export your voice profile as a portable artifact. Import someone else's. An edit
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | **The delta is negligible** — voice profile doesn't measurably change Claude's output | Medium | Fatal | Priority 1 tests this directly. If true, either the rules are too thin (fixable by loading more signal) or the enforcement mechanism is too weak (fixable by expanding guard coverage). If neither fix works, the thesis is wrong. |
-| **Users never reach synthesis** — they annotate but don't complete the correction → rule flow | High | High | Reduce friction: auto-suggest synthesis when correction count reaches threshold. One-click export. Auto-synthesis without manual prompt copy. |
+| **Users never reach synthesis** — they annotate but don't complete the correction → rule flow | High | High | The real fix is eliminating the synthesis step for common cases (continuous synthesis — auto-increment signal_count when correction matches existing rule). For novel patterns: auto-suggest synthesis at threshold. One-click export. Auto-classification removes tagging friction. See PIPELINE-AUDIT.md Layer 2. |
+| **Friction kills the loop** — too many manual steps between correction and effect | High | High | Currently 5 manual steps between feedback and effect. Each step is a dropout point. Auto-classification, continuous synthesis, and in-place rewrite collapse this to zero for common cases. |
 | **AI models improve and the problem disappears** — Claude 5 doesn't produce AI tells | Low | Medium | Even if base models improve, personal voice calibration remains valuable. "No AI tells" is not the same as "writes like you." |
 | **Kill-word approach is too blunt** — binary blocking prevents legitimate use of flagged words | Medium | Low | Severity system already exists (must-fix, should-fix, nice-to-fix). Only must-fix kill-words auto-block. Others are advisory. |
 | **Pipeline data loss** — corrections lost in synthesis, rules not persisted | Medium | High | Priority 2 fixes the transaction gap. Gap tracking ratchet logs production escapes. |

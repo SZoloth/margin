@@ -1,0 +1,324 @@
+diff --git a/src-tauri/src/watcher.rs b/src-tauri/src/watcher.rs
+index 1cc634d..4c95709 100644
+--- a/src-tauri/src/watcher.rs
++++ b/src-tauri/src/watcher.rs
+@@ -11,6 +11,7 @@ struct FileChangedPayload {
+ pub struct FileWatcher {
+     watcher: Option<RecommendedWatcher>,
+     watched_dir: Option<PathBuf>,
++    watch_id: u64,
+ }
+ 
+ impl FileWatcher {
+@@ -18,10 +19,11 @@ impl FileWatcher {
+         FileWatcher {
+             watcher: None,
+             watched_dir: None,
++            watch_id: 0,
+         }
+     }
+ 
+-    pub fn watch(&mut self, path: &str, app_handle: &AppHandle) -> Result<(), String> {
++    pub fn watch(&mut self, path: &str, watch_id: u64, app_handle: &AppHandle) -> Result<(), String> {
+         // Stop watching previous path if any
+         self.unwatch()?;
+ 
+@@ -76,6 +78,7 @@ impl FileWatcher {
+ 
+         self.watched_dir = Some(parent);
+         self.watcher = Some(watcher);
++        self.watch_id = watch_id;
+ 
+         Ok(())
+     }
+@@ -86,26 +89,35 @@ impl FileWatcher {
+         }
+         self.watched_dir = None;
+         self.watcher = None;
++        self.watch_id = 0;
+         Ok(())
+     }
++
++    pub fn unwatch_if_id_matches(&mut self, watch_id: u64) -> Result<(), String> {
++        if self.watch_id != watch_id {
++            return Ok(());
++        }
++        self.unwatch()
++    }
+ }
+ 
+ #[tauri::command]
+ pub fn watch_file(
+     path: String,
++    watch_id: u64,
+     state: tauri::State<'_, Mutex<FileWatcher>>,
+     app_handle: AppHandle,
+ ) -> Result<(), String> {
+     let mut watcher = state
+         .lock()
+         .map_err(|e| format!("Failed to lock watcher state: {e}"))?;
+-    watcher.watch(&path, &app_handle)
++    watcher.watch(&path, watch_id, &app_handle)
+ }
+ 
+ #[tauri::command]
+-pub fn unwatch_file(state: tauri::State<'_, Mutex<FileWatcher>>) -> Result<(), String> {
++pub fn unwatch_file(watch_id: u64, state: tauri::State<'_, Mutex<FileWatcher>>) -> Result<(), String> {
+     let mut watcher = state
+         .lock()
+         .map_err(|e| format!("Failed to lock watcher state: {e}"))?;
+-    watcher.unwatch()
++    watcher.unwatch_if_id_matches(watch_id)
+ }
+diff --git a/src/App.tsx b/src/App.tsx
+index 10b3eed..778484c 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -427,18 +427,34 @@ export default function App() {
+     const currentDoc = currentDocRef.current;
+     if (!currentDoc || currentDoc.file_path !== path) return;
+ 
+-    // Skip reload when we initiated the save — avoids cursor jump
+-    if (isSelfSaveRef.current(path)) return;
++    let didSeedMtime = false;
++    try {
++      const info = await stat(path);
++      const mtimeMs = info.mtime?.getTime();
++      if (mtimeMs) {
++        lastMtimeRef.current = mtimeMs;
++        didSeedMtime = true;
++      }
++
++      // Skip reload when we initiated the save — avoids cursor jump.
++      // Use mtime when available so a real external edit inside the time window
++      // isn't incorrectly suppressed.
++      if (isSelfSaveRef.current(path, mtimeMs)) return;
++    } catch {
++      // Fall back to time-window suppression if stat fails.
++      if (isSelfSaveRef.current(path)) return;
++    }
+ 
+     try {
+       const newContent = await readFile(path);
+       setContentExternalRef.current(newContent);
+-      // Update mtime baseline so focus fallback doesn't redundantly reload
+-      stat(path)
+-        .then((info) => {
+-          if (info.mtime) lastMtimeRef.current = info.mtime.getTime();
+-        })
+-        .catch(() => {});
++      if (!didSeedMtime) {
++        stat(path)
++          .then((info) => {
++            if (info.mtime) lastMtimeRef.current = info.mtime.getTime();
++          })
++          .catch(() => {});
++      }
+     } catch (err) {
+       console.error("Failed to reload file:", err);
+     }
+diff --git a/src/hooks/__tests__/useDocument.test.ts b/src/hooks/__tests__/useDocument.test.ts
+index 19be32b..8852d18 100644
+--- a/src/hooks/__tests__/useDocument.test.ts
++++ b/src/hooks/__tests__/useDocument.test.ts
+@@ -2,6 +2,7 @@
+ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+ import { renderHook, act } from "@testing-library/react";
+ import { useDocument } from "../useDocument";
++import { saveFile } from "@/lib/tauri-commands";
+ 
+ // Mock all Tauri commands
+ vi.mock("@/lib/tauri-commands", () => ({
+@@ -13,6 +14,10 @@ vi.mock("@/lib/tauri-commands", () => ({
+   renameFile: vi.fn(),
+ }));
+ 
++vi.mock("@tauri-apps/plugin-fs", () => ({
++  stat: vi.fn().mockResolvedValue({ mtime: new Date(123456789) }),
++}));
++
+ const TEST_PATH = "/tmp/test.md";
+ 
+ function makeTestDoc(path = TEST_PATH) {
+@@ -107,4 +112,38 @@ describe("useDocument — isSelfSave", () => {
+ 
+     expect(result.current.isSelfSave(TEST_PATH)).toBe(false);
+   });
++
++  it("does not clear dirty if content changes during an in-flight save", async () => {
++    const deferred: { promise: Promise<void>; resolve: () => void } = (() => {
++      let resolve!: () => void;
++      const promise = new Promise<void>((res) => { resolve = res; });
++      return { promise, resolve };
++    })();
++
++    const saveFileMock = vi.mocked(saveFile);
++    saveFileMock.mockImplementationOnce(() => deferred.promise);
++
++    const { result } = renderHook(() => useDocument());
++
++    act(() => {
++      result.current.restoreFromCache(makeTestDoc(), "hello world", TEST_PATH, true);
++    });
++
++    let savePromise: Promise<void>;
++    act(() => {
++      savePromise = result.current.saveCurrentFile();
++    });
++
++    // Edit while save is in-flight
++    act(() => {
++      result.current.setContent("hello world (edited)");
++    });
++
++    deferred.resolve();
++    await act(async () => {
++      await savePromise!;
++    });
++
++    expect(result.current.isDirty).toBe(true);
++  });
+ });
+diff --git a/src/hooks/useDocument.ts b/src/hooks/useDocument.ts
+index 0ad21b4..02c4a7a 100644
+--- a/src/hooks/useDocument.ts
++++ b/src/hooks/useDocument.ts
+@@ -1,5 +1,6 @@
+ import { useState, useEffect, useCallback, useRef } from "react";
+ import type { Document } from "@/types/document";
++import { stat } from "@tauri-apps/plugin-fs";
+ import {
+   openFileDialog,
+   readFile,
+@@ -35,7 +36,7 @@ export interface UseDocumentReturn {
+   openRecentDocument: (doc: Document) => Promise<void>;
+   openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
+   saveCurrentFile: () => Promise<void>;
+-  isSelfSave: (path: string) => boolean;
++  isSelfSave: (path: string, mtimeMs?: number) => boolean;
+   refreshRecentDocs: () => void;
+   renameDocFile: (doc: Document, newName: string) => Promise<void>;
+   setContent: (newContent: string) => void;
+@@ -51,6 +52,7 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
+   const [filePath, setFilePath] = useState<string | null>(null);
+   const [isDirty, setIsDirty] = useState(false);
+   const [isLoading, setIsLoadingRaw] = useState(false);
++  const editEpochRef = useRef(0);
+   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+ 
+   // Delay showing loading state to avoid flash for fast loads
+@@ -66,9 +68,9 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
+   // Track self-saves by path + timestamp so the file watcher can skip reloads.
+   // Uses a time-window approach: all watcher events for the saved path within
+   // the window are suppressed (handles multiple FS events per save).
+-  const selfSaveRef = useRef<{ path: string; until: number } | null>(null);
++  const selfSaveRef = useRef<{ path: string; until: number; mtimeMs?: number } | null>(null);
+ 
+-  const isSelfSave = useCallback((path: string): boolean => {
++  const isSelfSave = useCallback((path: string, mtimeMs?: number): boolean => {
+     const entry = selfSaveRef.current;
+     if (!entry) return false;
+     if (entry.path !== path) return false;
+@@ -76,6 +78,16 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
+       selfSaveRef.current = null;
+       return false;
+     }
++
++    // If we have mtime data, only suppress the watcher reload when the file's
++    // mtime matches what we just wrote. This avoids ignoring a real external
++    // edit that happens to land inside the time window.
++    if (mtimeMs !== undefined && entry.mtimeMs !== undefined) {
++      if (mtimeMs !== entry.mtimeMs) {
++        selfSaveRef.current = null;
++        return false;
++      }
++    }
+     return true;
+   }, []);
+ 
+@@ -123,6 +135,7 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
+ 
+   // User edit — marks dirty
+   const setContent = useCallback((newContent: string) => {
++    editEpochRef.current += 1;
+     setContentState(newContent);
+     setIsDirty(true);
+     scheduleAutosave();
+@@ -295,13 +308,31 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
+       return;
+     }
+ 
++    const startedAtEpoch = editEpochRef.current;
++
+     try {
+       // Strip any <mark> tags that TipTap's serializer may leak into markdown
+       const clean = content.replace(/<\/?mark[^>]*>/g, "");
+-      // Mark this path as self-saved for 1s so the file watcher skips the reload
+-      selfSaveRef.current = { path: filePath, until: Date.now() + 1000 };
++      // Mark this path as self-saved so the file watcher skips the reload.
++      // Use a larger pre-save window to tolerate slow writes and delayed FS events.
++      selfSaveRef.current = { path: filePath, until: Date.now() + 5000 };
+       await saveFileCommand(filePath, clean);
+-      setIsDirty(false);
++
++      // Tighten the post-save window so external edits aren't ignored for long.
++      // Also record mtime to distinguish our save from a different write.
++      let mtimeMs: number | undefined;
++      try {
++        const info = await stat(filePath);
++        mtimeMs = info.mtime?.getTime();
++      } catch {
++        mtimeMs = undefined;
++      }
++      selfSaveRef.current = { path: filePath, until: Date.now() + 1000, mtimeMs };
++
++      // Only clear dirty if nothing changed since we started saving.
++      if (editEpochRef.current === startedAtEpoch) {
++        setIsDirty(false);
++      }
+ 
+       if (currentDoc) {
+         const updated: Document = {
+@@ -314,6 +345,8 @@ export function useDocument(autosaveEnabled = false): UseDocumentReturn {
+         refreshRecentDocs();
+       }
+     } catch (err) {
++      // If the save fails, don't keep suppressing file watcher reloads.
++      selfSaveRef.current = null;
+       console.error("Failed to save file:", err);
+     }
+   }, [filePath, isDirty, content, currentDoc, refreshRecentDocs]);
+diff --git a/src/hooks/useFileWatcher.ts b/src/hooks/useFileWatcher.ts
+index 9b347da..0e346cd 100644
+--- a/src/hooks/useFileWatcher.ts
++++ b/src/hooks/useFileWatcher.ts
+@@ -6,12 +6,14 @@ export function useFileWatcher(
+   filePath: string | null,
+   onFileChanged: (path: string) => void
+ ) {
++  const nextWatchIdRef = useRef(0);
+   const onFileChangedRef = useRef(onFileChanged);
+   onFileChangedRef.current = onFileChanged;
+ 
+   useEffect(() => {
+     if (!filePath) return;
+ 
++    const watchId = (nextWatchIdRef.current += 1);
+     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+     let cancelled = false;
+ 
+@@ -27,12 +29,12 @@ export function useFileWatcher(
+     });
+ 
+     // THEN start watching
+-    invoke("watch_file", { path: filePath }).catch(console.error);
++    invoke("watch_file", { path: filePath, watchId }).catch(console.error);
+ 
+     return () => {
+       cancelled = true;
+       if (debounceTimer) clearTimeout(debounceTimer);
+-      invoke("unwatch_file").catch(console.error);
++      invoke("unwatch_file", { watchId }).catch(console.error);
+       void unlistenPromise.then((fn) => fn()).catch(console.error);
+     };
+   }, [filePath]);

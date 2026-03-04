@@ -1,63 +1,59 @@
-# Theory: Margin as a Writing Feedback Loop
+# Theory: Margin as a Compounding Writing Feedback Loop
 
 ## Problem
 
-Writers improve by reading their own work critically — but critical reading is ephemeral. You notice a weak transition, wince at a cliché, admire a sentence that landed — and then the moment passes. There's no systematic way to accumulate editorial judgment into something durable and actionable.
+AI writes competent prose but not *your* prose. You correct it. You correct the same things again. The feedback is scattered — chat history, mental notes, ad-hoc prompt instructions that don't persist. None of it compounds.
 
-The deeper problem is that AI writing tools are generic. Claude writes competent prose but not *your* prose. The missing input is a machine-readable record of your taste: what you flag, what you fix, what you admire. Without that record, every AI writing session starts from zero.
+The missing piece isn't the AI model. It's the feedback UX. There's no tool that makes it easy to give structured feedback at the point of reading and routes that feedback back to the AI in a way that persists, scopes correctly, and compounds over time.
+
+Every correction a writer gives is training data. But today, that data evaporates.
 
 ## Operating Theory
 
-Margin is a desktop reading app with a hidden payload: it builds a persistent, structured record of editorial judgment that feeds back into AI writing tools.
+Margin is a desktop reading app whose hidden payload is a persistent, structured record of editorial judgment that feeds back into AI writing tools. The surface is conventional — open a markdown file, highlight text, write margin notes. The differentiating layer is underneath.
 
-The surface experience is conventional — open a markdown file, highlight text, write margin notes. The differentiating layer is underneath: every annotation is persisted in SQLite with polarity (positive or corrective), typed by writing concern (voice, clarity, structure, etc.), and accumulated into writing rules. Those rules synthesize into a voice profile. The voice profile travels into Claude via MCP tools or clipboard export.
+The core loop is: **read → annotate → correct → synthesize → write better → read again**. Each cycle should produce fewer corrections than the last.
 
-The loop is: **read → annotate → correct → synthesize → write better → read again**.
+Three properties make this loop work:
 
-Three systems make this work:
+**Corrections are structured data, not free text.** Every annotation persists in SQLite with polarity (positive or corrective), writing type (cover-letter, outreach, blog, PRD, text message), and register (casual, professional, emotional, explaining, logistics). This structure is the routing logic — it determines which rules fire in which context. A correction to a cover letter stays scoped to cover letters. The system is smart enough not to apply outreach voice rules to a PRD.
 
-**The annotation engine.** TipTap editor with custom extensions for multi-color highlights and margin notes. Highlights are stored separately from document text — the file on disk never contains markup. A 4-tier text-anchoring system (`text-anchoring.ts`) re-resolves highlight positions when documents change externally, with explicit confidence levels (exact / fuzzy / orphaned) rather than silent degradation.
+**Signal count is the confidence mechanism.** When you give the same correction multiple times, `signal_count` increments. Low signal = guidance. Medium signal = soft enforcement (hook asks for confirmation). High signal = hard enforcement (hook blocks). You never classify severity manually — your behavior classifies it. The system watches what you care about most and enforces accordingly.
 
-**The diff review system.** When a file changes externally (VS Code edit while Margin is open), the file watcher triggers a diff pipeline. Small changes auto-accept. Larger changes surface per-change accept/reject controls.
-
-**The MCP integration.** A Node.js MCP server opens the SQLite database directly and exposes 14 tools to Claude. The export bridge (`ExportBridge`) is an in-process HTTP server that enables push-based annotation delivery — Claude gets interrupted with your annotations rather than holding a blocking call open.
+**The UX north star is minimum friction between feedback and effect.** The distance between "I corrected this" and "the system learned it" should approach zero. Auto-classify from context. Synthesize continuously, not in batches. Apply corrections to the current document immediately. The user's only job is to highlight and annotate.
 
 ## Strategy
 
-The development strategy has three layers, built bottom-up:
+The development strategy has four layers, built bottom-up. The first two are largely built. The last two are the current frontier.
 
-**Layer 1: Trustworthy data.** WAL-mode SQLite, foreign keys, cascading deletes, busy timeouts. Text anchoring with explicit confidence levels. The diff review system to prevent external edits from silently destroying annotations.
+**Layer 1: Trustworthy data.** WAL-mode SQLite, foreign keys, cascading deletes, busy timeouts. Text anchoring with 4-tier fallback and explicit confidence levels. File watcher with diff review for external edits. This layer is solid — 41 Rust tests on corrections, 46 tests on writing rules, export safety tests prevent data loss on persistence failure.
 
-**Layer 2: Rich annotation.** Two-polarity system (positive signals to emulate, corrective signals to avoid). Writing type classification. Before/after examples on corrections. Writing rules with signal counts and severity. Voice profile generation. This layer transforms raw highlights into structured editorial knowledge.
+**Layer 2: Rich annotation and rule synthesis.** Two-polarity system (positive signals to emulate, corrective signals to avoid). Writing type and register classification. Before/after examples on corrections. Writing rules with signal counts, severity tiers, and category grouping. Voice calibration from 168k iMessage statistical analysis. MCP tools for bidirectional access. Writing guard hook for enforcement. This layer is functionally complete but has disconnects at the boundaries — the pipeline audit identified 13 structural gaps where Margin's internal data doesn't flow cleanly to Claude Code's enforcement surfaces.
 
-**Layer 3: AI integration and verification.** MCP tools for bidirectional access. Export bridge with push notifications. Writing guard hook for real-time enforcement. Compliance checker and adversarial test suite for batch verification. This layer closes the loop — editorial judgment accumulated in Margin flows into Claude's context automatically, and the quality of that integration is now measurable.
+**Layer 3: Eliminate friction.** This is the current frontier. The gap between "correction given" and "effect felt" is currently 5 manual steps (classify → export → synthesize → re-export → re-invoke skill). The target is zero manual steps: auto-classification from document metadata and gesture, continuous synthesis (not batched), immediate in-place rewrite of the corrected paragraph, and automatic propagation to future documents of the same type.
 
-The sequence matters: you can't build Layer 3 without Layer 2's structure, and Layer 2 is worthless without Layer 1's reliability. The recent pipeline audit added a verification dimension to Layer 3 — it's no longer enough to have the plumbing; the plumbing needs to prove it works.
+**Layer 4: Prove it compounds.** Correction rate per document per writing type is the metric. If the system works, this number goes down over time. "Graduation" is when a writing type reaches zero corrections for sustained time — the system has learned that type. The product story is a chart: "Cover letter corrections dropped from 12 per doc to 2 per doc over three months."
+
+The constraint: the entire system should work within a Claude Code subscription. No fine-tuning, no custom models, no external APIs. Rules travel as structured text in context windows, not as model weights.
 
 ## Key Discoveries
 
-**The pipeline had no verification, and that mattered.** The full feedback→synthesis→rules→enforcement chain (corrections → polarity tagging → rule creation → writing-rules.md export → writing_guard.py export → Claude rule-following) was functionally complete across both Rust and TypeScript, but the TS side had zero test coverage for `createWritingRule`, `getWritingProfileMarkdown`, `getWritingGuardPy`, and `getAllCorrectionsForProfile`. The pipeline worked in practice but was a blind operation for any refactoring.
+**The pipeline audit revealed the gap between internal soundness and external enforcement.** Margin's internal data pipeline (corrections → synthesis → rules → profile generation) works. 129+ tests verify it. But the enforcement boundary — where Margin's rules meet Claude Code's hooks, skills, and rule files — is full of disconnects. The guard hook has an empty kill-word list. The editorial rules exist in 3-6 redundant copies with no sync mechanism. The reference files that `/writing-quality-gate` loads are manually curated islands, disconnected from Margin's DB. The system is a well-built engine with loose spark plug wires.
 
-An audit added 19 unit tests and 2 integration tests. The integration test proved the chain works end-to-end for the first time: create a correction → set polarity → create a kill-word rule → verify it appears in the profile markdown → verify it appears in the guard hook's KILL_WORDS array. This is the first time the pipeline has been tested as a continuous chain rather than per-function.
+**The vision sharpened from "fix the plumbing" to "compounding returns on feedback."** The initial audit framed the target as "all pipes connected, no leaks." That's a 5-star fix of a 3-star system. The real target is: every correction you give should immediately improve the document you're working on, propagate to all future documents of the same type, and never need to be given again. The goal isn't zero corrections forever — voice evolves, new writing types emerge. The goal is zero *repeated* corrections.
 
-**Schema parity drifted silently between Rust and TS.** The Rust backend added a `reviewed_at` column to `writing_rules` via migration, but the TS MCP server's test schema (`SCHEMA_SQL` in `db.ts`) didn't include it. Test databases were missing a column that exists in production. This is particularly dangerous when both backends share one SQLite file — the Rust migrations are the source of truth, and the TS `SCHEMA_SQL` is only for tests, but if those tests can't exercise a column that exists in production, the tests provide false confidence. Fixed by adding `reviewed_at INTEGER` to the TS schema.
+**Signal count as an automatic severity classifier was a key insight.** The schema already supports it (`signal_count` column, duplicate merge coalescing). The leap is making it drive enforcement: your behavior determines how strictly a rule is enforced, not a manual severity dropdown. This eliminates a friction point (manual classification) while making the system smarter.
 
-**The writing guard is structurally sound but toothless.** Live data integrity probes against `~/.margin/margin.db` revealed zero kill-word rules in the database — the `KILL_WORDS` array in the generated `writing_guard.py` is empty. The guard only catches slop patterns (one regex from a single `ai-slop` rule). The enforcement layer works mechanically — the test confirmed it catches patterns in .md files, skips .ts files, and fails open on malformed input — but it has no ammunition. The comprehensive `KILL_WORDS.md` reference file (50+ words/phrases at HIGH/MEDIUM severity) exists but isn't reflected in the database.
+**Context-aware loading is the missing routing layer.** The schema has `writing_type` and `register` columns. Tests verify filtering by type and grouping by register. But the loading path dumps the full profile every time. The agent needs to detect what it's writing (cover letter vs text message vs PRD) and load only the relevant rule subset. This is where "smart enough not to apply the same rules to a text message as to a cover letter" lives.
 
-**"Does Claude follow the rules?" is a different kind of question.** Unit tests verify plumbing correctness. But the product hypothesis — that accumulated editorial judgment makes Claude write better prose — requires a different verification method. The audit addressed this with a two-layer compliance system. Layer 1 (mechanical) does deterministic checks: kill word scan, structural tell detection, voice calibration violations, slop pattern matching. Layer 2 (LLM) shells out to `claude --print` with the full writing-rules.md and a scoring rubric.
-
-The adversarial test generates 27 prose samples (9 writing types × 3 each) using prompts designed to tempt AI tells — "Write a paragraph arguing that most product roadmaps are theater" tempts "the hard part isn't X — it's Y," while "Write a bullet point for leading a product redesign" tempts "leveraging" and "spearheaded." Rules violated in 2+ of 3 samples are flagged as systematic failures. The regression suite diffs against baselines over time. This converts the core product hypothesis from subjective impression to measured signal.
-
-**The `~/.margin/` directory is an informal protocol.** The database, MCP port file, corrections export, voice profile, and writing rules all live in `~/.margin/`. This started as a storage location and became a coordination mechanism between the desktop app, the MCP server, and external scripts like the compliance checker.
-
-**State-in-hooks works at this scale.** No centralized store — each hook owns its domain. `App.tsx` wires them together. The current complexity is manageable, but cross-cutting coordination lives in the root component as prop threading.
+**The constraint to Claude Code subscription shapes the architecture.** No fine-tuning means rules must be effective as structured text in context windows. No external APIs means enforcement at hook-time is local (Python script, regex scan). Voice calibration is statistical data, not a trained embedding. Synthesis uses `claude --print` within the subscription. This constraint is healthy — it keeps the system simple and portable.
 
 ## Open Questions
 
-**The kill-words gap needs a decision.** The comprehensive `KILL_WORDS.md` reference is not reflected in the database's `writing_rules` table. The guard hook reads from the database. Should the kill words be seeded as database rules (enabling per-word management via MCP tools, but 50+ rows for a mostly-static list), or should the guard hook read from `KILL_WORDS.md` directly (simpler, but breaks the "database is source of truth" pattern)?
+**Can continuous synthesis work within token budgets?** Batch synthesis (export corrections → agent session → create rules) is expensive but controllable. Continuous synthesis (every correction triggers an incremental rule check) would need to be lightweight — possibly a local heuristic (exact text match against existing rules) with LLM synthesis only for novel patterns. The economics matter: if every correction costs an API call for synthesis, the friction reduction is offset by latency and cost.
 
-**The adversarial baseline hasn't been established yet.** The infrastructure exists — adversarial prompts, compliance scoring, baseline diffing — but it hasn't been run. The first run will establish whether the current rule set and voice profile produce measurably different prose than un-coached Claude. If the scores are indistinguishable, the pipeline is plumbing without payoff. This is the single most important open question for the product.
+**How does in-place rewrite work architecturally?** When you correct a paragraph, Margin should rewrite it using the new rule. This requires either: (a) Margin calling Claude directly to regenerate the paragraph with the correction applied, or (b) the correction being a direct text replacement (simpler but less flexible). Option (a) is more powerful but means Margin becomes an AI writing surface, not just a reading surface. That's a significant scope expansion.
 
-**Bidirectional annotation is untested in practice.** The MCP write-back tools let Claude annotate documents. The infrastructure exists; the habit doesn't.
+**Is correction rate the right metric, or is it correction *effort*?** A document with 3 corrections that each took 30 seconds of thought might represent more friction than a document with 8 corrections that were all quick kill-word fixes. Signal count captures frequency but not effort. The metric might need a weight factor.
 
-**When does the hooks architecture need shared state?** The current domain-per-hook pattern is clean, but if another feature requires cross-hook reactivity (annotations affecting search ranking, corrections influencing highlight display), the wiring gets complex fast.
+**When does the full-profile-dump approach become a token problem?** `writing-rules.md` is currently ~480 lines. As rules accumulate, context-aware loading becomes mandatory not just for relevance but for token efficiency. At what rule count does the full profile stop fitting comfortably in Claude's context alongside the actual writing task?
