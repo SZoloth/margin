@@ -8,7 +8,7 @@ interface ExportAnnotationsPopoverProps {
   onExport: (writingType: string | null) => Promise<ExportResult>;
   onClose: () => void;
   persistCorrections: boolean;
-  hasMarginNotes: boolean;
+  hasMarginNotes?: boolean;
   onOpenSettings: () => void;
 }
 
@@ -17,10 +17,11 @@ export function ExportAnnotationsPopover({
   onExport,
   onClose,
   persistCorrections,
-  hasMarginNotes,
+  hasMarginNotes = false,
   onOpenSettings,
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [writingType, setWritingType] = useState<string>("general");
   const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
@@ -31,6 +32,7 @@ export function ExportAnnotationsPopover({
   useEffect(() => {
     if (isOpen) {
       setResult(null);
+      setErrorMessage(null);
       setExporting(false);
     }
   }, [isOpen]);
@@ -64,10 +66,16 @@ export function ExportAnnotationsPopover({
       try {
         const wt = showWritingTypeSelector ? writingType : null;
         const res = await onExportRef.current(wt);
-        if (!cancelled) setResult(res);
+        if (!cancelled) {
+          setResult(res);
+          setErrorMessage(null);
+        }
       } catch (err) {
         console.error("Export failed:", err);
-        if (!cancelled) setResult({ highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" });
+        if (!cancelled) {
+          setResult(null);
+          setErrorMessage("Export failed. Please try again.");
+        }
       } finally {
         if (!cancelled) setExporting(false);
       }
@@ -133,7 +141,7 @@ export function ExportAnnotationsPopover({
             border: "none",
             cursor: "pointer",
             color: "var(--color-text-secondary)",
-            fontSize: 18,
+            fontSize: "var(--text-lg)",
             lineHeight: 1,
             padding: "2px 6px",
             borderRadius: "var(--radius-sm)",
@@ -147,12 +155,31 @@ export function ExportAnnotationsPopover({
             style={{
               textAlign: "center",
               color: "var(--color-text-primary)",
-              fontSize: 14,
+              fontSize: "var(--text-base)",
               fontWeight: 500,
               padding: "8px 0",
             }}
           >
             Exporting...
+          </div>
+        ) : errorMessage ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--color-text-primary)",
+                fontSize: "var(--text-base)",
+                fontWeight: 500,
+              }}
+            >
+              <span style={{ color: "var(--color-danger, #d33)" }}>×</span>
+              Export failed
+            </div>
+            <div style={{ color: "var(--color-text-secondary)", fontSize: "var(--text-sm)" }}>
+              {errorMessage}
+            </div>
           </div>
         ) : result ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -163,7 +190,7 @@ export function ExportAnnotationsPopover({
                 alignItems: "center",
                 gap: 8,
                 color: "var(--color-text-primary)",
-                fontSize: 14,
+                fontSize: "var(--text-base)",
                 fontWeight: 500,
               }}
             >
@@ -175,7 +202,7 @@ export function ExportAnnotationsPopover({
             <div
               style={{
                 color: "var(--color-text-secondary)",
-                fontSize: 13,
+                fontSize: "var(--text-sm)",
               }}
             >
               {result.highlightCount} {result.highlightCount === 1 ? "annotation" : "annotations"}
@@ -193,7 +220,7 @@ export function ExportAnnotationsPopover({
                     style={{
                       borderLeft: "2px solid var(--color-border)",
                       paddingLeft: 10,
-                      fontSize: 12,
+                      fontSize: "var(--text-xs)",
                       color: "var(--color-text-secondary)",
                       lineHeight: 1.5,
                       fontStyle: "italic",
@@ -220,7 +247,7 @@ export function ExportAnnotationsPopover({
                   paddingTop: 10,
                 }}
               >
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
                   Tagged as
                 </span>
                 {WRITING_TYPES.map((wt) => (
@@ -230,7 +257,7 @@ export function ExportAnnotationsPopover({
                     onClick={() => setWritingType(wt.value)}
                     style={{
                       padding: "2px 8px",
-                      fontSize: 11,
+                      fontSize: "var(--text-xs)",
                       fontFamily: "'Inter', system-ui, sans-serif",
                       fontWeight: writingType === wt.value ? 600 : 400,
                       color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
@@ -251,7 +278,7 @@ export function ExportAnnotationsPopover({
             {result.correctionsSaved && (
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: "var(--text-xs)",
                   color: "var(--color-text-tertiary)",
                   borderTop: "1px solid var(--color-border)",
                   paddingTop: 10,
@@ -265,7 +292,7 @@ export function ExportAnnotationsPopover({
             {persistCorrections && !result.correctionsSaved && result.noteCount > 0 && (
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: "var(--text-xs)",
                   color: "var(--color-text-tertiary)",
                   borderTop: "1px solid var(--color-border)",
                   paddingTop: 10,
@@ -279,7 +306,7 @@ export function ExportAnnotationsPopover({
             {!persistCorrections && result.noteCount > 0 && (
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: "var(--text-xs)",
                   color: "var(--color-text-tertiary)",
                   borderTop: "1px solid var(--color-border)",
                   paddingTop: 10,
@@ -297,7 +324,7 @@ export function ExportAnnotationsPopover({
                     border: "none",
                     padding: 0,
                     color: "var(--color-accent, #4a9)",
-                    fontSize: 12,
+                    fontSize: "var(--text-xs)",
                     cursor: "pointer",
                     textDecoration: "underline",
                     textUnderlineOffset: 2,
