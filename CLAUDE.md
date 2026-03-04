@@ -64,3 +64,8 @@ After Rust changes, run `cargo check`. After TypeScript changes, run `pnpm tsc -
 ## Issue tracking
 
 This project uses `bd` (beads) for issue tracking. See AGENTS.md for the full workflow. Key commands: `bd ready`, `bd show <id>`, `bd close <id>`, `bd sync`.
+
+## Connected Projects
+
+- **personal-site** (`~/Projects/personal-site/`) — Margin features become case study content. When making architecture decisions, consider: "how does this look in the DreamWorks-style case study?"
+- **job-search-pipeline** (`~/Projects/job-search-pipeline/`) — Margin is portfolio evidence. Shipping visible features directly supports the job search.
