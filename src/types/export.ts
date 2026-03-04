@@ -5,6 +5,4 @@ export interface ExportResult {
   correctionsSaved: boolean;
   correctionsFile: string;
   sentToClaude?: boolean;
-  positiveCount?: number;
-  correctiveCount?: number;
 }

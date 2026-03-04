@@ -1,61 +1,14 @@
 import { useEffect, useState, useRef } from "react";
 import type { ExportResult } from "@/types/export";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
-
-// Show the MCP setup hint once per app session
-let mcpHintShown = false;
-
-function McpHint({ onClose, onOpenSettings }: { onClose: () => void; onOpenSettings: () => void }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!mcpHintShown) {
-      mcpHintShown = true;
-      setVisible(true);
-    }
-  }, []);
-
-  if (!visible) return null;
-
-  return (
-    <div
-      style={{
-        fontSize: 12,
-        color: "var(--color-text-tertiary)",
-        borderTop: "1px solid var(--color-border)",
-        paddingTop: 10,
-        lineHeight: 1.5,
-      }}
-    >
-      Tip: Connect to Claude for direct export.{" "}
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          onOpenSettings();
-        }}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          color: "var(--color-accent)",
-          fontSize: 12,
-          cursor: "pointer",
-          textDecoration: "underline",
-          textUnderlineOffset: 2,
-        }}
-      >
-        Set up in Settings
-      </button>
-    </div>
-  );
-}
+import { WRITING_TYPES } from "@/lib/writing-types";
 
 interface ExportAnnotationsPopoverProps {
   isOpen: boolean;
   onExport: (writingType: string | null) => Promise<ExportResult>;
   onClose: () => void;
   persistCorrections: boolean;
+  hasMarginNotes: boolean;
   onOpenSettings: () => void;
 }
 
@@ -64,18 +17,20 @@ export function ExportAnnotationsPopover({
   onExport,
   onClose,
   persistCorrections,
+  hasMarginNotes,
   onOpenSettings,
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [writingType, setWritingType] = useState<string>("general");
   const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
+
+  const showWritingTypeSelector = persistCorrections && hasMarginNotes;
 
   // Reset state when popover opens
   useEffect(() => {
     if (isOpen) {
       setResult(null);
-      setErrorMessage(null);
       setExporting(false);
     }
   }, [isOpen]);
@@ -107,17 +62,12 @@ export function ExportAnnotationsPopover({
     (async () => {
       setExporting(true);
       try {
-        const res = await onExportRef.current(null);
-        if (!cancelled) {
-          setResult(res);
-          setErrorMessage(null);
-        }
+        const wt = showWritingTypeSelector ? writingType : null;
+        const res = await onExportRef.current(wt);
+        if (!cancelled) setResult(res);
       } catch (err) {
         console.error("Export failed:", err);
-        if (!cancelled) {
-          setResult(null);
-          setErrorMessage("Export failed. Please try again.");
-        }
+        if (!cancelled) setResult({ highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" });
       } finally {
         if (!cancelled) setExporting(false);
       }
@@ -173,7 +123,6 @@ export function ExportAnnotationsPopover({
       >
         {/* Close button */}
         <button
-          type="button"
           onClick={onClose}
           aria-label="Close"
           style={{
@@ -205,25 +154,6 @@ export function ExportAnnotationsPopover({
           >
             Exporting...
           </div>
-        ) : errorMessage ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                color: "var(--color-text-primary)",
-                fontSize: 14,
-                fontWeight: 500,
-              }}
-            >
-              <span style={{ color: "var(--color-danger, #d33)" }}>×</span>
-              Export failed
-            </div>
-            <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>
-              {errorMessage}
-            </div>
-          </div>
         ) : result ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Header */}
@@ -237,7 +167,7 @@ export function ExportAnnotationsPopover({
                 fontWeight: 500,
               }}
             >
-              <span style={{ color: "var(--color-accent)" }}>✓</span>
+              <span style={{ color: "var(--color-accent, #4a9)" }}>✓</span>
               {result.sentToClaude ? "Sent to Claude" : "Copied to clipboard"}
             </div>
 
@@ -251,12 +181,6 @@ export function ExportAnnotationsPopover({
               {result.highlightCount} {result.highlightCount === 1 ? "annotation" : "annotations"}
               {result.noteCount > 0 && (
                 <> · {result.noteCount} {result.noteCount === 1 ? "note" : "notes"}</>
-              )}
-              {(result.positiveCount ?? 0) > 0 && (
-                <> · {result.positiveCount} positive</>
-              )}
-              {(result.correctiveCount ?? 0) > 0 && (
-                <> · {result.correctiveCount} corrective</>
               )}
             </div>
 
@@ -280,6 +204,45 @@ export function ExportAnnotationsPopover({
                   >
                     {snippet}
                   </div>
+                ))}
+              </div>
+            )}
+
+            {/* Writing type tag */}
+            {result.correctionsSaved && showWritingTypeSelector && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  Tagged as
+                </span>
+                {WRITING_TYPES.map((wt) => (
+                  <button
+                    key={wt.value}
+                    type="button"
+                    onClick={() => setWritingType(wt.value)}
+                    style={{
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      fontFamily: "'Inter', system-ui, sans-serif",
+                      fontWeight: writingType === wt.value ? 600 : 400,
+                      color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                      backgroundColor: writingType === wt.value ? "var(--hover-bg)" : "transparent",
+                      border: writingType === wt.value ? "1px solid var(--color-border)" : "1px solid transparent",
+                      borderRadius: "var(--radius-sm)",
+                      cursor: "pointer",
+                      transition: "all 150ms ease",
+                    }}
+                  >
+                    {wt.label}
+                  </button>
                 ))}
               </div>
             )}
@@ -333,7 +296,7 @@ export function ExportAnnotationsPopover({
                     background: "none",
                     border: "none",
                     padding: 0,
-                    color: "var(--color-accent)",
+                    color: "var(--color-accent, #4a9)",
                     fontSize: 12,
                     cursor: "pointer",
                     textDecoration: "underline",
@@ -344,23 +307,6 @@ export function ExportAnnotationsPopover({
                 </button>
               </div>
             )}
-
-            {/* "Also copied" when sent to Claude */}
-            {result.sentToClaude && (
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "var(--color-text-tertiary)",
-                  borderTop: "1px solid var(--color-border)",
-                  paddingTop: 10,
-                }}
-              >
-                Also copied to clipboard
-              </div>
-            )}
-
-            {/* MCP discovery hint — once per session */}
-            {!result.sentToClaude && <McpHint onClose={onClose} onOpenSettings={onOpenSettings} />}
           </div>
         ) : null}
       </div>

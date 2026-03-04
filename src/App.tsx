@@ -4,20 +4,6 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
-const AgentationDev = import.meta.env.DEV
-  ? lazy(() => import("agentation").then((m) => ({ default: m.Agentation })))
-  : null;
-const DesignDials = import.meta.env.DEV
-  ? lazy(() =>
-      import("./hooks/useDesignDials").then((m) => {
-        const Dials = () => {
-          m.useDesignDials();
-          return null;
-        };
-        return { default: Dials };
-      })
-    )
-  : null;
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
@@ -29,15 +15,13 @@ import { useSearch } from "@/hooks/useSearch";
 import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
-import { SettingsPage } from "@/components/settings/SettingsPage";
-import type { Section } from "@/components/settings/SettingsNav";
+import { SettingsModal } from "@/components/layout/SettingsModal";
+import { CorrectionsPanel } from "@/components/corrections/CorrectionsPanel";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
-import { findAllMatches } from "@/components/editor/extensions/search";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
-import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
-import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -51,11 +35,57 @@ import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { useUpdater } from "@/hooks/useUpdater";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
 import type { UndoAction } from "@/components/ui/UndoToast";
-import { useDiffReview } from "@/hooks/useDiffReview";
-import { DiffBanner } from "@/components/editor/DiffBanner";
-import { DiffNavChip } from "@/components/editor/DiffNavChip";
-import { DiffControls } from "@/components/editor/DiffControls";
 
+/**
+ * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
+ * Unlike flat-string indexOf, this accounts for block node boundaries that add
+ * positional offsets not present in the text content.
+ */
+function findTextInDoc(
+  doc: import("@tiptap/pm/model").Node,
+  search: string,
+): { from: number; to: number } | null {
+  // Collect text segments with their TipTap start positions
+  const segments: Array<{ text: string; pos: number }> = [];
+  doc.descendants((node, pos) => {
+    if (node.isText && node.text) {
+      segments.push({ text: node.text, pos });
+    }
+  });
+
+  if (segments.length === 0) return null;
+
+  // Build a flat string and a mapping from flat offset → TipTap position
+  let flat = "";
+  const offsetToPos: Array<{ flatStart: number; tiptapStart: number; length: number }> = [];
+  for (const seg of segments) {
+    offsetToPos.push({ flatStart: flat.length, tiptapStart: seg.pos, length: seg.text.length });
+    flat += seg.text;
+  }
+
+  const idx = flat.indexOf(search);
+  if (idx === -1) return null;
+
+  const fromFlat = idx;
+  const toFlat = idx + search.length;
+
+  // Convert flat offsets to TipTap positions
+  let from = -1;
+  let to = -1;
+  for (const map of offsetToPos) {
+    const segEnd = map.flatStart + map.length;
+    if (from === -1 && fromFlat >= map.flatStart && fromFlat < segEnd) {
+      from = map.tiptapStart + (fromFlat - map.flatStart);
+    }
+    if (toFlat >= map.flatStart && toFlat <= segEnd) {
+      to = map.tiptapStart + (toFlat - map.flatStart);
+      break;
+    }
+  }
+
+  if (from === -1 || to === -1) return null;
+  return { from, to };
+}
 
 export default function App() {
   const { settings, setSetting } = useSettings();
@@ -67,20 +97,15 @@ export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<Section | undefined>();
   const [showExportPopover, setShowExportPopover] = useState(false);
+  const [showCorrectionsPanel, setShowCorrectionsPanel] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
-  const [polarityMap, setPolarityMap] = useState<Map<string, "positive" | "corrective">>(new Map());
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [errorToast, setErrorToast] = useState<{ message: string; id: number } | null>(null);
   const errorIdRef = useRef(0);
   const undoIdRef = useRef(0);
-  const diffReview = useDiffReview();
-  const [findBarOpen, setFindBarOpen] = useState(false);
-  const [diffControlState, setDiffControlState] = useState<{ changeId: string; top: number; right: number } | null>(null);
-  const diffReviewDocIdRef = useRef<string | null>(null);
   const highlightThread = useAnimatedPresence(!!focusHighlightId, 200);
   const lastHighlightRef = useRef<{ highlight: import("@/types/annotations").Highlight; notes: import("@/types/annotations").MarginNote[]; anchorRect: DOMRect | null } | null>(null);
 
@@ -108,15 +133,7 @@ export default function App() {
     };
   }, [doc.currentDoc, doc.content, doc.filePath, doc.isDirty, annotations.highlights, annotations.marginNotes, annotations.isLoaded]);
 
-  const tabsHook = useTabs({
-    snapshotFn,
-    onFileMissing: (names) => {
-      const label = names.length === 1
-        ? `"${names[0]}" was deleted — tab removed`
-        : `${names.length} deleted files — tabs removed`;
-      setErrorToast({ message: label, id: ++errorIdRef.current });
-    },
-  });
+  const tabsHook = useTabs(snapshotFn);
   const unsavedDialog = useAnimatedPresence(!!tabsHook.pendingCloseTabId, 200);
 
   // Listen for Cmd+O from useTabs keyboard shortcut
@@ -164,11 +181,7 @@ export default function App() {
           prevDocIdRef.current = recentDoc.id;
           openAsNewTabRef.current = false;
           if (recentDoc.source === "file" && recentDoc.file_path) {
-            void stat(recentDoc.file_path).then(() => {
-              void doc.openRecentDocument(recentDoc);
-            }).catch(() => {
-              closeDeletedFileTab(recentDoc.file_path!, tab.id);
-            });
+            void doc.openRecentDocument(recentDoc);
           } else if (recentDoc.source === "keep-local" && recentDoc.keep_local_id) {
             void keepLocal.getContent(recentDoc.keep_local_id).then((markdown) => {
               void doc.openKeepLocalArticle(recentDoc, markdown);
@@ -284,20 +297,7 @@ export default function App() {
   persistCorrectionsRef.current = settings.persistCorrections;
   const setContentExternalRef = useRef(doc.setContentExternal);
   setContentExternalRef.current = doc.setContentExternal;
-  const contentRef = useRef(doc.content);
-  contentRef.current = doc.content;
-  const diffReviewRef = useRef(diffReview);
-  diffReviewRef.current = diffReview;
-  const tabsHookRef = useRef(tabsHook);
-  tabsHookRef.current = tabsHook;
   const isRestoringMarksRef = useRef(false);
-
-  // Avoid cross-document corruption: diff review state is scoped to a single doc
-  useEffect(() => {
-    diffReview.reset();
-    diffReviewDocIdRef.current = null;
-    setDiffControlState(null);
-  }, [diffReview.reset, doc.currentDoc?.id]);
 
   // Restore highlight marks in the editor when annotations load for a document.
   const lastRestoredDocId = useRef<string | null>(null);
@@ -392,7 +392,7 @@ export default function App() {
         // Positions out of range
       }
 
-      const found = findAllMatches(state.doc, h.text_content)[0];
+      const found = findTextInDoc(state.doc, h.text_content);
       if (found) {
         try {
           tr.addMark(found.from, found.to, markType.create({ color: h.color, highlightId: h.id }));
@@ -417,23 +417,8 @@ export default function App() {
   // Wrap onUpdate to suppress dirty state during mark restoration
   const handleEditorUpdate = useCallback((md: string) => {
     if (isRestoringMarksRef.current) return;
-    // Prevent edits from being persisted while diff review is active
-    if (diffReviewRef.current.mode !== "idle") return;
     doc.setContent(md);
   }, [doc.setContent]);
-
-  // Close a tab whose backing file was deleted, and show a toast.
-  // Used by the watcher catch, focus handler, and tab-switch guard.
-  // Dedup: only fire once per path until it's reopened.
-  const closedDeletedPathsRef = useRef(new Set<string>());
-  const closeDeletedFileTab = useCallback((filePath: string, tabId?: string) => {
-    if (closedDeletedPathsRef.current.has(filePath)) return;
-    closedDeletedPathsRef.current.add(filePath);
-    const name = filePath.split("/").pop() ?? "file";
-    const id = tabId ?? tabsHookRef.current.activeTabId;
-    if (id) tabsHookRef.current.forceCloseTab(id);
-    setErrorToast({ message: `"${name}" was deleted — tab closed`, id: ++errorIdRef.current });
-  }, []);
 
   const isSelfSaveRef = useRef(doc.isSelfSave);
   isSelfSaveRef.current = doc.isSelfSave;
@@ -447,25 +432,7 @@ export default function App() {
 
     try {
       const newContent = await readFile(path);
-      // Re-validate after async read — user may have switched tabs/docs
-      if (currentDocRef.current?.id !== currentDoc.id) return;
-      const oldContent = contentRef.current;
-      // Route through diff review instead of silently replacing
-      const wasActive = diffReviewRef.current.mode !== "idle";
-      const entered = diffReviewRef.current.enterPending(oldContent, newContent);
-      if (entered) {
-        diffReviewDocIdRef.current = currentDoc.id;
-      } else if (wasActive) {
-        // Don't get stuck showing an old diff banner when the latest update was auto-accepted
-        diffReviewRef.current.reset();
-        diffReviewDocIdRef.current = null;
-        setDiffControlState(null);
-      }
-      // Only apply immediately when diff review was NOT entered (auto-accepted).
-      // When in review, content is deferred until the user resolves changes.
-      if (!entered && newContent !== oldContent) {
-        setContentExternalRef.current(newContent);
-      }
+      setContentExternalRef.current(newContent);
       // Update mtime baseline so focus fallback doesn't redundantly reload
       stat(path)
         .then((info) => {
@@ -473,138 +440,11 @@ export default function App() {
         })
         .catch(() => {});
     } catch (err) {
-      // Check if the file was deleted (not just a transient read error)
-      try {
-        await stat(path);
-        // File exists — transient error, just log
-        console.error("Failed to reload file:", err);
-      } catch {
-        closeDeletedFileTab(path);
-      }
+      console.error("Failed to reload file:", err);
     }
   }, []);
 
   useFileWatcher(doc.filePath, handleFileChanged);
-
-  // When diff review resolves (accept/reject/dismiss), apply final content to the editor
-  const prevDiffModeRef = useRef(diffReview.mode);
-  useEffect(() => {
-    const prevMode = prevDiffModeRef.current;
-    prevDiffModeRef.current = diffReview.mode;
-
-    // Only act on transition TO idle FROM a non-idle state
-    if (diffReview.mode === "idle" && (prevMode === "pending" || prevMode === "reviewing")) {
-      const currentDoc = currentDocRef.current;
-      if (!currentDoc) return;
-      if (!diffReviewDocIdRef.current) return;
-      if (diffReviewDocIdRef.current && diffReviewDocIdRef.current !== currentDoc.id) {
-        return;
-      }
-      const finalContent = diffReview.getFinalContent();
-      const hasAccepted = diffReview.changes.some((c) => c.status === "accepted");
-      const hasRejected = diffReview.changes.some((c) => c.status === "rejected");
-      if (hasRejected) {
-        // Rejected changes means the file on disk differs from what the user wants.
-        // Mark dirty so they can Cmd+S to persist the reverted content.
-        doc.setContent(finalContent);
-      } else {
-        // All accepted — file on disk already has this content, don't mark dirty.
-        setContentExternalRef.current(finalContent);
-      }
-      // Force the editor to re-render with clean content.
-      // Set editable first so the command dispatches reliably, then replace
-      // the entire document (setContent), suppressing onUpdate via the
-      // isRestoringMarks guard to avoid marking dirty or polluting state.
-      const ed = editorRef.current;
-      if (ed && !ed.isDestroyed) {
-        ed.setEditable(true, false);
-        isRestoringMarksRef.current = true;
-        try {
-          ed.commands.setContent(finalContent);
-        } finally {
-          isRestoringMarksRef.current = false;
-        }
-      }
-
-      // If any changes were accepted, the document content differs from when
-      // highlights were originally created. Prevent the mark-restoration
-      // effect from re-applying highlights onto changed content — they'll
-      // be visually orphaned (correct per design: highlights stay in DB).
-      if (hasAccepted) {
-        lastRestoredDocId.current = currentDoc.id;
-      }
-
-      diffReviewDocIdRef.current = null;
-      diffReview.reset();
-      setDiffControlState(null);
-    }
-  }, [diffReview.mode, diffReview.getFinalContent, diffReview.reset, doc.setContent]);
-
-  // Disable editing while diff review is active (prevents saving markup to disk).
-  // Suppress the TipTap 'update' event (emitUpdate=false) because the editable
-  // transition fires AFTER the resolution effect — if the resolution's setContent
-  // didn't fully take effect, the update event would serialize stale diff markup
-  // into doc.content and lastEmittedMarkdownRef, preventing the Reader from
-  // correcting the editor in the next render.
-  useEffect(() => {
-    if (!editor) return;
-    editor.setEditable(diffReview.mode === "idle", false);
-  }, [editor, diffReview.mode]);
-
-  // Scroll to current change and auto-show Keep/Revert controls.
-  // Uses rAF to ensure DOM has rendered diff marks (especially on mode transition).
-  // Depends only on mode + currentIndex — NOT changes — so accepting/rejecting
-  // a single change doesn't re-trigger (which would flicker the controls).
-  useEffect(() => {
-    if (diffReview.mode !== "reviewing") return;
-    const change = diffReviewRef.current.changes[diffReview.currentIndex];
-    if (!change) return;
-
-    const frameId = requestAnimationFrame(() => {
-      const scrollContainer = document.querySelector("[data-scroll-container]");
-      const el = scrollContainer?.querySelector(`[data-change-id="${change.id}"]`);
-      if (el instanceof HTMLElement) {
-        el.scrollIntoView({ block: "center" });
-        // Position Keep/Revert controls next to the mark
-        const rect = el.getBoundingClientRect();
-        setDiffControlState({
-          changeId: change.id,
-          top: rect.top,
-          right: window.innerWidth - rect.right + 8,
-        });
-      } else {
-        setDiffControlState(null);
-      }
-    });
-    return () => cancelAnimationFrame(frameId);
-  }, [diffReview.mode, diffReview.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle diff-click events → show Keep/Revert controls (manual clicks)
-  useEffect(() => {
-    if (diffReview.mode !== "reviewing") return;
-
-    const handleDiffClick = (e: Event) => {
-      const { changeId, element } = (e as CustomEvent).detail;
-      if (!changeId || !element) return;
-      const rect = (element as HTMLElement).getBoundingClientRect();
-      setDiffControlState({
-        changeId,
-        top: rect.top,
-        right: window.innerWidth - rect.right + 8,
-      });
-    };
-
-    // Dismiss controls on scroll so they don't drift from the mark
-    const scrollContainer = document.querySelector("[data-scroll-container]");
-    const handleScroll = () => setDiffControlState(null);
-
-    window.addEventListener("margin:diff-click", handleDiffClick);
-    scrollContainer?.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener("margin:diff-click", handleDiffClick);
-      scrollContainer?.removeEventListener("scroll", handleScroll);
-    };
-  }, [diffReview.mode]);
 
   // Focus-based fallback: stat the file on window focus and reload if mtime changed.
   // Safety net so a missed watcher event is never permanent.
@@ -617,19 +457,16 @@ export default function App() {
 
     // Seed mtime on mount / path change
     const currentPath = doc.filePath;
-    closedDeletedPathsRef.current.delete(currentPath);
     stat(currentPath)
       .then((info) => {
         if (info.mtime) lastMtimeRef.current = info.mtime.getTime();
       })
       .catch(() => {});
 
-    let cancelled = false;
     const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (!focused || cancelled) return;
+      if (!focused) return;
       stat(currentPath)
         .then((info) => {
-          if (cancelled) return;
           const mtime = info.mtime?.getTime() ?? 0;
           if (mtime > 0 && lastMtimeRef.current > 0 && mtime !== lastMtimeRef.current) {
             lastMtimeRef.current = mtime;
@@ -643,30 +480,10 @@ export default function App() {
             lastMtimeRef.current = mtime;
           }
         })
-        .catch(async () => {
-          // First stat failure could be transient (iCloud sync, brief lock).
-          // Retry once after a short delay before concluding the file is gone.
-          if (cancelled) return;
-          await new Promise((r) => setTimeout(r, 500));
-          if (cancelled) return;
-          try {
-            const info = await stat(currentPath);
-            if (cancelled) return;
-            // File came back — treat as normal mtime check
-            const mtime = info.mtime?.getTime() ?? 0;
-            if (mtime > 0) lastMtimeRef.current = mtime;
-          } catch {
-            if (cancelled) return;
-            cancelled = true;
-            closeDeletedFileTab(currentPath);
-          }
-        });
+        .catch(() => {});
     });
 
-    return () => {
-      cancelled = true;
-      void unlisten.then((fn) => fn());
-    };
+    return () => { void unlisten.then((fn) => fn()); };
   }, [doc.filePath, handleFileChanged]);
 
   // Handle files opened via macOS "Open With" / double-click
@@ -768,9 +585,6 @@ export default function App() {
     const highlight = annotations.highlights.find((h) => h.id === id);
     if (!highlight) return;
 
-    // Capture margin notes before deletion so they can be restored on undo
-    const capturedNotes = annotations.marginNotes.filter((n) => n.highlight_id === id);
-
     // Delete immediately
     await annotations.deleteHighlight(id);
 
@@ -814,12 +628,6 @@ export default function App() {
             prefixContext: highlight.prefix_context,
             suffixContext: highlight.suffix_context,
           });
-          // Re-create captured margin notes with the new highlight ID
-          await Promise.all(
-            capturedNotes.map((note) =>
-              annotationsRef.current.createMarginNote(restored.id, note.content),
-            ),
-          );
           // Re-apply mark in editor
           if (currentEditor) {
             const restoreMarkType = currentEditor.state.schema.marks.highlight;
@@ -945,31 +753,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [doc.currentDoc, annotations.isLoaded]);
 
-  // Style Memory: Cmd+Shift+M — opens Settings at Style Memory section
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "m") {
-        e.preventDefault();
-        setSettingsSection("style-memory");
-        setShowSettings(true);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // Find in document: Cmd+F
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === "KeyF") {
-        e.preventDefault();
-        setFindBarOpen(true);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   const handleExportAnnotations = useCallback(
     async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
@@ -985,7 +768,6 @@ export default function App() {
         editor,
         highlights,
         marginNotes,
-        polarityMap,
       });
 
       // Clipboard copy + best-effort MCP send (parallel, MCP failure won't block export)
@@ -1000,7 +782,6 @@ export default function App() {
 
       let correctionsSaved = false;
       let correctionsFile = "";
-      let attemptedCorrectionPersist = false;
 
       if (persistCorrectionsRef.current && highlights.length > 0 && marginNotes.length > 0) {
         const notesByHighlight = new Map<string, string[]>();
@@ -1024,14 +805,13 @@ export default function App() {
             notes,
             highlight_color: h.color,
             writing_type: writingType,
-            polarity: polarityMap.get(h.id) ?? null,
           });
         }
 
         if (correctionInputs.length > 0) {
-          attemptedCorrectionPersist = true;
           const today = new Date().toISOString().slice(0, 10);
           correctionsFile = `corrections-${today}.jsonl`;
+          const { persistCorrections } = await import("@/lib/tauri-commands");
           try {
             await persistCorrections(
               correctionInputs,
@@ -1042,11 +822,6 @@ export default function App() {
               today,
             );
             correctionsSaved = true;
-
-            // Auto-export writing rules after corrections persist
-            exportWritingRules().catch((err: unknown) =>
-              console.error("Auto-export writing rules failed:", err),
-            );
           } catch (err) {
             console.error("Failed to persist corrections:", err);
           }
@@ -1054,12 +829,7 @@ export default function App() {
       }
 
       // Clear annotations from editor and DB after export
-      const shouldClearAnnotations = shouldClearAnnotationsAfterExport({
-        highlightCount: highlights.length,
-        attemptedCorrectionPersist,
-        correctionsSaved,
-      });
-      if (shouldClearAnnotations) {
+      if (highlights.length > 0) {
         // Strip highlight and marginNote marks from the editor
         const { state } = editor;
         const { tr } = state;
@@ -1098,15 +868,6 @@ export default function App() {
         tabsHook.snapshotActive();
       }
 
-      // Count polarity stats and clear
-      let positiveCount = 0;
-      let correctiveCount = 0;
-      for (const p of polarityMap.values()) {
-        if (p === "positive") positiveCount++;
-        else if (p === "corrective") correctiveCount++;
-      }
-      setPolarityMap(new Map());
-
       return {
         highlightCount: highlights.length,
         noteCount: marginNotes.length,
@@ -1114,11 +875,9 @@ export default function App() {
         correctionsSaved,
         correctionsFile,
         sentToClaude: mcpResult.sent,
-        positiveCount,
-        correctiveCount,
       };
     },
-    [editor, doc.currentDoc, polarityMap],
+    [editor, doc.currentDoc],
   );
 
   // Open a recent document from the sidebar (now goes through tabs)
@@ -1185,9 +944,6 @@ export default function App() {
       onCloseTab={tabsHook.closeTab}
       onReorderTabs={tabsHook.reorderTabs}
       onNewTab={doc.openFile}
-      editor={editor}
-      findBarOpen={findBarOpen}
-      onCloseFindBar={() => setFindBarOpen(false)}
       tocElement={
         doc.currentDoc && toc.headings.length > 0 ? (
           <TableOfContents
@@ -1212,22 +968,9 @@ export default function App() {
         ) : undefined
       }
     >
-      {diffReview.mode !== "idle" && (
-        <DiffBanner
-          changeCount={diffReview.changes.length}
-          pendingCount={diffReview.pendingCount}
-          updatedAt={diffReview.updatedAt}
-          onAcceptAll={diffReview.acceptAll}
-          onReview={diffReview.startReview}
-          onDismiss={diffReview.dismiss}
-          onRevertAll={diffReview.revertAll}
-          isReviewing={diffReview.mode === "reviewing"}
-        />
-      )}
-
       <Suspense fallback={<div className="reader-content" style={{ opacity: 0.3 }} />}>
         <Reader
-          content={diffReview.reviewContent ?? doc.content}
+          content={doc.content}
           onUpdate={handleEditorUpdate}
           isLoading={doc.isLoading}
           onEditorReady={handleEditorReady}
@@ -1241,53 +984,16 @@ export default function App() {
         defaultColor={settings.defaultHighlightColor}
       />
 
-      {diffReview.mode === "reviewing" && (
-        <DiffNavChip
-          currentIndex={diffReview.currentIndex}
-          totalCount={diffReview.changes.length}
-          onPrev={diffReview.navigatePrev}
-          onNext={diffReview.navigateNext}
-        />
-      )}
-
-      {diffReview.mode === "reviewing" && diffControlState && (
-        <DiffControls
-          changeId={diffControlState.changeId}
-          top={diffControlState.top}
-          right={diffControlState.right}
-          onKeep={(id) => {
-            diffReview.acceptChange(id);
-            setDiffControlState(null);
-          }}
-          onRevert={(id) => {
-            diffReview.rejectChange(id);
-            setDiffControlState(null);
-          }}
-        />
-      )}
-
       {highlightThread.isMounted && lastHighlightRef.current && (() => {
         const { highlight, notes, anchorRect: rect } = lastHighlightRef.current;
         return (
           <HighlightThread
             highlight={highlight}
             notes={notes}
-            polarity={polarityMap.get(highlight.id) ?? null}
             onAddNote={annotations.createMarginNote}
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
             onDeleteHighlight={handleDeleteHighlight}
-            onSetPolarity={(highlightId, polarity) => {
-              setPolarityMap((prev) => {
-                const next = new Map(prev);
-                if (polarity === null) {
-                  next.delete(highlightId);
-                } else {
-                  next.set(highlightId, polarity);
-                }
-                return next;
-              });
-            }}
             onClose={() => {
               setFocusHighlightId(null);
               setAnchorRect(null);
@@ -1305,6 +1011,7 @@ export default function App() {
         onExport={handleExportAnnotations}
         onClose={() => setShowExportPopover(false)}
         persistCorrections={settings.persistCorrections}
+        hasMarginNotes={annotations.marginNotes.length > 0}
         onOpenSettings={() => setShowSettings(true)}
       />
 
@@ -1366,7 +1073,7 @@ export default function App() {
                   border: "none",
                   cursor: "pointer",
                   color: "var(--color-text-secondary)",
-                  fontSize: 18, /* ds-lint-disable */
+                  fontSize: 18,
                   lineHeight: 1,
                   padding: "2px 6px",
                   borderRadius: "var(--radius-sm)",
@@ -1377,7 +1084,7 @@ export default function App() {
               <div style={{ marginBottom: 16 }}>
                 <div
                   style={{
-                    fontSize: 14, /* ds-lint-disable */
+                    fontSize: 14,
                     fontWeight: 600,
                     color: "var(--color-text-primary)",
                     marginBottom: 6,
@@ -1385,7 +1092,7 @@ export default function App() {
                 >
                   Unsaved changes
                 </div>
-                <div style={{ fontSize: 13, /* ds-lint-disable */ color: "var(--color-text-secondary)" }}>
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                   "{tab.title}" has unsaved changes.
                 </div>
               </div>
@@ -1394,7 +1101,7 @@ export default function App() {
                   onClick={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
                   style={{
                     padding: "6px 14px",
-                    fontSize: 13, /* ds-lint-disable */
+                    fontSize: 13,
                     borderRadius: "var(--radius-md)",
                     border: "1px solid var(--color-border)",
                     background: "none",
@@ -1411,7 +1118,7 @@ export default function App() {
                   }}
                   style={{
                     padding: "6px 14px",
-                    fontSize: 13, /* ds-lint-disable */
+                    fontSize: 13,
                     borderRadius: "var(--radius-md)",
                     border: "none",
                     backgroundColor: "var(--color-accent)",
@@ -1428,23 +1135,18 @@ export default function App() {
         );
       })()}
 
-      {showSettings && (
-        <div
-          className="fixed inset-0 z-50"
-          style={{ backgroundColor: "var(--color-page)" }}
-        >
-          <SettingsPage
-            settings={settings}
-            setSetting={setSetting}
-            onClose={() => {
-              setShowSettings(false);
-              setSettingsSection(undefined);
-            }}
-            updater={updater}
-            initialSection={settingsSection}
-          />
-        </div>
-      )}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        settings={settings}
+        setSetting={setSetting}
+        onOpenCorrections={() => setShowCorrectionsPanel(true)}
+      />
+
+      <CorrectionsPanel
+        isOpen={showCorrectionsPanel}
+        onClose={() => setShowCorrectionsPanel(false)}
+      />
 
       {updater.available && (
         <div
@@ -1456,8 +1158,8 @@ export default function App() {
             alignItems: "center",
             gap: 10,
             padding: "8px 14px",
-            fontSize: 12, /* ds-lint-disable */
-
+            fontSize: 12,
+            fontFamily: "'Inter', system-ui, sans-serif",
             color: "var(--color-text-primary)",
             backgroundColor: "var(--color-page)",
             border: "1px solid var(--color-border)",
@@ -1473,9 +1175,9 @@ export default function App() {
             disabled={updater.installing}
             style={{
               padding: "3px 10px",
-              fontSize: 11, /* ds-lint-disable */
+              fontSize: 11,
               fontWeight: 500,
-
+              fontFamily: "'Inter', system-ui, sans-serif",
               color: "var(--color-text-primary)",
               backgroundColor: "var(--hover-bg)",
               border: "1px solid var(--color-border)",
@@ -1496,7 +1198,7 @@ export default function App() {
                 cursor: "pointer",
                 padding: 2,
                 color: "var(--color-text-secondary)",
-                fontSize: 14, /* ds-lint-disable */
+                fontSize: 14,
                 lineHeight: 1,
               }}
               aria-label="Dismiss"
@@ -1505,21 +1207,11 @@ export default function App() {
             </button>
           )}
           {updater.error && (
-            <span style={{ color: "var(--color-danger, #ef4444)", fontSize: 11 /* ds-lint-disable */ }}>
+            <span style={{ color: "var(--color-highlight-red)", fontSize: 11 }}>
               {updater.error}
             </span>
           )}
         </div>
-      )}
-      {AgentationDev && (
-        <Suspense fallback={null}>
-          <AgentationDev />
-        </Suspense>
-      )}
-      {DesignDials && (
-        <Suspense fallback={null}>
-          <DesignDials />
-        </Suspense>
       )}
     </AppShell>
   );

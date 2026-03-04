@@ -1,7 +1,7 @@
 {
   "name": "margin",
   "private": true,
-  "version": "1.10.0",
+  "version": "0.8.0",
   "packageManager": "pnpm@10.30.0",
   "type": "module",
   "scripts": {
@@ -11,10 +11,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tokens": "npx tsx scripts/extract-tokens.ts",
-    "version:sync": "bash scripts/sync-version.sh",
-    "lint:tokens": "node --experimental-strip-types scripts/lint-tokens.ts --all",
-    "lint:tokens:staged": "node --experimental-strip-types scripts/lint-tokens.ts"
+    "version:sync": "bash scripts/sync-version.sh"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^3.1.1",
@@ -29,7 +26,6 @@
     "@tiptap/extension-highlight": "^2.11",
     "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-link": "^2.27.2",
-    "@tiptap/extension-strike": "2.27.2",
     "@tiptap/extension-table": "^2.27.2",
     "@tiptap/extension-table-cell": "^2.27.2",
     "@tiptap/extension-table-header": "^2.27.2",
@@ -40,12 +36,8 @@
     "@tiptap/pm": "^2.11",
     "@tiptap/react": "^2.11",
     "@tiptap/starter-kit": "^2.11",
-    "clsx": "^2.1.1",
-    "diff-match-patch-ts": "^0.8.0",
-    "markdown-it-front-matter": "^0.2.4",
     "react": "^19",
     "react-dom": "^19",
-    "tailwind-merge": "^3.5.0",
     "tiptap-markdown": "^0.8"
   },
   "devDependencies": {
@@ -53,13 +45,10 @@
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
-    "agentation": "^2.2.1",
     "jsdom": "^28.1.0",
-    "motion": "^12.34.5",
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",

@@ -1,7 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import Strike from "@tiptap/extension-strike";
 import Typography from "@tiptap/extension-typography";
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -15,30 +14,7 @@ import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
 import { MultiColorHighlight } from "./extensions/highlight";
 import { MarginNote } from "./extensions/margin-note";
-import { DiffMark } from "./extensions/diff-mark";
-import { FrontMatter } from "./extensions/front-matter";
-import { Search } from "./extensions/search";
 import "../../styles/editor.css";
-
-// Prevent Strike from claiming <del> tags used by DiffMark.
-// Without this, deleted text gets both a diffMark and a strike mark;
-// the strike serializes to ~~text~~ in markdown, which persists after
-// diff cleanup and shows strikethrough on content that should be removed.
-const SafeStrike = Strike.extend({
-  parseHTML() {
-    return [
-      { tag: "s" },
-      { tag: "del:not([data-change-id])" },
-      { tag: "strike" },
-      {
-        style: "text-decoration",
-        consuming: false,
-        getAttrs: (style) =>
-          (style as string).includes("line-through") ? {} : false,
-      },
-    ];
-  },
-});
 
 interface ReaderProps {
   content: string;
@@ -49,13 +25,10 @@ interface ReaderProps {
 
 export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderProps) {
   const isExternalUpdate = useRef(false);
-  const lastEmittedMarkdownRef = useRef<string | null>(null);
 
   const editor = useEditor({
     extensions: [
-      FrontMatter,
-      StarterKit.configure({ strike: false }),
-      SafeStrike,
+      StarterKit,
       Typography,
       Table.configure({ resizable: false }),
       TableRow,
@@ -63,12 +36,10 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
       TableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Link.configure({ openOnClick: false, autolink: true }),
+      Link.configure({ openOnClick: false, autolink: true, protocols: ["https", "http"] }),
       Image.configure({ inline: false, allowBase64: true }),
       MultiColorHighlight.configure({ multicolor: true }),
       MarginNote,
-      DiffMark,
-      Search,
       Markdown.configure({
         html: true,
         tightLists: true,
@@ -84,29 +55,12 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
     editorProps: {
       attributes: {
         class: "reader-content",
-        autocorrect: "off",
-        autocapitalize: "off",
-        spellcheck: "false",
       },
     },
     onUpdate: ({ editor: ed }) => {
       if (isExternalUpdate.current) return;
-      // Defense-in-depth: never serialize content that contains diff marks.
-      // If diff marks leak into markdown, deleted text persists as plain text
-      // (or ~~text~~ if Strike somehow claims <del> tags).
-      let hasDiffMarks = false;
-      ed.state.doc.descendants((node) => {
-        if (hasDiffMarks) return false;
-        if (node.marks.some((m) => m.type.name === "diffMark")) {
-          hasDiffMarks = true;
-          return false;
-        }
-      });
-      if (hasDiffMarks) return;
-
-      const md = ed.storage.markdown.getMarkdown() as string;
-      lastEmittedMarkdownRef.current = md;
-      onUpdate(md);
+      const md = ed.storage.markdown.getMarkdown();
+      onUpdate(md as string);
     },
   });
 
@@ -119,16 +73,15 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
 
-    // If the content prop matches what the editor last emitted via onUpdate,
-    // this is a round-trip from the editor's own typing — skip setContent
-    // to prevent the cursor from jumping to the end of the document.
-    if (content === lastEmittedMarkdownRef.current) {
-      lastEmittedMarkdownRef.current = null;
-      return;
-    }
-
     const currentMd = editor.storage.markdown.getMarkdown() as string;
     if (currentMd === content) return;
+
+    // If the only difference is that the editor has mark HTML (e.g. <mark ...>)
+    // from programmatic highlight restoration, skip the setContent call —
+    // it would wipe those marks and lose data-highlight-id attributes.
+    const stripMarks = (s: string) =>
+      s.replace(/<\/?mark[^>]*>/g, "");
+    if (stripMarks(currentMd) === stripMarks(content)) return;
 
     isExternalUpdate.current = true;
     editor.commands.setContent(content);
