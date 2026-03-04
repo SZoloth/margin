@@ -15,8 +15,8 @@ import { useSearch } from "@/hooks/useSearch";
 import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
-import { SettingsModal } from "@/components/layout/SettingsModal";
-import { CorrectionsPanel } from "@/components/corrections/CorrectionsPanel";
+import { SettingsPage } from "@/components/settings/SettingsPage";
+import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
@@ -97,8 +97,9 @@ export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<Section | undefined>();
   const [showExportPopover, setShowExportPopover] = useState(false);
-  const [showCorrectionsPanel, setShowCorrectionsPanel] = useState(false);
+  const [findBarOpen, setFindBarOpen] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
@@ -133,7 +134,15 @@ export default function App() {
     };
   }, [doc.currentDoc, doc.content, doc.filePath, doc.isDirty, annotations.highlights, annotations.marginNotes, annotations.isLoaded]);
 
-  const tabsHook = useTabs(snapshotFn);
+  const tabsHook = useTabs({
+    snapshotFn,
+    onFileMissing: (names) => {
+      const label = names.length === 1
+        ? `"${names[0]}" was deleted — tab removed`
+        : `${names.length} deleted files — tabs removed`;
+      setErrorToast({ message: label, id: ++errorIdRef.current });
+    },
+  });
   const unsavedDialog = useAnimatedPresence(!!tabsHook.pendingCloseTabId, 200);
 
   // Listen for Cmd+O from useTabs keyboard shortcut
@@ -753,6 +762,31 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [doc.currentDoc, annotations.isLoaded]);
 
+  // Style Memory: Cmd+Shift+M
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        setSettingsSection("style-memory");
+        setShowSettings(true);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Find in document: Cmd+F
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === "KeyF") {
+        e.preventDefault();
+        setFindBarOpen(true);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleExportAnnotations = useCallback(
     async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
@@ -805,6 +839,7 @@ export default function App() {
             notes,
             highlight_color: h.color,
             writing_type: writingType,
+            polarity: null,
           });
         }
 
@@ -917,7 +952,10 @@ export default function App() {
 
   return (
     <AppShell
-      onOpenSettings={() => setShowSettings(true)}
+      onOpenSettings={() => {
+        setSettingsSection(undefined);
+        setShowSettings(true);
+      }}
       currentDoc={doc.currentDoc}
       recentDocs={doc.recentDocs}
       onOpenFile={doc.openFile}
@@ -944,6 +982,9 @@ export default function App() {
       onCloseTab={tabsHook.closeTab}
       onReorderTabs={tabsHook.reorderTabs}
       onNewTab={doc.openFile}
+      editor={editor}
+      findBarOpen={findBarOpen}
+      onCloseFindBar={() => setFindBarOpen(false)}
       tocElement={
         doc.currentDoc && toc.headings.length > 0 ? (
           <TableOfContents
@@ -1012,7 +1053,10 @@ export default function App() {
         onClose={() => setShowExportPopover(false)}
         persistCorrections={settings.persistCorrections}
         hasMarginNotes={annotations.marginNotes.length > 0}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={() => {
+          setSettingsSection("writing");
+          setShowSettings(true);
+        }}
       />
 
       <UndoToast action={undoAction} />
@@ -1073,7 +1117,7 @@ export default function App() {
                   border: "none",
                   cursor: "pointer",
                   color: "var(--color-text-secondary)",
-                  fontSize: 18,
+                  fontSize: "var(--text-lg)",
                   lineHeight: 1,
                   padding: "2px 6px",
                   borderRadius: "var(--radius-sm)",
@@ -1084,7 +1128,7 @@ export default function App() {
               <div style={{ marginBottom: 16 }}>
                 <div
                   style={{
-                    fontSize: 14,
+                    fontSize: "var(--text-base)",
                     fontWeight: 600,
                     color: "var(--color-text-primary)",
                     marginBottom: 6,
@@ -1092,7 +1136,7 @@ export default function App() {
                 >
                   Unsaved changes
                 </div>
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
                   "{tab.title}" has unsaved changes.
                 </div>
               </div>
@@ -1101,7 +1145,7 @@ export default function App() {
                   onClick={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
                   style={{
                     padding: "6px 14px",
-                    fontSize: 13,
+                    fontSize: "var(--text-sm)",
                     borderRadius: "var(--radius-md)",
                     border: "1px solid var(--color-border)",
                     background: "none",
@@ -1118,7 +1162,7 @@ export default function App() {
                   }}
                   style={{
                     padding: "6px 14px",
-                    fontSize: 13,
+                    fontSize: "var(--text-sm)",
                     borderRadius: "var(--radius-md)",
                     border: "none",
                     backgroundColor: "var(--color-accent)",
@@ -1135,18 +1179,23 @@ export default function App() {
         );
       })()}
 
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        settings={settings}
-        setSetting={setSetting}
-        onOpenCorrections={() => setShowCorrectionsPanel(true)}
-      />
-
-      <CorrectionsPanel
-        isOpen={showCorrectionsPanel}
-        onClose={() => setShowCorrectionsPanel(false)}
-      />
+      {showSettings && (
+        <div
+          className="fixed inset-0 z-50"
+          style={{ backgroundColor: "var(--color-page)" }}
+        >
+          <SettingsPage
+            settings={settings}
+            setSetting={setSetting}
+            onClose={() => {
+              setShowSettings(false);
+              setSettingsSection(undefined);
+            }}
+            updater={updater}
+            initialSection={settingsSection}
+          />
+        </div>
+      )}
 
       {updater.available && (
         <div
@@ -1158,7 +1207,7 @@ export default function App() {
             alignItems: "center",
             gap: 10,
             padding: "8px 14px",
-            fontSize: 12,
+            fontSize: "var(--text-xs)",
             fontFamily: "'Inter', system-ui, sans-serif",
             color: "var(--color-text-primary)",
             backgroundColor: "var(--color-page)",
@@ -1175,7 +1224,7 @@ export default function App() {
             disabled={updater.installing}
             style={{
               padding: "3px 10px",
-              fontSize: 11,
+              fontSize: "var(--text-xs)",
               fontWeight: 500,
               fontFamily: "'Inter', system-ui, sans-serif",
               color: "var(--color-text-primary)",
@@ -1198,7 +1247,7 @@ export default function App() {
                 cursor: "pointer",
                 padding: 2,
                 color: "var(--color-text-secondary)",
-                fontSize: 14,
+                fontSize: "var(--text-base)",
                 lineHeight: 1,
               }}
               aria-label="Dismiss"
@@ -1207,7 +1256,7 @@ export default function App() {
             </button>
           )}
           {updater.error && (
-            <span style={{ color: "var(--color-highlight-red)", fontSize: 11 }}>
+            <span style={{ color: "var(--color-danger-text)", fontSize: "var(--text-xs)" }}>
               {updater.error}
             </span>
           )}

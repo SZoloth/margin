@@ -8,7 +8,7 @@ import {
   exportCorrectionsJson,
 } from "@/lib/tauri-commands";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
-import { WRITING_TYPES } from "@/lib/writing-types";
+import { WRITING_TYPES, type WritingType } from "@/lib/writing-types";
 
 const PAGE_SIZE = 50;
 
@@ -22,7 +22,7 @@ function WritingTypeChips({
   onChange,
 }: {
   value: string | null;
-  onChange: (v: string) => void;
+  onChange: (v: WritingType) => void;
 }) {
   return (
     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -36,7 +36,7 @@ function WritingTypeChips({
           }}
           style={{
             padding: "1px 6px",
-            fontSize: 10,
+            fontSize: "var(--text-xs)",
             fontFamily: "'Inter', system-ui, sans-serif",
             fontWeight: value === wt.value ? 600 : 400,
             color:
@@ -67,7 +67,7 @@ function CorrectionItem({
   onDelete,
 }: {
   correction: CorrectionDetail;
-  onUpdateType: (highlightId: string, writingType: string) => void;
+  onUpdateType: (highlightId: string, writingType: WritingType) => void;
   onDelete: (highlightId: string) => void;
 }) {
   const [showTypeChips, setShowTypeChips] = useState(false);
@@ -81,7 +81,7 @@ function CorrectionItem({
       style={{
         padding: "8px 0",
         borderBottom: "1px solid var(--color-border)",
-        fontSize: 12,
+        fontSize: "var(--text-xs)",
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
@@ -126,7 +126,7 @@ function CorrectionItem({
               onClick={() => setShowTypeChips(!showTypeChips)}
               style={{
                 padding: "1px 6px",
-                fontSize: 10,
+                fontSize: "var(--text-xs)",
                 fontFamily: "'Inter', system-ui, sans-serif",
                 color: "var(--color-text-secondary)",
                 backgroundColor: correction.writingType ? "var(--hover-bg)" : "transparent",
@@ -142,7 +142,7 @@ function CorrectionItem({
               onClick={() => onDelete(correction.highlightId)}
               style={{
                 padding: "1px 6px",
-                fontSize: 10,
+                fontSize: "var(--text-xs)",
                 fontFamily: "'Inter', system-ui, sans-serif",
                 color: "var(--color-text-secondary)",
                 backgroundColor: "transparent",
@@ -177,7 +177,7 @@ function DocumentGroup({
   onDelete,
 }: {
   group: DocumentCorrections;
-  onUpdateType: (highlightId: string, writingType: string) => void;
+  onUpdateType: (highlightId: string, writingType: WritingType) => void;
   onDelete: (highlightId: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -201,24 +201,24 @@ function DocumentGroup({
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: "var(--text-xs)",
             color: "var(--color-text-secondary)",
             transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
             transition: "transform 150ms ease",
           }}
         >
-          &#9660;
+          ▼
         </span>
         <span
           style={{
-            fontSize: 13,
+            fontSize: "var(--text-sm)",
             fontWeight: 600,
             color: "var(--color-text-primary)",
           }}
         >
           {group.documentTitle ?? "Untitled"}
         </span>
-        <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
           ({group.corrections.length})
         </span>
       </button>
@@ -287,7 +287,7 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
   }, []);
 
   const handleUpdateType = useCallback(
-    async (highlightId: string, writingType: string) => {
+    async (highlightId: string, writingType: WritingType) => {
       try {
         await updateCorrectionWritingType(highlightId, writingType);
         setGroups((prev) =>
@@ -503,7 +503,7 @@ Stop Conditions (pause and ask)
           <div>
             <h2
               style={{
-                fontSize: 15,
+                fontSize: "var(--text-lg)",
                 fontWeight: 600,
                 color: "var(--color-text-primary)",
                 margin: 0,
@@ -514,7 +514,7 @@ Stop Conditions (pause and ask)
             {totalCount > 0 && (
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--text-xs)",
                   color: "var(--color-text-secondary)",
                   marginTop: 2,
                 }}
@@ -533,7 +533,7 @@ Stop Conditions (pause and ask)
               cursor: "pointer",
               padding: 4,
               color: "var(--color-text-secondary)",
-              fontSize: 18,
+              fontSize: "var(--text-lg)",
               lineHeight: 1,
             }}
             aria-label="Close"
@@ -555,7 +555,7 @@ Stop Conditions (pause and ask)
               style={{
                 textAlign: "center",
                 color: "var(--color-text-secondary)",
-                fontSize: 13,
+                fontSize: "var(--text-sm)",
                 padding: "24px 0",
               }}
             >
@@ -566,7 +566,7 @@ Stop Conditions (pause and ask)
               style={{
                 textAlign: "center",
                 color: "var(--color-text-secondary)",
-                fontSize: 13,
+                fontSize: "var(--text-sm)",
                 padding: "24px 16px",
                 lineHeight: 1.6,
               }}
@@ -593,7 +593,7 @@ Stop Conditions (pause and ask)
                     display: "block",
                     margin: "8px auto",
                     padding: "6px 16px",
-                    fontSize: 12,
+                    fontSize: "var(--text-xs)",
                     fontFamily: "'Inter', system-ui, sans-serif",
                     color: "var(--color-text-secondary)",
                     backgroundColor: "var(--hover-bg)",
@@ -626,7 +626,7 @@ Stop Conditions (pause and ask)
               style={{
                 width: "100%",
                 padding: "8px 16px",
-                fontSize: 13,
+                fontSize: "var(--text-sm)",
                 fontWeight: 500,
                 fontFamily: "'Inter', system-ui, sans-serif",
                 color: "var(--color-text-primary)",
@@ -642,7 +642,7 @@ Stop Conditions (pause and ask)
             {exportStatus && (
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--text-xs)",
                   color: "var(--color-text-secondary)",
                   lineHeight: 1.5,
                   marginTop: 8,
