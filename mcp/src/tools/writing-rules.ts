@@ -52,6 +52,57 @@ const VALID_WRITING_TYPES = [
   "resume", "slack", "pitch", "outreach",
 ] as const;
 
+export interface CreateWritingRuleParams {
+  rule_text: string;
+  writing_type: string;
+  category: string;
+  severity: string;
+  when_to_apply?: string | null;
+  why?: string | null;
+  example_before?: string | null;
+  example_after?: string | null;
+  notes?: string | null;
+  source?: string;
+  signal_count?: number;
+}
+
+export function createWritingRule(
+  db: Database.Database,
+  params: CreateWritingRuleParams,
+): WritingRule | { error: string } {
+  if (!VALID_SEVERITIES.includes(params.severity as (typeof VALID_SEVERITIES)[number])) {
+    return { error: `Invalid severity "${params.severity}". Allowed: ${VALID_SEVERITIES.join(", ")}` };
+  }
+
+  if (!VALID_WRITING_TYPES.includes(params.writing_type as (typeof VALID_WRITING_TYPES)[number])) {
+    return { error: `Invalid writing_type "${params.writing_type}". Allowed: ${VALID_WRITING_TYPES.join(", ")}` };
+  }
+
+  const id = crypto.randomUUID();
+  const now = nowMillis();
+  const source = params.source ?? "synthesis";
+  const signalCount = params.signal_count ?? 1;
+
+  db.prepare(
+    `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id, params.writing_type, params.category, params.rule_text,
+    params.when_to_apply ?? null, params.why ?? null, params.severity,
+    params.example_before ?? null, params.example_after ?? null,
+    source, signalCount, params.notes ?? null, now, now,
+  );
+
+  return db
+    .prepare(
+      `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
+              why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt
+       FROM writing_rules WHERE id = ?`,
+    )
+    .get(id) as WritingRule;
+}
+
 export interface UpdateWritingRuleParams {
   id: string;
   rule_text?: string;

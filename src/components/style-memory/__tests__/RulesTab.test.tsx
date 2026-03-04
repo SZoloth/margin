@@ -11,11 +11,14 @@ vi.mock("@/lib/tauri-commands", () => ({
       severity: "must-fix",
       category: "grammar",
       signalCount: 3,
+      source: "synthesis",
+      writingType: "prose",
       whenToApply: null,
       why: null,
       exampleBefore: null,
       exampleAfter: null,
       notes: null,
+      reviewedAt: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     },
@@ -23,6 +26,8 @@ vi.mock("@/lib/tauri-commands", () => ({
   updateWritingRule: vi.fn(),
   deleteWritingRule: vi.fn(),
   exportWritingRules: vi.fn(),
+  markRulesReviewed: vi.fn().mockResolvedValue(1),
+  markRulesUnreviewed: vi.fn().mockResolvedValue(1),
 }));
 
 import { RulesTab } from "../RulesTab";

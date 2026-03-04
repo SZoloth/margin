@@ -339,18 +339,20 @@ export function AppShell({
           )}
         </div>
 
-        {/* Scrollable reader area */}
-        <div className="flex-1 overflow-y-auto" data-scroll-container style={{ position: "relative" }}>
+        {/* Scrollable reader area + empty state wrapper */}
+        <div className="flex-1 min-h-0" style={{ position: "relative" }}>
+          {/* Empty state: absolutely fills the wrapper, not the scroll container */}
           {emptyState.isMounted && (
             <div
-              className={`flex h-full items-center justify-center${!hasContent ? " empty-state-entrance" : ""}`}
+              className={!hasContent ? "empty-state-entrance" : undefined}
               style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 color: "var(--color-text-secondary)",
-                ...(hasContent ? {
-                  position: "absolute",
-                  inset: 0,
-                  zIndex: 1,
-                } : {}),
+                position: "absolute",
+                inset: 0,
+                zIndex: 1,
                 opacity: emptyState.isVisible ? 1 : 0,
                 transition: emptyState.isVisible
                   ? "none"
@@ -406,21 +408,25 @@ export function AppShell({
               </div>
             </div>
           )}
-          {hasContent && (
-            <div
-              className="reader-grid"
-              style={{
-                opacity: (contentEntranceDone && tabFadeVisible) ? 1 : 0,
-                transition: tabFadeVisible
-                  ? "opacity 200ms var(--ease-entrance)"
-                  : "opacity 80ms var(--ease-exit)",
-              }}
-            >
-              <div className="toc-column">{tocElement}</div>
-              <div className="reader-content-column">{children}</div>
-              <div className="margin-column">{marginIndicators}</div>
-            </div>
-          )}
+          {/* Scroll container only holds actual document content */}
+          <div className="h-full overflow-y-auto" data-scroll-container>
+            {hasContent && (
+              <div
+                className="reader-grid"
+                style={{
+                  opacity: (contentEntranceDone && tabFadeVisible) ? 1 : 0,
+                  transition: tabFadeVisible
+                    ? "opacity 200ms var(--ease-entrance)"
+                    : "opacity 80ms var(--ease-exit)",
+                }}
+              >
+                <div className="toc-column">{tocElement}</div>
+                <div className="reader-content-column">{children}</div>
+                <div className="margin-column">{marginIndicators}</div>
+              </div>
+            )}
+            {!hasContent && children}
+          </div>
         </div>
       </div>
 

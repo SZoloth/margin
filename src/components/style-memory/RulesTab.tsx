@@ -5,16 +5,18 @@ import {
   updateWritingRule,
   deleteWritingRule,
   exportWritingRules,
+  markRulesReviewed,
 } from "@/lib/tauri-commands";
 
+type RulesView = "unreviewed" | "all";
+
 interface RulesTabProps {
-  onStatsChange: (stats: { ruleCount: number }) => void;
+  onStatsChange: (stats: { ruleCount: number; unreviewedCount: number }) => void;
 }
 
 const SEVERITY_VALUES: WritingRuleSeverity[] = ["must-fix", "should-fix", "nice-to-fix"];
 
 function SeverityBadge({ severity }: { severity: string }) {
-  // Map severity to CSS token key, falling back to should-fix
   const key = SEVERITY_VALUES.includes(severity as WritingRuleSeverity)
     ? severity
     : "should-fix";
@@ -42,6 +44,22 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
+function SourceBadge({ source }: { source: string }) {
+  const label = source === "synthesis" ? "synthesized" : source;
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        color: "var(--color-text-secondary)",
+        opacity: 0.7,
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 function SignalBar({ count, max = 7 }: { count: number; max?: number }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--color-text-secondary)" }}>
@@ -63,14 +81,68 @@ function SignalBar({ count, max = 7 }: { count: number; max?: number }) {
   );
 }
 
+function ViewToggle({
+  view,
+  onChangeView,
+  unreviewedCount,
+  allCount,
+}: {
+  view: RulesView;
+  onChangeView: (v: RulesView) => void;
+  unreviewedCount: number;
+  allCount: number;
+}) {
+  const buttonBase: React.CSSProperties = {
+    padding: "3px 10px",
+    fontSize: 11,
+    border: "1px solid var(--color-border)",
+    cursor: "pointer",
+    transition: "all 100ms",
+  };
+
+  return (
+    <div style={{ display: "flex" }}>
+      <button
+        type="button"
+        onClick={() => onChangeView("unreviewed")}
+        style={{
+          ...buttonBase,
+          borderRadius: "100px 0 0 100px",
+          borderRight: "none",
+          background: view === "unreviewed" ? "var(--color-text-primary)" : "var(--color-page)",
+          color: view === "unreviewed" ? "var(--color-page)" : "var(--color-text-secondary)",
+          fontWeight: view === "unreviewed" ? 600 : 400,
+        }}
+      >
+        To review ({unreviewedCount})
+      </button>
+      <button
+        type="button"
+        onClick={() => onChangeView("all")}
+        style={{
+          ...buttonBase,
+          borderRadius: "0 100px 100px 0",
+          background: view === "all" ? "var(--color-text-primary)" : "var(--color-page)",
+          color: view === "all" ? "var(--color-page)" : "var(--color-text-secondary)",
+          fontWeight: view === "all" ? 600 : 400,
+        }}
+      >
+        All ({allCount})
+      </button>
+    </div>
+  );
+}
+
 function RuleCard({
   rule,
   onUpdate,
   onDelete,
+  onMarkReviewed,
 }: {
   rule: WritingRule;
   onUpdate: (id: string, updates: Partial<WritingRule>) => Promise<void>;
   onDelete: (id: string) => void;
+  onMarkReviewed: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -178,12 +250,15 @@ function RuleCard({
     );
   }
 
+  const isUnreviewed = rule.reviewedAt == null;
+
   return (
     <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", flex: 1, lineHeight: 1.4 }}>
           {rule.ruleText}
         </div>
+        <SourceBadge source={rule.source} />
         <SeverityBadge severity={rule.severity} />
       </div>
 
@@ -232,6 +307,24 @@ function RuleCard({
       )}
 
       <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+        {isUnreviewed && (
+          <button
+            type="button"
+            onClick={() => onMarkReviewed(rule.id)}
+            style={{
+              fontSize: 10,
+              color: "var(--color-accent)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              textDecoration: "underline",
+              textUnderlineOffset: 2,
+              padding: 0,
+            }}
+          >
+            Mark reviewed
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -331,8 +424,15 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const exportTimeoutRef = useRef<number | null>(null);
   const loadedRef = useRef(false);
+
+  const unreviewedCount = useMemo(() => rules.filter((r) => r.reviewedAt == null).length, [rules]);
+  const [view, setView] = useState<RulesView>("unreviewed");
+
+  // Smart default: show "all" if nothing to review
+  const effectiveView = view === "unreviewed" && unreviewedCount === 0 && rules.length > 0 ? "all" : view;
 
   const loadRules = useCallback(async () => {
     setLoading(true);
@@ -354,8 +454,8 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
   }, [loadRules]);
 
   useEffect(() => {
-    onStatsChange({ ruleCount: rules.length });
-  }, [rules, onStatsChange]);
+    onStatsChange({ ruleCount: rules.length, unreviewedCount });
+  }, [rules, onStatsChange, unreviewedCount]);
 
   useEffect(() => {
     return () => {
@@ -366,8 +466,12 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
   }, []);
 
   const filtered = useMemo(() =>
-    rules.filter((r) => !severityFilter || r.severity === severityFilter),
-    [rules, severityFilter],
+    rules.filter((r) => {
+      if (effectiveView === "unreviewed" && r.reviewedAt != null) return false;
+      if (severityFilter && r.severity !== severityFilter) return false;
+      return true;
+    }),
+    [rules, effectiveView, severityFilter],
   );
 
   const categoryGroups = useMemo(() => groupByCategory(filtered), [filtered]);
@@ -396,9 +500,56 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
     try {
       await deleteWritingRule(id);
       setRules((prev) => prev.filter((r) => r.id !== id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (err) {
       console.error("Failed to delete rule:", err);
     }
+  }, []);
+
+  const handleMarkReviewed = useCallback(async (id: string) => {
+    try {
+      await markRulesReviewed([id]);
+      setRules((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, reviewedAt: Date.now() } : r)),
+      );
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to mark rule reviewed:", err);
+    }
+  }, []);
+
+  const handleBulkMarkReviewed = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      await markRulesReviewed(Array.from(selectedIds));
+      const now = Date.now();
+      setRules((prev) =>
+        prev.map((r) => (selectedIds.has(r.id) ? { ...r, reviewedAt: now } : r)),
+      );
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error("Failed to bulk mark reviewed:", err);
+    }
+  }, [selectedIds]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }, []);
 
   const handleExport = useCallback(async () => {
@@ -429,6 +580,20 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
 
   const severityChips: WritingRuleSeverity[] = SEVERITY_VALUES;
 
+  // Empty state
+  const emptyMessage = useMemo(() => {
+    if (rules.length === 0) {
+      return "No writing rules yet. Export corrections for synthesis to generate rules.";
+    }
+    if (effectiveView === "unreviewed" && unreviewedCount === 0) {
+      return "No new rules to review. Export corrections for synthesis to generate rules.";
+    }
+    if (filtered.length === 0) {
+      return "No rules match this filter.";
+    }
+    return null;
+  }, [rules.length, effectiveView, unreviewedCount, filtered.length]);
+
   return (
     <>
       {/* Filter bar */}
@@ -443,6 +608,15 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
           background: "var(--color-page)",
         }}
       >
+        <ViewToggle
+          view={effectiveView}
+          onChangeView={(v) => {
+            setView(v);
+            setSelectedIds(new Set());
+          }}
+          unreviewedCount={unreviewedCount}
+          allCount={rules.length}
+        />
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           <button
             type="button"
@@ -479,6 +653,28 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
           ))}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {selectedIds.size > 0 && effectiveView === "unreviewed" && (
+            <>
+              <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                {selectedIds.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={handleBulkMarkReviewed}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--color-page)",
+                  color: "var(--color-text-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                Mark reviewed
+              </button>
+            </>
+          )}
           {exportStatus && (
             <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
               {exportStatus}
@@ -505,16 +701,14 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
 
       {/* Content area */}
       <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", padding: "16px 32px 64px" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 32px 64px" }}>
           {loading && rules.length === 0 ? (
             <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px" }}>
               Loading...
             </div>
-          ) : filtered.length === 0 ? (
+          ) : emptyMessage ? (
             <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px", lineHeight: 1.6 }}>
-              {rules.length === 0
-                ? "No writing rules yet. Export corrections for synthesis to generate rules."
-                : "No rules match this filter."}
+              {emptyMessage}
             </div>
           ) : (
             Array.from(categoryGroups.entries()).map(([category, categoryRules]) => (
@@ -556,12 +750,24 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                 </button>
                 {!collapsedCategories.has(category) &&
                   categoryRules.map((rule) => (
-                    <RuleCard
-                      key={rule.id}
-                      rule={rule}
-                      onUpdate={handleUpdate}
-                      onDelete={handleDelete}
-                    />
+                    <div key={rule.id} style={{ display: "flex", alignItems: "flex-start" }}>
+                      {effectiveView === "unreviewed" && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(rule.id)}
+                          onChange={() => handleToggleSelect(rule.id)}
+                          style={{ marginTop: 18, marginRight: 8, flexShrink: 0, accentColor: "var(--color-text-primary)" }}
+                        />
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <RuleCard
+                          rule={rule}
+                          onUpdate={handleUpdate}
+                          onDelete={handleDelete}
+                          onMarkReviewed={handleMarkReviewed}
+                        />
+                      </div>
+                    </div>
                   ))}
               </div>
             ))

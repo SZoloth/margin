@@ -294,8 +294,7 @@ export function ExportAnnotationsPopover({
                   paddingTop: 10,
                 }}
               >
-                {((result.positiveCount ?? 0) > 0 || (result.correctiveCount ?? 0) > 0)
-                  ? "Voice signals" : "Corrections"} saved to {result.correctionsFile}
+                Corrections saved to {result.correctionsFile}
               </div>
             )}
 

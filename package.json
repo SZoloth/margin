@@ -1,7 +1,7 @@
 {
   "name": "margin",
   "private": true,
-  "version": "1.8.5",
+  "version": "1.9.0",
   "packageManager": "pnpm@10.30.0",
   "type": "module",
   "scripts": {
@@ -59,9 +59,13 @@
     "@vitejs/plugin-react": "^4",
     "agentation": "^2.2.1",
     "jsdom": "^28.1.0",
+    "motion": "^12.34.5",
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",
     "vitest": "^4.0.18"
+  },
+  "optionalDependencies": {
+    "vite-plugin-design-playground": "link:../vite-plugin-design-playground"
   }
 }

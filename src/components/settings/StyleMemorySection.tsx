@@ -12,8 +12,9 @@ export function StyleMemorySection() {
     total: 0,
     documentCount: 0,
     untaggedCount: 0,
+    unsynthesizedCount: 0,
   });
-  const [ruleStats, setRuleStats] = useState({ ruleCount: 0 });
+  const [ruleStats, setRuleStats] = useState({ ruleCount: 0, unreviewedCount: 0 });
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const exportTimeoutRef = useRef<number | null>(null);
 
@@ -31,13 +32,13 @@ export function StyleMemorySection() {
   const rulesPanelId = "sm-panel-rules";
 
   const handleCorrectionStatsChange = useCallback(
-    (stats: { total: number; documentCount: number; untaggedCount: number }) => {
+    (stats: { total: number; documentCount: number; untaggedCount: number; unsynthesizedCount: number }) => {
       setCorrectionStats(stats);
     },
     [],
   );
 
-  const handleRuleStatsChange = useCallback((stats: { ruleCount: number }) => {
+  const handleRuleStatsChange = useCallback((stats: { ruleCount: number; unreviewedCount: number }) => {
     setRuleStats(stats);
   }, []);
 
@@ -47,7 +48,7 @@ export function StyleMemorySection() {
       if (count === 0) {
         setExportStatus("No corrections to export");
       } else {
-        const prompt = `Analyze ${count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Output to the writing_rules table via Margin's Tauri commands.`;
+        const prompt = `Analyze ${count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Pay attention to polarity tags — separate patterns to reinforce (+positive) from patterns to fix (+corrective). Save each rule via the margin_create_writing_rule MCP tool.`;
         await writeText(prompt);
         setExportStatus("Prompt copied — paste into your coding agent");
       }
@@ -65,14 +66,19 @@ export function StyleMemorySection() {
   }, []);
 
   return (
-    <div className="flex flex-col" style={{ margin: "-48px -32px 0", minHeight: "calc(100vh - 80px)" }}>
+    <div className="flex flex-col" style={{ minHeight: "calc(100vh - 80px)" }}>
       {/* Stats bar */}
       <div className="flex items-center gap-12 border-b border-[var(--color-border)] px-8 py-6">
         <Stat value={correctionStats.total} label="Corrections" />
-        <Stat value={correctionStats.documentCount} label="Documents" />
         <Stat value={ruleStats.ruleCount} label="Rules" />
+        {correctionStats.unsynthesizedCount > 0 && (
+          <Stat value={correctionStats.unsynthesizedCount} label="To process" accent />
+        )}
+        {ruleStats.unreviewedCount > 0 && (
+          <Stat value={ruleStats.unreviewedCount} label="To review" accent />
+        )}
         {correctionStats.untaggedCount > 0 && (
-          <Stat value={correctionStats.untaggedCount} label="Needs attention" accent />
+          <Stat value={correctionStats.untaggedCount} label="Needs attention" />
         )}
         <div className="ml-auto flex items-center gap-2">
           {exportStatus && (
@@ -84,13 +90,13 @@ export function StyleMemorySection() {
               {exportStatus}
             </span>
           )}
-          {activeTab === "corrections" && correctionStats.total > 0 && (
+          {activeTab === "corrections" && correctionStats.unsynthesizedCount > 0 && (
             <button
               type="button"
               onClick={handleExportForSynthesis}
               className="shrink-0 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--hover-bg)] px-3 py-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-text-secondary)] transition-colors duration-150 hover:bg-[var(--color-surface-muted)]"
             >
-              Export for synthesis
+              Export {correctionStats.unsynthesizedCount} for synthesis
             </button>
           )}
         </div>

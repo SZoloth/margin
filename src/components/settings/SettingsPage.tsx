@@ -37,28 +37,31 @@ export function SettingsPage({
       />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[560px] px-8 pt-12 pb-16">
-          <h2
-            className="mb-12 text-[length:var(--text-2xl)] font-light text-[var(--color-text-primary)]"
-          >
-            Settings
-          </h2>
+        {activeSection === "style-memory" ? (
+          <StyleMemorySection />
+        ) : (
+          <div className="mx-auto max-w-[560px] px-8 pt-12 pb-16">
+            <h2
+              className="mb-12 text-[length:var(--text-2xl)] font-light text-[var(--color-text-primary)]"
+            >
+              Settings
+            </h2>
 
-          {activeSection === "reading" && (
-            <ReadingSection settings={settings} setSetting={setSetting} />
-          )}
-          {activeSection === "writing" && (
-            <WritingSection
-              settings={settings}
-              setSetting={setSetting}
-              onOpenCorrections={() => setActiveSection("style-memory")}
-            />
-          )}
-          {activeSection === "style-memory" && <StyleMemorySection />}
-          {activeSection === "integrations" && <IntegrationsSection />}
-          {activeSection === "help" && <HelpSection />}
-          {activeSection === "about" && <AboutSection updater={updater} />}
-        </div>
+            {activeSection === "reading" && (
+              <ReadingSection settings={settings} setSetting={setSetting} />
+            )}
+            {activeSection === "writing" && (
+              <WritingSection
+                settings={settings}
+                setSetting={setSetting}
+                onOpenCorrections={() => setActiveSection("style-memory")}
+              />
+            )}
+            {activeSection === "integrations" && <IntegrationsSection />}
+            {activeSection === "help" && <HelpSection />}
+            {activeSection === "about" && <AboutSection updater={updater} />}
+          </div>
+        )}
       </div>
     </div>
   );

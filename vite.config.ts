@@ -6,8 +6,27 @@ import path from "path";
 const host = process.env.TAURI_DEV_HOST;
 const isTauriBuild = !!process.env.TAURI_ENV_PLATFORM;
 
-export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(async () => {
+  let playgroundPlugin = null;
+  if (!isTauriBuild) {
+    try {
+      const { designPlayground } = await import("vite-plugin-design-playground");
+      playgroundPlugin = designPlayground({
+        iterationsDir: "src/playground/iterations",
+        skillsDir: "src/playground/skills",
+        agent: "claude",
+      });
+    } catch {
+      // vite-plugin-design-playground not available (CI or fresh clone)
+    }
+  }
+
+  return {
+  plugins: [
+    react(),
+    tailwindcss(),
+    playgroundPlugin,
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -61,4 +80,5 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+};
+});

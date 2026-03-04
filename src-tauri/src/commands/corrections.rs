@@ -41,6 +41,7 @@ pub struct CorrectionDetail {
     pub polarity: Option<String>,
     pub document_title: Option<String>,
     pub created_at: i64,
+    pub synthesized_at: Option<i64>,
 }
 
 fn sanitize_filename_component(input: &str) -> String {
@@ -246,10 +247,11 @@ fn fetch_corrections_flat(
 ) -> rusqlite::Result<Vec<CorrectionDetail>> {
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
-                highlight_color, writing_type, polarity, document_title, created_at
+                highlight_color, writing_type, polarity, document_title, created_at,
+                synthesized_at
          FROM corrections
          WHERE session_id != '__backfilled__'
-         ORDER BY created_at DESC
+         ORDER BY CASE WHEN synthesized_at IS NULL THEN 0 ELSE 1 END, created_at DESC
          LIMIT ?1",
     )?;
 
@@ -267,6 +269,7 @@ fn fetch_corrections_flat(
             polarity: row.get(6)?,
             document_title: row.get(7)?,
             created_at: row.get(8)?,
+            synthesized_at: row.get(9)?,
         })
     })?;
 
@@ -335,7 +338,7 @@ fn fetch_corrections_by_document(
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
                 highlight_color, writing_type, polarity, document_title, document_id,
-                document_path, created_at
+                document_path, created_at, synthesized_at
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -360,6 +363,7 @@ fn fetch_corrections_by_document(
                 polarity: row.get(6)?,
                 document_title: row.get(7)?,
                 created_at: row.get(10)?,
+                synthesized_at: row.get(11)?,
             },
         ))
     })?;
@@ -466,7 +470,7 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
         "SELECT original_text, notes_json, extended_context, writing_type, polarity,
                 document_title, highlight_color, created_at
          FROM corrections
-         WHERE session_id != '__backfilled__'
+         WHERE session_id != '__backfilled__' AND synthesized_at IS NULL
          ORDER BY created_at DESC",
     )?;
 
@@ -596,6 +600,41 @@ pub async fn bulk_set_polarity_corrections(
     bulk_set_polarity(&conn, &highlight_ids, &polarity).map_err(|e| e.to_string())
 }
 
+fn mark_unsynthesized(
+    conn: &Connection,
+    highlight_ids: &[String],
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET synthesized_at = NULL WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+#[tauri::command]
+pub async fn mark_corrections_unsynthesized(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<u64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    mark_unsynthesized(&conn, &highlight_ids).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn get_voice_signals(
     state: tauri::State<'_, DbPool>,
@@ -615,7 +654,8 @@ fn fetch_voice_signals(
     let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match polarity {
         Some(p) => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
-                    highlight_color, writing_type, polarity, document_title, created_at
+                    highlight_color, writing_type, polarity, document_title, created_at,
+                    synthesized_at
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity = ?1
              ORDER BY created_at DESC
@@ -624,7 +664,8 @@ fn fetch_voice_signals(
         ),
         None => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
-                    highlight_color, writing_type, polarity, document_title, created_at
+                    highlight_color, writing_type, polarity, document_title, created_at,
+                    synthesized_at
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
              ORDER BY created_at DESC
@@ -649,13 +690,14 @@ fn fetch_voice_signals(
             polarity: row.get(6)?,
             document_title: row.get(7)?,
             created_at: row.get(8)?,
+            synthesized_at: row.get(9)?,
         })
     })?;
 
     rows.collect()
 }
 
-fn export_and_clear_corrections(conn: &Connection, path: &std::path::Path) -> Result<usize, String> {
+fn export_and_mark_synthesized(conn: &Connection, path: &std::path::Path) -> Result<usize, String> {
     let export = build_corrections_export(conn).map_err(|e| e.to_string())?;
     let count = export.total_count;
 
@@ -666,13 +708,14 @@ fn export_and_clear_corrections(conn: &Connection, path: &std::path::Path) -> Re
     let json = serde_json::to_string_pretty(&export).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| format!("Failed to write export: {e}"))?;
 
+    let now = now_millis();
     conn.execute(
-        "DELETE FROM corrections WHERE session_id != '__backfilled__'",
-        [],
+        "UPDATE corrections SET synthesized_at = ?1 WHERE session_id != '__backfilled__' AND synthesized_at IS NULL",
+        [now],
     )
     .map_err(|e| format!(
-        "Failed to clear exported corrections: {e}. \
-         Export file was written to {} — corrections remain in DB and may be re-exported.",
+        "Failed to mark corrections as synthesized: {e}. \
+         Export file was written to {} — corrections remain unsynthesized and may be re-exported.",
         path.display()
     ))?;
 
@@ -692,7 +735,7 @@ pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Opti
             .join("corrections-export.json")
     };
 
-    export_and_clear_corrections(&conn, &export_path)
+    export_and_mark_synthesized(&conn, &export_path)
 }
 
 #[cfg(test)]
@@ -718,7 +761,8 @@ mod tests {
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             writing_type TEXT,
-            polarity TEXT CHECK(polarity IN ('positive', 'corrective'))
+            polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+            synthesized_at INTEGER
         );"
     }
 
@@ -1021,7 +1065,7 @@ mod tests {
     }
 
     #[test]
-    fn export_and_clear_deletes_non_backfilled_corrections() {
+    fn export_and_mark_synthesized_preserves_rows_with_timestamp() {
         let conn = setup_full_db();
         insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
         insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
@@ -1029,19 +1073,39 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("export.json");
-        let count = export_and_clear_corrections(&conn, &path).unwrap();
+        let count = export_and_mark_synthesized(&conn, &path).unwrap();
 
         assert_eq!(count, 2);
         assert!(path.exists());
-        assert_eq!(count_corrections(&conn).unwrap(), 0);
+        // Rows are preserved, not deleted
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+        // All should have synthesized_at set
+        let unsynthesized: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE synthesized_at IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(unsynthesized, 0);
     }
 
     #[test]
-    fn export_and_clear_preserves_backfilled_rows() {
+    fn export_second_time_returns_zero_items() {
         let conn = setup_full_db();
-        // Regular correction
         insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
-        // Backfilled correction (should survive)
+
+        let dir = tempfile::tempdir().unwrap();
+        let path1 = dir.path().join("export1.json");
+        let count1 = export_and_mark_synthesized(&conn, &path1).unwrap();
+        assert_eq!(count1, 1);
+
+        // Second export should return 0 — already synthesized
+        let path2 = dir.path().join("export2.json");
+        let count2 = export_and_mark_synthesized(&conn, &path2).unwrap();
+        assert_eq!(count2, 0);
+    }
+
+    #[test]
+    fn export_and_mark_preserves_backfilled_rows() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
         conn.execute(
             "INSERT INTO corrections
                 (id, highlight_id, document_id, session_id, original_text, notes_json,
@@ -1053,22 +1117,23 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("export.json");
-        let count = export_and_clear_corrections(&conn, &path).unwrap();
+        let count = export_and_mark_synthesized(&conn, &path).unwrap();
 
         assert_eq!(count, 1); // only non-backfilled exported
-        assert_eq!(count_corrections(&conn).unwrap(), 1); // backfilled survives
-        let remaining: String = conn
-            .query_row("SELECT session_id FROM corrections", [], |r| r.get(0))
+        assert_eq!(count_corrections(&conn).unwrap(), 2); // all rows preserved
+        // Backfilled row should still have NULL synthesized_at
+        let bf_synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE session_id = '__backfilled__'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(remaining, "__backfilled__");
+        assert_eq!(bf_synth, None);
     }
 
     #[test]
-    fn export_and_clear_returns_zero_when_empty() {
+    fn export_and_mark_returns_zero_when_empty() {
         let conn = setup_full_db();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("export.json");
-        let count = export_and_clear_corrections(&conn, &path).unwrap();
+        let count = export_and_mark_synthesized(&conn, &path).unwrap();
         assert_eq!(count, 0);
         assert_eq!(count_corrections(&conn).unwrap(), 0);
     }
@@ -1292,6 +1357,48 @@ mod tests {
         let corrective = fetch_voice_signals(&conn, Some("corrective"), 100).unwrap();
         assert_eq!(corrective.len(), 1);
         assert_eq!(corrective[0].original_text, "bad");
+    }
+
+    // --- mark_unsynthesized tests ---
+
+    #[test]
+    fn mark_unsynthesized_clears_timestamp() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+
+        // Mark as synthesized first
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        export_and_mark_synthesized(&conn, &path).unwrap();
+
+        // Verify they're synthesized
+        let synth_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE synthesized_at IS NOT NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth_count, 2);
+
+        // Now mark h1 as unsynthesized
+        let updated = mark_unsynthesized(&conn, &["h1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        // h1 should have NULL synthesized_at, h2 should still be set
+        let h1_synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(h1_synth, None);
+
+        let h2_synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h2'", [], |r| r.get(0))
+            .unwrap();
+        assert!(h2_synth.is_some());
+    }
+
+    #[test]
+    fn mark_unsynthesized_empty_returns_zero() {
+        let conn = setup_full_db();
+        let updated = mark_unsynthesized(&conn, &[]).unwrap();
+        assert_eq!(updated, 0);
     }
 
     #[test]

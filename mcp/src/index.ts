@@ -39,6 +39,7 @@ import {
   getWritingRulesMarkdown,
   getWritingProfileMarkdown,
   getWritingGuardPy,
+  createWritingRule,
   updateWritingRule,
   deleteWritingRule,
 } from "./tools/writing-rules.js";
@@ -423,6 +424,31 @@ server.tool(
 );
 
 server.tool(
+  "margin_create_writing_rule",
+  "Create a new writing rule. Used by synthesis workflows to save rules derived from corrections.",
+  {
+    rule_text: z.string().describe("The rule text"),
+    writing_type: z.string().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
+    category: z.string().describe("Rule category (e.g. word-choice, structure, tone, kill-words, ai-slop, voice-calibration)"),
+    severity: z.enum(["must-fix", "should-fix", "nice-to-fix"]).describe("Rule severity"),
+    when_to_apply: z.string().optional().describe("When to apply this rule"),
+    why: z.string().optional().describe("Why this rule exists"),
+    example_before: z.string().optional().describe("Example of text before applying the rule"),
+    example_after: z.string().optional().describe("Example of text after applying the rule"),
+    notes: z.string().optional().describe("Additional notes"),
+    source: z.string().optional().describe("Source of the rule (default: synthesis)"),
+    signal_count: z.number().optional().describe("How many times this pattern was observed (default: 1)"),
+  },
+  async (params) => withDbAndExport(() => {
+    const result = createWritingRule(getWriteDb(), params);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }),
+);
+
+server.tool(
   "margin_update_writing_rule",
   "Update fields of an existing writing rule. Only provided fields are updated.",
   {
@@ -550,7 +576,7 @@ server.prompt(
           role: "user" as const,
           content: {
             type: "text" as const,
-            text: `Analyze my writing corrections and rules${writing_type ? ` for "${writing_type}" writing` : ""}.\n\nSummary:\n${JSON.stringify(summary, null, 2)}\n\nRecent corrections:\n${JSON.stringify(corrections.slice(0, 50), null, 2)}\n\nWriting rules:\n${rulesMarkdown}\n\nWhat patterns do you see in my corrections? Which rules am I violating most? What should I focus on improving?`,
+            text: `Analyze my writing corrections and rules${writing_type ? ` for "${writing_type}" writing` : ""}.\n\nSummary:\n${JSON.stringify(summary, null, 2)}\n\nRecent corrections:\n${JSON.stringify(corrections.slice(0, 50), null, 2)}\n\nWriting rules:\n${rulesMarkdown}\n\nWhat patterns do you see in my corrections? Are there themes in my positive signals (patterns to keep) vs corrective signals (patterns to fix)? Which rules am I violating most? What should I focus on improving?`,
           },
         }],
       };

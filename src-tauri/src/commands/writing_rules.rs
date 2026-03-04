@@ -20,6 +20,7 @@ pub struct WritingRule {
     pub notes: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    pub reviewed_at: Option<i64>,
 }
 
 fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
@@ -38,12 +39,14 @@ fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
         notes: row.get(11)?,
         created_at: row.get(12)?,
         updated_at: row.get(13)?,
+        reviewed_at: row.get(14)?,
     })
 }
 
 const RULES_SELECT: &str =
     "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
-            example_before, example_after, source, signal_count, notes, created_at, updated_at
+            example_before, example_after, source, signal_count, notes, created_at, updated_at,
+            reviewed_at
      FROM writing_rules";
 
 fn fetch_writing_rules(
@@ -672,6 +675,72 @@ pub struct VoiceProfileExportResult {
     pub rule_count: usize,
 }
 
+fn mark_reviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64> {
+    if rule_ids.is_empty() {
+        return Ok(0);
+    }
+    let now = now_millis();
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    for chunk in rule_ids.chunks(900) {
+        let placeholders: Vec<String> = (2..=chunk.len() + 1).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE writing_rules SET reviewed_at = ?1 WHERE id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 1);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for id in chunk {
+            params.push(id as &dyn rusqlite::types::ToSql);
+        }
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+fn mark_unreviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64> {
+    if rule_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    for chunk in rule_ids.chunks(900) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE writing_rules SET reviewed_at = NULL WHERE id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+#[tauri::command]
+pub async fn mark_rules_reviewed(
+    state: tauri::State<'_, DbPool>,
+    rule_ids: Vec<String>,
+) -> Result<u64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    mark_reviewed(&conn, &rule_ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn mark_rules_unreviewed(
+    state: tauri::State<'_, DbPool>,
+    rule_ids: Vec<String>,
+) -> Result<u64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    mark_unreviewed(&conn, &rule_ids).map_err(|e| e.to_string())
+}
+
 /// Alias for export_writing_rules — voice profile is now merged into writing-rules.md.
 #[tauri::command]
 pub async fn export_voice_profile(
@@ -701,6 +770,16 @@ mod tests {
     fn setup_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         migrate_add_writing_rules_table(&conn).unwrap();
+        // Add reviewed_at column (matches production migration)
+        let has_col: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)").unwrap();
+            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap()
+                .filter_map(|r| r.ok()).collect();
+            cols.iter().any(|c| c == "reviewed_at")
+        };
+        if !has_col {
+            conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN reviewed_at INTEGER;").unwrap();
+        }
         conn
     }
 
@@ -1106,6 +1185,65 @@ mod tests {
         let md = generate_writing_profile_markdown(&[], &corrections);
         assert!(md.contains("## Writing Samples"));
         assert!(md.contains("🎉"));
+    }
+
+    // --- mark_reviewed / mark_unreviewed tests ---
+
+    #[test]
+    fn mark_reviewed_sets_timestamp() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+        insert_rule(&conn, "r2", "email", "tone", "Be brief", "should-fix");
+
+        let updated = mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        let reviewed: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(reviewed.is_some());
+
+        // r2 should still be NULL
+        let r2_reviewed: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r2'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(r2_reviewed, None);
+    }
+
+    #[test]
+    fn mark_unreviewed_clears_timestamp() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        // Mark reviewed first
+        mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+        let reviewed: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(reviewed.is_some());
+
+        // Now mark unreviewed
+        let updated = mark_unreviewed(&conn, &["r1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        let cleared: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cleared, None);
+    }
+
+    #[test]
+    fn mark_reviewed_empty_returns_zero() {
+        let conn = setup_db();
+        let updated = mark_reviewed(&conn, &[]).unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn mark_unreviewed_empty_returns_zero() {
+        let conn = setup_db();
+        let updated = mark_unreviewed(&conn, &[]).unwrap();
+        assert_eq!(updated, 0);
     }
 
 }

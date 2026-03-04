@@ -120,6 +120,7 @@ export interface WritingRule {
   source: string;
   signalCount: number;
   notes: string | null;
+  reviewedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -238,4 +239,16 @@ export async function updateHighlightPositions(
   updates: [string, number, number][],
 ): Promise<void> {
   return invoke<void>("update_highlight_positions", { updates });
+}
+
+export async function markCorrectionsUnsynthesized(highlightIds: string[]): Promise<number> {
+  return invoke<number>("mark_corrections_unsynthesized", { highlightIds });
+}
+
+export async function markRulesReviewed(ruleIds: string[]): Promise<number> {
+  return invoke<number>("mark_rules_reviewed", { ruleIds });
+}
+
+export async function markRulesUnreviewed(ruleIds: string[]): Promise<number> {
+  return invoke<number>("mark_rules_unreviewed", { ruleIds });
 }

@@ -135,6 +135,12 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add polarity column to corrections
     migrate_corrections_add_polarity(&conn)?;
 
+    // Migration: add synthesized_at column to corrections
+    migrate_corrections_add_synthesized_at(&conn)?;
+
+    // Migration: add reviewed_at column to writing_rules
+    migrate_writing_rules_add_reviewed_at(&conn)?;
+
     // Seed: voice calibration + editorial rules into writing_rules table
     seed_voice_and_editorial_rules(&conn)?;
 
@@ -1052,8 +1058,8 @@ pub fn seed_voice_and_editorial_rules(conn: &Connection) -> Result<(), Box<dyn s
 
     for (writing_type, category, rule_text, severity, when_to_apply, why, signal_count) in &rules {
         conn.execute(
-            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, when_to_apply, why, source, signal_count, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'seed-v1', ?8, ?9, ?9)",
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, when_to_apply, why, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'seed-v1', ?8, ?9, ?9, ?9)",
             rusqlite::params![
                 uuid::Uuid::new_v4().to_string(),
                 writing_type,
@@ -1088,5 +1094,48 @@ fn migrate_documents_add_frecency_columns(conn: &Connection) -> Result<(), Box<d
     if !columns.iter().any(|c| c == "indexed_at") {
         conn.execute_batch("ALTER TABLE documents ADD COLUMN indexed_at INTEGER;")?;
     }
+    Ok(())
+}
+
+/// Adds a `synthesized_at` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_synthesized_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "synthesized_at")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE corrections ADD COLUMN synthesized_at INTEGER;
+             CREATE INDEX IF NOT EXISTS idx_corrections_synthesized ON corrections(synthesized_at);",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `reviewed_at` column to the writing_rules table if it doesn't exist.
+fn migrate_writing_rules_add_reviewed_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "reviewed_at")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN reviewed_at INTEGER;")?;
+        // Pre-seeded rules start as reviewed
+        conn.execute_batch(
+            "UPDATE writing_rules SET reviewed_at = created_at WHERE source IN ('voice-calibration', 'editorial', 'seed-v1');",
+        )?;
+    }
+
     Ok(())
 }

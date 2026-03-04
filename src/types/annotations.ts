@@ -50,6 +50,7 @@ export interface CorrectionDetail {
   highlightColor: string;
   writingType: string | null;
   polarity: "positive" | "corrective" | null;
+  synthesizedAt: number | null;
   documentTitle: string | null;
   createdAt: number;
 }

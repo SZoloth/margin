@@ -7,6 +7,17 @@ const Reader = lazy(() => import("@/components/editor/Reader"));
 const AgentationDev = import.meta.env.DEV
   ? lazy(() => import("agentation").then((m) => ({ default: m.Agentation })))
   : null;
+const DesignDials = import.meta.env.DEV
+  ? lazy(() =>
+      import("./hooks/useDesignDials").then((m) => {
+        const Dials = () => {
+          m.useDesignDials();
+          return null;
+        };
+        return { default: Dials };
+      })
+    )
+  : null;
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
@@ -460,7 +471,11 @@ export default function App() {
 
   // Close a tab whose backing file was deleted, and show a toast.
   // Used by the watcher catch, focus handler, and tab-switch guard.
+  // Dedup: only fire once per path until it's reopened.
+  const closedDeletedPathsRef = useRef(new Set<string>());
   const closeDeletedFileTab = useCallback((filePath: string, tabId?: string) => {
+    if (closedDeletedPathsRef.current.has(filePath)) return;
+    closedDeletedPathsRef.current.add(filePath);
     const name = filePath.split("/").pop() ?? "file";
     const id = tabId ?? tabsHookRef.current.activeTabId;
     if (id) tabsHookRef.current.forceCloseTab(id);
@@ -649,16 +664,19 @@ export default function App() {
 
     // Seed mtime on mount / path change
     const currentPath = doc.filePath;
+    closedDeletedPathsRef.current.delete(currentPath);
     stat(currentPath)
       .then((info) => {
         if (info.mtime) lastMtimeRef.current = info.mtime.getTime();
       })
       .catch(() => {});
 
+    let cancelled = false;
     const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (!focused) return;
+      if (!focused || cancelled) return;
       stat(currentPath)
         .then((info) => {
+          if (cancelled) return;
           const mtime = info.mtime?.getTime() ?? 0;
           if (mtime > 0 && lastMtimeRef.current > 0 && mtime !== lastMtimeRef.current) {
             lastMtimeRef.current = mtime;
@@ -672,13 +690,30 @@ export default function App() {
             lastMtimeRef.current = mtime;
           }
         })
-        .catch(() => {
-          // File gone (or inaccessible) while app was in background
-          closeDeletedFileTab(currentPath);
+        .catch(async () => {
+          // First stat failure could be transient (iCloud sync, brief lock).
+          // Retry once after a short delay before concluding the file is gone.
+          if (cancelled) return;
+          await new Promise((r) => setTimeout(r, 500));
+          if (cancelled) return;
+          try {
+            const info = await stat(currentPath);
+            if (cancelled) return;
+            // File came back — treat as normal mtime check
+            const mtime = info.mtime?.getTime() ?? 0;
+            if (mtime > 0) lastMtimeRef.current = mtime;
+          } catch {
+            if (cancelled) return;
+            cancelled = true;
+            closeDeletedFileTab(currentPath);
+          }
         });
     });
 
-    return () => { void unlisten.then((fn) => fn()); };
+    return () => {
+      cancelled = true;
+      void unlisten.then((fn) => fn());
+    };
   }, [doc.filePath, handleFileChanged]);
 
   // Handle files opened via macOS "Open With" / double-click
@@ -1504,6 +1539,11 @@ export default function App() {
       {AgentationDev && (
         <Suspense fallback={null}>
           <AgentationDev />
+        </Suspense>
+      )}
+      {DesignDials && (
+        <Suspense fallback={null}>
+          <DesignDials />
         </Suspense>
       )}
     </AppShell>

@@ -6,14 +6,17 @@ import {
   deleteCorrection,
   bulkDeleteCorrections,
   bulkTagCorrections,
+  markCorrectionsUnsynthesized,
 } from "@/lib/tauri-commands";
 import { WRITING_TYPES, type WritingType } from "@/lib/writing-types";
 
 const PAGE_SIZE = 500;
 const FILTER_CHIP_TYPES = WRITING_TYPES.slice(0, 6);
 
+type CorrectionView = "inbox" | "archive";
+
 interface CorrectionsTabProps {
-  onStatsChange: (stats: { total: number; documentCount: number; untaggedCount: number }) => void;
+  onStatsChange: (stats: { total: number; documentCount: number; untaggedCount: number; unsynthesizedCount: number }) => void;
 }
 
 function formatDateLabel(timestamp: number, todayMs: number, yesterdayMs: number): string {
@@ -106,6 +109,58 @@ function WritingTypeChips({
   );
 }
 
+function ViewToggle({
+  view,
+  onChangeView,
+  inboxCount,
+  archiveCount,
+}: {
+  view: CorrectionView;
+  onChangeView: (v: CorrectionView) => void;
+  inboxCount: number;
+  archiveCount: number;
+}) {
+  const buttonBase: React.CSSProperties = {
+    padding: "3px 10px",
+    fontSize: 11,
+    border: "1px solid var(--color-border)",
+    cursor: "pointer",
+    transition: "all 100ms",
+  };
+
+  return (
+    <div style={{ display: "flex" }}>
+      <button
+        type="button"
+        onClick={() => onChangeView("inbox")}
+        style={{
+          ...buttonBase,
+          borderRadius: "100px 0 0 100px",
+          borderRight: "none",
+          background: view === "inbox" ? "var(--color-text-primary)" : "var(--color-page)",
+          color: view === "inbox" ? "var(--color-page)" : "var(--color-text-secondary)",
+          fontWeight: view === "inbox" ? 600 : 400,
+        }}
+      >
+        Inbox ({inboxCount})
+      </button>
+      <button
+        type="button"
+        onClick={() => onChangeView("archive")}
+        style={{
+          ...buttonBase,
+          borderRadius: "0 100px 100px 0",
+          background: view === "archive" ? "var(--color-text-primary)" : "var(--color-page)",
+          color: view === "archive" ? "var(--color-page)" : "var(--color-text-secondary)",
+          fontWeight: view === "archive" ? 600 : 400,
+        }}
+      >
+        Archive ({archiveCount})
+      </button>
+    </div>
+  );
+}
+
 function CorrectionCard({
   correction,
   isSelected,
@@ -122,6 +177,7 @@ function CorrectionCard({
   const [expanded, setExpanded] = useState(false);
   const [showTypeChips, setShowTypeChips] = useState(false);
   const typeChipsId = `writing-type-chips-${correction.highlightId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  const isSynthesized = correction.synthesizedAt != null;
 
   return (
     <div
@@ -134,6 +190,7 @@ function CorrectionCard({
         alignItems: "flex-start",
         cursor: "pointer",
         transition: "background 100ms",
+        opacity: isSynthesized ? 0.55 : 1,
       }}
     >
       <input
@@ -289,6 +346,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkTypeChips, setShowBulkTypeChips] = useState(false);
+  const [view, setView] = useState<CorrectionView>("inbox");
   const loadedRef = useRef(false);
 
   const loadCorrections = useCallback(async (pageLimit: number) => {
@@ -310,6 +368,10 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
     }
   }, [loadCorrections]);
 
+  // Counts for view toggle
+  const inboxCount = useMemo(() => corrections.filter((c) => c.synthesizedAt == null).length, [corrections]);
+  const archiveCount = useMemo(() => corrections.filter((c) => c.synthesizedAt != null).length, [corrections]);
+
   // Report stats to parent
   useEffect(() => {
     const docs = new Set<string>();
@@ -318,12 +380,20 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
       docs.add(c.documentTitle ?? "unknown");
       if (!c.writingType) untagged++;
     }
-    onStatsChange({ total: corrections.length, documentCount: docs.size, untaggedCount: untagged });
-  }, [corrections, onStatsChange]);
+    onStatsChange({
+      total: corrections.length,
+      documentCount: docs.size,
+      untaggedCount: untagged,
+      unsynthesizedCount: inboxCount,
+    });
+  }, [corrections, onStatsChange, inboxCount]);
 
   // Filtering
   const filtered = useMemo(() =>
     corrections.filter((c) => {
+      // View filter
+      if (view === "inbox" && c.synthesizedAt != null) return false;
+      if (view === "archive" && c.synthesizedAt == null) return false;
       if (activeFilter && c.writingType !== activeFilter) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
@@ -332,7 +402,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
       }
       return true;
     }),
-    [corrections, activeFilter, searchText],
+    [corrections, view, activeFilter, searchText],
   );
 
   const dateGroups = useMemo(() => groupByDate(filtered), [filtered]);
@@ -399,6 +469,19 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
     }
   }, [selectedIds]);
 
+  const handleBulkRequeue = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      await markCorrectionsUnsynthesized(Array.from(selectedIds));
+      setCorrections((prev) =>
+        prev.map((c) => (selectedIds.has(c.highlightId) ? { ...c, synthesizedAt: null } : c)),
+      );
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error("Failed to requeue corrections:", err);
+    }
+  }, [selectedIds]);
+
   const handleLoadMore = useCallback(() => {
     const newLimit = limit + PAGE_SIZE;
     setLimit(newLimit);
@@ -406,6 +489,20 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
   }, [limit, loadCorrections]);
 
   const chipTypes = FILTER_CHIP_TYPES;
+
+  // Empty state messages
+  const emptyMessage = useMemo(() => {
+    if (corrections.length === 0) {
+      return "No corrections yet. Highlight text and add margin notes, then export to start collecting feedback.";
+    }
+    if (view === "inbox" && inboxCount === 0 && archiveCount > 0) {
+      return "All caught up. Corrections have been exported for synthesis.";
+    }
+    if (filtered.length === 0) {
+      return "No corrections match your filters.";
+    }
+    return null;
+  }, [corrections.length, view, inboxCount, archiveCount, filtered.length]);
 
   return (
     <>
@@ -421,6 +518,15 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
           background: "var(--color-page)",
         }}
       >
+        <ViewToggle
+          view={view}
+          onChangeView={(v) => {
+            setView(v);
+            setSelectedIds(new Set());
+          }}
+          inboxCount={inboxCount}
+          archiveCount={archiveCount}
+        />
         <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
           <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 7, color: "var(--color-text-secondary)", fontSize: 12, pointerEvents: "none" }}>
             &#x1F50D;
@@ -487,6 +593,23 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
               <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
                 {selectedIds.size} selected
               </span>
+              {view === "archive" && (
+                <button
+                  type="button"
+                  onClick={handleBulkRequeue}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--color-page)",
+                    color: "var(--color-text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Requeue
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowBulkTypeChips(!showBulkTypeChips)}
@@ -533,16 +656,14 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
 
       {/* Content area */}
       <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", padding: "16px 32px 64px" }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 32px 64px" }}>
           {loading && corrections.length === 0 ? (
             <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px" }}>
               Loading...
             </div>
-          ) : filtered.length === 0 ? (
+          ) : emptyMessage || filtered.length === 0 ? (
             <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px", lineHeight: 1.6 }}>
-              {corrections.length === 0
-                ? "No corrections yet. Highlight text and add margin notes, then export to start collecting feedback."
-                : "No corrections match your filters."}
+              {emptyMessage ?? "No corrections match your filters."}
             </div>
           ) : (
             <>
