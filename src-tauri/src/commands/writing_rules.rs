@@ -160,12 +160,17 @@ fn format_rules_section(lines: &mut Vec<String>, rules: &[&WritingRule]) {
                 }
                 lines.push(format!("- Signal: seen {} time(s)", rule.signal_count));
                 if rule.example_before.is_some() || rule.example_after.is_some() {
-                    lines.push("- Before -> After:".to_string());
-                    if let Some(before) = &rule.example_before {
-                        lines.push(format!("  - Before: \"{before}\""));
-                    }
-                    if let Some(after) = &rule.example_after {
-                        lines.push(format!("  - After: \"{after}\""));
+                    let show_before = rule.example_before.is_some() && rule.category != "heading-patterns";
+                    if show_before || rule.example_after.is_some() {
+                        lines.push("- Before -> After:".to_string());
+                        if show_before {
+                            if let Some(before) = &rule.example_before {
+                                lines.push(format!("  - Before: \"{before}\""));
+                            }
+                        }
+                        if let Some(after) = &rule.example_after {
+                            lines.push(format!("  - After: \"{after}\""));
+                        }
                     }
                 }
                 if let Some(notes) = &rule.notes {
@@ -372,6 +377,32 @@ fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
         })
         .collect();
 
+    // Collect heading patterns
+    let heading_patterns: Vec<(&str, &str)> = rules
+        .iter()
+        .filter(|r| r.category == "heading-patterns" && r.severity == "must-fix" && r.example_before.is_some())
+        .filter_map(|r| {
+            r.example_before
+                .as_deref()
+                .map(|pattern| (pattern, r.rule_text.as_str()))
+        })
+        .collect();
+
+    // Collect auto-synthesized corrections (substring match on original text, capped at 80 chars)
+    let auto_corrections: Vec<(&str, &str)> = rules
+        .iter()
+        .filter(|r| {
+            r.category == "auto-synthesized"
+                && r.severity == "must-fix"
+                && r.example_before.as_ref().map_or(false, |eb| eb.len() <= 80)
+        })
+        .filter_map(|r| {
+            r.example_before
+                .as_deref()
+                .map(|original| (original, r.rule_text.as_str()))
+        })
+        .collect();
+
     // Build JSON data blobs for safety (no raw string embedding in Python source)
     let kill_words_json =
         serde_json::to_string(&kill_words).unwrap_or_else(|_| "[]".to_string());
@@ -382,11 +413,28 @@ fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
             .collect::<Vec<_>>(),
     )
     .unwrap_or_else(|_| "[]".to_string());
+    let heading_patterns_json = serde_json::to_string(
+        &heading_patterns
+            .iter()
+            .map(|(p, e)| vec![*p, *e])
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|_| "[]".to_string());
+    let auto_corrections_json = serde_json::to_string(
+        &auto_corrections
+            .iter()
+            .map(|(p, e)| vec![*p, *e])
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|_| "[]".to_string());
 
     // Guard: `"""` in JSON would break the Python raw triple-quoted string delimiter.
     // serde_json escapes `"` as `\"` so this shouldn't happen in practice, but defend
     // against it since the generated file runs as a hook with full user permissions.
-    if kill_words_json.contains(r#"""""#) || slop_patterns_json.contains(r#"""""#) {
+    if [&kill_words_json, &slop_patterns_json, &heading_patterns_json, &auto_corrections_json]
+        .iter()
+        .any(|s| s.contains(r#"""""#))
+    {
         return "#!/usr/bin/env python3\n\
 # ERROR: A writing rule contains a triple-quote sequence that cannot be safely\n\
 # embedded. Remove the offending rule text and re-export.\n\
@@ -415,6 +463,12 @@ KILL_WORDS = json.loads(r"""{kill_words_json}""")
 # AI-slop sentence patterns — [pattern, explanation]
 # Same raw-string rule as above.
 SLOP_PATTERNS = json.loads(r"""{slop_patterns_json}""")
+
+# Heading patterns — [regex, explanation] applied per heading line
+HEADING_PATTERNS = json.loads(r"""{heading_patterns_json}""")
+
+# Auto-synthesized corrections — [original_text, explanation] substring match
+AUTO_CORRECTIONS = json.loads(r"""{auto_corrections_json}""")
 
 def get_extension(path):
     if not path:
@@ -454,11 +508,30 @@ def main():
             if re.search(pattern, text):
                 violations.append(explanation)
 
+        # Check heading patterns
+        if HEADING_PATTERNS:
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith('#'):
+                    continue
+                heading_text = stripped.lstrip('#').strip()
+                if not heading_text:
+                    continue
+                for pattern, explanation in HEADING_PATTERNS:
+                    if re.search(pattern, heading_text):
+                        violations.append(f'{{explanation}}: "{{stripped}}"')
+                        break
+
+        # Check auto-synthesized corrections (substring match)
+        for original_text, explanation in AUTO_CORRECTIONS:
+            if original_text.lower() in lower:
+                violations.append(f'Auto-correction: "{{original_text}}" — {{explanation}}')
+
         if violations:
-            msg = "WRITING GUARD: AI-slop patterns detected:\n"
+            msg = "WRITING GUARD: Writing rule violations detected:\n"
             for v in violations:
                 msg += f"  - {{v}}\n"
-            msg += "Rephrase to sound human. See ~/.margin/writing-rules.md for examples."
+            msg += "Fix violations. See ~/.margin/writing-rules.md for rules."
 
             print(json.dumps({{
                 "hookSpecificOutput": {{
@@ -1438,6 +1511,73 @@ mod tests {
         let corrections = fetch_all_corrections_for_profile(&conn).unwrap();
 
         assert_eq!(corrections.len(), 2005);
+    }
+
+    // --- heading-patterns tests ---
+
+    #[test]
+    fn hook_includes_heading_patterns() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "heading-patterns",
+            "Section headings must not start with 'The'", "must-fix",
+            None, None,
+            Some(r"(?:^|:\s*)[Tt]he\b"),
+            Some("## An uncomfortable timeline"),
+            1,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains("HEADING_PATTERNS = json.loads("));
+        assert!(py.contains("heading_text"));
+        assert!(py.contains("[Tt]he"));
+    }
+
+    #[test]
+    fn hook_excludes_non_must_fix_heading_patterns() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "heading-patterns",
+            "Some rule", "should-fix",
+            None, None, Some("^foo"), None, 1,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains(r#"HEADING_PATTERNS = json.loads(r"""[]""")"#));
+    }
+
+    #[test]
+    fn hook_heading_patterns_empty_when_no_rules() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "kill-words", "leverage", "must-fix");
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains(r#"HEADING_PATTERNS = json.loads(r"""[]""")"#));
+    }
+
+    #[test]
+    fn profile_skips_before_for_heading_patterns() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "heading-patterns",
+            "No headings starting with The", "must-fix",
+            None, None,
+            Some(r"(?:^|:\s*)[Tt]he\b"),
+            Some("## An uncomfortable timeline"),
+            1,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_rules_markdown(&rules);
+
+        assert!(!md.contains(r"(?:^|:\s*)[Tt]he\b"));
+        assert!(md.contains("## An uncomfortable timeline"));
     }
 
 }

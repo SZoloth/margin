@@ -394,9 +394,12 @@ function formatRulesSection(rules: WritingRule[]): string[] {
         if (rule.why) lines.push(`- Why: ${rule.why}`);
         lines.push(`- Signal: seen ${rule.signalCount} time(s)`);
         if (rule.exampleBefore || rule.exampleAfter) {
-          lines.push("- Before -> After:");
-          if (rule.exampleBefore) lines.push(`  - Before: "${rule.exampleBefore}"`);
-          if (rule.exampleAfter) lines.push(`  - After: "${rule.exampleAfter}"`);
+          const showBefore = rule.exampleBefore && rule.category !== "heading-patterns";
+          if (showBefore || rule.exampleAfter) {
+            lines.push("- Before -> After:");
+            if (showBefore) lines.push(`  - Before: "${rule.exampleBefore}"`);
+            if (rule.exampleAfter) lines.push(`  - After: "${rule.exampleAfter}"`);
+          }
         }
         if (rule.notes) lines.push(`- Notes: ${rule.notes}`);
       }
@@ -419,10 +422,20 @@ export function getWritingGuardPy(rules: WritingRule[]): string {
     .filter((r) => r.category === "ai-slop" && r.exampleBefore)
     .map((r) => [r.exampleBefore!, r.ruleText]);
 
+  const headingPatterns = rules
+    .filter((r) => r.category === "heading-patterns" && r.severity === "must-fix" && r.exampleBefore)
+    .map((r) => [r.exampleBefore!, r.ruleText]);
+
+  const autoCorrections = rules
+    .filter((r) => r.category === "auto-synthesized" && r.severity === "must-fix" && r.exampleBefore && r.exampleBefore.length <= 80)
+    .map((r) => [r.exampleBefore!, r.ruleText]);
+
   const killWordsJson = JSON.stringify(killWords);
   const slopPatternsJson = JSON.stringify(slopPatterns);
+  const headingPatternsJson = JSON.stringify(headingPatterns);
+  const autoCorrectionsJson = JSON.stringify(autoCorrections);
 
-  if (killWordsJson.includes('"""') || slopPatternsJson.includes('"""')) {
+  if ([killWordsJson, slopPatternsJson, headingPatternsJson, autoCorrectionsJson].some((s) => s.includes('"""'))) {
     return `#!/usr/bin/env python3
 # ERROR: A writing rule contains a triple-quote sequence that cannot be safely
 # embedded. Remove the offending rule text and re-export.
@@ -448,6 +461,12 @@ KILL_WORDS = json.loads(r"""${killWordsJson}""")
 
 # AI-slop sentence patterns — [pattern, explanation]
 SLOP_PATTERNS = json.loads(r"""${slopPatternsJson}""")
+
+# Heading patterns — [regex, explanation] applied per heading line
+HEADING_PATTERNS = json.loads(r"""${headingPatternsJson}""")
+
+# Auto-synthesized corrections — [original_text, explanation] substring match
+AUTO_CORRECTIONS = json.loads(r"""${autoCorrectionsJson}""")
 
 def get_extension(path):
     if not path:
@@ -487,11 +506,30 @@ def main():
             if re.search(pattern, text):
                 violations.append(explanation)
 
+        # Check heading patterns
+        if HEADING_PATTERNS:
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith('#'):
+                    continue
+                heading_text = stripped.lstrip('#').strip()
+                if not heading_text:
+                    continue
+                for pattern, explanation in HEADING_PATTERNS:
+                    if re.search(pattern, heading_text):
+                        violations.append(f'{explanation}: "{stripped}"')
+                        break
+
+        # Check auto-synthesized corrections (substring match)
+        for original_text, explanation in AUTO_CORRECTIONS:
+            if original_text.lower() in lower:
+                violations.append(f'Auto-correction: "{original_text}" — {explanation}')
+
         if violations:
-            msg = "WRITING GUARD: AI-slop patterns detected:\\n"
+            msg = "WRITING GUARD: Writing rule violations detected:\\n"
             for v in violations:
                 msg += f"  - {v}\\n"
-            msg += "Rephrase to sound human. See ~/.margin/writing-rules.md for examples."
+            msg += "Fix violations. See ~/.margin/writing-rules.md for rules."
 
             print(json.dumps({
                 "hookSpecificOutput": {

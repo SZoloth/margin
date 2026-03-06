@@ -231,6 +231,19 @@ pub async fn persist_corrections(
                 jsonl_file = None;
             }
         }
+
+        // Auto-synthesize writing rule from correction notes
+        if !input.notes.is_empty() {
+            if let Err(e) = auto_synthesize_rule(
+                &tx,
+                &input.highlight_id,
+                &input.original_text,
+                &input.notes,
+                input.writing_type.as_deref(),
+            ) {
+                eprintln!("Auto-synthesis failed for {}: {e}", input.highlight_id);
+            }
+        }
     }
 
     tx.commit().map_err(|e| e.to_string())?;
@@ -239,6 +252,47 @@ pub async fn persist_corrections(
     }
 
     Ok(session_id)
+}
+
+/// Auto-synthesize a writing rule from a correction's notes.
+/// Uses UPSERT to deduplicate by (writing_type, category, rule_text) and increment signal_count.
+fn auto_synthesize_rule(
+    conn: &Connection,
+    highlight_id: &str,
+    original_text: &str,
+    notes: &[String],
+    writing_type: Option<&str>,
+) -> rusqlite::Result<()> {
+    if notes.is_empty() {
+        return Ok(());
+    }
+
+    let rule_text = notes.join("; ");
+    let example_before = if original_text.len() > 200 {
+        &original_text[..original_text.floor_char_boundary(200)]
+    } else {
+        original_text
+    };
+    let wt = writing_type.unwrap_or("general");
+    let now = now_millis();
+    let id = Uuid::new_v4().to_string();
+
+    conn.execute(
+        "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, example_before, source, signal_count, created_at, updated_at)
+         VALUES (?1, ?2, 'auto-synthesized', ?3, 'must-fix', ?4, 'auto-synthesis', 1, ?5, ?5)
+         ON CONFLICT(writing_type, category, rule_text) DO UPDATE SET
+           signal_count = writing_rules.signal_count + 1,
+           example_before = COALESCE(excluded.example_before, writing_rules.example_before),
+           updated_at = excluded.updated_at",
+        rusqlite::params![id, wt, rule_text, example_before, now],
+    )?;
+
+    conn.execute(
+        "UPDATE corrections SET synthesized_at = ?1 WHERE highlight_id = ?2",
+        rusqlite::params![now, highlight_id],
+    )?;
+
+    Ok(())
 }
 
 fn fetch_corrections_flat(
@@ -799,6 +853,25 @@ mod tests {
             writing_type TEXT,
             polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
             synthesized_at INTEGER
+        );
+        CREATE TABLE writing_rules (
+            id TEXT PRIMARY KEY,
+            writing_type TEXT NOT NULL,
+            category TEXT NOT NULL,
+            rule_text TEXT NOT NULL,
+            when_to_apply TEXT,
+            why TEXT,
+            severity TEXT NOT NULL DEFAULT 'should-fix',
+            example_before TEXT,
+            example_after TEXT,
+            source TEXT NOT NULL DEFAULT 'synthesis',
+            signal_count INTEGER NOT NULL DEFAULT 1,
+            notes TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            reviewed_at INTEGER,
+            register TEXT,
+            UNIQUE(writing_type, category, rule_text)
         );"
     }
 
@@ -1548,5 +1621,100 @@ mod tests {
         assert_eq!(all_tagged.len(), 2);
         // Should not include the untagged one
         assert!(all_tagged.iter().all(|c| c.polarity.is_some()));
+    }
+
+    // --- auto_synthesize_rule tests ---
+
+    #[test]
+    fn auto_synthesize_creates_rule_from_notes() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "bad phrase", r#"["use X instead"]"#);
+
+        let notes = vec!["use X instead".to_string()];
+        auto_synthesize_rule(&conn, "h1", "bad phrase", &notes, Some("email")).unwrap();
+
+        let rule_text: String = conn
+            .query_row(
+                "SELECT rule_text FROM writing_rules WHERE category = 'auto-synthesized'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(rule_text, "use X instead");
+
+        let synth: Option<i64> = conn
+            .query_row(
+                "SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(synth.is_some());
+    }
+
+    #[test]
+    fn auto_synthesize_skips_empty_notes() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"[]"#);
+
+        let notes: Vec<String> = vec![];
+        auto_synthesize_rule(&conn, "h1", "text", &notes, None).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn auto_synthesize_deduplicates_via_upsert() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "bad phrase", r#"["fix this"]"#);
+        insert_correction(&conn, "h2", "another bad", r#"["fix this"]"#);
+
+        let notes = vec!["fix this".to_string()];
+        auto_synthesize_rule(&conn, "h1", "bad phrase", &notes, None).unwrap();
+        auto_synthesize_rule(&conn, "h2", "another bad", &notes, None).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let signal_count: i64 = conn
+            .query_row(
+                "SELECT signal_count FROM writing_rules WHERE category = 'auto-synthesized'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(signal_count, 2);
+    }
+
+    #[test]
+    fn auto_synthesize_sets_synthesized_at() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+
+        let before: Option<i64> = conn
+            .query_row(
+                "SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(before.is_none());
+
+        let notes = vec!["note".to_string()];
+        auto_synthesize_rule(&conn, "h1", "text", &notes, None).unwrap();
+
+        let after: Option<i64> = conn
+            .query_row(
+                "SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(after.is_some());
     }
 }

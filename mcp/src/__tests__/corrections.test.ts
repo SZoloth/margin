@@ -13,6 +13,7 @@ import {
   setCorrectionPolarity,
   getVoiceSignals,
   getAllCorrectionsForProfile,
+  autoSynthesizeRule,
 } from "../tools/corrections.js";
 
 let db: Database.Database;
@@ -422,5 +423,106 @@ describe("getAllCorrectionsForProfile", () => {
   it("returns empty array for empty table", () => {
     const results = getAllCorrectionsForProfile(db);
     expect(results).toHaveLength(0);
+  });
+});
+
+describe("autoSynthesizeRule", () => {
+  it("creates a should-fix rule in auto-synthesized category", () => {
+    insertCorrection("h1", "bad phrase", '["use X instead"]');
+
+    autoSynthesizeRule(db, {
+      highlight_id: "h1",
+      original_text: "bad phrase",
+      notes: ["use X instead"],
+      writing_type: "email",
+    });
+
+    const rule = db.prepare(
+      "SELECT rule_text, writing_type, category, severity, example_before, source FROM writing_rules WHERE category = 'auto-synthesized'"
+    ).get() as { rule_text: string; writing_type: string; category: string; severity: string; example_before: string; source: string };
+    expect(rule).toBeTruthy();
+    expect(rule.rule_text).toBe("use X instead");
+    expect(rule.writing_type).toBe("email");
+    expect(rule.severity).toBe("must-fix");
+    expect(rule.example_before).toBe("bad phrase");
+    expect(rule.source).toBe("auto-synthesis");
+  });
+
+  it("does NOT create a rule when notes are empty", () => {
+    insertCorrection("h1", "text", '[]');
+
+    autoSynthesizeRule(db, {
+      highlight_id: "h1",
+      original_text: "text",
+      notes: [],
+    });
+
+    const count = (db.prepare("SELECT COUNT(*) as count FROM writing_rules").get() as { count: number }).count;
+    expect(count).toBe(0);
+  });
+
+  it("coalesces duplicate notes via signal_count increment", () => {
+    insertCorrection("h1", "bad phrase 1", '["fix this"]');
+    insertCorrection("h2", "bad phrase 2", '["fix this"]');
+
+    autoSynthesizeRule(db, {
+      highlight_id: "h1",
+      original_text: "bad phrase 1",
+      notes: ["fix this"],
+    });
+    autoSynthesizeRule(db, {
+      highlight_id: "h2",
+      original_text: "bad phrase 2",
+      notes: ["fix this"],
+    });
+
+    const count = (db.prepare("SELECT COUNT(*) as count FROM writing_rules WHERE category = 'auto-synthesized'").get() as { count: number }).count;
+    expect(count).toBe(1);
+
+    const rule = db.prepare("SELECT signal_count FROM writing_rules WHERE category = 'auto-synthesized'").get() as { signal_count: number };
+    expect(rule.signal_count).toBe(2);
+  });
+
+  it("sets synthesized_at on the correction", () => {
+    insertCorrection("h1", "text", '["note"]');
+
+    const before = db.prepare("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'").get() as { synthesized_at: number | null };
+    expect(before.synthesized_at).toBeNull();
+
+    autoSynthesizeRule(db, {
+      highlight_id: "h1",
+      original_text: "text",
+      notes: ["note"],
+    });
+
+    const after = db.prepare("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'").get() as { synthesized_at: number | null };
+    expect(after.synthesized_at).not.toBeNull();
+  });
+
+  it("defaults writing_type to general when not provided", () => {
+    insertCorrection("h1", "text", '["note"]');
+
+    autoSynthesizeRule(db, {
+      highlight_id: "h1",
+      original_text: "text",
+      notes: ["note"],
+    });
+
+    const rule = db.prepare("SELECT writing_type FROM writing_rules WHERE category = 'auto-synthesized'").get() as { writing_type: string };
+    expect(rule.writing_type).toBe("general");
+  });
+
+  it("truncates long original_text for example_before", () => {
+    const longText = "x".repeat(300);
+    insertCorrection("h1", longText, '["note"]');
+
+    autoSynthesizeRule(db, {
+      highlight_id: "h1",
+      original_text: longText,
+      notes: ["note"],
+    });
+
+    const rule = db.prepare("SELECT example_before FROM writing_rules WHERE category = 'auto-synthesized'").get() as { example_before: string };
+    expect(rule.example_before.length).toBe(200);
   });
 });

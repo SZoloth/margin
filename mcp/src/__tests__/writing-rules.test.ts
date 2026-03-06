@@ -485,6 +485,50 @@ describe("getWritingGuardPy", () => {
     expect(py).not.toContain("Some rule");
   });
 
+  it("includes heading-patterns with regex in HEADING_PATTERNS", () => {
+    insertRule("r1", "general", "heading-patterns",
+      "Section headings must not start with 'The'", "must-fix", {
+        exampleBefore: "(?:^|:\\s*)[Tt]he\\b",
+        exampleAfter: "## An uncomfortable timeline",
+      });
+
+    const rules = getWritingRules(db);
+    const py = getWritingGuardPy(rules);
+
+    expect(py).toContain("HEADING_PATTERNS");
+    expect(py).toContain("[Tt]he");
+    expect(py).toContain("heading_text");
+  });
+
+  it("excludes non-must-fix heading-patterns from HEADING_PATTERNS", () => {
+    insertRule("r1", "general", "heading-patterns",
+      "Some heading rule", "should-fix", { exampleBefore: "^foo" });
+
+    const rules = getWritingRules(db);
+    const py = getWritingGuardPy(rules);
+
+    expect(py).toContain('HEADING_PATTERNS = json.loads(r"""[]"""');
+  });
+
+  it("excludes heading-patterns without exampleBefore", () => {
+    insertRule("r1", "general", "heading-patterns",
+      "Some heading rule", "must-fix");
+
+    const rules = getWritingRules(db);
+    const py = getWritingGuardPy(rules);
+
+    expect(py).toContain('HEADING_PATTERNS = json.loads(r"""[]"""');
+  });
+
+  it("generates empty HEADING_PATTERNS when no heading rules exist", () => {
+    insertRule("r1", "general", "kill-words", "leverage", "must-fix");
+
+    const rules = getWritingRules(db);
+    const py = getWritingGuardPy(rules);
+
+    expect(py).toContain('HEADING_PATTERNS = json.loads(r"""[]"""');
+  });
+
   it("safely handles rule text containing triple quotes without injection", () => {
     // JSON.stringify escapes double quotes, so '"""' in rule text becomes '\"\"\"'
     // in the serialized JSON. The triple-quote guard is defense-in-depth; here we
@@ -501,6 +545,20 @@ describe("getWritingGuardPy", () => {
     expect(py).not.toContain("triple-quote injection blocked");
   });
 
+  it("skips Before rendering for heading-patterns category", () => {
+    insertRule("r1", "general", "heading-patterns",
+      "No headings starting with The", "must-fix", {
+        exampleBefore: "(?:^|:\\s*)[Tt]he\\b",
+        exampleAfter: "## An uncomfortable timeline",
+      });
+
+    const rules = getWritingRules(db);
+    const md = getWritingRulesMarkdown(rules);
+
+    expect(md).not.toContain("(?:^|:\\s*)[Tt]he\\b");
+    expect(md).toContain("## An uncomfortable timeline");
+  });
+
   it("JSON-escapes special chars in rule text", () => {
     insertRule("r1", "general", "kill-words", 'word with "quotes" and \\backslash', "must-fix");
 
@@ -510,5 +568,31 @@ describe("getWritingGuardPy", () => {
     // The rule text should be JSON-encoded inside the Python script
     expect(py).toContain('\\"quotes\\"');
     expect(py).toContain("\\\\backslash");
+  });
+
+  it("includes auto-synthesized corrections in hook", () => {
+    insertRule("r1", "general", "auto-synthesized", "don't write this way", "must-fix", {
+      exampleBefore: "bad phrase here",
+    });
+
+    const rules = getWritingRules(db);
+    const py = getWritingGuardPy(rules);
+
+    expect(py).toContain("AUTO_CORRECTIONS");
+    expect(py).toContain("bad phrase here");
+    expect(py).toContain("Auto-correction");
+  });
+
+  it("excludes auto-synthesized corrections longer than 80 chars", () => {
+    const longText = "x".repeat(81);
+    insertRule("r1", "general", "auto-synthesized", "some note", "must-fix", {
+      exampleBefore: longText,
+    });
+
+    const rules = getWritingRules(db);
+    const py = getWritingGuardPy(rules);
+
+    expect(py).toContain("AUTO_CORRECTIONS");
+    expect(py).not.toContain(longText);
   });
 });

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { nowMillis } from "../db.js";
 import { findTextInDocument, createHighlight } from "./annotations.js";
 import { getDocument } from "./documents.js";
+import { createWritingRule } from "./writing-rules.js";
 
 export interface CorrectionRecord {
   originalText: string;
@@ -347,6 +348,36 @@ function parseVoiceSignalRow(row: RawVoiceSignalRow): VoiceSignalRecord {
     documentTitle: row.documentTitle,
     createdAt: row.createdAt,
   };
+}
+
+export function autoSynthesizeRule(
+  db: Database.Database,
+  params: {
+    highlight_id: string;
+    original_text: string;
+    notes: string[];
+    writing_type?: string | null;
+  },
+): void {
+  if (!params.notes.length) return;
+
+  const ruleText = params.notes.join("; ");
+  const exampleBefore = params.original_text.length > 200
+    ? params.original_text.slice(0, 200)
+    : params.original_text;
+
+  createWritingRule(db, {
+    rule_text: ruleText,
+    writing_type: params.writing_type ?? "general",
+    category: "auto-synthesized",
+    severity: "must-fix",
+    example_before: exampleBefore,
+    source: "auto-synthesis",
+    signal_count: 1,
+  });
+
+  db.prepare("UPDATE corrections SET synthesized_at = ? WHERE highlight_id = ?")
+    .run(nowMillis(), params.highlight_id);
 }
 
 function parseRow(row: RawCorrectionRow): CorrectionRecord {

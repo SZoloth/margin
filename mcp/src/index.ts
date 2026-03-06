@@ -33,6 +33,7 @@ import {
   updateCorrectionWritingType,
   setCorrectionPolarity,
   getVoiceSignals,
+  autoSynthesizeRule,
 } from "./tools/corrections.js";
 import {
   getWritingRules,
@@ -313,9 +314,18 @@ server.tool(
     color: z.enum(["yellow", "green", "blue", "pink", "purple", "orange"]).optional().describe("Highlight color (default: yellow)"),
   },
   async (params) => withDbAndExport(() => {
-    const result = createCorrection(getWriteDb(), params);
+    const db = getWriteDb();
+    const result = createCorrection(db, params);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    if (params.notes.length > 0) {
+      autoSynthesizeRule(db, {
+        highlight_id: result.highlight_id,
+        original_text: params.original_text,
+        notes: params.notes,
+        writing_type: params.writing_type,
+      });
     }
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }),
@@ -403,9 +413,33 @@ server.tool(
     polarity: z.enum(["positive", "corrective"]).describe("Voice signal polarity"),
   },
   async ({ highlight_id, polarity }) => withDbAndExport(() => {
-    const result = setCorrectionPolarity(getWriteDb(), highlight_id, polarity);
+    const db = getWriteDb();
+    const result = setCorrectionPolarity(db, highlight_id, polarity);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    if (polarity === "corrective") {
+      try {
+        const corr = db.prepare(
+          "SELECT original_text, notes_json, writing_type, synthesized_at FROM corrections WHERE highlight_id = ?"
+        ).get(highlight_id) as { original_text: string; notes_json: string; writing_type: string | null; synthesized_at: number | null } | undefined;
+        if (corr && !corr.synthesized_at) {
+          let notes: string[] = [];
+          try { const parsed = JSON.parse(corr.notes_json); if (Array.isArray(parsed)) notes = parsed.filter((v: unknown): v is string => typeof v === "string"); } catch {}
+          if (notes.length > 0) {
+            autoSynthesizeRule(db, {
+              highlight_id,
+              original_text: corr.original_text,
+              notes,
+              writing_type: corr.writing_type,
+            });
+          }
+        }
+      } catch (err) {
+        // Synthesis failure should not prevent polarity update from succeeding
+        // eslint-disable-next-line no-console
+        console.error("Auto-synthesis failed during polarity update:", err);
+      }
     }
     return { content: [{ type: "text", text: "Polarity updated." }] };
   }),

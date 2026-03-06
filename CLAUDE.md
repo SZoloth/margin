@@ -4,7 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Margin is a local-first desktop reading and annotation app. Open markdown files or keep-local articles, highlight text, write margin notes, export annotations. Built with Tauri v2 + React 19 + TipTap + SQLite.
+Margin is a writing quality system disguised as a reading app. The surface is a desktop app where you read, highlight, and annotate — but the actual product is underneath: it captures editorial judgment from reading, synthesizes corrections into enforceable writing rules, and mechanically prevents Claude from writing patterns you've flagged.
+
+**The loop:** Read → Annotate → Correct → Synthesize rules → Enforce on AI writing → Read AI output → Annotate again. Each iteration makes the system more precisely yours.
+
+**Key artifacts the system produces:**
+- `~/.margin/writing-rules.md` — voice profile consumed by Claude via MCP or clipboard
+- `~/.claude/hooks/writing_guard.py` — pre-tool hook that intercepts Write/Edit on prose files, auto-rejecting kill-words and AI slop patterns
+
+**The product thesis:** Every correction you give should immediately improve the current document, propagate to all future documents of the same type, and never need to be given again.
+
+Built with Tauri v2 + React 19 + TipTap + SQLite. See `docs/strat/product-strategy.md` and `docs/strat/technical-strategy.md` for full strategy.
 
 ## Commands
 
@@ -42,6 +52,15 @@ pnpm tsc --noEmit     # Type check without emitting
 - `src-tauri/src/watcher.rs` — file watcher using `notify` crate (macOS FSEvents)
 - Database: `~/.margin/margin.db` (WAL mode, foreign keys, cascading deletes)
 
+**Writing quality pipeline:**
+- `src-tauri/src/commands/corrections.rs` — correction persistence, export, synthesis marking
+- `src-tauri/src/commands/writing_rules.rs` — rule CRUD, profile generation, guard hook generation
+- `mcp/src/tools/corrections.ts` — MCP tools for corrections (create, get, export, set polarity)
+- `mcp/src/tools/writing-rules.ts` — MCP tools for rules (create, update, get, export as markdown)
+- `mcp/scripts/adversarial-test.ts` — 27-prompt adversarial testing (9 writing types x 3)
+- `mcp/scripts/compliance-check.ts` — mechanical + LLM compliance scoring against rule set
+- Database: `~/.margin/margin.db` — SQLite is the coordination layer between Rust, MCP (Node.js), and generated artifacts
+
 **Data flow:** React hooks → `invoke()` → Rust command handlers → SQLite. No REST API for core features.
 
 ## Key patterns
@@ -52,6 +71,10 @@ pnpm tsc --noEmit     # Type check without emitting
 - **Path alias:** `@/*` maps to `./src/*` in TypeScript and Vite.
 - **Styling:** CSS variables for theming (light/dark via `prefers-color-scheme`), Tailwind v4, custom CSS in `src/styles/`. Highlight colors defined as CSS custom properties in `globals.css`.
 - **Editor:** TipTap with custom extensions in `src/components/editor/extensions/` (MultiColorHighlight, MarginNote).
+- **SQLite as coordination layer:** The database is the protocol between Rust (desktop app), MCP (Node.js), and generated artifacts. Schema truth lives in Rust migrations. All consumers derive from it.
+- **Enforce at tool level, not prompt level:** The writing guard hook mechanically prevents violations — Claude can't choose to ignore it. This is the core technical advantage over prompt-based approaches.
+- **Idempotent rule synthesis:** `UNIQUE(writing_type, category, rule_text)` means duplicate rule creation merges (increments `signal_count`, takes max severity).
+- **Dual artifact generation:** Both Rust and MCP can generate `writing-rules.md` and `writing_guard.py`. Known structural risk — single-writer pattern is the target.
 
 ## Testing & Verification
 
