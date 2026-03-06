@@ -4,9 +4,17 @@ Unreleased changes ready to ship.
 
 ## Ready (main)
 
-(none)
+(none — v1.13.0 shipped 2026-03-06)
 
 ## Shipped
+
+### v1.13.0 (2026-03-06)
+
+- `fix: allow multiple corrections per highlight — remove UNIQUE constraint, re-backfill`
+- `feat: type-aware rule filtering in adversarial test and compliance checker`
+- `feat: pattern discovery script for modern Sonnet calibration`
+- `fix: remove UNIQUE(highlight_id) from MCP schema (schema drift)`
+
 
 ### v1.12.0 (2026-03-05)
 
