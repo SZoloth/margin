@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+MODE="${1:-full}"
+
+cd "$REPO_ROOT"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/verify [standard|data-layer|backend|full]
+
+Modes:
+  standard    Frontend + MCP checks + gap audit
+  data-layer  Standard checks plus backend cargo checks and clippy
+  backend     Backend cargo checks only
+  full        Standard checks plus backend cargo checks
+EOF
+}
+
+run() {
+  echo
+  echo "==> $*"
+  "$@"
+}
+
+run_from_dir() {
+  local dir="$1"
+  shift
+
+  echo
+  echo "==> (cd $dir && $*)"
+  (
+    cd "$dir"
+    "$@"
+  )
+}
+
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "error: required command not found: $cmd" >&2
+    exit 1
+  fi
+}
+
+run_mcp_command() {
+  local mcp_dir="$REPO_ROOT/mcp"
+  local node_bin="${MCP_NODE_BIN:-/opt/homebrew/Cellar/node@22/22.22.0_1/bin/node}"
+  local vitest_entry="$REPO_ROOT/node_modules/.pnpm/vitest@3.2.4_@types+node@22.19.13_jiti@2.6.1_jsdom@28.1.0_lightningcss@1.31.1/node_modules/vitest/vitest.mjs"
+  local tsc_entry="$REPO_ROOT/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/bin/tsc"
+  local subcommand="$1"
+
+  if [[ ! -x "$node_bin" ]]; then
+    echo "error: MCP Node runtime not found at $node_bin" >&2
+    echo "Set MCP_NODE_BIN to a Node 22 binary that matches better-sqlite3." >&2
+    exit 1
+  fi
+
+  case "$subcommand" in
+    test)
+      run_from_dir "$mcp_dir" "$node_bin" "$vitest_entry" run -c vitest.config.ts
+      ;;
+    build)
+      run_from_dir "$mcp_dir" "$node_bin" "$tsc_entry" -p tsconfig.json
+      ;;
+    *)
+      echo "error: unknown MCP subcommand: $subcommand" >&2
+      exit 1
+      ;;
+  esac
+}
+
+run_standard() {
+  require_cmd pnpm
+  require_cmd node
+
+  run ./node_modules/.bin/tsc --noEmit
+  run pnpm test:frontend
+  run pnpm build
+  run_mcp_command test
+  run_mcp_command build
+  run node .harness/scripts/audit-gaps.mjs
+}
+
+run_backend() {
+  require_cmd cargo
+
+  run cargo check --manifest-path src-tauri/Cargo.toml
+  run cargo test --manifest-path src-tauri/Cargo.toml
+}
+
+run_clippy() {
+  if cargo clippy --version >/dev/null 2>&1; then
+    run cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+  else
+    echo
+    echo "==> cargo clippy not available, skipping"
+  fi
+}
+
+case "$MODE" in
+  standard)
+    run_standard
+    ;;
+  backend)
+    run_backend
+    ;;
+  data-layer)
+    run_standard
+    run_backend
+    run_clippy
+    ;;
+  full)
+    run_standard
+    run_backend
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    echo "error: unknown verify mode: $MODE" >&2
+    echo >&2
+    usage >&2
+    exit 1
+    ;;
+esac

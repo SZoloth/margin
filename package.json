@@ -6,11 +6,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "typecheck": "./node_modules/.bin/tsc --noEmit",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
+    "test:frontend": "vitest run src",
     "test:watch": "vitest",
+    "verify": "bash scripts/verify",
+    "verify:standard": "bash scripts/verify standard",
+    "verify:data-layer": "bash scripts/verify data-layer",
+    "verify:full": "bash scripts/verify full",
     "version:sync": "bash scripts/sync-version.sh"
   },
   "dependencies": {
