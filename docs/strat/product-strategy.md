@@ -2,6 +2,8 @@
 
 **Last updated:** 2026-03-04
 
+**Related docs:** [PIPELINE-AUDIT.md](./PIPELINE-AUDIT.md) · [technical-strategy.md](./technical-strategy.md)
+
 ---
 
 ## Strategic Context
@@ -14,7 +16,65 @@ Margin exists to fix this — not by detecting AI text, but by preventing AI tel
 
 **UX north star:** Minimum friction between feedback and effect. The distance between "I corrected this" and "the system learned it" should approach zero. Today that distance is 5 manual steps (classify → export → synthesize → re-export → re-invoke). The target is zero manual steps for common cases.
 
-**Constraint:** The entire system should work within a user's Claude Code subscription. No fine-tuning, no custom models, no external APIs. Rules travel as structured text in context windows, not as model weights.
+**Friction in the current pipeline:**
+
+| Step | What happens | Friction |
+| --- | --- | --- |
+| 1. Correct text | Highlight + annotate in Margin | Low (the UX is already good) |
+| 2. Classify correction | Set polarity, writing type | Medium (manual, required for signal quality) |
+| 3. Export corrections | Click export or trigger from Style Memory | Medium (manual batch operation) |
+| 4. Synthesis | Claude analyzes patterns, creates rules | High (manual, requires agent session) |
+| 5. Export profile | `margin export profile` regenerates artifacts | Medium (manual, or auto on rule mutation) |
+| 6. Effect on current doc | Re-generate the draft you're working on | Not connected (correction doesn't fix the doc you're editing) |
+| 7. Effect on future docs | Rules loaded next time `/writing-voice` fires | Automatic (but only if the skill is invoked) |
+
+Steps 2-6 are where friction lives. The ideal collapses them:
+
+| Step | Ideal | Friction |
+| --- | --- | --- |
+| 1. Correct text | Highlight + annotate in Margin | Same |
+| 2. Classify | Auto-inferred from document type + correction content | Zero (system infers) |
+| 3-5. Learn | Correction persists → rule created/strengthened → artifacts regenerated | Zero (continuous, not batched) |
+| 6. Current doc | The paragraph you corrected is rewritten using the new rule | Zero (immediate) |
+| 7. Future docs | Rules are already propagated; context-aware loading matches rules to medium | Zero (automatic) |
+
+**Constraint:** The entire system works within a Claude Code subscription. See [technical-strategy.md](./technical-strategy.md) for implementation details.
+
+### The compounding loop
+
+```
+  ┌──────────────────────────────────────────────────────────────┐
+  │                    THE FEEDBACK LOOP                          │
+  │                                                              │
+  │   AI generates     You review in      You correct in         │
+  │   a draft      →   Margin         →   Margin             →  │
+  │                    (reading UX)       (annotation UX)         │
+  │        ▲                                    │                │
+  │        │                                    ▼                │
+  │        │                    ┌─── immediate ───┐              │
+  │        │                    ▼                  ▼              │
+  │        │           Current doc gets    Correction persists   │
+  │        │           rewritten with      with inferred type    │
+  │        │           the correction      + polarity            │
+  │        │           applied                    │              │
+  │        │                                      ▼              │
+  │        │                               Rule created or       │
+  │        │                               signal_count++        │
+  │        │                               (automatic, not       │
+  │        │                                batched)             │
+  │        │                                      │              │
+  │        │                                      ▼              │
+  │        │                               Artifacts regen       │
+  │        │                               (profile + hook +     │
+  │        │                                editorial rules)     │
+  │        │                                      │              │
+  │        └──────────────────────────────────────┘              │
+  │                                                              │
+  │   Next draft is better. Fewer corrections needed.            │
+  │   The correction you just gave is already working —          │
+  │   on this doc and every future doc of the same type.         │
+  └──────────────────────────────────────────────────────────────┘
+```
 
 **The single most important open question:** Does the loop actually work? The adversarial testing infrastructure exists (27 prompts, compliance scoring, regression diffing) but has never been run. The writing guard is mechanically sound but has zero kill-word rules loaded. The voice profile generates correctly but has thin signal. Until there's a measured compliance delta between coached and uncoached Claude, everything else is premature.
 
@@ -55,26 +115,13 @@ Margin exists to fix this — not by detecting AI text, but by preventing AI tel
 
 **Goal:** Make the corrections → rules → profile → enforcement chain transactionally safe, and eliminate the redundancy that causes drift.
 
-**Why second:** The pipeline audit (2026-03-03, updated 2026-03-04) found 13 structural disconnects. If the loop is proven to work (Priority 1), these become critical — you can't lose corrections that have proven value, and you can't have rules scattered across 6 locations with no sync.
+**Why second:** The pipeline audit found 13 structural disconnects. If the loop is proven to work (Priority 1), these become critical — you can't lose corrections that have proven value, and you can't have rules scattered across 6 locations with no sync.
 
-**Critical issues from audit:**
+**The 3 most urgent issues:** synthesis is not transactional (§9 — corrections marked done before rules persist), the guard hook is nearly empty (§1, §13 — zero kill-words, 1 slop pattern), and editorial rules are scattered across 3-6 locations with no sync (§11). See [PIPELINE-AUDIT.md](./PIPELINE-AUDIT.md) for the full 13-finding breakdown and status tracking.
 
-| Issue | Severity | Problem | Fix |
-|-------|----------|---------|-----|
-| Synthesis not transactional | P1 | `export_corrections_json` marks rows `synthesized_at = now()` before rules are confirmed created. Failed synthesis = lost corrections (marked done, rules never made). | Wrap in SQLite transaction; don't mark synthesized until rules are confirmed persisted. |
-| Dual artifact generators | P2 | Rust (`export_writing_rules`) and MCP (`autoExportWritingProfile`) both generate `writing-rules.md` and `writing_guard.py` independently. Same intent, duplicated formatting logic, structural drift risk. | Single writer: MCP mutations trigger Rust export command. Or: golden parity test ensuring both produce identical output for same fixture data. |
-| Enforcement coverage undefined | P2 | Only `kill-words` and `ai-slop` categories auto-enforce via guard hook. Other categories (tone, structure, voice-calibration) are advisory with no defined policy about what *should* be enforced. | Define explicit enforcement policy. Consider signal-driven severity: signal_count drives enforcement strength automatically (1-2 = guidance, 3-5 = soft gate, 6+ = hard gate). User behavior classifies severity, not manual tagging. |
-| Editorial rules in 3-6 places | P2 | Same rules exist in `~/.claude/CLAUDE.md`, `~/.claude/rules/editorial.md`, `~/.margin/writing-rules.md`, `KILL_WORDS.md`, `AI_TELLS.md`, and `rules.json`. No sync. Already drifted. | Margin DB is source of truth. `editorial.md` auto-generated on export. CLAUDE.md defers. Reference files generated or retired. See PIPELINE-AUDIT.md §7, §10. |
-| Guard hook nearly empty | P1 | `writing_guard.py` has `KILL_WORDS = []` and 1 slop pattern. The enforcement layer works but catches nothing. | Seed kill-words into DB. Populate slop patterns from must-fix rules with before/after examples. |
-| Unclassified corrections pollute profile | P2 | Corrections without polarity set end up in "Unclassified" section. | Filter for `polarity IS NOT NULL` in profile export. |
+**Technical fixes** (transaction safety, dual artifact generators, schema parity, MCP surface gaps) are owned by [technical-strategy.md](./technical-strategy.md).
 
-**Additional hardening:**
-- MCP schema parity: `SCHEMA_SQL` in `mcp/src/db.ts` must match Rust migrations mechanically. Schema drift has already caused a bug (`reviewed_at` column missing in test DB).
-- `synthesized_at` semantics: MCP tools ignore this field, re-reading full correction history every time. Enforce the semantics or remove the field.
-- Retire `word_guard.py`: merge its single banned word into DB, one guard hook not two.
-- `reviewed_at` needs MCP write path: agents synthesizing rules via MCP can't mark them reviewed.
-
-**Success signal:** Zero pipeline data loss. All corrections entering synthesis produce corresponding rules. Rust and MCP artifact outputs identical for same input. Editorial rules exist in exactly one place (Margin DB) with generated artifacts downstream.
+**Success signal:** Zero pipeline data loss. All corrections entering synthesis produce corresponding rules. Editorial rules exist in exactly one place (Margin DB) with generated artifacts downstream.
 
 ---
 
@@ -97,10 +144,7 @@ Margin exists to fix this — not by detecting AI text, but by preventing AI tel
 - **Read your own best writing:** Highlight passages with positive polarity to populate the "writing samples" section. Claude needs examples of what *to* do, not just what to avoid.
 - **Cross-document synthesis:** After 5-10 annotation sessions, run synthesis. Duplicate rules merge (signal_count increments), indicating patterns you flag consistently.
 
-**Friction reduction that accelerates loading (from PIPELINE-AUDIT.md Layer 2):**
-- **Auto-classification from context:** Polarity and writing type inferred from gesture + document metadata. If you cross out a word, that's corrective polarity. If the document is tagged as `cover-letter`, the correction inherits that type. Manual tagging becomes a fallback, not the default.
-- **Continuous synthesis for common cases:** When a correction matches an existing rule exactly, increment signal_count automatically — no manual synthesis step needed. Novel patterns still surface for review.
-- **Context-aware rule loading:** Agent detects writing type from task and loads only the relevant subset. Cover letter rules fire for cover letters, not for text messages. This is the difference between a generic style guide and a context-aware voice model.
+**Friction reduction that accelerates loading:** Auto-classification (infer polarity + writing type from gesture and document metadata), continuous synthesis (auto-increment signal_count for known patterns), and context-aware rule loading (agent loads only the relevant subset for the current writing type). Technical implementation details in [technical-strategy.md](./technical-strategy.md) § Friction Reduction Architecture.
 
 **Success signal:** Voice profile that feels like a genuine editorial fingerprint — specific to your voice, not a generic style guide. Adversarial compliance score improves measurably from Priority 1 baseline. Loading velocity increases as friction decreases (auto-classification and continuous synthesis reduce the manual work per correction).
 
@@ -110,19 +154,15 @@ Margin exists to fix this — not by detecting AI text, but by preventing AI tel
 
 **Goal:** Commit to Tauri or Swift as the long-term implementation.
 
-**Why fourth:** The platform choice depends on whether the loop requires editor-level AI features. Priority 1 answers that.
+**Why fourth:** The platform choice depends on whether the loop requires editor-level AI features (in-place rewrite). Priority 1 answers that.
 
-**The question is simple:** Does the writing quality system need the AI to edit documents *inside* Margin? Or does the AI write elsewhere (Claude Code, chat) and the voice profile travels to that context?
+**The product question:** Does Margin need to be an AI writing surface (corrections immediately rewrite the paragraph), or just a reading/annotation surface where the voice profile travels to wherever AI writes?
 
-| If... | Then... |
-|-------|---------|
-| AI writes elsewhere, profile travels via MCP/clipboard/hooks | **Swift.** The app only needs to be a fast annotator. NSTextView is fine. 2 deps, 1 language, 15MB binary. 5-7 day gap to close (floating toolbar, text anchoring wiring, tab drag, TOC). |
-| AI writes inside Margin (inline suggestions, tracked changes, AI editor) | **Tauri.** TipTap's extension system supports Content AI, tracked changes, agent editing. NSTextView can't match this. 50+ deps but justified. |
-| Unsure | Stay on Tauri until Priority 1 clarifies the interaction model. Don't migrate speculatively. |
+- If reading/annotation only → Swift is simpler (2 deps, 15MB binary)
+- If in-place rewrite is core → Tauri/TipTap is required (content AI, tracked changes)
+- If unsure → stay on Tauri until Priority 1 clarifies
 
-**New consideration from pipeline audit (Layer 2 — in-place rewrite):** The UX north star calls for corrections to immediately fix the paragraph you're looking at, not just persist for future drafts. If this is in scope, it means Margin needs to call Claude to rewrite corrected paragraphs — making Margin an AI writing surface, not just a reading surface. This significantly favors Tauri (TipTap content AI, tracked changes) and weakens the Swift case. The platform decision should weigh this: is in-place rewrite a core UX requirement or a nice-to-have?
-
-**Current assessment:** The writing quality system works through enforcement hooks and voice profiles that travel to Claude's context, not through in-editor AI features. This points toward Swift. But in-place rewrite changes the calculus — if frictionless feedback requires the corrected paragraph to be rewritten immediately, the app needs AI editing capabilities. Assessment should come from Priority 1 data and UX testing, not speculation.
+**The full technical analysis** (platform comparison, dependency tradeoffs, gap-to-close estimates) is owned by [technical-strategy.md](./technical-strategy.md).
 
 ---
 
@@ -141,10 +181,20 @@ Margin exists to fix this — not by detecting AI text, but by preventing AI tel
 **What makes this case study different from "I built an app":** It has a thesis (editorial judgment compounds into AI writing quality), two measurements (adversarial compliance delta AND correction rate over time per writing type), and a result. The compliance delta proves the rules work. The correction rate proves the system *learns* — fewer corrections needed over time. The graduation milestone ("text messages: zero corrections in 30 days") is the ultimate proof point.
 
 **The case study story:**
-1. **Problem:** AI writes generic content. You correct it. You correct the same things again. The feedback never compounds.
-2. **Insight:** Every correction is training data. The missing piece is the feedback UX — no tool captures structured feedback at the point of reading and routes it back to AI in a way that persists and compounds.
-3. **Solution:** Margin captures corrections in the most natural gesture (highlight + annotate), infers context automatically, synthesizes into scoped rules, enforces across every surface where AI writes.
-4. **Result:** Correction rate dropped from X to Y per document. The goal isn't zero corrections forever — voice evolves. The goal is zero *repeated* corrections.
+1. **Problem:** AI writes generic content. You correct it. You correct the same things again. The feedback is scattered across chat history, your head, ad-hoc prompt instructions that don't persist. None of it compounds.
+2. **Insight:** Every correction is training data. The missing piece isn't the AI model — it's the feedback UX. No tool captures structured feedback at the point of reading and routes it back to AI in a way that persists and compounds.
+3. **Solution:** Margin captures corrections at the point of reading, in the most natural gesture (highlight + annotate), infers context automatically, synthesizes corrections into persistent rules scoped by writing type and register, and enforces them across every surface where AI writes — immediately on the current document, and automatically on every future document of the same type.
+4. **Result:** Correction rate drops over time, per writing type. The goal isn't zero corrections forever — voice evolves, new writing types emerge. The goal is zero *repeated* corrections. You should never have to tell the system the same thing twice.
+
+#### Metrics that prove the loop
+
+**Correction rate** is the only output metric that matters. If the system works, corrections per document go down over time, per writing type. Margin already stores corrections with timestamps and document context — the data exists to compute: "For cover letters, the correction rate dropped from 12 per doc (January) to 3 per doc (March)." Not "the system has 47 rules" — that's an input metric. "You gave 3 corrections this time instead of 12" — that's the output.
+
+**Graduation detection.** For any writing type, there's a point where the correction rate is effectively zero — the system has learned enough rules, with enough signal strength, scoped to the right context, that it produces content you don't need to correct. The system should surface when a writing type is approaching graduation: "You haven't corrected a text message in 30 days. Cover letters still average 4 corrections per doc."
+
+**Override tracking.** When the guard hook fires and the user overrides it, that's a signal the rule is wrong for that context. If a rule is overridden more than it's enforced, it needs context scoping (wrong writing_type or register), not removal. Overrides are feedback too — they refine the routing logic.
+
+**Uncovered pattern detection.** When a correction doesn't match any existing rule, that's a new pattern. Over time, the gap between "corrections given" and "rules that exist" should shrink to zero. When it reaches zero for a given writing type, that type is "learned."
 
 ---
 
@@ -177,6 +227,10 @@ Surface rules you haven't reviewed recently. Show examples of violations from pa
 #### 6e: Rule sharing and composition
 
 Export your voice profile as a portable artifact. Import someone else's. An editor could maintain a house style profile. Organizations could have a base profile that individuals extend. This requires: profile merging, conflict resolution (my rule vs. house rule), and provenance tracking.
+
+#### 6f: Correction decay (90-day rule re-evaluation)
+
+Rules that haven't been triggered or reinforced in 90 days surface for re-evaluation. Your voice evolves — a rule from 6 months ago that you've never re-corrected might be stale. The `reviewed_at` column (already in the schema) becomes the mechanism. Rules don't silently expire; they surface for a quick "still relevant?" check.
 
 ---
 

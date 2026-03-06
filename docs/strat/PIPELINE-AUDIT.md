@@ -68,7 +68,7 @@
 | 6 | MCP resource returns incomplete view | P3 | open |
 | 7 | `reviewed_at` has no write path on the MCP surface | P3 | open |
 | 8 | Dual artifact generators increase drift risk | P2 | open |
-| 9 | Synthesis completion is not transactional | P1 | open |
+| 9 | Synthesis completion is not transactional | P1 | fixed |
 | 10 | writing-quality-gate reference files are manually maintained islands | P2 | open |
 | 11 | Same editorial rules load through three separate paths | P2 | open |
 | 12 | Voice eval was never validated | P2 | open |
@@ -113,9 +113,9 @@ The Rust migrations added `reviewed_at` to writing_rules. The Tauri frontend can
 
 Both the Rust path (`export_writing_rules` in Tauri) and the MCP path (`autoExportWritingProfile`) independently generate `writing-rules.md` and `writing_guard.py`. Duplicated formatting logic means the two outputs can diverge silently — same DB, different rendering, no cross-check.
 
-### §9. Synthesis completion is not transactional
+### §9. Synthesis completion is not transactional — FIXED
 
-`export_corrections_json` marks corrections as `synthesized_at` before the resulting rules are guaranteed persisted. A partial or failed synthesis run (e.g. Claude context window fills, user cancels) can move corrections to "archived" state without complete rule creation. Manual recovery exists ("mark unsynthesized") but the happy path has a data-loss window.
+~~`export_corrections_json` marks corrections as `synthesized_at` before the resulting rules are guaranteed persisted.~~ Fixed: `export_corrections_json` now only exports without marking. A separate `mark_corrections_synthesized` command (Tauri + MCP) is called explicitly after rules are confirmed created. If synthesis fails, corrections remain unsynthesized and are re-exported on the next run. Guarded by `export_does_not_mark_synthesized`, `export_without_mark_keeps_corrections_reexportable`, and MCP `failed synthesis leaves corrections re-exportable` tests.
 
 ### §10. writing-quality-gate reference files are manually maintained islands
 
