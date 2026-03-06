@@ -4,6 +4,15 @@ Unreleased changes ready to ship.
 
 ## Ready (main)
 
+### 2026-03-05
+
+- `fix: make synthesis transactional` (PIPELINE-AUDIT §9)
+  - Split `export_and_mark_synthesized` into export-only + explicit mark.
+  - Corrections stay unsynthesized until agent confirms rule creation via `mark_corrections_synthesized` (Tauri + MCP).
+  - Both export paths (settings panel + corrections panel) include highlight_ids in synthesis prompt.
+  - 9 new regression tests (6 Rust + 3 MCP integration).
+  - Fixed MCP test schema drift (missing `synthesized_at` column).
+
 ### 2026-03-04
 
 - `feat: register-aware voice calibration`
