@@ -47,7 +47,7 @@ describe("StyleMemorySection", () => {
   });
 
   it("hides export CTA after successful synthesis export of all pending corrections", async () => {
-    vi.mocked(exportCorrectionsJson).mockResolvedValue(3);
+    vi.mocked(exportCorrectionsJson).mockResolvedValue({ count: 3, highlightIds: ["h1", "h2", "h3"] });
     vi.mocked(writeText).mockResolvedValue(undefined);
     const user = userEvent.setup();
 

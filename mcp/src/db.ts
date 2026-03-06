@@ -109,7 +109,8 @@ export const SCHEMA_SQL = `
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     writing_type TEXT,
-    polarity TEXT CHECK(polarity IN ('positive', 'corrective'))
+    polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+    synthesized_at INTEGER
   );
 
   CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);

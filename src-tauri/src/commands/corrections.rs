@@ -427,6 +427,7 @@ pub struct CorrectionsExport {
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportedCorrection {
+    pub highlight_id: String,
     pub original_text: String,
     pub notes: Vec<String>,
     pub extended_context: Option<String>,
@@ -435,6 +436,13 @@ pub struct ExportedCorrection {
     pub document_title: Option<String>,
     pub highlight_color: String,
     pub created_at: i64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    pub count: usize,
+    pub highlight_ids: Vec<String>,
 }
 
 /// Formats Unix seconds as an ISO 8601 UTC timestamp (e.g. "2026-03-01T12:34:56Z").
@@ -467,7 +475,7 @@ fn unix_secs_to_iso8601(secs: u64) -> String {
 
 fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsExport> {
     let mut stmt = conn.prepare(
-        "SELECT original_text, notes_json, extended_context, writing_type, polarity,
+        "SELECT highlight_id, original_text, notes_json, extended_context, writing_type, polarity,
                 document_title, highlight_color, created_at
          FROM corrections
          WHERE session_id != '__backfilled__' AND synthesized_at IS NULL
@@ -477,17 +485,18 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
     let corrections: Vec<ExportedCorrection> = stmt
         .query_map([], |row| {
             Ok(ExportedCorrection {
-                original_text: row.get(0)?,
+                highlight_id: row.get(0)?,
+                original_text: row.get(1)?,
                 notes: serde_json::from_str::<Vec<String>>(
-                    &row.get::<_, String>(1)?,
+                    &row.get::<_, String>(2)?,
                 )
                 .unwrap_or_default(),
-                extended_context: row.get(2)?,
-                writing_type: row.get(3)?,
-                polarity: row.get(4)?,
-                document_title: row.get(5)?,
-                highlight_color: row.get(6)?,
-                created_at: row.get(7)?,
+                extended_context: row.get(3)?,
+                writing_type: row.get(4)?,
+                polarity: row.get(5)?,
+                document_title: row.get(6)?,
+                highlight_color: row.get(7)?,
+                created_at: row.get(8)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -697,8 +706,9 @@ fn fetch_voice_signals(
     rows.collect()
 }
 
-fn export_and_mark_synthesized(conn: &Connection, path: &std::path::Path) -> Result<usize, String> {
+fn export_corrections_only(conn: &Connection, path: &std::path::Path) -> Result<ExportResult, String> {
     let export = build_corrections_export(conn).map_err(|e| e.to_string())?;
+    let highlight_ids: Vec<String> = export.corrections.iter().map(|c| c.highlight_id.clone()).collect();
     let count = export.total_count;
 
     if let Some(parent) = path.parent() {
@@ -708,22 +718,39 @@ fn export_and_mark_synthesized(conn: &Connection, path: &std::path::Path) -> Res
     let json = serde_json::to_string_pretty(&export).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| format!("Failed to write export: {e}"))?;
 
-    let now = now_millis();
-    conn.execute(
-        "UPDATE corrections SET synthesized_at = ?1 WHERE session_id != '__backfilled__' AND synthesized_at IS NULL",
-        [now],
-    )
-    .map_err(|e| format!(
-        "Failed to mark corrections as synthesized: {e}. \
-         Export file was written to {} — corrections remain unsynthesized and may be re-exported.",
-        path.display()
-    ))?;
+    Ok(ExportResult { count, highlight_ids })
+}
 
-    Ok(count)
+fn mark_synthesized(
+    conn: &Connection,
+    highlight_ids: &[String],
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let now = now_millis();
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 1) {
+        let placeholders: Vec<String> = (2..=chunk.len() + 1).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET synthesized_at = ?1 WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 1);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for id in chunk {
+            params.push(id as &dyn rusqlite::types::ToSql);
+        }
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
 }
 
 #[tauri::command]
-pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Option<String>) -> Result<usize, String> {
+pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Option<String>) -> Result<ExportResult, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
 
     let export_path = if let Some(p) = path {
@@ -735,7 +762,16 @@ pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Opti
             .join("corrections-export.json")
     };
 
-    export_and_mark_synthesized(&conn, &export_path)
+    export_corrections_only(&conn, &export_path)
+}
+
+#[tauri::command]
+pub async fn mark_corrections_synthesized(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<u64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    mark_synthesized(&conn, &highlight_ids).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -1099,7 +1135,7 @@ mod tests {
     }
 
     #[test]
-    fn export_and_mark_synthesized_preserves_rows_with_timestamp() {
+    fn export_does_not_mark_synthesized() {
         let conn = setup_full_db();
         insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
         insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
@@ -1107,13 +1143,36 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("export.json");
-        let count = export_and_mark_synthesized(&conn, &path).unwrap();
+        let result = export_corrections_only(&conn, &path).unwrap();
 
-        assert_eq!(count, 2);
+        assert_eq!(result.count, 2);
+        assert_eq!(result.highlight_ids.len(), 2);
         assert!(path.exists());
         // Rows are preserved, not deleted
         assert_eq!(count_corrections(&conn).unwrap(), 2);
-        // All should have synthesized_at set
+        // Export does NOT mark synthesized — all should still be NULL
+        let unsynthesized: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE synthesized_at IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(unsynthesized, 2);
+    }
+
+    #[test]
+    fn export_then_mark_synthesized_full_flow() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let result = export_corrections_only(&conn, &path).unwrap();
+        assert_eq!(result.count, 2);
+
+        // Mark synthesized explicitly (simulates: agent created rules, then marks done)
+        let marked = mark_synthesized(&conn, &result.highlight_ids).unwrap();
+        assert_eq!(marked, 2);
+
+        // All should now have synthesized_at set
         let unsynthesized: i64 = conn
             .query_row("SELECT COUNT(*) FROM corrections WHERE synthesized_at IS NULL", [], |r| r.get(0))
             .unwrap();
@@ -1121,23 +1180,39 @@ mod tests {
     }
 
     #[test]
-    fn export_second_time_returns_zero_items() {
+    fn export_without_mark_keeps_corrections_reexportable() {
         let conn = setup_full_db();
         insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
 
         let dir = tempfile::tempdir().unwrap();
         let path1 = dir.path().join("export1.json");
-        let count1 = export_and_mark_synthesized(&conn, &path1).unwrap();
-        assert_eq!(count1, 1);
+        let result1 = export_corrections_only(&conn, &path1).unwrap();
+        assert_eq!(result1.count, 1);
 
-        // Second export should return 0 — already synthesized
+        // Without calling mark_synthesized, second export returns the SAME items
         let path2 = dir.path().join("export2.json");
-        let count2 = export_and_mark_synthesized(&conn, &path2).unwrap();
-        assert_eq!(count2, 0);
+        let result2 = export_corrections_only(&conn, &path2).unwrap();
+        assert_eq!(result2.count, 1);
     }
 
     #[test]
-    fn export_and_mark_preserves_backfilled_rows() {
+    fn export_after_mark_returns_zero_items() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path1 = dir.path().join("export1.json");
+        let result1 = export_corrections_only(&conn, &path1).unwrap();
+        mark_synthesized(&conn, &result1.highlight_ids).unwrap();
+
+        // After marking, second export returns 0
+        let path2 = dir.path().join("export2.json");
+        let result2 = export_corrections_only(&conn, &path2).unwrap();
+        assert_eq!(result2.count, 0);
+    }
+
+    #[test]
+    fn export_preserves_backfilled_rows() {
         let conn = setup_full_db();
         insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
         conn.execute(
@@ -1147,9 +1222,7 @@ mod tests {
              VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'old text', '[\"old\"]', 'Doc', 'file', 'yellow', 500, 500)",
             [],
         ).unwrap();
-        // UI-facing counts exclude backfilled rows.
         assert_eq!(count_corrections(&conn).unwrap(), 1);
-        // Physical rows are still preserved in SQLite.
         let total_rows: i64 = conn
             .query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
             .unwrap();
@@ -1157,15 +1230,17 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("export.json");
-        let count = export_and_mark_synthesized(&conn, &path).unwrap();
+        let result = export_corrections_only(&conn, &path).unwrap();
 
-        assert_eq!(count, 1); // only non-backfilled exported
-        assert_eq!(count_corrections(&conn).unwrap(), 1); // backfilled excluded from user-facing count
+        assert_eq!(result.count, 1); // only non-backfilled exported
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
         let total_rows_after: i64 = conn
             .query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(total_rows_after, 2); // all rows preserved physically
-        // Backfilled row should still have NULL synthesized_at
+        assert_eq!(total_rows_after, 2);
+
+        // Mark synthesized — only the exported correction, not the backfilled one
+        mark_synthesized(&conn, &result.highlight_ids).unwrap();
         let bf_synth: Option<i64> = conn
             .query_row("SELECT synthesized_at FROM corrections WHERE session_id = '__backfilled__'", [], |r| r.get(0))
             .unwrap();
@@ -1173,13 +1248,13 @@ mod tests {
     }
 
     #[test]
-    fn export_and_mark_returns_zero_when_empty() {
+    fn export_returns_zero_when_empty() {
         let conn = setup_full_db();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("export.json");
-        let count = export_and_mark_synthesized(&conn, &path).unwrap();
-        assert_eq!(count, 0);
-        assert_eq!(count_corrections(&conn).unwrap(), 0);
+        let result = export_corrections_only(&conn, &path).unwrap();
+        assert_eq!(result.count, 0);
+        assert_eq!(result.highlight_ids.len(), 0);
     }
 
     #[test]
@@ -1412,9 +1487,7 @@ mod tests {
         insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
 
         // Mark as synthesized first
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("export.json");
-        export_and_mark_synthesized(&conn, &path).unwrap();
+        mark_synthesized(&conn, &["h1".to_string(), "h2".to_string()]).unwrap();
 
         // Verify they're synthesized
         let synth_count: i64 = conn

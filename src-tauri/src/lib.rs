@@ -74,6 +74,7 @@ pub fn run() {
             commands::corrections::bulk_tag_corrections,
             commands::corrections::bulk_set_polarity_corrections,
             commands::corrections::get_voice_signals,
+            commands::corrections::mark_corrections_synthesized,
             commands::corrections::mark_corrections_unsynthesized,
             commands::tabs::get_open_tabs,
             commands::tabs::save_open_tabs,

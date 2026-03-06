@@ -44,15 +44,16 @@ export function StyleMemorySection() {
 
   const handleExportForSynthesis = useCallback(async () => {
     try {
-      const count = await exportCorrectionsJson();
-      if (count === 0) {
+      const result = await exportCorrectionsJson();
+      if (result.count === 0) {
         setExportStatus("No corrections to export");
       } else {
         setCorrectionStats((prev) => ({
           ...prev,
-          unsynthesizedCount: Math.max(0, prev.unsynthesizedCount - count),
+          unsynthesizedCount: Math.max(0, prev.unsynthesizedCount - result.count),
         }));
-        const prompt = `Analyze ${count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Pay attention to polarity tags — separate patterns to reinforce (+positive) from patterns to fix (+corrective). Save each rule via the margin_create_writing_rule MCP tool.`;
+        const idsJson = JSON.stringify(result.highlightIds);
+        const prompt = `Analyze ${result.count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Pay attention to polarity tags — separate patterns to reinforce (+positive) from patterns to fix (+corrective). Save each rule via the margin_create_writing_rule MCP tool.\n\nAfter ALL rules are created, call margin_mark_corrections_synthesized with highlight_ids: ${idsJson}`;
         await writeText(prompt);
         setExportStatus("Prompt copied — paste into your coding agent");
       }

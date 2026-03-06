@@ -329,17 +329,19 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
 
   const handleExportForSynthesis = useCallback(async () => {
     try {
-      const count = await exportCorrectionsJson();
-      if (count === 0) {
+      const result = await exportCorrectionsJson();
+      if (result.count === 0) {
         setExportStatus("No corrections to export");
       } else {
         await loadCorrections(limit);
+        const idsJson = JSON.stringify(result.highlightIds);
         const prompt = `Objective
 - Convert writing corrections from ~/.margin/corrections-export.json into actionable writing rules in ~/.margin/writing-rules.md.
 - Done when: (1) rules are grouped and de-duplicated, (2) each rule has ≥1 before/after example grounded in the corrections, (3) only the "## Learned from corrections" section is added/updated while all other existing content is preserved verbatim.
+- IMPORTANT: After ALL rules are created, call margin_mark_corrections_synthesized with highlight_ids: ${idsJson}
 
 Context / Inputs
-- Input JSON: ~/.margin/corrections-export.json (${count} corrections)
+- Input JSON: ~/.margin/corrections-export.json (${result.count} corrections)
 - Output Markdown: ~/.margin/writing-rules.md
 
 Scope Constraints (blast radius)

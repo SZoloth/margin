@@ -6,7 +6,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { ExportBridge } from "./export-bridge.js";
-import { openReadDb, openWriteDb } from "./db.js";
+import { openReadDb, openWriteDb, nowMillis } from "./db.js";
 import { startExportBridge } from "./startup.js";
 import {
   listDocuments,
@@ -421,6 +421,31 @@ server.tool(
   async ({ polarity, limit }) => withDb(() => ({
     content: [{ type: "text", text: JSON.stringify(getVoiceSignals(getReadDb(), polarity, limit), null, 2) }],
   })),
+);
+
+server.tool(
+  "margin_mark_corrections_synthesized",
+  "Mark corrections as synthesized after rules have been successfully created. Call this AFTER creating all rules from an export batch to confirm synthesis completed. Corrections not marked will be re-exported on the next synthesis run.",
+  {
+    highlight_ids: z.array(z.string()).describe("Highlight IDs of the corrections to mark as synthesized"),
+  },
+  async ({ highlight_ids }) => withDb(() => {
+    if (highlight_ids.length === 0) {
+      return { content: [{ type: "text", text: "No highlight IDs provided." }] };
+    }
+    const db = getWriteDb();
+    const now = nowMillis();
+    const stmt = db.prepare("UPDATE corrections SET synthesized_at = ? WHERE highlight_id = ?");
+    let marked = 0;
+    const tx = db.transaction(() => {
+      for (const id of highlight_ids) {
+        const result = stmt.run(now, id);
+        marked += result.changes;
+      }
+    });
+    tx();
+    return { content: [{ type: "text", text: `Marked ${marked} correction(s) as synthesized.` }] };
+  }),
 );
 
 server.tool(

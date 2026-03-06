@@ -9,7 +9,9 @@ import {
   deleteCorrection,
   setCorrectionPolarity,
   getAllCorrectionsForProfile,
+  getCorrections,
 } from "../tools/corrections.js";
+import { nowMillis } from "../db.js";
 import {
   createWritingRule,
   getWritingRules,
@@ -176,6 +178,93 @@ describe("full pipeline: feedback → synthesis → rules → export", () => {
     const profileMd = getWritingProfileMarkdown([], allCorrections);
     expect(profileMd).toContain("leverages synergies");
     expect(profileMd).not.toContain("legacy backfill phrase");
+  });
+});
+
+describe("transactional synthesis: mark_corrections_synthesized", () => {
+  it("corrections remain unsynthesized until explicitly marked", () => {
+    insertDocWithFile(docId, tmpFile);
+
+    const corrResult = createCorrection(db, {
+      document_id: docId,
+      original_text: "leverages synergies",
+      notes: ["Corporate jargon"],
+    });
+    expect(corrResult).not.toHaveProperty("error");
+    if ("error" in corrResult) throw new Error(corrResult.error);
+
+    // Corrections are unsynthesized by default
+    const unsynthCount = (db.prepare(
+      "SELECT COUNT(*) as count FROM corrections WHERE synthesized_at IS NULL AND session_id != '__backfilled__'"
+    ).get() as { count: number }).count;
+    expect(unsynthCount).toBe(1);
+
+    // Create a rule (simulates synthesis) but DON'T mark corrections as synthesized
+    const ruleResult = createWritingRule(db, {
+      rule_text: "leverages",
+      writing_type: "general",
+      category: "kill-words",
+      severity: "must-fix",
+    });
+    expect(ruleResult).not.toHaveProperty("error");
+
+    // Correction is STILL unsynthesized — rule creation alone doesn't mark it
+    const stillUnsynth = (db.prepare(
+      "SELECT COUNT(*) as count FROM corrections WHERE synthesized_at IS NULL AND session_id != '__backfilled__'"
+    ).get() as { count: number }).count;
+    expect(stillUnsynth).toBe(1);
+  });
+
+  it("marks corrections as synthesized after explicit call", () => {
+    insertDocWithFile(docId, tmpFile);
+
+    const corrResult = createCorrection(db, {
+      document_id: docId,
+      original_text: "leverages synergies",
+      notes: ["Corporate jargon"],
+    });
+    expect(corrResult).not.toHaveProperty("error");
+    if ("error" in corrResult) throw new Error(corrResult.error);
+
+    // Create rule then explicitly mark synthesized
+    createWritingRule(db, {
+      rule_text: "leverages",
+      writing_type: "general",
+      category: "kill-words",
+      severity: "must-fix",
+    });
+
+    const now = nowMillis();
+    const stmt = db.prepare("UPDATE corrections SET synthesized_at = ? WHERE highlight_id = ?");
+    stmt.run(now, corrResult.highlight_id);
+
+    // Now it's synthesized
+    const synthCount = (db.prepare(
+      "SELECT COUNT(*) as count FROM corrections WHERE synthesized_at IS NOT NULL AND session_id != '__backfilled__'"
+    ).get() as { count: number }).count;
+    expect(synthCount).toBe(1);
+  });
+
+  it("failed synthesis leaves corrections re-exportable", () => {
+    insertDocWithFile(docId, tmpFile);
+
+    const corr1 = createCorrection(db, {
+      document_id: docId,
+      original_text: "leverages synergies",
+      notes: ["Jargon"],
+    });
+    expect(corr1).not.toHaveProperty("error");
+    if ("error" in corr1) throw new Error(corr1.error);
+
+    // Simulate: export happens (corrections are read) but synthesis fails
+    // — no rules created, no mark_synthesized called
+    const corrections = getCorrections(db);
+    expect(corrections).toHaveLength(1);
+
+    // Second "export" still returns the same corrections (not lost)
+    const correctionsRetry = getCorrections(db);
+    expect(correctionsRetry).toHaveLength(1);
+    expect(correctionsRetry[0].originalText).toBe("leverages synergies");
   });
 });
 

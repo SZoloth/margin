@@ -88,11 +88,20 @@ export async function deleteCorrection(highlightId: string): Promise<void> {
   return invoke<void>("delete_correction", { highlightId });
 }
 
-export async function exportCorrectionsJson(path?: string): Promise<number> {
-  return invoke<number>(
+export interface ExportResult {
+  count: number;
+  highlightIds: string[];
+}
+
+export async function exportCorrectionsJson(path?: string): Promise<ExportResult> {
+  return invoke<ExportResult>(
     "export_corrections_json",
     path === undefined ? {} : { path },
   );
+}
+
+export async function markCorrectionsSynthesized(highlightIds: string[]): Promise<number> {
+  return invoke<number>("mark_corrections_synthesized", { highlightIds });
 }
 
 export interface IndexAllResult {
