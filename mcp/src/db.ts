@@ -93,7 +93,7 @@ export const SCHEMA_SQL = `
 
   CREATE TABLE IF NOT EXISTS corrections (
     id TEXT PRIMARY KEY,
-    highlight_id TEXT NOT NULL UNIQUE,
+    highlight_id TEXT NOT NULL,
     document_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
     original_text TEXT NOT NULL,

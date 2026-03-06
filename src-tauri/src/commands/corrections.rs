@@ -168,21 +168,7 @@ pub async fn persist_corrections(
                  prefix_context, suffix_context, extended_context, notes_json,
                  document_title, document_source, document_path, category,
                  highlight_color, created_at, updated_at, writing_type, polarity)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
-             ON CONFLICT(highlight_id) DO UPDATE SET
-                session_id = excluded.session_id,
-                original_text = excluded.original_text,
-                prefix_context = excluded.prefix_context,
-                suffix_context = excluded.suffix_context,
-                extended_context = excluded.extended_context,
-                notes_json = excluded.notes_json,
-                document_title = excluded.document_title,
-                document_source = excluded.document_source,
-                document_path = excluded.document_path,
-                highlight_color = excluded.highlight_color,
-                updated_at = excluded.updated_at,
-                writing_type = COALESCE(excluded.writing_type, corrections.writing_type),
-                polarity = COALESCE(excluded.polarity, corrections.polarity)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             rusqlite::params![
                 id,
                 input.highlight_id,
@@ -835,7 +821,7 @@ mod tests {
     fn full_schema_sql() -> &'static str {
         "CREATE TABLE corrections (
             id TEXT PRIMARY KEY,
-            highlight_id TEXT NOT NULL UNIQUE,
+            highlight_id TEXT NOT NULL,
             document_id TEXT NOT NULL,
             session_id TEXT NOT NULL,
             original_text TEXT NOT NULL,
@@ -981,31 +967,22 @@ mod tests {
     }
 
     #[test]
-    fn upsert_updates_on_duplicate_highlight_id() {
+    fn duplicate_highlight_id_creates_two_rows() {
         let conn = setup_full_db();
         insert_correction(&conn, "h1", "original", r#"["old note"]"#);
         assert_eq!(count_corrections(&conn).unwrap(), 1);
 
-        // Upsert with same highlight_id should update, not duplicate
+        // Same highlight_id should create a second row (corrections are events)
         conn.execute(
             "INSERT INTO corrections
                 (id, highlight_id, document_id, session_id, original_text, notes_json,
                  document_title, document_source, highlight_color, created_at, updated_at)
-             VALUES (?1, 'h1', 'doc1', 'sess2', 'updated', '[\"new note\"]', 'Test', 'file', 'green', 2000, 2000)
-             ON CONFLICT(highlight_id) DO UPDATE SET
-                original_text = excluded.original_text,
-                notes_json = excluded.notes_json,
-                highlight_color = excluded.highlight_color,
-                updated_at = excluded.updated_at",
+             VALUES (?1, 'h1', 'doc1', 'sess2', 'updated', '[\"new note\"]', 'Test', 'file', 'green', 2000, 2000)",
             rusqlite::params![Uuid::new_v4().to_string()],
         )
         .unwrap();
 
-        assert_eq!(count_corrections(&conn).unwrap(), 1); // still 1
-        let records = fetch_corrections(&conn, 10).unwrap();
-        assert_eq!(records[0].original_text, "updated");
-        assert_eq!(records[0].notes, vec!["new note"]);
-        assert_eq!(records[0].highlight_color, "green");
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
     }
 
     #[test]
@@ -1045,9 +1022,9 @@ mod tests {
     }
 
     #[test]
-    fn upsert_preserves_existing_writing_type_when_null() {
+    fn same_highlight_id_different_writing_types_both_exist() {
         let conn = setup_full_db();
-        // Insert with writing_type
+        // Insert with writing_type 'prd'
         conn.execute(
             "INSERT INTO corrections
                 (id, highlight_id, document_id, session_id, original_text, notes_json,
@@ -1056,28 +1033,23 @@ mod tests {
             [],
         ).unwrap();
 
-        // Upsert with NULL writing_type — should preserve 'prd'
+        // Insert again with NULL writing_type — both rows should exist
         conn.execute(
             "INSERT INTO corrections
                 (id, highlight_id, document_id, session_id, original_text, notes_json,
                  document_title, document_source, highlight_color, created_at, updated_at, writing_type)
-             VALUES ('id2', 'h1', 'doc1', 'sess2', 'updated', '[\"new\"]', 'Test', 'file', 'yellow', 2000, 2000, NULL)
-             ON CONFLICT(highlight_id) DO UPDATE SET
-                original_text = excluded.original_text,
-                notes_json = excluded.notes_json,
-                updated_at = excluded.updated_at,
-                writing_type = COALESCE(excluded.writing_type, corrections.writing_type)",
+             VALUES ('id2', 'h1', 'doc1', 'sess2', 'updated', '[\"new\"]', 'Test', 'file', 'yellow', 2000, 2000, NULL)",
             [],
         ).unwrap();
 
-        let wt: Option<String> = conn
-            .query_row("SELECT writing_type FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(wt, Some("prd".to_string()));
+        assert_eq!(count, 2);
     }
 
     #[test]
-    fn upsert_updates_writing_type_when_provided() {
+    fn same_highlight_id_inserts_independently() {
         let conn = setup_full_db();
         conn.execute(
             "INSERT INTO corrections
@@ -1087,22 +1059,29 @@ mod tests {
             [],
         ).unwrap();
 
-        // Upsert with new writing_type — should update to 'email'
+        // Insert with different writing_type — both rows exist independently
         conn.execute(
             "INSERT INTO corrections
                 (id, highlight_id, document_id, session_id, original_text, notes_json,
                  document_title, document_source, highlight_color, created_at, updated_at, writing_type)
-             VALUES ('id2', 'h1', 'doc1', 'sess2', 'text', '[\"note\"]', 'Test', 'file', 'yellow', 2000, 2000, 'email')
-             ON CONFLICT(highlight_id) DO UPDATE SET
-                updated_at = excluded.updated_at,
-                writing_type = COALESCE(excluded.writing_type, corrections.writing_type)",
+             VALUES ('id2', 'h1', 'doc1', 'sess2', 'text', '[\"note\"]', 'Test', 'file', 'yellow', 2000, 2000, 'email')",
             [],
         ).unwrap();
 
-        let wt: Option<String> = conn
-            .query_row("SELECT writing_type FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(wt, Some("email".to_string()));
+        assert_eq!(count, 2);
+
+        // Both writing types exist
+        let types: Vec<Option<String>> = conn
+            .prepare("SELECT writing_type FROM corrections WHERE highlight_id = 'h1' ORDER BY created_at")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert_eq!(types, vec![Some("prd".to_string()), Some("email".to_string())]);
     }
 
     // --- get_corrections_by_document tests ---

@@ -144,6 +144,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add register column to writing_rules
     migrate_writing_rules_add_register(&conn)?;
 
+    // Migration: remove UNIQUE constraint on highlight_id in corrections and re-backfill
+    migrate_corrections_remove_highlight_unique(&conn)?;
+
     // Seed: voice calibration + editorial rules into writing_rules table
     seed_voice_and_editorial_rules(&conn)?;
 
@@ -270,21 +273,17 @@ fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) -> us
                 continue;
             };
 
-            let id = uuid::Uuid::new_v4().to_string();
-            // Use upsert so newer JSONL entries (processed later) overwrite older ones
+            let exported_at = val["exported_at"].as_i64().unwrap_or(0);
+            let id = format!("bf-{}-{}", highlight_id, exported_at);
+            // INSERT OR IGNORE: deterministic ID makes re-runs idempotent,
+            // and different highlight_id or exported_at values all get their own rows.
             match conn.execute(
-                "INSERT INTO corrections
+                "INSERT OR IGNORE INTO corrections
                     (id, highlight_id, document_id, session_id, original_text,
                      prefix_context, suffix_context, extended_context, notes_json,
                      document_title, document_source, document_path, category,
                      highlight_color, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
-                 ON CONFLICT(highlight_id) DO UPDATE SET
-                    original_text = excluded.original_text,
-                    notes_json = excluded.notes_json,
-                    document_title = excluded.document_title,
-                    highlight_color = excluded.highlight_color,
-                    updated_at = excluded.updated_at",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
                 rusqlite::params![
                     id,
                     highlight_id,
@@ -300,11 +299,12 @@ fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) -> us
                     val["document_path"].as_str(),
                     Option::<String>::None,
                     val["highlight_color"].as_str().unwrap_or("yellow"),
-                    val["exported_at"].as_i64().unwrap_or(0),
-                    val["exported_at"].as_i64().unwrap_or(0),
+                    exported_at,
+                    exported_at,
                 ],
             ) {
-                Ok(_) => imported += 1,
+                Ok(n) if n > 0 => imported += 1,
+                Ok(_) => {} // INSERT OR IGNORE: row already exists
                 Err(e) => eprintln!("backfill: failed to insert correction: {e}"),
             }
         }
@@ -412,7 +412,7 @@ mod tests {
     fn corrections_table_sql() -> &'static str {
         "CREATE TABLE corrections (
             id TEXT PRIMARY KEY,
-            highlight_id TEXT NOT NULL UNIQUE,
+            highlight_id TEXT NOT NULL,
             document_id TEXT NOT NULL,
             session_id TEXT NOT NULL,
             original_text TEXT NOT NULL,
@@ -467,9 +467,9 @@ mod tests {
     }
 
     #[test]
-    fn backfill_upserts_on_duplicate_highlight_id() {
+    fn backfill_inserts_alongside_existing_and_is_idempotent() {
         let conn = setup_db();
-        // Pre-insert one correction
+        // Pre-insert one correction with a non-backfill ID
         conn.execute(
             "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at) VALUES ('existing', 'h1', 'd1', 's1', 'old text', '[]', 'file', 'yellow', 0, 0)",
             [],
@@ -478,7 +478,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
         let mut f = fs::File::create(&jsonl_path).unwrap();
-        // Same highlight_id as existing — should upsert (update)
+        // Same highlight_id as existing but different deterministic ID → inserts as new row
         writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s2","original_text":"new text","notes":["fix"],"document_source":"file","highlight_color":"yellow","exported_at":1700000000000}}"#).unwrap();
         // New highlight_id
         writeln!(f, r#"{{"highlight_id":"h2","document_id":"d1","session_id":"s2","original_text":"fresh","notes":["new"],"document_source":"file","highlight_color":"green","exported_at":1700000001000}}"#).unwrap();
@@ -486,21 +486,17 @@ mod tests {
 
         let imported = backfill_corrections_from_dir(&conn, dir.path());
 
-        assert_eq!(imported, 2); // both processed (1 upsert + 1 insert)
-        assert_eq!(count(&conn), 2); // 1 updated + 1 new
-        // h1 text should be updated from JSONL
-        let text: String = conn
-            .query_row(
-                "SELECT original_text FROM corrections WHERE highlight_id = 'h1'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(text, "new text");
+        assert_eq!(imported, 2); // both inserted
+        assert_eq!(count(&conn), 3); // 1 existing + 2 backfilled
+
+        // Re-run is idempotent (same deterministic IDs → INSERT OR IGNORE)
+        let imported2 = backfill_corrections_from_dir(&conn, dir.path());
+        assert_eq!(imported2, 0); // all ignored
+        assert_eq!(count(&conn), 3); // no change
     }
 
     #[test]
-    fn backfill_processes_files_in_sorted_order() {
+    fn backfill_creates_multiple_rows_for_same_highlight_different_exports() {
         let conn = setup_db();
         let dir = tempfile::tempdir().unwrap();
 
@@ -510,7 +506,7 @@ mod tests {
         writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"old version","notes":["old"],"document_source":"file","highlight_color":"yellow","exported_at":1000}}"#).unwrap();
         f.flush().unwrap();
 
-        // Newer file (should win on upsert)
+        // Newer file — same highlight_id but different exported_at → different deterministic ID → both inserted
         let new_path = dir.path().join("corrections-2026-02-23.jsonl");
         let mut f = fs::File::create(&new_path).unwrap();
         writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s2","original_text":"new version","notes":["new"],"document_source":"file","highlight_color":"green","exported_at":2000}}"#).unwrap();
@@ -518,15 +514,7 @@ mod tests {
 
         backfill_corrections_from_dir(&conn, dir.path());
 
-        assert_eq!(count(&conn), 1);
-        let text: String = conn
-            .query_row(
-                "SELECT original_text FROM corrections WHERE highlight_id = 'h1'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(text, "new version"); // newer file wins
+        assert_eq!(count(&conn), 2); // both rows exist — corrections are events
     }
 
     #[test]
@@ -925,6 +913,85 @@ fn migrate_corrections_add_polarity(conn: &Connection) -> Result<(), Box<dyn std
              CREATE INDEX IF NOT EXISTS idx_corrections_polarity ON corrections(polarity);",
         )?;
     }
+
+    Ok(())
+}
+
+/// Removes the UNIQUE constraint on highlight_id in the corrections table and re-backfills.
+/// A correction is an event, not a state — multiple corrections per highlight position are valid.
+fn migrate_corrections_remove_highlight_unique(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if the UNIQUE constraint on highlight_id still exists
+    let sql: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='corrections'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+
+    if !sql.contains("UNIQUE") {
+        return Ok(());
+    }
+
+    conn.execute_batch("PRAGMA foreign_keys=OFF;")?;
+
+    conn.execute_batch(
+        "BEGIN;
+
+         CREATE TABLE corrections_new (
+             id TEXT PRIMARY KEY,
+             highlight_id TEXT NOT NULL,
+             document_id TEXT NOT NULL,
+             session_id TEXT NOT NULL,
+             original_text TEXT NOT NULL,
+             prefix_context TEXT,
+             suffix_context TEXT,
+             extended_context TEXT,
+             notes_json TEXT NOT NULL,
+             document_title TEXT,
+             document_source TEXT NOT NULL,
+             document_path TEXT,
+             category TEXT,
+             highlight_color TEXT NOT NULL,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL,
+             writing_type TEXT,
+             polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+             synthesized_at INTEGER
+         );
+
+         INSERT INTO corrections_new SELECT * FROM corrections;
+
+         DROP TABLE corrections;
+
+         ALTER TABLE corrections_new RENAME TO corrections;
+
+         CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
+         CREATE INDEX IF NOT EXISTS idx_corrections_session ON corrections(session_id);
+
+         COMMIT;",
+    )?;
+
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+
+    // Delete backfill sentinel so re-backfill runs
+    let _ = conn.execute("DELETE FROM corrections WHERE id = '__backfill_marker__'", []);
+
+    // Re-run backfill with deterministic IDs
+    if let Some(home) = dirs::home_dir() {
+        let corrections_dir = home.join(".margin").join("corrections");
+        backfill_corrections_from_dir(conn, &corrections_dir);
+    }
+
+    // Re-insert sentinel
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO corrections
+            (id, highlight_id, document_id, session_id, original_text,
+             notes_json, document_source, highlight_color, created_at, updated_at)
+         VALUES ('__backfill_marker__', '__backfill_marker__', '', '__backfilled__',
+                 '', '[]', 'system', 'none', 0, 0)",
+        [],
+    );
 
     Ok(())
 }
