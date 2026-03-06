@@ -87,3 +87,28 @@
   - @AppStorage on ObservableObject doesn't propagate through parent objects — need explicit Combine forwarding
   - @MainActor Tasks inherit main actor context — use Task.detached for CPU-bound or blocking subprocess work
 ---
+
+## 2026-03-05 — Transactional Synthesis (PIPELINE-AUDIT §9): ALL 7 TASKS COMPLETE
+
+**Source:** Compound product analysis of docs/strat/PIPELINE-AUDIT.md, product-strategy.md, technical-strategy.md
+**Priority:** #1 of 5 ranked items — P1 data-loss window in synthesis pipeline
+
+### Changes
+- T-001: Split `export_and_mark_synthesized` → `export_corrections_only` (read-only) + `mark_synthesized` (explicit confirmation). New `ExportResult` struct returns `{count, highlight_ids}`. Added `mark_corrections_synthesized` Tauri command. Chunked UPDATE respects `SQLITE_VAR_LIMIT`.
+- T-002: Added `margin_mark_corrections_synthesized` MCP tool in `mcp/src/index.ts`. Uses `db.transaction()` to batch-mark. Fixed schema drift: added `synthesized_at INTEGER` to MCP test schema (`SCHEMA_SQL` in `mcp/src/db.ts`).
+- T-003: Updated `tauri-commands.ts` (new `ExportResult` interface, `markCorrectionsSynthesized` wrapper), browser stubs, `StyleMemorySection.tsx` and `CorrectionsPanel.tsx` (both export paths now include highlight_ids in synthesis prompt).
+- T-004: 6 new Rust regression tests: `export_does_not_mark_synthesized`, `export_then_mark_synthesized_full_flow`, `export_without_mark_keeps_corrections_reexportable`, `export_after_mark_returns_zero_items`, `export_preserves_backfilled_rows`, `export_returns_zero_when_empty`.
+- T-005: 3 new MCP integration tests in `pipeline-integration.test.ts`: corrections remain unsynthesized until explicitly marked, marks work after explicit call, failed synthesis leaves corrections re-exportable.
+- T-006: Updated all existing Rust tests to use split API (no test assumes export marks synthesized_at).
+- T-007: PIPELINE-AUDIT.md §9 status updated to `fixed` with test guard documentation.
+
+### Test results
+- 188 Rust tests passing
+- 438 frontend/MCP tests passing (626 total)
+
+### Learnings
+- MCP test schema (`SCHEMA_SQL` in `mcp/src/db.ts`) is manually maintained — schema drift is a real risk. The `synthesized_at` column was missing. No automated schema derivation exists (PIPELINE-AUDIT doesn't have a finding for this yet but should).
+- Two export paths exist: `StyleMemorySection.tsx` (settings panel) and `CorrectionsPanel.tsx` (corrections panel). Both consumers needed updating — easy to miss.
+- `pnpm_enforcer.py` hook blocks `npm run build` — always use `pnpm run build` for MCP builds.
+- SQLite `SQLITE_VAR_LIMIT` (999 default) means bulk UPDATEs need chunking for large highlight_id arrays.
+---

@@ -4,6 +4,17 @@ Unreleased changes ready to ship.
 
 ## Ready (main)
 
+### 2026-03-04
+
+- `feat: register-aware voice calibration`
+  - Added `register` column to `writing_rules` table (nullable TEXT) with migration and backfill.
+  - Voice-calibration rules now tagged as `all` (universal) or `casual` based on `when_to_apply` text.
+  - Writing profile markdown groups voice rules into Universal / Casual / Professional subsections.
+  - Professional register section explicitly tells Claude casual rules DO NOT apply.
+  - MCP `create_writing_rule` and `update_writing_rule` accept `register` parameter.
+  - Adversarial test prompt includes register context so formal types aren't penalized by casual rules.
+  - Mirrored grouping logic in both Rust and TS renderers.
+
 ### 2026-03-03
 
 - `fix: harden feedback-to-rules synthesis pipeline` (`8ca532c`)
