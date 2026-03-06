@@ -8,7 +8,7 @@ Unreleased changes ready to ship.
 
 ## Shipped
 
-### v1.9.0 (2026-03-05)
+### v1.11.0 (2026-03-05)
 
 - `fix: make synthesis transactional` (PIPELINE-AUDIT §9)
 - `feat: register-aware voice calibration`
