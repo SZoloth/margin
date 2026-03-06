@@ -429,7 +429,7 @@ server.tool(
   {
     highlight_ids: z.array(z.string()).describe("Highlight IDs of the corrections to mark as synthesized"),
   },
-  async ({ highlight_ids }) => withDb(() => {
+  async ({ highlight_ids }) => withDbAndExport(() => {
     if (highlight_ids.length === 0) {
       return { content: [{ type: "text", text: "No highlight IDs provided." }] };
     }
