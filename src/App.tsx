@@ -21,7 +21,8 @@ import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
-import { readFile, drainPendingOpenFiles } from "@/lib/tauri-commands";
+import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
+import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -35,6 +36,10 @@ import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { useUpdater } from "@/hooks/useUpdater";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
 import type { UndoAction } from "@/components/ui/UndoToast";
+import { useDiffReview } from "@/hooks/useDiffReview";
+import { DiffBanner } from "@/components/editor/DiffBanner";
+import { DiffNavChip } from "@/components/editor/DiffNavChip";
+import { DiffControls } from "@/components/editor/DiffControls";
 
 /**
  * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
@@ -103,12 +108,16 @@ export default function App() {
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
+  const [polarityMap, setPolarityMap] = useState<Map<string, "positive" | "corrective">>(new Map());
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [errorToast, setErrorToast] = useState<{ message: string; id: number } | null>(null);
   const errorIdRef = useRef(0);
   const undoIdRef = useRef(0);
   const highlightThread = useAnimatedPresence(!!focusHighlightId, 200);
   const lastHighlightRef = useRef<{ highlight: import("@/types/annotations").Highlight; notes: import("@/types/annotations").MarginNote[]; anchorRect: DOMRect | null } | null>(null);
+  const diffReview = useDiffReview();
+  const [diffControlState, setDiffControlState] = useState<{ changeId: string; top: number; right: number } | null>(null);
+  const diffReviewDocIdRef = useRef<string | null>(null);
 
   // Keep last valid highlight data for exit animation
   if (focusHighlightId && annotations.isLoaded) {
@@ -306,7 +315,18 @@ export default function App() {
   persistCorrectionsRef.current = settings.persistCorrections;
   const setContentExternalRef = useRef(doc.setContentExternal);
   setContentExternalRef.current = doc.setContentExternal;
+  const contentRef = useRef(doc.content);
+  contentRef.current = doc.content;
+  const diffReviewRef = useRef(diffReview);
+  diffReviewRef.current = diffReview;
   const isRestoringMarksRef = useRef(false);
+
+  // Reset diff review when switching documents
+  useEffect(() => {
+    diffReview.reset();
+    diffReviewDocIdRef.current = null;
+    setDiffControlState(null);
+  }, [diffReview.reset, doc.currentDoc?.id]);
 
   // Restore highlight marks in the editor when annotations load for a document.
   const lastRestoredDocId = useRef<string | null>(null);
@@ -425,6 +445,7 @@ export default function App() {
 
   // Wrap onUpdate to suppress dirty state during mark restoration
   const handleEditorUpdate = useCallback((md: string) => {
+    if (diffReviewRef.current.mode !== "idle") return;
     if (isRestoringMarksRef.current) return;
     doc.setContent(md);
   }, [doc.setContent]);
@@ -441,7 +462,20 @@ export default function App() {
 
     try {
       const newContent = await readFile(path);
-      setContentExternalRef.current(newContent);
+      if (currentDocRef.current?.id !== currentDoc.id) return;
+      const oldContent = contentRef.current;
+      const wasActive = diffReviewRef.current.mode !== "idle";
+      const entered = diffReviewRef.current.enterPending(oldContent, newContent);
+      if (entered) {
+        diffReviewDocIdRef.current = currentDoc.id;
+      } else if (wasActive) {
+        diffReviewRef.current.reset();
+        diffReviewDocIdRef.current = null;
+        setDiffControlState(null);
+      }
+      if (!entered && newContent !== oldContent) {
+        setContentExternalRef.current(newContent);
+      }
       // Update mtime baseline so focus fallback doesn't redundantly reload
       stat(path)
         .then((info) => {
@@ -494,6 +528,89 @@ export default function App() {
 
     return () => { void unlisten.then((fn) => fn()); };
   }, [doc.filePath, handleFileChanged]);
+
+  // Diff resolution: when review transitions to idle, apply final content
+  const prevDiffModeRef = useRef(diffReview.mode);
+  useEffect(() => {
+    const prevMode = prevDiffModeRef.current;
+    prevDiffModeRef.current = diffReview.mode;
+    if (diffReview.mode === "idle" && (prevMode === "pending" || prevMode === "reviewing")) {
+      const currentDoc = currentDocRef.current;
+      if (!currentDoc) return;
+      if (!diffReviewDocIdRef.current) return;
+      if (diffReviewDocIdRef.current !== currentDoc.id) return;
+      const finalContent = diffReview.getFinalContent();
+      const hasAccepted = diffReview.changes.some((c) => c.status === "accepted");
+      const hasRejected = diffReview.changes.some((c) => c.status === "rejected");
+      if (hasRejected) {
+        doc.setContent(finalContent);
+      } else {
+        setContentExternalRef.current(finalContent);
+      }
+      const ed = editorRef.current;
+      if (ed && !ed.isDestroyed) {
+        isRestoringMarksRef.current = true;
+        try {
+          ed.commands.setContent(finalContent);
+        } finally {
+          isRestoringMarksRef.current = false;
+        }
+      }
+      if (hasAccepted) {
+        lastRestoredDocId.current = currentDoc.id;
+      }
+      diffReviewDocIdRef.current = null;
+      diffReview.reset();
+      setDiffControlState(null);
+    }
+  }, [diffReview.mode, diffReview.changes, diffReview.getFinalContent, diffReview.reset, doc.setContent]);
+
+  // Toggle editor editable based on diff review mode
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(diffReview.mode === "idle", false);
+  }, [editor, diffReview.mode]);
+
+  const diffControlFromElement = useCallback((changeId: string, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    setDiffControlState({ changeId, top: rect.top, right: window.innerWidth - rect.right + 8 });
+  }, []);
+
+  // Scroll to current change and show controls during review
+  useEffect(() => {
+    if (diffReview.mode !== "reviewing") return;
+    const change = diffReviewRef.current.changes[diffReview.currentIndex];
+    if (!change) return;
+    const frameId = requestAnimationFrame(() => {
+      const scrollContainer = document.querySelector("[data-scroll-container]");
+      const el = scrollContainer?.querySelector(`[data-change-id="${change.id}"]`);
+      if (el instanceof HTMLElement) {
+        el.scrollIntoView({ block: "center" });
+        diffControlFromElement(change.id, el);
+      } else {
+        setDiffControlState(null);
+      }
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [diffReview.mode, diffReview.currentIndex]);
+
+  // Diff-click event handler + scroll dismiss
+  useEffect(() => {
+    if (diffReview.mode !== "reviewing") return;
+    const handleDiffClick = (e: Event) => {
+      const { changeId, element } = (e as CustomEvent).detail;
+      if (!changeId || !element) return;
+      diffControlFromElement(changeId, element as HTMLElement);
+    };
+    const scrollContainer = document.querySelector("[data-scroll-container]");
+    const handleScroll = () => setDiffControlState(null);
+    window.addEventListener("margin:diff-click", handleDiffClick);
+    scrollContainer?.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("margin:diff-click", handleDiffClick);
+      scrollContainer?.removeEventListener("scroll", handleScroll);
+    };
+  }, [diffReview.mode]);
 
   // Handle files opened via macOS "Open With" / double-click
   const openFilePathRef = useRef(doc.openFilePath);
@@ -802,6 +919,7 @@ export default function App() {
         editor,
         highlights,
         marginNotes,
+        polarityMap,
       });
 
       // Clipboard copy + best-effort MCP send (parallel, MCP failure won't block export)
@@ -816,6 +934,7 @@ export default function App() {
 
       let correctionsSaved = false;
       let correctionsFile = "";
+      let attemptedCorrectionPersist = false;
 
       if (persistCorrectionsRef.current && highlights.length > 0 && marginNotes.length > 0) {
         const notesByHighlight = new Map<string, string[]>();
@@ -839,14 +958,14 @@ export default function App() {
             notes,
             highlight_color: h.color,
             writing_type: writingType,
-            polarity: null,
+            polarity: polarityMap.get(h.id) ?? null,
           });
         }
 
         if (correctionInputs.length > 0) {
+          attemptedCorrectionPersist = true;
           const today = new Date().toISOString().slice(0, 10);
           correctionsFile = `corrections-${today}.jsonl`;
-          const { persistCorrections } = await import("@/lib/tauri-commands");
           try {
             await persistCorrections(
               correctionInputs,
@@ -857,14 +976,24 @@ export default function App() {
               today,
             );
             correctionsSaved = true;
+
+            // Auto-export writing rules after corrections persist
+            exportWritingRules().catch((err: unknown) =>
+              console.error("Auto-export writing rules failed:", err),
+            );
           } catch (err) {
             console.error("Failed to persist corrections:", err);
           }
         }
       }
 
-      // Clear annotations from editor and DB after export
-      if (highlights.length > 0) {
+      // Clear annotations from editor and DB after export (skip if correction persist failed)
+      const shouldClearAnnotations = shouldClearAnnotationsAfterExport({
+        highlightCount: highlights.length,
+        attemptedCorrectionPersist,
+        correctionsSaved,
+      });
+      if (shouldClearAnnotations) {
         // Strip highlight and marginNote marks from the editor
         const { state } = editor;
         const { tr } = state;
@@ -903,6 +1032,15 @@ export default function App() {
         tabsHook.snapshotActive();
       }
 
+      // Count polarity stats and clear
+      let positiveCount = 0;
+      let correctiveCount = 0;
+      for (const p of polarityMap.values()) {
+        if (p === "positive") positiveCount++;
+        else if (p === "corrective") correctiveCount++;
+      }
+      setPolarityMap(new Map());
+
       return {
         highlightCount: highlights.length,
         noteCount: marginNotes.length,
@@ -910,9 +1048,11 @@ export default function App() {
         correctionsSaved,
         correctionsFile,
         sentToClaude: mcpResult.sent,
+        positiveCount,
+        correctiveCount,
       };
     },
-    [editor, doc.currentDoc],
+    [editor, doc.currentDoc, polarityMap],
   );
 
   // Open a recent document from the sidebar (now goes through tabs)
@@ -1009,9 +1149,22 @@ export default function App() {
         ) : undefined
       }
     >
+      {diffReview.mode !== "idle" && (
+        <DiffBanner
+          changeCount={diffReview.changes.length}
+          pendingCount={diffReview.pendingCount}
+          updatedAt={diffReview.updatedAt}
+          onAcceptAll={diffReview.acceptAll}
+          onReview={diffReview.startReview}
+          onDismiss={diffReview.dismiss}
+          onRevertAll={diffReview.revertAll}
+          isReviewing={diffReview.mode === "reviewing"}
+        />
+      )}
+
       <Suspense fallback={<div className="reader-content" style={{ opacity: 0.3 }} />}>
         <Reader
-          content={doc.content}
+          content={diffReview.reviewContent ?? doc.content}
           onUpdate={handleEditorUpdate}
           isLoading={doc.isLoading}
           onEditorReady={handleEditorReady}
@@ -1025,16 +1178,53 @@ export default function App() {
         defaultColor={settings.defaultHighlightColor}
       />
 
+      {diffReview.mode === "reviewing" && (
+        <DiffNavChip
+          currentIndex={diffReview.currentIndex}
+          totalCount={diffReview.changes.length}
+          onPrev={diffReview.navigatePrev}
+          onNext={diffReview.navigateNext}
+        />
+      )}
+
+      {diffReview.mode === "reviewing" && diffControlState && (
+        <DiffControls
+          changeId={diffControlState.changeId}
+          top={diffControlState.top}
+          right={diffControlState.right}
+          onKeep={(id) => {
+            diffReview.acceptChange(id);
+            setDiffControlState(null);
+          }}
+          onRevert={(id) => {
+            diffReview.rejectChange(id);
+            setDiffControlState(null);
+          }}
+        />
+      )}
+
       {highlightThread.isMounted && lastHighlightRef.current && (() => {
         const { highlight, notes, anchorRect: rect } = lastHighlightRef.current;
         return (
           <HighlightThread
             highlight={highlight}
             notes={notes}
+            polarity={polarityMap.get(highlight.id) ?? null}
             onAddNote={annotations.createMarginNote}
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
             onDeleteHighlight={handleDeleteHighlight}
+            onSetPolarity={(highlightId, polarity) => {
+              setPolarityMap((prev) => {
+                const next = new Map(prev);
+                if (polarity === null) {
+                  next.delete(highlightId);
+                } else {
+                  next.set(highlightId, polarity);
+                }
+                return next;
+              });
+            }}
             onClose={() => {
               setFocusHighlightId(null);
               setAnchorRect(null);
