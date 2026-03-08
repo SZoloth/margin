@@ -1,5 +1,6 @@
 pub mod annotations;
 pub mod corrections;
+pub mod dashboard;
 pub mod documents;
 pub mod files;
 pub mod keep_local;

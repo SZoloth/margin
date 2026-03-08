@@ -261,3 +261,65 @@ export async function markRulesReviewed(ruleIds: string[]): Promise<number> {
 export async function markRulesUnreviewed(ruleIds: string[]): Promise<number> {
   return invoke<number>("mark_rules_unreviewed", { ruleIds });
 }
+
+// Dashboard types
+export interface TestRunSummary {
+  id: string;
+  timestamp: number;
+  mode: string;
+  ruleCount: number;
+  totalSamples: number;
+  avgMechanicalIssues: number;
+  avgDimensionScore: number;
+  avgMechanicalDelta: number | null;
+  avgDimensionDelta: number | null;
+  dimensionAveragesJson: string | null;
+  dimensionDeltasJson: string | null;
+  bestType: string | null;
+  worstType: string | null;
+  status: string;
+  createdAt: number;
+}
+
+export interface DashboardSummary {
+  latestRun: TestRunSummary | null;
+  recentRuns: TestRunSummary[];
+  ruleCount: number;
+}
+
+export interface TestRunTypeDetail {
+  id: string;
+  writingType: string;
+  sampleCount: number;
+  avgMechanicalIssues: number;
+  avgDimensionScore: number;
+  dimensionScoresJson: string | null;
+  mechanicalDelta: number | null;
+  dimensionDelta: number | null;
+  systematicViolationsJson: string | null;
+  createdAt: number;
+}
+
+export interface TestRunDetail {
+  run: TestRunSummary;
+  types: TestRunTypeDetail[];
+}
+
+export async function getDashboardSummary(limit?: number): Promise<DashboardSummary> {
+  return invoke<DashboardSummary>(
+    "get_dashboard_summary",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function getTestRunDetail(runId: string): Promise<TestRunDetail> {
+  return invoke<TestRunDetail>("get_test_run_detail", { runId });
+}
+
+export async function startTestRun(): Promise<string> {
+  return invoke<string>("start_test_run");
+}
+
+export async function exportDashboardMarkdown(): Promise<string> {
+  return invoke<string>("export_dashboard_markdown");
+}

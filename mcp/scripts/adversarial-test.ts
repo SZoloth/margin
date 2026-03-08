@@ -306,8 +306,11 @@ export function runAdversarialTests(
 ): AdversarialResult {
   const modeLabel = mode === "coached" ? "coached" : "uncoached";
   const results: TypeResult[] = [];
+  const total = types.filter((t) => ADVERSARIAL_PROMPTS[t]).length * SAMPLES_PER_TYPE;
+  let completed = 0;
 
-  for (const type of types) {
+  for (let typeIdx = 0; typeIdx < types.length; typeIdx++) {
+    const type = types[typeIdx];
     const prompt = ADVERSARIAL_PROMPTS[type];
     if (!prompt) {
       console.error(
@@ -321,6 +324,9 @@ export function runAdversarialTests(
     console.log(
       `${CYAN}Testing ${BOLD}${type}${RESET} ${DIM}(${modeLabel})${RESET}${CYAN}...${RESET}`
     );
+    process.stderr.write(
+      `PROGRESS:${JSON.stringify({ event: "start-type", writingType: type, typeIndex: typeIdx + 1, typeTotal: types.filter((t) => ADVERSARIAL_PROMPTS[t]).length })}\n`
+    );
 
     const samples: AdversarialSample[] = [];
 
@@ -328,10 +334,14 @@ export function runAdversarialTests(
       process.stdout.write(
         `  ${DIM}Sample ${i + 1}/${SAMPLES_PER_TYPE}...${RESET}`
       );
+      process.stderr.write(
+        `PROGRESS:${JSON.stringify({ event: "sample", writingType: type, sample: i + 1, step: modeLabel, completed, total })}\n`
+      );
       const text =
         mode === "coached"
           ? generateSample(writingRules, type, prompt)
           : generateUncoached(type, prompt);
+      completed++;
 
       if (!text) {
         console.log(` ${RED}failed${RESET}`);
@@ -433,14 +443,21 @@ function avgDimensions(samples: { compliance: ComplianceResult }[]): Record<stri
 
 export function runComparisonTests(types: string[]): ComparisonResult {
   const results: ComparisonTypeResult[] = [];
+  const validTypes = types.filter((t) => ADVERSARIAL_PROMPTS[t]);
+  const total = validTypes.length * SAMPLES_PER_TYPE * 2;
+  let completed = 0;
 
-  for (const type of types) {
+  for (let typeIdx = 0; typeIdx < types.length; typeIdx++) {
+    const type = types[typeIdx];
     const prompt = ADVERSARIAL_PROMPTS[type];
     if (!prompt) continue;
 
     const writingRules = loadWritingRulesForType(type);
 
     console.log(`${CYAN}Comparing ${BOLD}${type}${RESET}${CYAN}...${RESET}`);
+    process.stderr.write(
+      `PROGRESS:${JSON.stringify({ event: "start-type", writingType: type, typeIndex: typeIdx + 1, typeTotal: validTypes.length })}\n`
+    );
     const samples: ComparisonSample[] = [];
 
     for (let i = 0; i < SAMPLES_PER_TYPE; i++) {
@@ -448,13 +465,21 @@ export function runComparisonTests(types: string[]): ComparisonResult {
 
       // Uncoached
       process.stdout.write(` ${DIM}[uncoached...${RESET}`);
+      process.stderr.write(
+        `PROGRESS:${JSON.stringify({ event: "sample", writingType: type, sample: i + 1, step: "uncoached", completed, total })}\n`
+      );
       const uncoachedText = generateUncoached(type, prompt);
       const uncoachedCompliance = uncoachedText ? runComplianceCheck(uncoachedText, type) : runComplianceCheck("", type);
+      completed++;
 
       // Coached
       process.stdout.write(`${DIM}coached...]${RESET}`);
+      process.stderr.write(
+        `PROGRESS:${JSON.stringify({ event: "sample", writingType: type, sample: i + 1, step: "coached", completed, total })}\n`
+      );
       const coachedText = generateSample(writingRules, type, prompt);
       const coachedCompliance = coachedText ? runComplianceCheck(coachedText, type) : runComplianceCheck("", type);
+      completed++;
 
       const uIssues = uncoachedCompliance.summary.mechanicalIssues;
       const cIssues = coachedCompliance.summary.mechanicalIssues;
@@ -626,12 +651,17 @@ function main(): void {
       `  --types      Comma-separated list of types to test (default: all 9)`
     );
     console.log(
+      `  --json-output  Write structured JSON result to file path`
+    );
+    console.log(
       `\nAvailable types: ${Object.keys(ADVERSARIAL_PROMPTS).join(", ")}`
     );
     process.exit(0);
   }
 
   const save = args.includes("--save");
+  const jsonOutputIdx = args.indexOf("--json-output");
+  const jsonOutputPath = (jsonOutputIdx !== -1 && args[jsonOutputIdx + 1]) ? args[jsonOutputIdx + 1] : null;
   const modeIdx = args.indexOf("--mode");
   const mode = (modeIdx !== -1 && args[modeIdx + 1]) ? args[modeIdx + 1] : "coached";
   const typesIdx = args.indexOf("--types");
@@ -656,6 +686,9 @@ function main(): void {
       writeFileSync(outPath, JSON.stringify(result, null, 2));
       console.log(`${GREEN}Saved comparison to ${outPath}${RESET}`);
     }
+    if (jsonOutputPath) {
+      writeFileSync(jsonOutputPath, JSON.stringify(result, null, 2));
+    }
   } else {
     const testMode = mode === "uncoached" ? "uncoached" : "coached";
     const result = runAdversarialTests(types, testMode as "coached" | "uncoached");
@@ -666,6 +699,9 @@ function main(): void {
       const outPath = join(dir, `${testMode}-${date}.json`);
       writeFileSync(outPath, JSON.stringify(result, null, 2));
       console.log(`${GREEN}Saved ${testMode} results to ${outPath}${RESET}`);
+    }
+    if (jsonOutputPath) {
+      writeFileSync(jsonOutputPath, JSON.stringify(result, null, 2));
     }
   }
 }
