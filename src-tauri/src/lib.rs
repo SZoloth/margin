@@ -85,6 +85,8 @@ pub fn run() {
             commands::writing_rules::export_voice_profile,
             commands::writing_rules::mark_rules_reviewed,
             commands::writing_rules::mark_rules_unreviewed,
+            commands::seed_rules::seed_rules_from_guide,
+            commands::seed_rules::open_style_guide_dialog,
             watcher::watch_file,
             watcher::unwatch_file,
             drain_pending_open_files,
