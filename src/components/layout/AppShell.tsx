@@ -37,6 +37,9 @@ interface AppShellProps {
   editor: Editor | null;
   findBarOpen: boolean;
   onCloseFindBar: () => void;
+  // Onboarding
+  welcomeBar?: React.ReactNode;
+  hasSampleContent?: boolean;
 }
 
 export function AppShell({
@@ -63,6 +66,8 @@ export function AppShell({
   editor,
   findBarOpen,
   onCloseFindBar,
+  welcomeBar,
+  hasSampleContent,
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -146,7 +151,7 @@ export function AppShell({
   }, []);
 
   const backdrop = useAnimatedPresence(isMobile && sidebarOpen, 200);
-  const hasContent = currentDoc !== null;
+  const hasContent = currentDoc !== null || !!hasSampleContent;
   const showExport = !!hasAnnotations && !!onExport;
   const exportBtn = useAnimatedPresence(showExport, 150);
   const emptyState = useAnimatedPresence(!hasContent, 300);
@@ -350,6 +355,8 @@ export function AppShell({
 
         <FindBar editor={editor} isOpen={findBarOpen} onClose={onCloseFindBar} />
 
+        {welcomeBar}
+
         {/* Scrollable reader area + empty state wrapper */}
         <div className="flex-1 min-h-0" style={{ position: "relative" }}>
           {/* Empty state: absolutely fills the wrapper, not the scroll container */}
@@ -411,7 +418,7 @@ export function AppShell({
                     color: "var(--color-text-secondary)",
                   }}
                 >
-                  Open a file to start reading, or drop a markdown file anywhere.
+                  Open a file with ⌘O to start reading.
                 </p>
                 <div style={{ marginTop: 12 }}>
                   <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd>
