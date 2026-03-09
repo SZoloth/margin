@@ -9,7 +9,7 @@ export function RunButton({
   onRun: () => void;
   progress?: TestProgress | null;
 }) {
-  const pct = progress ? Math.round((progress.completed / progress.total) * 100) : 0;
+  const pct = progress && progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
 
   return (
     <div className="flex flex-col items-center gap-2">

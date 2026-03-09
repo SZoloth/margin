@@ -9,12 +9,14 @@ function barColor(score: number): string {
 }
 
 export function DimensionBars({ run }: { run: TestRunSummary }) {
-  const averages: Record<string, number> = run.dimensionAveragesJson
-    ? JSON.parse(run.dimensionAveragesJson)
-    : {};
-  const deltas: Record<string, number> | null = run.dimensionDeltasJson
-    ? JSON.parse(run.dimensionDeltasJson)
-    : null;
+  let averages: Record<string, number> = {};
+  let deltas: Record<string, number> | null = null;
+  try {
+    if (run.dimensionAveragesJson) averages = JSON.parse(run.dimensionAveragesJson);
+    if (run.dimensionDeltasJson) deltas = JSON.parse(run.dimensionDeltasJson);
+  } catch {
+    console.error("Failed to parse dimension JSON");
+  }
 
   return (
     <div>

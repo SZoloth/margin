@@ -101,7 +101,7 @@ pub fn get_dashboard_summary_inner(
     let recent_runs: Vec<TestRunSummary> = stmt
         .query_map([limit], |row| row_to_run_summary(row))
         .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
+        .filter_map(|r| r.map_err(|e| eprintln!("dashboard row parse error: {e}")).ok())
         .collect();
 
     let latest_run = recent_runs.first().cloned();
@@ -159,7 +159,7 @@ pub fn get_test_run_detail_inner(
             })
         })
         .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
+        .filter_map(|r| r.map_err(|e| eprintln!("dashboard row parse error: {e}")).ok())
         .collect();
 
     Ok(TestRunDetail { run, types })
@@ -284,7 +284,21 @@ pub async fn start_test_run(
     let tmp_file = std::env::temp_dir().join(format!("margin-test-run-{}.json", &run_id_clone));
     let tmp_path = tmp_file.to_string_lossy().to_string();
 
-    let script_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mcp/scripts");
+    // In dev builds, resolve relative to Cargo manifest. In production, resolve
+    // relative to the executable (which lives in Margin.app/Contents/MacOS/).
+    let script_dir = {
+        let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mcp/scripts");
+        if dev_path.exists() {
+            dev_path
+        } else if let Ok(exe) = std::env::current_exe() {
+            // Production: exe is at Margin.app/Contents/MacOS/margin
+            // Repo mcp/scripts won't exist — this feature requires a dev environment
+            let prod_path = exe.parent().unwrap_or(std::path::Path::new(".")).join("../Resources/mcp/scripts");
+            prod_path
+        } else {
+            dev_path
+        }
+    };
 
     std::thread::spawn(move || {
         use tauri::Emitter;
@@ -611,7 +625,7 @@ fn process_test_results(
     let dim_jsons: Vec<Option<String>> = dim_stmt
         .query_map([run_id], |row| row.get(0))
         .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
+        .filter_map(|r| r.map_err(|e| eprintln!("dashboard row parse error: {e}")).ok())
         .collect();
 
     let dimension_averages_json = {

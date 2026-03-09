@@ -45,9 +45,10 @@ export function TypeBreakdown({ run }: { run: TestRunSummary }) {
           </thead>
           <tbody>
             {types.map((t) => {
-              const violations: string[] = t.systematicViolationsJson
-                ? JSON.parse(t.systematicViolationsJson)
-                : [];
+              let violations: string[] = [];
+              try {
+                if (t.systematicViolationsJson) violations = JSON.parse(t.systematicViolationsJson);
+              } catch { /* ignore malformed JSON */ }
               return (
                 <tr key={t.id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-surface-subtle)]">
                   <td className="px-4 py-2.5 font-medium text-[var(--color-text-primary)]">

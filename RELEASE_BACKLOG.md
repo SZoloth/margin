@@ -4,14 +4,19 @@ Unreleased changes ready to ship.
 
 ## Ready (main)
 
-### Merged to main (unreleased)
+### Uncommitted
+
+(none)
+
+## Shipped
+
+### v1.14.0 (2026-03-09)
 
 - `feat: seed writing rules from style guide` — upload/paste style guide, LLM extraction into DB
 - `feat: first-run onboarding with sample document` — WelcomeBar, OnboardingToast, sample content
 - `feat: writing quality dashboard` — test run tracking, progress feedback, error surfacing
 - `fix: improve style memory UI` — CorrectionsTab/RulesTab improvements, design token migration
-
-## Shipped
+- `fix: review fixes` — division-by-zero guard in RunButton, JSON.parse safety in dashboard, script path resolution for production builds
 
 ### v1.13.1 (2026-03-07)
 
