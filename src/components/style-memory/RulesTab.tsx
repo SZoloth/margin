@@ -10,8 +10,11 @@ import {
 
 type RulesView = "unreviewed" | "all";
 
+type RulesFilterHint = "unreviewed" | "all" | null;
+
 interface RulesTabProps {
   onStatsChange: (stats: { ruleCount: number; unreviewedCount: number }) => void;
+  filterHint?: RulesFilterHint;
 }
 
 const SEVERITY_VALUES: WritingRuleSeverity[] = ["must-fix", "should-fix", "nice-to-fix"];
@@ -418,7 +421,7 @@ function formatCategoryLabel(category: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function RulesTab({ onStatsChange }: RulesTabProps) {
+export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
   const [rules, setRules] = useState<WritingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
@@ -427,9 +430,22 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const exportTimeoutRef = useRef<number | null>(null);
   const loadedRef = useRef(false);
+  const prevFilterHintRef = useRef(filterHint);
 
   const unreviewedCount = useMemo(() => rules.filter((r) => r.reviewedAt == null).length, [rules]);
   const [view, setView] = useState<RulesView>("unreviewed");
+
+  useEffect(() => {
+    if (filterHint === prevFilterHintRef.current) return;
+    prevFilterHintRef.current = filterHint;
+    if (filterHint === "unreviewed") {
+      setView("unreviewed");
+      setSeverityFilter(null);
+    } else if (filterHint === "all") {
+      setView("all");
+      setSeverityFilter(null);
+    }
+  }, [filterHint]);
 
   // Smart default: show "all" if nothing to review
   const effectiveView = view === "unreviewed" && unreviewedCount === 0 && rules.length > 0 ? "all" : view;

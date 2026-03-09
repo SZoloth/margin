@@ -15,8 +15,11 @@ const FILTER_CHIP_TYPES = WRITING_TYPES.slice(0, 6);
 
 type CorrectionView = "inbox" | "archive";
 
+type CorrectionFilterHint = "unsynthesized" | "untagged" | "all" | null;
+
 interface CorrectionsTabProps {
   onStatsChange: (stats: { total: number; documentCount: number; untaggedCount: number; unsynthesizedCount: number }) => void;
+  filterHint?: CorrectionFilterHint;
 }
 
 function formatDateLabel(timestamp: number, todayMs: number, yesterdayMs: number): string {
@@ -338,7 +341,7 @@ function highlightInContext(context: string, original: string): React.ReactNode 
   );
 }
 
-export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
+export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProps) {
   const [corrections, setCorrections] = useState<CorrectionDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -347,7 +350,25 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkTypeChips, setShowBulkTypeChips] = useState(false);
   const [view, setView] = useState<CorrectionView>("inbox");
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
   const loadedRef = useRef(false);
+  const prevFilterHintRef = useRef(filterHint);
+
+  useEffect(() => {
+    if (filterHint === prevFilterHintRef.current) return;
+    prevFilterHintRef.current = filterHint;
+    if (filterHint === "untagged") {
+      setView("inbox");
+      setActiveFilter(null);
+      setUntaggedOnly(true);
+    } else if (filterHint === "unsynthesized") {
+      setView("inbox");
+      setActiveFilter(null);
+      setUntaggedOnly(false);
+    } else {
+      setUntaggedOnly(false);
+    }
+  }, [filterHint]);
 
   const loadCorrections = useCallback(async (pageLimit: number) => {
     setLoading(true);
@@ -394,6 +415,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
       // View filter
       if (view === "inbox" && c.synthesizedAt != null) return false;
       if (view === "archive" && c.synthesizedAt == null) return false;
+      if (untaggedOnly && c.writingType) return false;
       if (activeFilter && c.writingType !== activeFilter) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
@@ -402,7 +424,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
       }
       return true;
     }),
-    [corrections, view, activeFilter, searchText],
+    [corrections, view, activeFilter, searchText, untaggedOnly],
   );
 
   const dateGroups = useMemo(() => groupByDate(filtered), [filtered]);
