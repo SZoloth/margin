@@ -10,8 +10,11 @@ import {
 
 type RulesView = "unreviewed" | "all";
 
+type RulesFilterHint = "unreviewed" | "all" | null;
+
 interface RulesTabProps {
   onStatsChange: (stats: { ruleCount: number; unreviewedCount: number }) => void;
+  filterHint?: RulesFilterHint;
 }
 
 const SEVERITY_VALUES: WritingRuleSeverity[] = ["must-fix", "should-fix", "nice-to-fix"];
@@ -26,7 +29,7 @@ function SeverityBadge({ severity }: { severity: string }) {
       data-severity-badge
       style={{
         padding: "2px 8px",
-        fontSize: 12,
+        fontSize: "var(--text-xs)",
         fontWeight: 600,
         borderRadius: 100,
         textTransform: "uppercase",
@@ -49,7 +52,7 @@ function SourceBadge({ source }: { source: string }) {
   return (
     <span
       style={{
-        fontSize: 10,
+        fontSize: "var(--text-2xs)",
         color: "var(--color-text-secondary)",
         opacity: 0.7,
         flexShrink: 0,
@@ -62,7 +65,7 @@ function SourceBadge({ source }: { source: string }) {
 
 function SignalBar({ count, max = 7 }: { count: number; max?: number }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--color-text-secondary)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "var(--text-2xs)", color: "var(--color-text-secondary)" }}>
       <div style={{ display: "flex", gap: 1 }}>
         {Array.from({ length: max }, (_, i) => (
           <div
@@ -94,7 +97,7 @@ function ViewToggle({
 }) {
   const buttonBase: React.CSSProperties = {
     padding: "3px 10px",
-    fontSize: 11,
+    fontSize: "var(--text-xxs)",
     border: "1px solid var(--color-border)",
     cursor: "pointer",
     transition: "all 100ms",
@@ -189,7 +192,7 @@ function RuleCard({
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "4px 8px",
-    fontSize: 12,
+    fontSize: "var(--text-xs)",
     border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-sm)",
     background: "var(--color-page)",
@@ -202,12 +205,12 @@ function RuleCard({
       <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Rule text</label>
+            <label style={{ fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Rule text</label>
             <input value={editFields.ruleText} onChange={(e) => setEditFields({ ...editFields, ruleText: e.target.value })} style={inputStyle} />
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Severity</label>
+              <label style={{ fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Severity</label>
               <select
                 value={editFields.severity}
                 onChange={(e) => setEditFields({ ...editFields, severity: e.target.value as WritingRule["severity"] })}
@@ -219,29 +222,29 @@ function RuleCard({
               </select>
             </div>
             <div style={{ flex: 2 }}>
-              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>When to apply</label>
+              <label style={{ fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>When to apply</label>
               <input value={editFields.whenToApply} onChange={(e) => setEditFields({ ...editFields, whenToApply: e.target.value })} style={inputStyle} placeholder="When to apply..." />
             </div>
           </div>
           <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Why</label>
+            <label style={{ fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Why</label>
             <input value={editFields.why} onChange={(e) => setEditFields({ ...editFields, why: e.target.value })} style={inputStyle} placeholder="Why this matters..." />
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Before</label>
+              <label style={{ fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Before</label>
               <input value={editFields.exampleBefore} onChange={(e) => setEditFields({ ...editFields, exampleBefore: e.target.value })} style={inputStyle} placeholder="Before example..." />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>After</label>
+              <label style={{ fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>After</label>
               <input value={editFields.exampleAfter} onChange={(e) => setEditFields({ ...editFields, exampleAfter: e.target.value })} style={inputStyle} placeholder="After example..." />
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button type="button" onClick={handleSave} style={{ padding: "4px 12px", fontSize: 11, background: "var(--color-text-primary)", color: "var(--color-page)", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+            <button type="button" onClick={handleSave} style={{ padding: "4px 12px", fontSize: "var(--text-xxs)", background: "var(--color-text-primary)", color: "var(--color-page)", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
               Save
             </button>
-            <button type="button" onClick={handleCancel} style={{ padding: "4px 12px", fontSize: 11, background: "var(--color-page)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+            <button type="button" onClick={handleCancel} style={{ padding: "4px 12px", fontSize: "var(--text-xxs)", background: "var(--color-page)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -255,7 +258,7 @@ function RuleCard({
   return (
     <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", flex: 1, lineHeight: 1.4 }}>
+        <div style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--color-text-primary)", flex: 1, lineHeight: 1.4 }}>
           {rule.ruleText}
         </div>
         <SourceBadge source={rule.source} />
@@ -263,14 +266,14 @@ function RuleCard({
       </div>
 
       {rule.whenToApply && (
-        <div style={{ fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
-          <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: 9, letterSpacing: "0.3px" }}>When </strong>
+        <div style={{ fontSize: "var(--text-xxs)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
+          <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: "var(--text-3xs)", letterSpacing: "0.3px" }}>When </strong>
           {rule.whenToApply}
         </div>
       )}
       {rule.why && (
-        <div style={{ fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
-          <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: 9, letterSpacing: "0.3px" }}>Why </strong>
+        <div style={{ fontSize: "var(--text-xxs)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
+          <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: "var(--text-3xs)", letterSpacing: "0.3px" }}>Why </strong>
           {rule.why}
         </div>
       )}
@@ -286,7 +289,7 @@ function RuleCard({
             padding: "8px 12px",
             background: "var(--color-sidebar, var(--hover-bg))",
             borderRadius: "var(--radius-sm)",
-            fontSize: 11,
+            fontSize: "var(--text-xxs)",
             lineHeight: 1.5,
           }}
         >
@@ -312,7 +315,7 @@ function RuleCard({
             type="button"
             onClick={() => onMarkReviewed(rule.id)}
             style={{
-              fontSize: 10,
+              fontSize: "var(--text-2xs)",
               color: "var(--color-accent)",
               background: "none",
               border: "none",
@@ -329,7 +332,7 @@ function RuleCard({
           type="button"
           onClick={() => setEditing(true)}
           style={{
-            fontSize: 10,
+            fontSize: "var(--text-2xs)",
             color: "var(--color-text-secondary)",
             background: "none",
             border: "none",
@@ -346,7 +349,7 @@ function RuleCard({
             type="button"
             onClick={() => setConfirmDelete(true)}
             style={{
-              fontSize: 10,
+              fontSize: "var(--text-2xs)",
               color: "var(--color-text-secondary)",
               background: "none",
               border: "none",
@@ -367,7 +370,7 @@ function RuleCard({
                 setConfirmDelete(false);
               }}
               style={{
-                fontSize: 10,
+                fontSize: "var(--text-2xs)",
                 color: "var(--color-danger, #ef4444)",
                 background: "none",
                 border: "none",
@@ -382,7 +385,7 @@ function RuleCard({
               type="button"
               onClick={() => setConfirmDelete(false)}
               style={{
-                fontSize: 10,
+                fontSize: "var(--text-2xs)",
                 color: "var(--color-text-secondary)",
                 background: "none",
                 border: "none",

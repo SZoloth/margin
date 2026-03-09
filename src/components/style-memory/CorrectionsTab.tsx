@@ -15,8 +15,11 @@ const FILTER_CHIP_TYPES = WRITING_TYPES.slice(0, 6);
 
 type CorrectionView = "inbox" | "archive";
 
+type CorrectionFilterHint = "unsynthesized" | "untagged" | "all" | null;
+
 interface CorrectionsTabProps {
   onStatsChange: (stats: { total: number; documentCount: number; untaggedCount: number; unsynthesizedCount: number }) => void;
+  filterHint?: CorrectionFilterHint;
 }
 
 function formatDateLabel(timestamp: number, todayMs: number, yesterdayMs: number): string {
@@ -85,7 +88,7 @@ function WritingTypeChips({
           }}
           style={{
             padding: "1px 6px",
-            fontSize: 10,
+            fontSize: "var(--text-2xs)",
             fontWeight: value === wt.value ? 600 : 400,
             color:
               value === wt.value
@@ -122,7 +125,7 @@ function ViewToggle({
 }) {
   const buttonBase: React.CSSProperties = {
     padding: "3px 10px",
-    fontSize: 11,
+    fontSize: "var(--text-xxs)",
     border: "1px solid var(--color-border)",
     cursor: "pointer",
     transition: "all 100ms",
@@ -217,7 +220,7 @@ function CorrectionCard({
         <div
           style={{
             fontFamily: "'Newsreader', Georgia, serif",
-            fontSize: 15,
+            fontSize: "var(--text-md)",
             fontStyle: "italic",
             color: "var(--color-text-secondary)",
             lineHeight: 1.5,
@@ -227,11 +230,11 @@ function CorrectionCard({
           &ldquo;{correction.originalText}&rdquo;
         </div>
         {correction.notes.length > 0 && (
-          <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: 14, color: "var(--color-text-primary)", lineHeight: 1.4, marginBottom: 6 }}>
+          <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: "var(--text-base)", color: "var(--color-text-primary)", lineHeight: 1.4, marginBottom: 6 }}>
             {correction.notes.join("; ")}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-xs)", color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
           <button
             type="button"
             aria-expanded={showTypeChips}
@@ -242,7 +245,7 @@ function CorrectionCard({
             }}
             style={{
               padding: "1px 7px",
-              fontSize: 12,
+              fontSize: "var(--text-xs)",
               color: "var(--color-text-secondary)",
               backgroundColor: correction.writingType ? "var(--hover-bg)" : "transparent",
               border: correction.writingType
@@ -269,7 +272,7 @@ function CorrectionCard({
             }}
             style={{
               padding: 0,
-              fontSize: 10,
+              fontSize: "var(--text-2xs)",
               color: "var(--color-text-secondary)",
               background: "none",
               border: "none",
@@ -303,12 +306,12 @@ function CorrectionCard({
               background: "var(--color-sidebar, var(--hover-bg))",
               borderRadius: "var(--radius-sm)",
               borderLeft: "3px solid var(--color-border)",
-              fontSize: 12,
+              fontSize: "var(--text-xs)",
               color: "var(--color-text-secondary)",
               lineHeight: 1.6,
             }}
           >
-            <div style={{ marginBottom: 6, fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+            <div style={{ marginBottom: 6, fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>
               Extended context
             </div>
             {highlightInContext(correction.extendedContext, correction.originalText)}
@@ -338,7 +341,7 @@ function highlightInContext(context: string, original: string): React.ReactNode 
   );
 }
 
-export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
+export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProps) {
   const [corrections, setCorrections] = useState<CorrectionDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -347,7 +350,25 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkTypeChips, setShowBulkTypeChips] = useState(false);
   const [view, setView] = useState<CorrectionView>("inbox");
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
   const loadedRef = useRef(false);
+  const prevFilterHintRef = useRef(filterHint);
+
+  useEffect(() => {
+    if (filterHint === prevFilterHintRef.current) return;
+    prevFilterHintRef.current = filterHint;
+    if (filterHint === "untagged") {
+      setView("inbox");
+      setActiveFilter(null);
+      setUntaggedOnly(true);
+    } else if (filterHint === "unsynthesized") {
+      setView("inbox");
+      setActiveFilter(null);
+      setUntaggedOnly(false);
+    } else {
+      setUntaggedOnly(false);
+    }
+  }, [filterHint]);
 
   const loadCorrections = useCallback(async (pageLimit: number) => {
     setLoading(true);
@@ -394,6 +415,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
       // View filter
       if (view === "inbox" && c.synthesizedAt != null) return false;
       if (view === "archive" && c.synthesizedAt == null) return false;
+      if (untaggedOnly && c.writingType) return false;
       if (activeFilter && c.writingType !== activeFilter) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
@@ -402,7 +424,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
       }
       return true;
     }),
-    [corrections, view, activeFilter, searchText],
+    [corrections, view, activeFilter, searchText, untaggedOnly],
   );
 
   const dateGroups = useMemo(() => groupByDate(filtered), [filtered]);
@@ -528,7 +550,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
           archiveCount={archiveCount}
         />
         <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
-          <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 7, color: "var(--color-text-secondary)", fontSize: 12, pointerEvents: "none" }}>
+          <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 7, color: "var(--color-text-secondary)", fontSize: "var(--text-xs)", pointerEvents: "none" }}>
             &#x1F50D;
           </span>
           <input
@@ -539,7 +561,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
             style={{
               width: "100%",
               padding: "6px 10px 6px 28px",
-              fontSize: 12,
+              fontSize: "var(--text-xs)",
               border: "1px solid var(--color-border)",
               borderRadius: "var(--radius-sm)",
               background: "var(--color-page)",
@@ -555,7 +577,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
             aria-pressed={!activeFilter}
             style={{
               padding: "3px 10px",
-              fontSize: 11,
+              fontSize: "var(--text-xxs)",
               border: "1px solid var(--color-border)",
               borderRadius: 100,
               background: !activeFilter ? "var(--color-text-primary)" : "var(--color-page)",
@@ -574,7 +596,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
               aria-pressed={activeFilter === wt.value}
               style={{
                 padding: "3px 10px",
-                fontSize: 11,
+                fontSize: "var(--text-xxs)",
                 border: "1px solid var(--color-border)",
                 borderRadius: 100,
                 background: activeFilter === wt.value ? "var(--color-text-primary)" : "var(--color-page)",
@@ -590,7 +612,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
         <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           {selectedIds.size > 0 && (
             <>
-              <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: "var(--text-xxs)", color: "var(--color-text-secondary)" }}>
                 {selectedIds.size} selected
               </span>
               {view === "archive" && (
@@ -599,7 +621,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                   onClick={handleBulkRequeue}
                   style={{
                     padding: "4px 10px",
-                    fontSize: 11,
+                    fontSize: "var(--text-xxs)",
                     border: "1px solid var(--color-border)",
                     borderRadius: "var(--radius-sm)",
                     background: "var(--color-page)",
@@ -617,7 +639,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                 aria-controls="corrections-bulk-tag-chips"
                 style={{
                   padding: "4px 10px",
-                  fontSize: 11,
+                  fontSize: "var(--text-xxs)",
                   border: "1px solid var(--color-border)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
@@ -632,7 +654,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                 onClick={handleBulkDelete}
                 style={{
                   padding: "4px 10px",
-                  fontSize: 11,
+                  fontSize: "var(--text-xxs)",
                   border: "1px solid var(--color-danger, #ef4444)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
@@ -658,11 +680,11 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
       <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
         <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 32px 64px" }}>
           {loading && corrections.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px" }}>
+            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px" }}>
               Loading...
             </div>
           ) : emptyMessage || filtered.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "64px 32px", lineHeight: 1.6 }}>
+            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px", lineHeight: 1.6 }}>
               {emptyMessage ?? "No corrections match your filters."}
             </div>
           ) : (
@@ -671,7 +693,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                 <div key={dateLabel}>
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: "var(--text-xs)",
                       fontWeight: 600,
                       color: "var(--color-text-tertiary)",
                       textTransform: "uppercase",
@@ -703,7 +725,7 @@ export function CorrectionsTab({ onStatsChange }: CorrectionsTabProps) {
                     display: "block",
                     margin: "16px auto",
                     padding: "8px 24px",
-                    fontSize: 12,
+                    fontSize: "var(--text-xs)",
                     color: "var(--color-text-secondary)",
                     backgroundColor: "var(--hover-bg)",
                     border: "1px solid var(--color-border)",
