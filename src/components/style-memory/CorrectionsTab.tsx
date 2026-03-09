@@ -125,7 +125,7 @@ function ViewToggle({
 }) {
   const buttonBase: React.CSSProperties = {
     padding: "3px 10px",
-    fontSize: "var(--text-xxs)",
+    fontSize: "var(--text-1xs)",
     border: "1px solid var(--color-border)",
     cursor: "pointer",
     transition: "all 100ms",
@@ -577,7 +577,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
             aria-pressed={!activeFilter}
             style={{
               padding: "3px 10px",
-              fontSize: "var(--text-xxs)",
+              fontSize: "var(--text-1xs)",
               border: "1px solid var(--color-border)",
               borderRadius: 100,
               background: !activeFilter ? "var(--color-text-primary)" : "var(--color-page)",
@@ -596,7 +596,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
               aria-pressed={activeFilter === wt.value}
               style={{
                 padding: "3px 10px",
-                fontSize: "var(--text-xxs)",
+                fontSize: "var(--text-1xs)",
                 border: "1px solid var(--color-border)",
                 borderRadius: 100,
                 background: activeFilter === wt.value ? "var(--color-text-primary)" : "var(--color-page)",
@@ -612,7 +612,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
         <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           {selectedIds.size > 0 && (
             <>
-              <span style={{ fontSize: "var(--text-xxs)", color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: "var(--text-1xs)", color: "var(--color-text-secondary)" }}>
                 {selectedIds.size} selected
               </span>
               {view === "archive" && (
@@ -621,7 +621,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
                   onClick={handleBulkRequeue}
                   style={{
                     padding: "4px 10px",
-                    fontSize: "var(--text-xxs)",
+                    fontSize: "var(--text-1xs)",
                     border: "1px solid var(--color-border)",
                     borderRadius: "var(--radius-sm)",
                     background: "var(--color-page)",
@@ -639,7 +639,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
                 aria-controls="corrections-bulk-tag-chips"
                 style={{
                   padding: "4px 10px",
-                  fontSize: "var(--text-xxs)",
+                  fontSize: "var(--text-1xs)",
                   border: "1px solid var(--color-border)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
@@ -654,7 +654,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
                 onClick={handleBulkDelete}
                 style={{
                   padding: "4px 10px",
-                  fontSize: "var(--text-xxs)",
+                  fontSize: "var(--text-1xs)",
                   border: "1px solid var(--color-danger, #ef4444)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",

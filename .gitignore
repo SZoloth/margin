@@ -16,3 +16,5 @@ tsconfig.tsbuildinfo
 dogfood-output/
 docs/ai-integration-exploration.md
 .research/
+.agents/
+cli/cli

@@ -97,7 +97,7 @@ function ViewToggle({
 }) {
   const buttonBase: React.CSSProperties = {
     padding: "3px 10px",
-    fontSize: "var(--text-xxs)",
+    fontSize: "var(--text-1xs)",
     border: "1px solid var(--color-border)",
     cursor: "pointer",
     transition: "all 100ms",
@@ -241,10 +241,10 @@ function RuleCard({
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button type="button" onClick={handleSave} style={{ padding: "4px 12px", fontSize: "var(--text-xxs)", background: "var(--color-text-primary)", color: "var(--color-page)", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+            <button type="button" onClick={handleSave} style={{ padding: "4px 12px", fontSize: "var(--text-1xs)", background: "var(--color-text-primary)", color: "var(--color-page)", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
               Save
             </button>
-            <button type="button" onClick={handleCancel} style={{ padding: "4px 12px", fontSize: "var(--text-xxs)", background: "var(--color-page)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+            <button type="button" onClick={handleCancel} style={{ padding: "4px 12px", fontSize: "var(--text-1xs)", background: "var(--color-page)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
               Cancel
             </button>
           </div>
@@ -266,13 +266,13 @@ function RuleCard({
       </div>
 
       {rule.whenToApply && (
-        <div style={{ fontSize: "var(--text-xxs)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
+        <div style={{ fontSize: "var(--text-1xs)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
           <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: "var(--text-3xs)", letterSpacing: "0.3px" }}>When </strong>
           {rule.whenToApply}
         </div>
       )}
       {rule.why && (
-        <div style={{ fontSize: "var(--text-xxs)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
+        <div style={{ fontSize: "var(--text-1xs)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
           <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: "var(--text-3xs)", letterSpacing: "0.3px" }}>Why </strong>
           {rule.why}
         </div>
@@ -289,7 +289,7 @@ function RuleCard({
             padding: "8px 12px",
             background: "var(--color-sidebar, var(--hover-bg))",
             borderRadius: "var(--radius-sm)",
-            fontSize: "var(--text-xxs)",
+            fontSize: "var(--text-1xs)",
             lineHeight: 1.5,
           }}
         >
