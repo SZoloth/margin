@@ -4,6 +4,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SettingsPage } from "../SettingsPage";
 import { DEFAULT_SETTINGS } from "@/hooks/useSettings";
+import { TestRunProvider } from "@/hooks/useTestRunContext";
+
+const renderWithProvider = (ui: React.ReactElement) =>
+  render(<TestRunProvider>{ui}</TestRunProvider>);
 
 // Mock Tauri commands used by child components
 vi.mock("@/lib/tauri-commands", () => ({
@@ -20,6 +24,10 @@ vi.mock("@/lib/mcp-bridge", () => ({
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
 describe("SettingsPage", () => {
@@ -42,7 +50,7 @@ describe("SettingsPage", () => {
   };
 
   it("renders SettingsNav and content area", () => {
-    render(<SettingsPage {...defaultProps} />);
+    renderWithProvider(<SettingsPage {...defaultProps} />);
 
     // Nav section links should be present (text may appear in both nav and section)
     expect(screen.getAllByText("Reading").length).toBeGreaterThanOrEqual(1);
@@ -51,7 +59,7 @@ describe("SettingsPage", () => {
   });
 
   it("default section is 'reading'", () => {
-    render(<SettingsPage {...defaultProps} />);
+    renderWithProvider(<SettingsPage {...defaultProps} />);
 
     // Reading section content should be visible (theme control)
     expect(screen.getByRole("radiogroup", { name: "Theme" })).toBeInTheDocument();
@@ -60,7 +68,7 @@ describe("SettingsPage", () => {
   it("switching sections shows correct content", async () => {
     const user = userEvent.setup();
 
-    render(<SettingsPage {...defaultProps} />);
+    renderWithProvider(<SettingsPage {...defaultProps} />);
 
     // Click "Writing" nav item
     await user.click(screen.getByText("Writing"));
@@ -73,14 +81,14 @@ describe("SettingsPage", () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
 
-    render(<SettingsPage {...defaultProps} onClose={onClose} />);
+    renderWithProvider(<SettingsPage {...defaultProps} onClose={onClose} />);
 
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("page title 'Settings' renders as h2", () => {
-    render(<SettingsPage {...defaultProps} />);
+    renderWithProvider(<SettingsPage {...defaultProps} />);
 
     const heading = screen.getByRole("heading", { level: 2, name: "Settings" });
     expect(heading).toBeInTheDocument();
@@ -90,7 +98,7 @@ describe("SettingsPage", () => {
     const setSetting = vi.fn();
     const user = userEvent.setup();
 
-    render(<SettingsPage {...defaultProps} setSetting={setSetting} />);
+    renderWithProvider(<SettingsPage {...defaultProps} setSetting={setSetting} />);
 
     // Click a theme option to verify setSetting is wired through
     const radios = screen.getByRole("radiogroup", { name: "Theme" });

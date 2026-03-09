@@ -147,6 +147,15 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: remove UNIQUE constraint on highlight_id in corrections and re-backfill
     migrate_corrections_remove_highlight_unique(&conn)?;
 
+    // Migration: create dashboard tables (test_runs, test_run_types)
+    migrate_add_dashboard_tables(&conn)?;
+
+    // Cleanup: mark stale running test runs as failed (from previous crashes)
+    let _ = conn.execute(
+        "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
+        [],
+    );
+
     // Seed: voice calibration + editorial rules into writing_rules table
     seed_voice_and_editorial_rules(&conn)?;
 
@@ -993,6 +1002,44 @@ fn migrate_corrections_remove_highlight_unique(conn: &Connection) -> Result<(), 
         [],
     );
 
+    Ok(())
+}
+
+/// Creates the `test_runs` and `test_run_types` tables for the stats dashboard.
+pub fn migrate_add_dashboard_tables(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS test_runs (
+            id TEXT PRIMARY KEY,
+            timestamp INTEGER NOT NULL,
+            mode TEXT NOT NULL CHECK(mode IN ('coached', 'uncoached', 'comparison')),
+            rule_count INTEGER NOT NULL,
+            total_samples INTEGER NOT NULL,
+            avg_mechanical_issues REAL NOT NULL,
+            avg_dimension_score REAL NOT NULL,
+            avg_mechanical_delta REAL,
+            avg_dimension_delta REAL,
+            dimension_averages_json TEXT,
+            dimension_deltas_json TEXT,
+            best_type TEXT,
+            worst_type TEXT,
+            status TEXT NOT NULL DEFAULT 'completed',
+            created_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS test_run_types (
+            id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+            writing_type TEXT NOT NULL,
+            sample_count INTEGER NOT NULL,
+            avg_mechanical_issues REAL NOT NULL,
+            avg_dimension_score REAL NOT NULL,
+            dimension_scores_json TEXT,
+            mechanical_delta REAL,
+            dimension_delta REAL,
+            systematic_violations_json TEXT,
+            created_at INTEGER NOT NULL
+        );",
+    )?;
     Ok(())
 }
 

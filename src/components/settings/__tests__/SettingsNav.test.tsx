@@ -3,6 +3,14 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SettingsNav, type Section } from "../SettingsNav";
+import { TestRunProvider } from "@/hooks/useTestRunContext";
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+const renderWithProvider = (ui: React.ReactElement) =>
+  render(<TestRunProvider>{ui}</TestRunProvider>);
 
 describe("SettingsNav", () => {
   const defaultProps = {
@@ -12,18 +20,19 @@ describe("SettingsNav", () => {
   };
 
   it("renders all section links", () => {
-    render(<SettingsNav {...defaultProps} />);
+    renderWithProvider(<SettingsNav {...defaultProps} />);
 
     expect(screen.getByText("Reading")).toBeInTheDocument();
     expect(screen.getByText("Writing")).toBeInTheDocument();
     expect(screen.getByText("Style Memory")).toBeInTheDocument();
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Integrations")).toBeInTheDocument();
     expect(screen.getByText("Help")).toBeInTheDocument();
     expect(screen.getByText("About")).toBeInTheDocument();
   });
 
   it("highlights the active section", () => {
-    render(<SettingsNav {...defaultProps} activeSection="writing" />);
+    renderWithProvider(<SettingsNav {...defaultProps} activeSection="writing" />);
 
     const writingItem = screen.getByText("Writing").closest("button");
     expect(writingItem).toHaveAttribute("aria-current", "true");
@@ -36,7 +45,7 @@ describe("SettingsNav", () => {
     const onSelect = vi.fn();
     const user = userEvent.setup();
 
-    render(<SettingsNav {...defaultProps} onSelect={onSelect} />);
+    renderWithProvider(<SettingsNav {...defaultProps} onSelect={onSelect} />);
 
     await user.click(screen.getByText("Writing"));
     expect(onSelect).toHaveBeenCalledWith("writing");
@@ -46,7 +55,7 @@ describe("SettingsNav", () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
 
-    render(<SettingsNav {...defaultProps} onClose={onClose} />);
+    renderWithProvider(<SettingsNav {...defaultProps} onClose={onClose} />);
 
     const backButton = screen.getByLabelText("Back to app");
     expect(backButton).toBeInTheDocument();
@@ -59,7 +68,7 @@ describe("SettingsNav", () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
 
-    render(<SettingsNav {...defaultProps} onClose={onClose} />);
+    renderWithProvider(<SettingsNav {...defaultProps} onClose={onClose} />);
 
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(1);

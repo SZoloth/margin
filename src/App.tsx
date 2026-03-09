@@ -40,6 +40,10 @@ import { useDiffReview } from "@/hooks/useDiffReview";
 import { DiffBanner } from "@/components/editor/DiffBanner";
 import { DiffNavChip } from "@/components/editor/DiffNavChip";
 import { DiffControls } from "@/components/editor/DiffControls";
+import { useOnboarding } from "@/hooks/useOnboarding";
+import { SAMPLE_DOCUMENT_CONTENT } from "@/lib/sample-document";
+import { WelcomeBar } from "@/components/onboarding/WelcomeBar";
+import { OnboardingToast } from "@/components/onboarding/OnboardingToast";
 
 /**
  * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
@@ -98,6 +102,8 @@ export default function App() {
   const annotations = useAnnotations(doc.refreshRecentDocs);
   const keepLocal = useKeepLocal();
   const search = useSearch();
+  const onboarding = useOnboarding();
+  const [onboardingToast, setOnboardingToast] = useState<string | null>(null);
   const updater = useUpdater();
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
@@ -279,6 +285,13 @@ export default function App() {
           void doc.openKeepLocalArticle(cache.document!, markdown);
         }).catch(console.error);
       }
+    }
+  }, [tabsHook.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load sample document on first run
+  useEffect(() => {
+    if (onboarding.isFirstRun && onboarding.step !== "complete" && !doc.currentDoc && tabsHook.isReady && tabsHook.tabs.length === 0) {
+      doc.setContentExternal(SAMPLE_DOCUMENT_CONTENT);
     }
   }, [tabsHook.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -785,9 +798,27 @@ export default function App() {
   const handleHighlight = useCallback(
     async (color?: string) => {
       const resolvedColor = color ?? settings.defaultHighlightColor;
-      if (!editor || !doc.currentDoc) return;
+      if (!editor) return;
       const { from, to } = editor.state.selection;
       if (from === to) return;
+
+      // Onboarding: visual-only highlight, no persistence
+      if (!doc.currentDoc) {
+        const markType = editor.state.schema.marks.highlight;
+        if (markType) {
+          const tr = editor.state.tr.addMark(
+            from, to,
+            markType.create({ color: resolvedColor }),
+          );
+          tr.setMeta("addToHistory", false);
+          editor.view.dispatch(tr);
+        }
+        if (onboarding.step === "welcome") {
+          onboarding.advanceToHighlighted();
+          setOnboardingToast("Highlight saved. Try adding a note \u2014 select text and click the comment icon.");
+        }
+        return;
+      }
 
       const fullText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n");
       const selectedText = editor.state.doc.textBetween(from, to, "\n");
@@ -817,13 +848,31 @@ export default function App() {
         console.error("Failed to save highlight:", err, "documentId:", doc.currentDoc.id);
       }
     },
-    [editor, doc.currentDoc, annotations, settings.defaultHighlightColor],
+    [editor, doc.currentDoc, annotations, settings.defaultHighlightColor, onboarding.step],
   );
 
   const handleNote = useCallback(async () => {
-    if (!editor || !doc.currentDoc) return;
+    if (!editor) return;
     const { from, to } = editor.state.selection;
     if (from === to) return;
+
+    // Onboarding: visual-only highlight+note, advance to complete
+    if (!doc.currentDoc) {
+      const markType = editor.state.schema.marks.highlight;
+      if (markType) {
+        const tr = editor.state.tr.addMark(
+          from, to,
+          markType.create({ color: settings.defaultHighlightColor }),
+        );
+        tr.setMeta("addToHistory", false);
+        editor.view.dispatch(tr);
+      }
+      if (onboarding.step === "welcome" || onboarding.step === "highlighted") {
+        onboarding.advanceToNoted();
+        setOnboardingToast("Annotations saved. Open more files with \u2318O.");
+      }
+      return;
+    }
 
     const fullText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n");
     const selectedText = editor.state.doc.textBetween(from, to, "\n");
@@ -863,7 +912,15 @@ export default function App() {
     } catch (err) {
       console.error("Failed to save highlight for note:", err);
     }
-  }, [editor, doc.currentDoc, annotations]);
+  }, [editor, doc.currentDoc, annotations, onboarding.step, settings.defaultHighlightColor]);
+
+  // Complete onboarding when a real file is opened
+  useEffect(() => {
+    if (doc.currentDoc && onboarding.step !== "complete") {
+      onboarding.complete();
+      setOnboardingToast(null);
+    }
+  }, [doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Export annotations: Cmd+Shift+E
   useEffect(() => {
@@ -1125,6 +1182,12 @@ export default function App() {
       editor={editor}
       findBarOpen={findBarOpen}
       onCloseFindBar={() => setFindBarOpen(false)}
+      welcomeBar={
+        onboarding.step === "welcome" ? (
+          <WelcomeBar visible onDismiss={onboarding.dismissWelcome} />
+        ) : undefined
+      }
+      hasSampleContent={onboarding.step !== "complete" && !doc.currentDoc && doc.content.length > 0}
       tocElement={
         doc.currentDoc && toc.headings.length > 0 ? (
           <TableOfContents
@@ -1251,6 +1314,11 @@ export default function App() {
 
       <UndoToast action={undoAction} />
       <ErrorToast key={errorToast?.id} message={errorToast?.message ?? null} />
+      <OnboardingToast
+        message={onboardingToast}
+        duration={onboardingToast?.includes("⌘O") ? 6000 : 5000}
+        onDismiss={() => setOnboardingToast(null)}
+      />
 
       {/* Unsaved changes dialog */}
       {unsavedDialog.isMounted && (() => {

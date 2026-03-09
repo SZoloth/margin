@@ -38,6 +38,9 @@
   --color-warning: #eab308;
   --color-accent: #8a6e1a;
   --color-text-tertiary: #9e9892;
+  --color-green: #22c55e;
+  --color-red: #ef4444;
+  --color-amber: #f59e0b;
 
   /* Severity badge tokens */
   --color-severity-must-fix-bg: #fef2f2;
@@ -115,6 +118,9 @@
   --color-warning: #facc15;
   --color-accent: #facc15;
   --color-text-tertiary: #6e6e6e;
+  --color-green: #4ade80;
+  --color-red: #f87171;
+  --color-amber: #fbbf24;
 
   /* Severity badge tokens */
   --color-severity-must-fix-bg: #3b1c1c;
@@ -157,4 +163,8 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@keyframes barFill {
+  from { width: 0%; }
 }

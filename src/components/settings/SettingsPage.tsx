@@ -8,6 +8,7 @@ import { StyleMemorySection } from "./StyleMemorySection";
 import { IntegrationsSection } from "./IntegrationsSection";
 import { AboutSection } from "./AboutSection";
 import { HelpSection } from "./HelpSection";
+import { DashboardSection } from "@/components/dashboard/DashboardSection";
 
 interface SettingsPageProps {
   settings: Settings;
@@ -39,6 +40,8 @@ export function SettingsPage({
       <div className="flex-1 overflow-y-auto">
         {activeSection === "style-memory" ? (
           <StyleMemorySection />
+        ) : activeSection === "dashboard" ? (
+          <DashboardSection />
         ) : (
           <div className="mx-auto max-w-[560px] px-8 pt-12 pb-16">
             <h2

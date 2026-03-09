@@ -1,12 +1,14 @@
 import { useEffect } from "react";
 import { cn } from "@/lib/cn";
+import { useTestRunContext } from "@/hooks/useTestRunContext";
 
-export type Section = "reading" | "writing" | "style-memory" | "integrations" | "help" | "about";
+export type Section = "reading" | "writing" | "style-memory" | "dashboard" | "integrations" | "help" | "about";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "reading", label: "Reading" },
   { id: "writing", label: "Writing" },
   { id: "style-memory", label: "Style Memory" },
+  { id: "dashboard", label: "Dashboard" },
   { id: "integrations", label: "Integrations" },
   { id: "help", label: "Help" },
   { id: "about", label: "About" },
@@ -19,6 +21,8 @@ interface SettingsNavProps {
 }
 
 export function SettingsNav({ activeSection, onSelect, onClose }: SettingsNavProps) {
+  const { isTestRunning } = useTestRunContext();
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -56,7 +60,16 @@ export function SettingsNav({ activeSection, onSelect, onClose }: SettingsNavPro
                 : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
             )}
           >
-            {section.label}
+            <span className="flex items-center gap-2">
+              {section.label}
+              {section.id === "dashboard" && isTestRunning && (
+                <span
+                  className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
+                  title="Test running"
+                  aria-label="Test running"
+                />
+              )}
+            </span>
           </button>
         ))}
       </div>
