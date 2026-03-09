@@ -88,6 +88,20 @@ After Rust changes, run `cargo check`. After TypeScript changes, run `pnpm tsc -
 
 This project uses `bd` (beads) for issue tracking. See AGENTS.md for the full workflow. Key commands: `bd ready`, `bd show <id>`, `bd close <id>`, `bd sync`.
 
+## Branch Coordination
+
+Multiple Claude Code sessions may work on this repo simultaneously. Follow these rules to prevent conflicts:
+
+- **Never commit directly to main** — always use a feature branch (`feat/`, `fix/`).
+- **Never `git add .` or `git add -A`** — only stage files you created or modified for your task.
+- **Quality gates before push:** `cargo check`, `pnpm tsc --noEmit`, `cargo test`, `pnpm test` — all must pass.
+- **High-collision files** (coordinate carefully, check for conflicts before pushing):
+  - `src-tauri/src/lib.rs` — command registrations
+  - `src-tauri/src/commands/mod.rs` — module declarations
+  - `src/lib/tauri-commands.ts` — TypeScript command wrappers
+  - `src/App.tsx` — root component wiring
+  - `src/styles/globals.css` — CSS variables and global styles
+
 ## Connected Projects
 
 - **personal-site** (`~/Projects/personal-site/`) — Margin features become case study content. When making architecture decisions, consider: "how does this look in the DreamWorks-style case study?"

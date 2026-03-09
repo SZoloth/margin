@@ -4,10 +4,12 @@ Unreleased changes ready to ship.
 
 ## Ready (main)
 
-### Uncommitted
+### Merged to main (unreleased)
 
-- `feat: dashboard section` in settings (tables, commands, UI)
-- `feat: seed rules from style guide` — upload/paste style guide, extract rules into DB
+- `feat: seed writing rules from style guide` — upload/paste style guide, LLM extraction into DB
+- `feat: first-run onboarding with sample document` — WelcomeBar, OnboardingToast, sample content
+- `feat: writing quality dashboard` — test run tracking, progress feedback, error surfacing
+- `fix: improve style memory UI` — CorrectionsTab/RulesTab improvements, design token migration
 
 ## Shipped
 
