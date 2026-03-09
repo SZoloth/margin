@@ -1,10 +1,127 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { exportCorrectionsJson } from "@/lib/tauri-commands";
+import { exportCorrectionsJson, seedRulesFromGuide, openStyleGuideDialog } from "@/lib/tauri-commands";
+import type { SeedRulesResult } from "@/lib/tauri-commands";
 import { CorrectionsTab } from "@/components/style-memory/CorrectionsTab";
 import { RulesTab } from "@/components/style-memory/RulesTab";
+import { WRITING_TYPES } from "@/lib/writing-types";
+import { SettingsButton } from "./SettingsButton";
 
 type ActiveTab = "corrections" | "rules";
+
+function SeedGuideSection({ onSeeded }: { onSeeded: () => void }) {
+  const [mode, setMode] = useState<"closed" | "paste">("closed");
+  const [pasteText, setPasteText] = useState("");
+  const [writingType, setWritingType] = useState("general");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<SeedRulesResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSeed = useCallback(async (text: string, name?: string) => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await seedRulesFromGuide(text, writingType, name);
+      setResult(r);
+      setMode("closed");
+      setPasteText("");
+      onSeeded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [writingType, onSeeded]);
+
+  const handleUpload = useCallback(async () => {
+    try {
+      const content = await openStyleGuideDialog();
+      if (content) {
+        await handleSeed(content, "Uploaded file");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [handleSeed]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-8 py-4">
+        <div
+          className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-tertiary)] border-t-[var(--color-accent)]"
+        />
+        <span className="text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
+          Extracting rules...
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b border-[var(--color-border)] px-8 py-4">
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <span className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">
+            Seed from style guide
+          </span>
+          {result && (
+            <span className="ml-3 text-[length:var(--text-xs)] text-[var(--color-accent)]">
+              Extracted {result.created} rule{result.created !== 1 ? "s" : ""}
+              {result.deduplicated > 0 && ` (${result.deduplicated} deduplicated)`}
+              {" "}&mdash; review below
+            </span>
+          )}
+          {error && (
+            <span className="ml-3 text-[length:var(--text-xs)] text-[var(--color-danger,#e53e3e)]">
+              {error}
+            </span>
+          )}
+        </div>
+        <select
+          value={writingType}
+          onChange={(e) => setWritingType(e.target.value)}
+          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[length:var(--text-xs)] text-[var(--color-text-primary)]"
+        >
+          {WRITING_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <SettingsButton onClick={handleUpload} disabled={loading}>
+          Upload guide
+        </SettingsButton>
+        <SettingsButton
+          onClick={() => setMode(mode === "paste" ? "closed" : "paste")}
+          disabled={loading}
+        >
+          {mode === "paste" ? "Cancel" : "Paste instead"}
+        </SettingsButton>
+      </div>
+
+      {mode === "paste" && (
+        <div className="mt-3 flex flex-col gap-2">
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            placeholder="Paste your style guide content here..."
+            rows={6}
+            className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-[length:var(--text-sm)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+          />
+          <div className="flex justify-end">
+            <SettingsButton
+              onClick={() => handleSeed(pasteText, "Pasted content")}
+              disabled={!pasteText.trim()}
+            >
+              Extract rules
+            </SettingsButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function StyleMemorySection() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("corrections");
@@ -106,6 +223,9 @@ export function StyleMemorySection() {
           )}
         </div>
       </div>
+
+      {/* Seed from style guide */}
+      <SeedGuideSection onSeeded={() => setActiveTab("rules")} />
 
       {/* Tab bar */}
       <div

@@ -4,6 +4,7 @@ pub mod documents;
 pub mod files;
 pub mod keep_local;
 pub mod search;
+pub mod seed_rules;
 pub mod snapshots;
 pub mod tabs;
 pub mod writing_rules;

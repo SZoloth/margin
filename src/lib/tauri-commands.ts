@@ -261,3 +261,25 @@ export async function markRulesReviewed(ruleIds: string[]): Promise<number> {
 export async function markRulesUnreviewed(ruleIds: string[]): Promise<number> {
   return invoke<number>("mark_rules_unreviewed", { ruleIds });
 }
+
+export interface SeedRulesResult {
+  created: number;
+  deduplicated: number;
+  errors: string[];
+}
+
+export async function seedRulesFromGuide(
+  guideText: string,
+  writingType?: string,
+  guideName?: string,
+): Promise<SeedRulesResult> {
+  return invoke<SeedRulesResult>("seed_rules_from_guide", {
+    guideText,
+    writingType,
+    guideName,
+  });
+}
+
+export async function openStyleGuideDialog(): Promise<string | null> {
+  return invoke<string | null>("open_style_guide_dialog");
+}
