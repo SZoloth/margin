@@ -206,9 +206,12 @@ func formatRulesSection(rules []db.WritingRule) []string {
 }
 
 // GenerateWritingGuardPy generates the Python hook script.
+// This is the canonical generator — Rust and MCP delegate to the CLI.
 func GenerateWritingGuardPy(rules []db.WritingRule) string {
 	var killWords []string
 	var slopPatterns [][2]string
+	var headingPatterns [][2]string
+	var autoCorrections [][2]string
 
 	for _, r := range rules {
 		if r.Severity == "must-fix" && r.Category == "kill-words" {
@@ -217,17 +220,29 @@ func GenerateWritingGuardPy(rules []db.WritingRule) string {
 		if r.Category == "ai-slop" && r.ExampleBefore != nil {
 			slopPatterns = append(slopPatterns, [2]string{*r.ExampleBefore, r.RuleText})
 		}
+		if r.Category == "heading-patterns" && r.Severity == "must-fix" && r.ExampleBefore != nil {
+			headingPatterns = append(headingPatterns, [2]string{*r.ExampleBefore, r.RuleText})
+		}
+		if r.Category == "auto-synthesized" && r.Severity == "must-fix" && r.ExampleBefore != nil {
+			if utf8.RuneCountInString(*r.ExampleBefore) <= 80 {
+				autoCorrections = append(autoCorrections, [2]string{*r.ExampleBefore, r.RuleText})
+			}
+		}
 	}
 
 	killWordsJSON, _ := json.Marshal(killWords)
 	slopPatternsJSON, _ := json.Marshal(slopPatterns)
+	headingPatternsJSON, _ := json.Marshal(headingPatterns)
+	autoCorrectionsJSON, _ := json.Marshal(autoCorrections)
 
-	if strings.Contains(string(killWordsJSON), `"""`) || strings.Contains(string(slopPatternsJSON), `"""`) {
-		return `#!/usr/bin/env python3
+	for _, blob := range [][]byte{killWordsJSON, slopPatternsJSON, headingPatternsJSON, autoCorrectionsJSON} {
+		if strings.Contains(string(blob), `"""`) {
+			return `#!/usr/bin/env python3
 # ERROR: A writing rule contains a triple-quote sequence that cannot be safely
 # embedded. Remove the offending rule text and re-export.
 import sys; print('writing_guard: triple-quote injection blocked — skipping guard', file=sys.stderr); sys.exit(1)
 `
+		}
 	}
 
 	return fmt.Sprintf(`#!/usr/bin/env python3
@@ -248,6 +263,12 @@ KILL_WORDS = json.loads(r"""%s""")
 
 # AI-slop sentence patterns — [pattern, explanation]
 SLOP_PATTERNS = json.loads(r"""%s""")
+
+# Heading patterns — [regex, explanation] applied per heading line
+HEADING_PATTERNS = json.loads(r"""%s""")
+
+# Auto-synthesized corrections — [original_text, explanation] substring match
+AUTO_CORRECTIONS = json.loads(r"""%s""")
 
 def get_extension(path):
     if not path:
@@ -287,11 +308,30 @@ def main():
             if re.search(pattern, text):
                 violations.append(explanation)
 
+        # Check heading patterns
+        if HEADING_PATTERNS:
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith('#'):
+                    continue
+                heading_text = stripped.lstrip('#').strip()
+                if not heading_text:
+                    continue
+                for pattern, explanation in HEADING_PATTERNS:
+                    if re.search(pattern, heading_text):
+                        violations.append(f'{explanation}: "{stripped}"')
+                        break
+
+        # Check auto-synthesized corrections (substring match)
+        for original_text, explanation in AUTO_CORRECTIONS:
+            if original_text.lower() in lower:
+                violations.append(f'Auto-correction: "{original_text}" — {explanation}')
+
         if violations:
-            msg = "WRITING GUARD: AI-slop patterns detected:\n"
+            msg = "WRITING GUARD: Writing rule violations detected:\n"
             for v in violations:
                 msg += f"  - {v}\n"
-            msg += "Rephrase to sound human. See ~/.margin/writing-rules.md for examples."
+            msg += "Fix violations. See ~/.margin/writing-rules.md for rules."
 
             print(json.dumps({
                 "hookSpecificOutput": {
@@ -309,7 +349,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-`, string(killWordsJSON), string(slopPatternsJSON))
+`, string(killWordsJSON), string(slopPatternsJSON), string(headingPatternsJSON), string(autoCorrectionsJSON))
 }
 
 // ExportProfile writes ~/.margin/writing-rules.md and ~/.claude/hooks/writing_guard.py.

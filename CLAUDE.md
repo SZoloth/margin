@@ -74,7 +74,7 @@ pnpm tsc --noEmit     # Type check without emitting
 - **SQLite as coordination layer:** The database is the protocol between Rust (desktop app), MCP (Node.js), and generated artifacts. Schema truth lives in Rust migrations. All consumers derive from it.
 - **Enforce at tool level, not prompt level:** The writing guard hook mechanically prevents violations — Claude can't choose to ignore it. This is the core technical advantage over prompt-based approaches.
 - **Idempotent rule synthesis:** `UNIQUE(writing_type, category, rule_text)` means duplicate rule creation merges (increments `signal_count`, takes max severity).
-- **Dual artifact generation:** Both Rust and MCP can generate `writing-rules.md` and `writing_guard.py`. Known structural risk — single-writer pattern is the target.
+- **Single-writer artifact generation:** The Go CLI (`margin export profile`) is the sole writer of `~/.margin/writing-rules.md` and `~/.claude/hooks/writing_guard.py`. Both Rust (`run_cli_export()`) and MCP (`autoExportWritingProfile()`) delegate to the CLI. Rust and MCP retain `#[cfg(test)]`/display-only formatters for test coverage but never write files directly.
 
 ## Testing & Verification
 

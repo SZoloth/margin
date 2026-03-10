@@ -72,6 +72,7 @@ fn fetch_writing_rules(
 }
 
 /// Groups items by a string key, preserving insertion order.
+#[cfg(test)]
 fn group_by_key<'a, T, F>(items: &'a [T], key_fn: F) -> Vec<(&'a str, Vec<&'a T>)>
 where
     F: Fn(&T) -> &str,
@@ -92,6 +93,7 @@ where
     groups
 }
 
+#[cfg(test)]
 fn writing_type_label(wt: &str) -> &str {
     match wt {
         "general" => "General",
@@ -107,6 +109,7 @@ fn writing_type_label(wt: &str) -> &str {
     }
 }
 
+#[cfg(test)]
 fn titlecase_category(category: &str) -> String {
     category
         .replace('-', " ")
@@ -122,6 +125,7 @@ fn titlecase_category(category: &str) -> String {
         .join(" ")
 }
 
+#[cfg(test)]
 fn format_rules_section(lines: &mut Vec<String>, rules: &[&WritingRule]) {
     let mut groups = group_by_key(rules, |r| &r.writing_type);
 
@@ -183,6 +187,8 @@ fn format_rules_section(lines: &mut Vec<String>, rules: &[&WritingRule]) {
 
 /// Generates a unified writing profile markdown that includes voice calibration,
 /// corrections (positive/corrective samples), and synthesized rules.
+/// Retained for test coverage — production export delegates to `margin` CLI.
+#[cfg(test)]
 fn generate_writing_profile_markdown(
     rules: &[WritingRule],
     corrections: &[CorrectionRecord],
@@ -344,7 +350,7 @@ fn generate_writing_profile_markdown(
 }
 
 /// Legacy standalone rules-only markdown generator (kept for tests only).
-#[allow(dead_code)]
+#[cfg(test)]
 fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
     let mut lines = Vec::new();
     lines.push("# Writing Rules".to_string());
@@ -358,6 +364,8 @@ fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
     lines.join("\n")
 }
 
+/// Retained for test coverage — production export delegates to `margin` CLI.
+#[cfg(test)]
 fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
     // Collect kill words from must-fix rules
     let kill_words: Vec<&str> = rules
@@ -553,50 +561,6 @@ if __name__ == "__main__":
     )
 }
 
-fn write_export_files(markdown: &str, hook_py: &str) -> Result<(String, String), String> {
-    // Write files
-    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
-
-    let md_path = home.join(".margin").join("writing-rules.md");
-    if let Some(parent) = md_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create .margin dir: {e}"))?;
-    }
-
-    let hook_path = home.join(".claude").join("hooks").join("writing_guard.py");
-    if let Some(parent) = hook_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create hooks dir: {e}"))?;
-    }
-
-    let mut errors = Vec::new();
-
-    if let Err(e) = std::fs::write(&md_path, markdown) {
-        errors.push(format!("Failed to write {}: {e}", md_path.display()));
-    }
-
-    if let Err(e) = std::fs::write(&hook_path, hook_py) {
-        errors.push(format!("Failed to write {}: {e}", hook_path.display()));
-    } else {
-        // Make hook executable
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Err(e) = std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)) {
-                eprintln!("Warning: could not set executable permission on {}: {e}", hook_path.display());
-            }
-        }
-    }
-
-    if !errors.is_empty() {
-        return Err(errors.join("; "));
-    }
-
-    Ok((
-        md_path.to_string_lossy().to_string(),
-        hook_path.to_string_lossy().to_string(),
-    ))
-}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -727,18 +691,40 @@ pub async fn get_writing_rules(
     fetch_writing_rules(&conn, writing_type.as_deref()).map_err(|e| e.to_string())
 }
 
-/// Shared inner logic: read rules + corrections, generate markdown + hook, write files.
+/// Delegate file generation to the `margin` CLI (single-writer pattern).
+/// The CLI reads from SQLite and writes both ~/.margin/writing-rules.md
+/// and ~/.claude/hooks/writing_guard.py.
+fn run_cli_export() -> Result<(String, String), String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    let md_path = home.join(".margin").join("writing-rules.md");
+    let hook_path = home.join(".claude").join("hooks").join("writing_guard.py");
+
+    let output = std::process::Command::new("margin")
+        .args(["export", "profile"])
+        .output()
+        .map_err(|e| format!("Failed to run `margin export profile`: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("margin export profile failed: {stderr}"));
+    }
+
+    Ok((
+        md_path.to_string_lossy().to_string(),
+        hook_path.to_string_lossy().to_string(),
+    ))
+}
+
+/// Shared inner logic: delegate file writing to CLI, read rules + corrections for return values.
 fn do_export(state: &DbPool) -> Result<(Vec<WritingRule>, Vec<CorrectionRecord>, String, String), String> {
+    let (markdown_path, hook_path) = run_cli_export()?;
+
     let (rules, corrections) = {
         let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
         let rules = fetch_writing_rules(&conn, None).map_err(|e| e.to_string())?;
         let corrections = fetch_all_corrections_for_profile(&conn).map_err(|e| e.to_string())?;
         (rules, corrections)
     };
-
-    let markdown = generate_writing_profile_markdown(&rules, &corrections);
-    let hook_py = generate_writing_guard_py(&rules);
-    let (markdown_path, hook_path) = write_export_files(&markdown, &hook_py)?;
 
     Ok((rules, corrections, markdown_path, hook_path))
 }
@@ -781,6 +767,7 @@ fn fetch_all_corrections_for_profile(conn: &Connection) -> rusqlite::Result<Vec<
     rows.collect()
 }
 
+#[cfg(test)]
 fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
     let mut iter = text.chars();
     let prefix: String = iter.by_ref().take(max_chars).collect();

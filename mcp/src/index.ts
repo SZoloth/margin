@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, writeFile } from "fs/promises";
-import { homedir } from "os";
-import { join } from "path";
+import { execFile } from "child_process";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -26,7 +24,6 @@ import {
 } from "./tools/annotations.js";
 import {
   getCorrections,
-  getAllCorrectionsForProfile,
   getCorrectionsSummary,
   createCorrection,
   deleteCorrection,
@@ -38,8 +35,6 @@ import {
 import {
   getWritingRules,
   getWritingRulesMarkdown,
-  getWritingProfileMarkdown,
-  getWritingGuardPy,
   createWritingRule,
   updateWritingRule,
   deleteWritingRule,
@@ -88,32 +83,21 @@ function dbErrorMessage(err: unknown): string {
 }
 
 /**
- * Auto-export unified writing profile (voice calibration + corrections + rules)
- * after a mutation. Fire-and-forget — errors are logged but don't fail the mutation.
+ * Auto-export unified writing profile via the `margin` CLI (single-writer pattern).
+ * The CLI reads from SQLite and writes both ~/.margin/writing-rules.md and
+ * ~/.claude/hooks/writing_guard.py. Fire-and-forget — errors are logged but don't
+ * fail the mutation.
  */
 async function autoExportWritingProfile(): Promise<void> {
-  try {
-    // Use the write DB so we see the just-committed mutation (WAL visibility).
-    const db = getWriteDb();
-    const rules = getWritingRules(db);
-    const corrections = getAllCorrectionsForProfile(db);
-    const md = getWritingProfileMarkdown(rules, corrections);
-    const hookPy = getWritingGuardPy(rules);
-
-    const home = homedir();
-    if (!home) return;
-
-    const mdDir = join(home, ".margin");
-    const hookDir = join(home, ".claude", "hooks");
-    await Promise.all([mkdir(mdDir, { recursive: true }), mkdir(hookDir, { recursive: true })]);
-    await Promise.all([
-      writeFile(join(mdDir, "writing-rules.md"), md),
-      writeFile(join(hookDir, "writing_guard.py"), hookPy, { mode: 0o755 }),
-    ]);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("Auto-export writing profile failed:", err);
-  }
+  return new Promise((resolve) => {
+    execFile("margin", ["export", "profile"], (err, _stdout, stderr) => {
+      if (err) {
+        // eslint-disable-next-line no-console
+        console.error("Auto-export writing profile failed:", stderr || err.message);
+      }
+      resolve();
+    });
+  });
 }
 
 async function withDb(fn: () => ToolResult | Promise<ToolResult>): Promise<ToolResult> {
