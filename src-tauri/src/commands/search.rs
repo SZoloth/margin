@@ -129,8 +129,26 @@ fn sanitize_fts_query(query: &str) -> String {
 
 // === Inner functions (testable with &Connection) ===
 
+// FTS5 snippet() evaluates all match positions to find the best window.
+// Pathological inputs (many repeated tokens) make this O(n) and extremely slow.
+// Truncating at a char boundary covers ~8k words — enough for articles and essays.
+const MAX_INDEX_CHARS: usize = 50_000;
+
+fn truncate_to_char_boundary(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut boundary = max;
+    while !s.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    &s[..boundary]
+}
+
 fn index_document_inner(conn: &Connection, document_id: &str, title: &str, content: &str) -> Result<(), String> {
     ensure_fts_table(conn)?;
+
+    let content = truncate_to_char_boundary(content, MAX_INDEX_CHARS);
 
     conn.execute(
         "DELETE FROM documents_fts WHERE document_id = ?1",
@@ -584,11 +602,33 @@ mod tests {
     #[test]
     fn search_very_long_content() {
         let conn = setup_db();
-        let long_content = "word ".repeat(25_000); // ~125k chars
+        // Realistic long document: unique tokens (word0..word4999) + one search target.
+        // snippet() is fast when match positions are sparse.
+        let filler: String = (0..5_000).map(|i| format!("word{i} ")).collect();
+        let long_content = format!("{} searchtarget extra filler here", filler);
         index_document_inner(&conn, "d1", "Long Doc", &long_content).unwrap();
 
-        let results = search_documents_inner(&conn, "word", 10).unwrap();
+        let results = search_documents_inner(&conn, "searchtarget", 10).unwrap();
         assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn index_truncates_content_at_char_boundary() {
+        let conn = setup_db();
+        // Fill up to just over MAX_INDEX_CHARS, then append a unique word past the limit.
+        let prefix = "alpha ".repeat(MAX_INDEX_CHARS / 6);
+        let content = format!("{}uniquewordpastlimit", prefix);
+        assert!(content.len() > MAX_INDEX_CHARS);
+
+        index_document_inner(&conn, "d1", "Title", &content).unwrap();
+
+        // "alpha" is within the truncation window — should be found.
+        let found = search_documents_inner(&conn, "alpha", 10).unwrap();
+        assert_eq!(found.len(), 1);
+
+        // "uniquewordpastlimit" is past the truncation limit — should not be found.
+        let not_found = search_documents_inner(&conn, "uniquewordpastlimit", 10).unwrap();
+        assert_eq!(not_found.len(), 0);
     }
 
     #[test]
