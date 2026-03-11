@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
 import { render, waitFor, screen } from "@testing-library/react";
 import { ExportAnnotationsPopover } from "../ExportAnnotationsPopover";

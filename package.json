@@ -60,7 +60,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
-    "jsdom": "^28.1.0",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",
