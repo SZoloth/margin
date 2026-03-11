@@ -98,6 +98,9 @@ describe("RulesTab — SeverityBadge", () => {
 
     await screen.findByText("Test rule");
 
+    // Reset call count in case previous test's fire-and-forget leaked
+    vi.mocked(exportWritingRules).mockClear();
+
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
 
