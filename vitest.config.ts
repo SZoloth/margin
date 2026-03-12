@@ -18,15 +18,15 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    // fileParallelism: false runs files serially. pool: "threads" + singleThread: true reuses
-    // a single thread worker for all test files — avoids repeated worker spawn overhead that
-    // causes "Timeout waiting for worker to respond" after ~36 sequential workers.
-    // isolate: true (default) is preserved: vitest resets the module registry between files.
+    // fileParallelism: false + pool: "forks" + singleFork: true runs all test files in one
+    // child process. Eliminates per-file worker spawn overhead that causes "Timeout waiting
+    // for worker to respond" after ~38 sequential workers. pool: "threads" + singleThread: true
+    // still triggered the forks pool internally (seen in error messages), so using forks explicitly.
     fileParallelism: false,
-    pool: "threads",
+    pool: "forks",
     poolOptions: {
-      threads: {
-        singleThread: true,
+      forks: {
+        singleFork: true,
       },
     },
   },
