@@ -18,8 +18,16 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    // fileParallelism: false is the vitest 4 way to run files serially (replaces singleFork).
-    // Avoids "Timeout waiting for worker to respond" from concurrent TipTap + jsdom workers.
+    // fileParallelism: false runs files serially. pool: "threads" + singleThread: true reuses
+    // a single thread worker for all test files — avoids repeated worker spawn overhead that
+    // causes "Timeout waiting for worker to respond" after ~36 sequential workers.
+    // isolate: true (default) is preserved: vitest resets the module registry between files.
     fileParallelism: false,
+    pool: "threads",
+    poolOptions: {
+      threads: {
+        singleThread: true,
+      },
+    },
   },
 });
