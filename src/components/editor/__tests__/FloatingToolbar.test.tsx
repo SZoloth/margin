@@ -51,41 +51,56 @@ describe("FloatingToolbar", () => {
   });
 
   it("unmounts after selection is cleared", async () => {
-    const editor = createMockEditor(true);
-    render(
-      <FloatingToolbar
-        editor={editor}
-        onHighlight={vi.fn()}
-        onNote={vi.fn()}
-      />,
-    );
+    // FloatingToolbar calls requestAnimationFrame(() => setIsVisible(true)) when first
+    // mounting. In React 19, un-awaited act() leaves a polling loop that waits for all
+    // pending async work — including rAF — before resolving. Since jsdom never fires rAF
+    // automatically this loop runs until the 30s testTimeout.
+    // Fix: use fake timers so vi.runAllTimers() fires rAF synchronously, then await each
+    // act() to prevent dangling React 19 act() promises.
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor(true);
+      render(
+        <FloatingToolbar
+          editor={editor}
+          onHighlight={vi.fn()}
+          onNote={vi.fn()}
+        />,
+      );
 
-    // Mount toolbar
-    act(() => {
-      editor._trigger("selectionUpdate");
-    });
-
-    expect(document.body.querySelector("[role='toolbar']")).toBeTruthy();
-
-    // Clear selection
-    (editor.state.selection as { empty: boolean }).empty = true;
-    act(() => {
-      editor._trigger("selectionUpdate");
-    });
-
-    // After transition completes, toolbar should unmount
-    // Simulate transitionend event
-    const toolbar = document.body.querySelector("[role='toolbar']");
-    if (toolbar) {
-      act(() => {
-        toolbar.dispatchEvent(new Event("transitionend", { bubbles: true }));
+      // Mount toolbar — flush rAF via fake timers so isVisible becomes true
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.runAllTimers();
       });
-    }
 
-    // The toolbar should have opacity 0 (hidden) after selection cleared
-    const toolbarAfter = document.body.querySelector("[role='toolbar']");
-    if (toolbarAfter) {
-      expect(toolbarAfter.getAttribute("style")).toContain("opacity: 0");
+      expect(document.body.querySelector("[role='toolbar']")).toBeTruthy();
+
+      // Clear selection
+      (editor.state.selection as { empty: boolean }).empty = true;
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+      });
+
+      // Simulate transitionend with propertyName so the opacity handler fires.
+      // jsdom lacks TransitionEvent; attach propertyName to a plain Event instead.
+      const toolbar = document.body.querySelector("[role='toolbar']");
+      if (toolbar) {
+        await act(async () => {
+          const evt = new Event("transitionend", { bubbles: true });
+          Object.defineProperty(evt, "propertyName", { value: "opacity" });
+          toolbar.dispatchEvent(evt);
+        });
+      }
+
+      // Toolbar should be unmounted (transitionend triggered setIsMounted(false))
+      // or if still present, it should be hidden (opacity: 0)
+      const toolbarAfter = document.body.querySelector("[role='toolbar']");
+      if (toolbarAfter) {
+        expect(toolbarAfter.getAttribute("style")).toContain("opacity: 0");
+      }
+    } finally {
+      vi.useRealTimers();
     }
   });
 

@@ -17,28 +17,29 @@ Nemo is a clownfish. His father Marlin searches for Nemo across the ocean.
 
 Just keep swimming, just keep swimming.`;
 
-function setupEditor(): Promise<Editor> {
-  return new Promise((resolve) => {
+describe("Search extension", () => {
+  let editor: Editor;
+
+  // Single shared editor for all tests in this file. Uses waitFor() (same pattern
+  // as Reader.test.tsx) instead of Promise+onEditorReady — waitFor() drives React's
+  // async scheduler correctly in vmForks where the Promise pattern hangs on cold-start.
+  beforeAll(async () => {
+    let editorRef: Editor | null = null;
     render(
       <Reader
         content={SAMPLE_DOC}
         onUpdate={() => {}}
         isLoading={false}
-        onEditorReady={(ed) => resolve(ed)}
+        onEditorReady={(ed) => { editorRef = ed; }}
       />,
     );
-  });
-}
-
-describe("Search extension", () => {
-  describe("findAllMatches", () => {
-    let editor: Editor;
-
-    beforeAll(async () => {
-      editor = await setupEditor();
-      await waitFor(() => expect(editor).toBeTruthy());
+    await waitFor(() => {
+      expect(editorRef).not.toBeNull();
     });
+    editor = editorRef!;
+  });
 
+  describe("findAllMatches", () => {
     it("finds all occurrences case-insensitively", () => {
       const results = findAllMatches(editor.state.doc, "nemo");
       // "Nemo" appears in heading, first paragraph (x2), and character list
@@ -72,13 +73,6 @@ describe("Search extension", () => {
   });
 
   describe("editor commands", () => {
-    let editor: Editor;
-
-    beforeAll(async () => {
-      editor = await setupEditor();
-      await waitFor(() => expect(editor).toBeTruthy());
-    });
-
     it("setSearchTerm populates storage results", () => {
       editor.commands.clearSearch();
       editor.commands.setSearchTerm("Nemo");
