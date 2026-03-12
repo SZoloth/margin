@@ -31,23 +31,29 @@ function createMockEditor(hasSelection: boolean) {
 
 describe("FloatingToolbar", () => {
   it("renders with role='toolbar' and aria-label", async () => {
-    const editor = createMockEditor(true);
-    render(
-      <FloatingToolbar
-        editor={editor}
-        onHighlight={vi.fn()}
-        onNote={vi.fn()}
-      />,
-    );
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor(true);
+      render(
+        <FloatingToolbar
+          editor={editor}
+          onHighlight={vi.fn()}
+          onNote={vi.fn()}
+        />,
+      );
 
-    // Trigger selection update to mount toolbar
-    act(() => {
-      editor._trigger("selectionUpdate");
-    });
+      // Trigger selection update to mount toolbar; flush rAF via fake timers
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.runAllTimers();
+      });
 
-    const toolbar = document.body.querySelector("[role='toolbar']");
-    expect(toolbar).toBeTruthy();
-    expect(toolbar?.getAttribute("aria-label")).toBe("Text formatting");
+      const toolbar = document.body.querySelector("[role='toolbar']");
+      expect(toolbar).toBeTruthy();
+      expect(toolbar?.getAttribute("aria-label")).toBe("Text formatting");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("unmounts after selection is cleared", async () => {
@@ -104,49 +110,61 @@ describe("FloatingToolbar", () => {
     }
   });
 
-  it("applies toolbar-color-btn--selected class to default color button", () => {
-    const editor = createMockEditor(true);
-    render(
-      <FloatingToolbar
-        editor={editor}
-        onHighlight={vi.fn()}
-        onNote={vi.fn()}
-        defaultColor="yellow"
-      />,
-    );
+  it("applies toolbar-color-btn--selected class to default color button", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor(true);
+      render(
+        <FloatingToolbar
+          editor={editor}
+          onHighlight={vi.fn()}
+          onNote={vi.fn()}
+          defaultColor="yellow"
+        />,
+      );
 
-    act(() => {
-      editor._trigger("selectionUpdate");
-    });
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.runAllTimers();
+      });
 
-    const yellowBtn = document.body.querySelector("[aria-label='Highlight yellow']");
-    expect(yellowBtn).toBeTruthy();
-    expect(yellowBtn?.className).toContain("toolbar-color-btn--selected");
+      const yellowBtn = document.body.querySelector("[aria-label='Highlight yellow']");
+      expect(yellowBtn).toBeTruthy();
+      expect(yellowBtn?.className).toContain("toolbar-color-btn--selected");
 
-    // Non-default buttons should NOT have the selected class
-    const blueBtn = document.body.querySelector("[aria-label='Highlight blue']");
-    expect(blueBtn?.className).not.toContain("toolbar-color-btn--selected");
+      // Non-default buttons should NOT have the selected class
+      const blueBtn = document.body.querySelector("[aria-label='Highlight blue']");
+      expect(blueBtn?.className).not.toContain("toolbar-color-btn--selected");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it("uses CSS variable references for entrance easing", () => {
-    const editor = createMockEditor(true);
-    render(
-      <FloatingToolbar
-        editor={editor}
-        onHighlight={vi.fn()}
-        onNote={vi.fn()}
-      />,
-    );
+  it("uses CSS variable references for entrance easing", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor(true);
+      render(
+        <FloatingToolbar
+          editor={editor}
+          onHighlight={vi.fn()}
+          onNote={vi.fn()}
+        />,
+      );
 
-    act(() => {
-      editor._trigger("selectionUpdate");
-    });
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.runAllTimers();
+      });
 
-    const toolbar = document.body.querySelector("[role='toolbar']") as HTMLElement;
-    expect(toolbar).toBeTruthy();
-    // Toolbar may start with exit easing (not yet visible) or entrance easing
-    // Either way, it should use CSS variables, not hardcoded cubic-bezier
-    expect(toolbar.style.transition).toMatch(/var\(--ease-(entrance|exit)\)/);
-    expect(toolbar.style.transition).not.toContain("cubic-bezier");
+      const toolbar = document.body.querySelector("[role='toolbar']") as HTMLElement;
+      expect(toolbar).toBeTruthy();
+      // Toolbar may start with exit easing (not yet visible) or entrance easing
+      // Either way, it should use CSS variables, not hardcoded cubic-bezier
+      expect(toolbar.style.transition).toMatch(/var\(--ease-(entrance|exit)\)/);
+      expect(toolbar.style.transition).not.toContain("cubic-bezier");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
