@@ -17,12 +17,13 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    // pool: "vmForks" uses Node VM contexts instead of child_process.fork per file — no per-file
-    // OS process spawning. Eliminates the 60s START_TIMEOUT failures ("Timeout waiting for worker
-    // to respond") that hit the last ~3 files after a long sequential run.
-    // poolOptions was removed in Vitest 4 (singleFork/singleThread are no longer valid).
-    // fileParallelism: false keeps files serial (maxWorkers=1).
-    pool: "vmForks",
+    // pool: "threads" uses worker_threads instead of child_process.fork — avoids the per-file
+    // OS process spawn overhead that causes START_TIMEOUT failures with "forks" pool.
+    // Worker threads start in ~100ms vs ~2s for forks, eliminating timeout risk.
+    // isolate: true (default) is preserved so vi.mock() works correctly per-file.
+    // fileParallelism: false keeps files serial (maxWorkers=1) to avoid resource exhaustion.
+    // poolOptions was removed in Vitest 4 — singleFork/singleThread no longer exist.
+    pool: "threads",
     fileParallelism: false,
   },
 });
