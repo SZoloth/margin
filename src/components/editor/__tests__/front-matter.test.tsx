@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { Reader } from "../Reader";
 import type { Editor } from "@tiptap/core";
@@ -55,6 +55,18 @@ const NO_FM_DOC = `# No front matter
 Just a regular document.`;
 
 describe("Front matter round-trip", () => {
+  // TipTap's first-ever initialization in the process compiles markdown-it rules and
+  // ProseMirror schemas, which takes 30-60s in jsdom. Pre-warm once so the actual
+  // tests run against an already-initialized editor.
+  beforeAll(async () => {
+    const { unmount } = render(<Reader content="" onUpdate={() => {}} isLoading={false} />);
+    await waitFor(
+      () => { if (!document.querySelector("[contenteditable]")) throw new Error("not ready"); },
+      { timeout: 90_000 },
+    );
+    unmount();
+  }, 90_000);
+
   it("preserves front matter through getMarkdown()", async () => {
     let editorRef: Editor | null = null;
 

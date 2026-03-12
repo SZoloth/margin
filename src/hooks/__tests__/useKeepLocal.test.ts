@@ -148,8 +148,7 @@ describe("useKeepLocal", () => {
     expect(result.current.isOnline).toBe(true);
 
     await act(async () => {
-      vi.advanceTimersByTime(30_000);
-      await flush();
+      await vi.advanceTimersByTimeAsync(30_000);
     });
     expect(result.current.isOnline).toBe(false);
   });
@@ -176,8 +175,7 @@ describe("useKeepLocal", () => {
     expect(result.current.isOnline).toBe(false);
 
     await act(async () => {
-      vi.advanceTimersByTime(30_000);
-      await flush();
+      await vi.advanceTimersByTimeAsync(30_000);
     });
     expect(result.current.isOnline).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith("keep_local_list_items", {
