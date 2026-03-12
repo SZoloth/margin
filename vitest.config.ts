@@ -12,22 +12,17 @@ export default defineConfig({
   },
   test: {
     // All test files use jsdom (components, hooks, and pure-logic libs all run fine in jsdom).
-    // Setting this globally instead of per-file prevents 30 separate fork workers from spawning.
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    // fileParallelism: false + pool: "forks" + singleFork: true runs all test files in one
-    // child process. Eliminates per-file worker spawn overhead that causes "Timeout waiting
-    // for worker to respond" after ~38 sequential workers. pool: "threads" + singleThread: true
-    // still triggered the forks pool internally (seen in error messages), so using forks explicitly.
+    // pool: "vmForks" uses Node VM contexts instead of child_process.fork per file — no per-file
+    // OS process spawning. Eliminates the 60s START_TIMEOUT failures ("Timeout waiting for worker
+    // to respond") that hit the last ~3 files after a long sequential run.
+    // poolOptions was removed in Vitest 4 (singleFork/singleThread are no longer valid).
+    // fileParallelism: false keeps files serial (maxWorkers=1).
+    pool: "vmForks",
     fileParallelism: false,
-    pool: "forks",
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
   },
 });
