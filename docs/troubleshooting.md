@@ -56,6 +56,39 @@ Dependencies were not installed for that worktree.
 
 Run `pnpm install` before trusting the failures. For direct typechecks, prefer `./node_modules/.bin/tsc --noEmit`.
 
+## Autoresearch In The Wrong Worktree
+
+### Symptom
+
+`setup_autoresearch_session`, `init_experiment`, or `run_experiment` refuse to run, or pi warns that autoresearch needs a dedicated branch.
+
+### Likely Cause
+
+You started pi in a normal feature branch instead of a dedicated `feat/autoresearch-*` worktree.
+
+### Fix
+
+Run `/autoresearch` for the one-command path, or say something like `let's run autoresearch on search speed`. If Terminal auto-launch fails, run `/autoresearch-worktree`, `cd` into the new worktree, start pi there, then run `/skill:margin-autoresearch`.
+
+## Autoresearch Terminal Launch Failed
+
+### Symptom
+
+`/autoresearch` creates the worktree but does not open a new pi session.
+
+### Likely Cause
+
+macOS automation permissions blocked `osascript`, or Terminal.app could not be launched.
+
+### Fix
+
+Use the fallback command shown by pi, or run the manual path:
+
+1. `/autoresearch-worktree`
+2. `cd` into the new worktree
+3. `pi`
+4. `/skill:margin-autoresearch`
+
 ## Export Or Rule Changes Drift
 
 ### Symptom

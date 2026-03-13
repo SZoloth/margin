@@ -23,6 +23,7 @@
 
 - This repo is the Tauri implementation. Do not treat the stale `Margin/` directory as an active code path.
 - Verification should run through `scripts/verify` so agents follow the same entrypoint.
+- Pi autoresearch must run in a dedicated `feat/autoresearch-*` worktree. Repo-wide git staging and reset commands remain forbidden there too.
 - Gap tracking lives in `.harness/gaps.jsonl`; production escapes should result in a durable record and a regression test.
 
 ## Unsafe Changes

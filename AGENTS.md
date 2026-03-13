@@ -74,6 +74,7 @@ If they fail because of another agent's uncommitted changes in your working tree
 
 - Keep `PLANS.md` updated for any non-trivial task.
 - Use `scripts/verify` as the default quality gate entrypoint.
+- Pi autoresearch workflow: `docs/pi-autoresearch.md`. Default path is `/autoresearch` or a natural request like "let's run autoresearch on search speed"; manual path is `/autoresearch-worktree`, then `/skill:margin-autoresearch` in the dedicated worktree.
 - If you learn a new failure mode, add it to `docs/troubleshooting.md`.
 - If you learn a new hard constraint, add it to `docs/invariants.md`.
 - If verification expectations change, update `docs/evals.md`.
