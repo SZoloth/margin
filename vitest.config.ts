@@ -6,22 +6,26 @@ import path from "path";
 // runs). With fileParallelism: false (serial execution), this backfires: tiny files end up
 // last, when system memory is most depleted after 37 workers, causing worker spawn timeouts.
 //
-// Fix: run the smallest hook tests first, before the heavy jsdom/TipTap component tests
-// have exhausted system resources. The rest still runs in vitest's default large-first order.
+// Fix: pin hook/lib tests first (smallest, most resource-constrained), then run all remaining
+// files in smallest-first order so no small file ever lands at the tail of a depleted queue.
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
-    const sorted = await super.sort(files);
-    // Pin pure hook tests (≤6 KB) to the front — these are the files that otherwise land
-    // last due to their small size and fail with "Timeout waiting for worker to respond".
-    const small = sorted.filter((f) => {
+    const sorted = await super.sort(files); // largest-first (vitest default)
+    // Pin pure hook/lib tests to the front — these are the smallest files and must not land
+    // last after heavy jsdom/TipTap workers have exhausted system resources.
+    const pinned = sorted.filter((f) => {
       const rel = f.moduleId.replace(/\\/g, "/");
       return rel.includes("/hooks/__tests__/") || rel.includes("/lib/__tests__/");
     });
-    const rest = sorted.filter((f) => {
-      const rel = f.moduleId.replace(/\\/g, "/");
-      return !rel.includes("/hooks/__tests__/") && !rel.includes("/lib/__tests__/");
-    });
-    return [...small, ...rest];
+    // Reverse the remaining files: vitest's large-first order becomes small-first, so no
+    // small component test can end up at the very end of the queue when memory is depleted.
+    const rest = sorted
+      .filter((f) => {
+        const rel = f.moduleId.replace(/\\/g, "/");
+        return !rel.includes("/hooks/__tests__/") && !rel.includes("/lib/__tests__/");
+      })
+      .reverse();
+    return [...pinned, ...rest];
   }
 }
 
