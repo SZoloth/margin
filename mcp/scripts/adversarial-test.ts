@@ -2,14 +2,20 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { execSync } from "child_process";
-import { homedir } from "os";
 import { join, resolve } from "path";
 import { fileURLToPath } from "url";
 import {
   runComplianceCheck,
   type ComplianceResult,
-  type DimensionScores,
 } from "./compliance-check.ts";
+import {
+  ADVERSARIAL_PROMPTS,
+  SAMPLES_PER_TYPE,
+  REGISTER_MAP,
+  loadWritingRulesForType,
+  stripMetaCommentary,
+  cleanEnv,
+} from "./shared.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -82,134 +88,17 @@ const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 
-// ── Adversarial prompts ────────────────────────────────────────────────
-
-const ADVERSARIAL_PROMPTS: Record<string, string> = {
-  general:
-    "Write a 200-word blog intro about why product managers should learn to code",
-  email:
-    "Draft a follow-up email after a job interview at a company you're excited about",
-  "cover-letter":
-    "Write an opening paragraph for a PM role at Stripe",
-  outreach:
-    "Draft a cold LinkedIn message to a VP of Product at a Series B startup",
-  prd:
-    "Write the problem statement section for a feature that adds dark mode",
-  blog:
-    "Write a paragraph arguing that most product roadmaps are theater",
-  resume:
-    "Write a bullet point for leading a product redesign that increased retention 15%",
-  slack:
-    "Write a message asking your team to review a doc before Friday",
-  pitch:
-    "Write the opening of a pitch deck for a reading annotation tool",
-};
-
-const SAMPLES_PER_TYPE = 3;
-
-const REGISTER_MAP: Record<string, string> = {
-  general: "casual",
-  email: "casual",
-  slack: "casual",
-  outreach: "casual",
-  pitch: "professional",
-  prd: "professional",
-  "cover-letter": "professional",
-  resume: "professional",
-  blog: "professional",
-};
+// ADVERSARIAL_PROMPTS, SAMPLES_PER_TYPE, REGISTER_MAP imported from shared.ts
 
 // ── Generation ─────────────────────────────────────────────────────────
+// loadWritingRulesForType, cleanEnv, stripMetaCommentary imported from shared.ts
 
-function loadWritingRules(): string {
-  const rulesPath = join(homedir(), ".margin/writing-rules.md");
-  if (!existsSync(rulesPath)) {
-    console.error(
-      `${RED}Writing rules not found at ${rulesPath}${RESET}`
-    );
-    process.exit(1);
-  }
-  return readFileSync(rulesPath, "utf-8");
-}
-
-interface WritingRuleRow {
-  writing_type: string;
-  category: string;
-  rule_text: string;
-  severity: string;
-  example_before: string | null;
-  example_after: string | null;
-  register: string | null;
-}
-
-function loadWritingRulesForType(type: string): string {
-  try {
-    const Database = require("better-sqlite3");
-    const dbPath = join(homedir(), ".margin/margin.db");
-    if (!existsSync(dbPath)) return loadWritingRules();
-
-    const db = new Database(dbPath, { readonly: true });
-    const register = REGISTER_MAP[type] ?? "casual";
-
-    const rows = db
-      .prepare(
-        `SELECT writing_type, category, rule_text, severity, example_before, example_after, register
-         FROM writing_rules
-         WHERE (writing_type = ? OR writing_type = 'general' OR register = ?)
-         ORDER BY signal_count DESC, created_at DESC`
-      )
-      .all(type, register) as WritingRuleRow[];
-    db.close();
-
-    if (rows.length === 0) return loadWritingRules();
-
-    // Group by writing_type, then by category
-    const grouped = new Map<string, Map<string, WritingRuleRow[]>>();
-    for (const row of rows) {
-      if (!grouped.has(row.writing_type)) grouped.set(row.writing_type, new Map());
-      const categories = grouped.get(row.writing_type)!;
-      if (!categories.has(row.category)) categories.set(row.category, []);
-      categories.get(row.category)!.push(row);
-    }
-
-    const lines: string[] = [`# Writing Rules (filtered for: ${type}, register: ${register})`];
-
-    for (const [writingType, categories] of grouped) {
-      lines.push("", `## ${writingType.charAt(0).toUpperCase() + writingType.slice(1)}`);
-      for (const [category, rules] of categories) {
-        lines.push(`### ${category}`);
-        for (const rule of rules) {
-          lines.push(`- [${rule.severity}] ${rule.rule_text}`);
-          if (rule.example_before) lines.push(`  - Before: "${rule.example_before}"`);
-          if (rule.example_after) lines.push(`  - After: "${rule.example_after}"`);
-        }
-      }
-    }
-
-    return lines.join("\n");
-  } catch {
-    return loadWritingRules();
-  }
-}
-
-function cleanEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  delete env.CLAUDECODE;
-  return env;
-}
-
-function stripMetaCommentary(text: string): string {
-  // Remove content between --- delimiters (Claude wraps prose in ---)
-  const fenceMatch = text.match(/---\n([\s\S]+?)\n---/);
-  if (fenceMatch) return fenceMatch[1].trim();
-
-  // Remove leading meta like "Here's a 200-word intro:" or "Here's the draft:"
-  let cleaned = text.replace(/^(?:Here['']s|Writing rules|I['']ll)[^\n]*\n+/i, "");
-
-  // Remove trailing meta like "~195 words." or "Critique pass:" or "(207 words..."
-  cleaned = cleaned.replace(/\n+(?:\*\*Critique|~\d+\s*words|^\(.+\)$|\*\(.+\)\*).*/ms, "");
-
-  return cleaned.trim();
+let _cachedCoachingTemplate: string | null | undefined;
+function loadCoachingTemplate(): string | null {
+  if (_cachedCoachingTemplate !== undefined) return _cachedCoachingTemplate;
+  const templatePath = join(import.meta.dirname ?? ".", "autoresearch", "coaching-prompt.md");
+  _cachedCoachingTemplate = existsSync(templatePath) ? readFileSync(templatePath, "utf-8") : null;
+  return _cachedCoachingTemplate;
 }
 
 function generateSample(
@@ -218,7 +107,18 @@ function generateSample(
   prompt: string
 ): string {
   const register = REGISTER_MAP[type] ?? "casual";
-  const fullPrompt = `You are writing in the style described in the writing rules below.\n\n<writing-rules>\n${writingRules}\n</writing-rules>\n\nWriting type: ${type}\nRegister: ${register}\nApply voice rules matching this register. Casual-register rules DO NOT apply to professional writing.\n\nOutput ONLY the prose — no commentary, critique, word counts, or meta-discussion.\n\n${prompt}`;
+
+  const template = loadCoachingTemplate();
+  let fullPrompt: string;
+  if (template) {
+    fullPrompt = template
+      .replace("{{RULES}}", writingRules)
+      .replace("{{TYPE}}", type)
+      .replace("{{REGISTER}}", register)
+      .replace("{{PROMPT}}", prompt);
+  } else {
+    fullPrompt = `You are writing in the style described in the writing rules below.\n\n<writing-rules>\n${writingRules}\n</writing-rules>\n\nWriting type: ${type}\nRegister: ${register}\nApply voice rules matching this register. Casual-register rules DO NOT apply to professional writing.\n\nOutput ONLY the prose — no commentary, critique, word counts, or meta-discussion.\n\n${prompt}`;
+  }
 
   try {
     const result = execSync(`claude --print --model sonnet`, {
