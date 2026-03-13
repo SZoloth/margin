@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import { beforeEach, afterEach, vi } from "vitest";
 
 // Node.js 25 introduced a native localStorage stub that lacks the full Storage API.
 // Redefine it with a proper in-memory implementation so tests can call localStorage.clear() etc.
@@ -27,6 +27,14 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   } as unknown as typeof globalThis.ResizeObserver;
 }
+
+beforeEach(() => {
+  // Defensive guard: restore real timers at the START of each test in case a
+  // previous test's cleanup failed (e.g., it timed out before afterEach ran).
+  // Without this, a hung test leaves fake timers on globalThis, which blocks
+  // Vitest's own setTimeout-based 30s timeout — causing 900s+ worker hangs.
+  vi.useRealTimers();
+});
 
 afterEach(() => {
   // Restore real timers after every test so fake timers from one file
