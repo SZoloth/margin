@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { Sidebar } from "../Sidebar";
 import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
@@ -73,13 +73,24 @@ describe("Sidebar", () => {
   });
 
   describe("search input container", () => {
-    it("has transition-colors and duration-150 classes", () => {
-      render(<Sidebar {...defaultProps} />);
+    it("has transition-colors and duration-150 classes", async () => {
+      // useAnimatedPresence schedules timers on mount. In the full suite, Reader.test.tsx
+      // (TipTap) leaves pending rAF callbacks that cause React 19's act() to poll indefinitely.
+      // Fix: fake timers + vi.runAllTimers() flushes all pending work before querying.
+      vi.useFakeTimers();
+      try {
+        await act(async () => {
+          render(<Sidebar {...defaultProps} />);
+          vi.runAllTimers();
+        });
 
-      const searchInput = screen.getByPlaceholderText("Search documents...");
-      const container = searchInput.closest("div.flex.items-center");
-      expect(container?.className).toContain("transition-colors");
-      expect(container?.className).toContain("duration-150");
+        const searchInput = screen.getByPlaceholderText("Search documents...");
+        const container = searchInput.closest("div.flex.items-center");
+        expect(container?.className).toContain("transition-colors");
+        expect(container?.className).toContain("duration-150");
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
