@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 
 // Node.js 25 introduced a native localStorage stub that lacks the full Storage API.
 // Redefine it with a proper in-memory implementation so tests can call localStorage.clear() etc.
@@ -29,5 +29,8 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 }
 
 afterEach(() => {
+  // Restore real timers after every test so fake timers from one file
+  // don't leak into subsequent files in the same worker thread.
+  vi.useRealTimers();
   cleanup();
 });
