@@ -1,5 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, act } from "@testing-library/react";
+
+// @hugeicons/core-free-icons is a 41k-line CJS bundle — loading it in a worker thread
+// causes a startup timeout before any test code runs. Mock both packages so only the
+// FloatingToolbar logic is exercised here; icon rendering is not under test.
+vi.mock("@hugeicons/react", () => ({
+  HugeiconsIcon: () => null,
+}));
+vi.mock("@hugeicons/core-free-icons", () => ({
+  Comment01Icon: {},
+}));
+
 import { FloatingToolbar } from "../FloatingToolbar";
 
 // Minimal Editor mock with the events and state the toolbar needs
