@@ -88,8 +88,7 @@ describe("useKeepLocal", () => {
     ).length;
 
     await act(async () => {
-      vi.advanceTimersByTime(30_000);
-      await flush();
+      await vi.advanceTimersByTimeAsync(30_000);
     });
 
     const callCountAfter30s = mockInvoke.mock.calls.filter(
@@ -149,6 +148,7 @@ describe("useKeepLocal", () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
+      await flush();
     });
     expect(result.current.isOnline).toBe(false);
   });
