@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 
 // Node.js 25 introduced a native localStorage stub that lacks the full Storage API.
 // Redefine it with a proper in-memory implementation so tests can call localStorage.clear() etc.
@@ -28,6 +28,14 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as unknown as typeof globalThis.ResizeObserver;
 }
 
-afterEach(() => {
+afterEach(async () => {
+  // Restore real timers after every test so fake timers from one file
+  // don't leak into subsequent files in the same worker thread.
+  vi.useRealTimers();
   cleanup();
+  // Yield one macrotask cycle so any stale jsdom timer callbacks (e.g. rAF-as-setTimeout
+  // left by userEvent.setup()) can fire and drain before the next test file begins.
+  // Without this, React 19's synchronous act() in the first render() of the next file
+  // spin-waits for stale callbacks that never fire in jsdom, hitting the 30s testTimeout.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 });

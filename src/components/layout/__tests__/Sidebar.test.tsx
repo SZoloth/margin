@@ -1,5 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+
+// @hugeicons/core-free-icons is a 41k-line CJS bundle that causes worker spawn
+// timeouts in the full test suite when loaded for real. Mock both packages so
+// only Sidebar layout and styling logic is exercised here.
+vi.mock("@hugeicons/react", () => ({
+  HugeiconsIcon: () => null,
+}));
+vi.mock("@hugeicons/core-free-icons", () => ({
+  FolderOpenIcon: {},
+  Search01Icon: {},
+  Settings01Icon: {},
+}));
+
 import { Sidebar } from "../Sidebar";
 import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
