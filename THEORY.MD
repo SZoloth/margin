@@ -48,12 +48,36 @@ The constraint: the entire system should work within a Claude Code subscription.
 
 **The constraint to Claude Code subscription shapes the architecture.** No fine-tuning means rules must be effective as structured text in context windows. No external APIs means enforcement at hook-time is local (Python script, regex scan). Voice calibration is statistical data, not a trained embedding. Synthesis uses `claude --print` within the subscription. This constraint is healthy — it keeps the system simple and portable.
 
+**The hybrid architecture won (2026-03-13).** Autoresearch tested five architectures for getting Claude to write in Sam's voice. After 6 experiment runs totaling 216 scored samples:
+
+| Architecture | Approach | Mean Pass Rate | Runs | Samples |
+|---|---|---|---|---|
+| A (rules) | 240 explicit rules as text instructions | 51.9% | 1 | 27 |
+| B (exemplars) | 10 samples of Sam's writing as few-shot | 55.6% | 1 | 27 |
+| C (editor) | Write freely, then edit against rules | 63.0% | 1 | 27 |
+| D (corrections) | 30 raw corrections with context and reasoning | 61.2% | 2 | 54 |
+| **E (hybrid)** | **Corrections + high-signal rules** | **72.3%** | **3** | **81** |
+
+Architecture E — combining raw corrections (the concrete "you wrote X, I wanted Y" signal) with high-signal rules (signal_count ≥ 2 or severity = must-fix, for structural patterns) — outperforms every other approach by 9+ percentage points. E's 3-run range (59.3-80.8%) overlaps with D's best run but its mean is substantially higher.
+
+The key insight: corrections and rules serve different functions. Corrections handle mechanical compliance ("don't use 'genuinely,' don't start with 'The'"). Rules handle structural patterns that may not yet have a correction in the DB (negative parallelism, sentence length variation). Neither alone matches the hybrid.
+
+Dimension scores (voice quality, naturalness) are flat across all architectures (44-47). The entire difference is in mechanical compliance — avoiding the specific patterns Sam has flagged. This means the optimization surface is narrow and well-defined: it's about pattern avoidance, not style generation.
+
+**Negative parallelism solved, repetitive-structure is the new frontier (2026-03-13, Tier 1).** Five experiments tested prompt-level interventions for neg-para. Prose instructions failed (whack-a-mole: fix neg-para, get repetitive-structure). A full governance schema (Architecture F, 63.9% mean) eliminated neg-para but hurt overall compliance. The winning approach: add a single structured `<prohibition>` block to E's prompt — surgical, ~10 lines, borrows F's technique without F's overhead. This variant (Architecture G) averages 70.4% with neg-para at 1 leak per 81 samples, and tighter variance (7.4pp range vs E's 21.5pp).
+
+The remaining #1 failure is **repetitive-structure** — 4+ consecutive sentences of similar word count. This is fundamentally different from neg-para: it's a generation-time structural problem the model can't self-monitor, not a pattern it can learn to avoid. Prompt instructions to "vary sentence length" had no measurable effect. This may be the single-pass ceiling — further improvement likely requires either (a) a post-generation mechanical check with targeted rewrite, or (b) accepting it as the floor and optimizing other surfaces.
+
 ## Open Questions
 
-**Can continuous synthesis work within token budgets?** Batch synthesis (export corrections → agent session → create rules) is expensive but controllable. Continuous synthesis (every correction triggers an incremental rule check) would need to be lightweight — possibly a local heuristic (exact text match against existing rules) with LLM synthesis only for novel patterns. The economics matter: if every correction costs an API call for synthesis, the friction reduction is offset by latency and cost.
+**~~Should the system pivot from rules-first to corrections-first?~~** Answered: yes, but as a hybrid. Architecture E (corrections + high-signal rules) confirmed across 81 samples at 72.3% mean pass rate. The system should transition from rules-first (Architecture A) to E's corrections-first approach with rules as structural backstop. The current coaching-prompt.md and writing guard pipeline still use Architecture A — wiring E into production is Tier 3.
 
-**How does in-place rewrite work architecturally?** When you correct a paragraph, Margin should rewrite it using the new rule. This requires either: (a) Margin calling Claude directly to regenerate the paragraph with the correction applied, or (b) the correction being a direct text replacement (simpler but less flexible). Option (a) is more powerful but means Margin becomes an AI writing surface, not just a reading surface. That's a significant scope expansion.
+**Is the eval measuring the right thing?** The compliance scoring (mechanical checks + dimension scores) is a proxy for "would Sam correct this?" If the proxy doesn't correlate with actual corrections, optimizing against it is wasted work. Calibration study needed: generate prose, score it, have Sam read and correct it, compare.
 
-**Is correction rate the right metric, or is it correction *effort*?** A document with 3 corrections that each took 30 seconds of thought might represent more friction than a document with 8 corrections that were all quick kill-word fixes. Signal count captures frequency but not effort. The metric might need a weight factor.
+**Can continuous synthesis work within token budgets?** Batch synthesis (export corrections → agent session → create rules) is expensive but controllable. Continuous synthesis (every correction triggers an incremental rule check) would need to be lightweight — possibly a local heuristic (exact text match against existing rules) with LLM synthesis only for novel patterns.
 
-**When does the full-profile-dump approach become a token problem?** `writing-rules.md` is currently ~480 lines. As rules accumulate, context-aware loading becomes mandatory not just for relevance but for token efficiency. At what rule count does the full profile stop fitting comfortably in Claude's context alongside the actual writing task?
+**How does in-place rewrite work architecturally?** When you correct a paragraph, Margin should rewrite it using the new rule. This requires either: (a) Margin calling Claude directly to regenerate the paragraph with the correction applied, or (b) the correction being a direct text replacement (simpler but less flexible). Option (a) is more powerful but means Margin becomes an AI writing surface, not just a reading surface.
+
+**What's G's ceiling?** G averages 70.4% with the neg-para fix. Repetitive-structure accounts for ~8 failed samples per run (~30% of failures). If repetitive-structure could be eliminated, G would approach 80-85%. But single-pass generation may not be able to solve this — it may require a lightweight post-generation check. The question is whether correction selection and rule threshold tuning can close the gap without adding a second LLM pass.
+
+**Does the proxy score correlate with Sam's real corrections?** Untested. The compliance scoring (mechanical checks + dimension heuristics) is an approximation of "would Sam correct this?" If the proxy is miscalibrated, optimizing against it is wasted work. A calibration study (generate → score → have Sam read and correct → compare) is needed before heavy Tier 1 investment.

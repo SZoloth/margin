@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 import { HighlightThread } from "../HighlightThread";
 import type { Highlight, MarginNote } from "@/types/annotations";
@@ -19,7 +19,19 @@ const mockHighlight: Highlight = {
 const mockNotes: MarginNote[] = [];
 
 describe("HighlightThread", () => {
-  afterEach(cleanup);
+  // HighlightThread's close-on-click-outside useEffect uses setTimeout(..., 0) to
+  // defer adding the mousedown listener. In React 19, this pending macrotask keeps
+  // the act() work loop running indefinitely when the worker thread processes multiple
+  // test files sequentially (fileParallelism: false). Fake timers prevent the setTimeout
+  // from creating a pending macrotask that bleeds act() work into subsequent test files,
+  // causing the first test in downstream files to hang for minutes.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
 
   it("applies highlight color to excerpt border", () => {
     render(
