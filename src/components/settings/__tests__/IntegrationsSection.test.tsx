@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { IntegrationsSection } from "../IntegrationsSection";
 
 vi.mock("@/lib/mcp-bridge", () => ({
@@ -41,8 +40,7 @@ describe("IntegrationsSection", () => {
 
     // Click disclosure to reveal it
     const showButton = screen.getByText("Show config");
-    const user = userEvent.setup();
-    await user.click(showButton);
+    fireEvent.click(showButton);
 
     expect(screen.getByText(/"mcpServers"/)).toBeInTheDocument();
   });
