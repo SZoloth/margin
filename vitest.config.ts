@@ -18,16 +18,14 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    // fileParallelism: false runs files serially. pool: "threads" + singleThread: true reuses
-    // a single thread worker for all test files — avoids repeated worker spawn overhead that
-    // causes "Timeout waiting for worker to respond" after ~36 sequential workers.
-    // isolate: true (default) is preserved: vitest resets the module registry between files.
+    // fileParallelism: false runs files serially. maxWorkers: 1 limits the thread pool to a
+    // single worker — vitest 4 defaults to numCPUs-1 workers (up to 12) which pre-spawns idle
+    // threads that exhaust memory and cause "Timeout waiting for worker to respond" after ~30
+    // sequential test files. isolate: true (default) is preserved: module registry is cleared
+    // between files so vi.mock() works correctly per-file.
+    // Note: poolOptions.threads.singleThread was removed in vitest 4; maxWorkers is top-level.
     fileParallelism: false,
     pool: "threads",
-    poolOptions: {
-      threads: {
-        singleThread: true,
-      },
-    },
+    maxWorkers: 1,
   },
 });
