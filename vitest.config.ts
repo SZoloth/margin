@@ -3,25 +3,38 @@ import { BaseSequencer } from "vitest/node";
 import path from "path";
 
 // Vitest's default BaseSequencer sorts larger files first (to minimize variance in parallel
-// runs). With fileParallelism: false (serial execution), this backfires: tiny files end up
-// last, when system memory is most depleted after 37 workers, causing worker spawn timeouts.
+// runs). With fileParallelism: false (serial execution), this backfires: small hook/lib files
+// end up last, when system memory is most depleted, causing worker spawn timeouts.
 //
-// Fix: run the smallest hook tests first, before the heavy jsdom/TipTap component tests
-// have exhausted system resources. The rest still runs in vitest's default large-first order.
+// Fix: run hook and lib tests first, before heavy jsdom/TipTap component tests exhaust
+// system resources. Uses explicit push-based bucketing (not .filter()) to guarantee every
+// file ends up in exactly one bucket even if moduleId is undefined/unexpected.
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
     const sorted = await super.sort(files);
-    // Pin pure hook tests (≤6 KB) to the front — these are the files that otherwise land
-    // last due to their small size and fail with "Timeout waiting for worker to respond".
-    const small = sorted.filter((f) => {
-      const rel = f.moduleId.replace(/\\/g, "/");
-      return rel.includes("/hooks/__tests__/") || rel.includes("/lib/__tests__/");
-    });
-    const rest = sorted.filter((f) => {
-      const rel = f.moduleId.replace(/\\/g, "/");
-      return !rel.includes("/hooks/__tests__/") && !rel.includes("/lib/__tests__/");
-    });
-    return [...small, ...rest];
+    const small: typeof sorted = [];
+    const rest: typeof sorted = [];
+    const unclassified: typeof sorted = [];
+    for (const f of sorted) {
+      // Guard against undefined/null moduleId (defensive — should not happen, but if it
+      // does, an uncaught exception here would silently drop the file from the sorted list).
+      const rel = (f.moduleId ?? "").replace(/\\/g, "/");
+      if (!rel) {
+        // Missing moduleId: run first so it doesn't get deferred to after all component tests.
+        small.unshift(f);
+      } else if (rel.includes("/hooks/__tests__/") || rel.includes("/lib/__tests__/")) {
+        small.push(f);
+      } else {
+        rest.push(f);
+      }
+    }
+    // Safety net: any file that somehow survived neither bucket (should be impossible).
+    for (const f of files) {
+      if (!small.includes(f) && !rest.includes(f)) {
+        unclassified.push(f);
+      }
+    }
+    return [...small, ...rest, ...unclassified];
   }
 }
 
