@@ -15,6 +15,11 @@ const VALID_WRITING_TYPES: &[&str] = &[
     "slack",
     "pitch",
     "outreach",
+    "case-study",
+    "email-hiring",
+    "email-friend",
+    "social-post",
+    "text-friend",
 ];
 
 #[derive(serde::Serialize)]

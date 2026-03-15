@@ -42,6 +42,11 @@ export const REGISTER_MAP: Record<string, string> = {
   "cover-letter": "professional",
   resume: "professional",
   blog: "professional",
+  "case-study": "professional",
+  "email-hiring": "professional",
+  "email-friend": "casual",
+  "social-post": "casual",
+  "text-friend": "casual",
 };
 
 // ── Types ──────────────────────────────────────────────────────────────
