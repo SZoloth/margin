@@ -31,10 +31,12 @@ class HookFirstSequencer extends BaseSequencer {
       } else if (
         rel.includes("/hooks/__tests__/") ||
         rel.includes("/lib/__tests__/") ||
+        rel.includes("/settings/__tests__/") ||
         rel.includes("DiffNavChip.test") ||
         rel.includes("FloatingToolbar.test") ||
         rel.includes("Sidebar.test") ||
         rel.includes("StyleMemorySection.test") ||
+        rel.includes("RulesTab.test") ||
         rel.includes("search.test")
       ) {
         small.push(f);

@@ -79,8 +79,10 @@ describe("RulesTab — SeverityBadge", () => {
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const input = screen.getByDisplayValue("Test rule");
-    await user.clear(input);
-    await user.type(input, "Updated rule text");
+    // Use fireEvent.change instead of user.clear()+user.type() to avoid userEvent
+    // keyboard-event deadlock when stale rAF callbacks from preceding test files are
+    // still pending in the jsdom queue (matches IntegrationsSection fix pattern).
+    fireEvent.change(input, { target: { value: "Updated rule text" } });
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
