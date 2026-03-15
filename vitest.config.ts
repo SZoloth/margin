@@ -8,10 +8,12 @@ import path from "path";
 // TipTap initialization. Each worker thread takes ~52s to start (vitest's hardcoded START_TIMEOUT
 // is 60s), so late-running workers fail intermittently.
 //
-// Fix: run hook, lib, and simple component tests first, before heavy TipTap component tests
+// Fix: run hook, lib, and lightweight component tests first, before heavy TipTap editor tests
 // exhaust system resources. Reader.test runs first of all (unshift) because it has the heaviest
 // TipTap editor setup and times out if the system is resource-depleted after 30+ other files.
-// Also includes search.test (uses Reader/TipTap but must run early to avoid worker spawn timeout).
+// Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
+// FloatingToolbar, search) run in the "small" bucket. Heavy editor tests (HighlightThread,
+// ExportAnnotationsPopover, TabBar, etc.) run in "rest".
 // Uses explicit push-based bucketing — every file ends up in exactly one bucket so nothing is dropped.
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {

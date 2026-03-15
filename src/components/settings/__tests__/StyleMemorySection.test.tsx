@@ -66,7 +66,7 @@ describe("StyleMemorySection", () => {
 
     render(<StyleMemorySection />);
 
-    const exportButton = await screen.findByRole("button", { name: "Export 3 for synthesis" });
+    const exportButton = await screen.findByRole("button", { name: "Export 3 for synthesis" }, { timeout: 5000 });
     await user.click(exportButton);
 
     await waitFor(() => {
