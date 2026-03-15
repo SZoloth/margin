@@ -9,8 +9,10 @@ import path from "path";
 // is 60s), so late-running workers fail intermittently.
 //
 // Fix: run hook, lib, and simple component tests first, before heavy TipTap component tests
-// exhaust system resources. Uses explicit push-based bucketing — every file ends up in exactly
-// one bucket so nothing is dropped.
+// exhaust system resources. Reader.test runs first of all (unshift) because it has the heaviest
+// TipTap editor setup and times out if the system is resource-depleted after 30+ other files.
+// Also includes search.test (uses Reader/TipTap but must run early to avoid worker spawn timeout).
+// Uses explicit push-based bucketing — every file ends up in exactly one bucket so nothing is dropped.
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
     const sorted = await super.sort(files);
@@ -21,12 +23,19 @@ class HookFirstSequencer extends BaseSequencer {
       if (!rel) {
         small.unshift(f);
       } else if (
+        // Reader.test renders the heaviest TipTap editor (all extensions). Run it
+        // first so it gets a fresh worker before system resources are depleted.
+        rel.includes("Reader.test")
+      ) {
+        small.unshift(f);
+      } else if (
         rel.includes("/hooks/__tests__/") ||
         rel.includes("/lib/__tests__/") ||
         rel.includes("DiffNavChip.test") ||
         rel.includes("FloatingToolbar.test") ||
         rel.includes("Sidebar.test") ||
-        rel.includes("StyleMemorySection.test")
+        rel.includes("StyleMemorySection.test") ||
+        rel.includes("search.test")
       ) {
         small.push(f);
       } else {
