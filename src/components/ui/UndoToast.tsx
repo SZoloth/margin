@@ -110,7 +110,7 @@ export function UndoToast({ action, duration = 5000 }: UndoToastProps) {
       <button
         type="button"
         onClick={commit}
-        className="text-xs"
+        className="text-[length:var(--text-xs)]"
         style={{
           color: "var(--color-text-secondary)",
           cursor: "pointer",

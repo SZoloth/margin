@@ -95,14 +95,14 @@ function ThreadMessage({
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); setIsEditing(false); }}
-            className="note-action-btn text-xs"
+            className="note-action-btn text-[length:var(--text-xs)]"
           >
             Cancel
           </button>
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); handleSave(); }}
-            className="note-action-btn text-xs"
+            className="note-action-btn text-[length:var(--text-xs)]"
             style={{ fontWeight: 500 }}
           >
             Save
@@ -117,13 +117,13 @@ function ThreadMessage({
       <span className="thread-message-time">{formatTimeAgo(note.created_at)}</span>
       <p className="thread-message-content">{note.content}</p>
       <div className="thread-message-actions">
-        <button type="button" onClick={startEditing} className="note-action-btn text-xs">
+        <button type="button" onClick={startEditing} className="note-action-btn text-[length:var(--text-xs)]">
           Edit
         </button>
         <button
           type="button"
           onClick={() => onDelete(note.id)}
-          className="note-action-btn note-action-btn--delete text-xs"
+          className="note-action-btn note-action-btn--delete text-[length:var(--text-xs)]"
         >
           Delete
         </button>
@@ -293,7 +293,7 @@ export function HighlightThread({
               <button
                 type="button"
                 onClick={() => onSetPolarity(highlight.id, polarity === "positive" ? null : "positive")}
-                className="note-action-btn text-xs"
+                className="note-action-btn text-[length:var(--text-xs)]"
                 title="Positive signal — do more of this"
                 style={{
                   fontWeight: polarity === "positive" ? 600 : 400,
@@ -308,7 +308,7 @@ export function HighlightThread({
               <button
                 type="button"
                 onClick={() => onSetPolarity(highlight.id, polarity === "corrective" ? null : "corrective")}
-                className="note-action-btn text-xs"
+                className="note-action-btn text-[length:var(--text-xs)]"
                 title="Corrective signal — avoid this"
                 style={{
                   fontWeight: polarity === "corrective" ? 600 : 400,
@@ -325,7 +325,7 @@ export function HighlightThread({
           <button
             type="button"
             onClick={() => onDeleteHighlight(highlight.id)}
-            className="note-action-btn note-action-btn--delete text-xs"
+            className="note-action-btn note-action-btn--delete text-[length:var(--text-xs)]"
           >
             Remove
           </button>
@@ -372,7 +372,7 @@ export function HighlightThread({
             <button
               type="button"
               onClick={handleAddNote}
-              className="note-action-btn note-action-btn--primary text-xs"
+              className="note-action-btn note-action-btn--primary text-[length:var(--text-xs)]"
             >
               Save
             </button>

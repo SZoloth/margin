@@ -88,7 +88,7 @@ function WritingTypeChips({
           }}
           style={{
             padding: "1px 6px",
-            fontSize: "var(--text-2xs)",
+            fontSize: "var(--text-xs)",
             fontWeight: value === wt.value ? 600 : 400,
             color:
               value === wt.value
@@ -125,7 +125,7 @@ function ViewToggle({
 }) {
   const buttonBase: React.CSSProperties = {
     padding: "3px 10px",
-    fontSize: "var(--text-1xs)",
+    fontSize: "var(--text-sm)",
     border: "1px solid var(--color-border)",
     cursor: "pointer",
     transition: "all 100ms",
@@ -220,7 +220,7 @@ function CorrectionCard({
         <div
           style={{
             fontFamily: "'Newsreader', Georgia, serif",
-            fontSize: "var(--text-md)",
+            fontSize: "var(--text-lg)",
             fontStyle: "italic",
             color: "var(--color-text-secondary)",
             lineHeight: 1.5,
@@ -272,7 +272,7 @@ function CorrectionCard({
             }}
             style={{
               padding: 0,
-              fontSize: "var(--text-2xs)",
+              fontSize: "var(--text-xs)",
               color: "var(--color-text-secondary)",
               background: "none",
               border: "none",
@@ -311,7 +311,7 @@ function CorrectionCard({
               lineHeight: 1.6,
             }}
           >
-            <div style={{ marginBottom: 6, fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+            <div style={{ marginBottom: 6, fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>
               Extended context
             </div>
             {highlightInContext(correction.extendedContext, correction.originalText)}
@@ -577,7 +577,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
             aria-pressed={!activeFilter}
             style={{
               padding: "3px 10px",
-              fontSize: "var(--text-1xs)",
+              fontSize: "var(--text-sm)",
               border: "1px solid var(--color-border)",
               borderRadius: 100,
               background: !activeFilter ? "var(--color-text-primary)" : "var(--color-page)",
@@ -596,7 +596,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
               aria-pressed={activeFilter === wt.value}
               style={{
                 padding: "3px 10px",
-                fontSize: "var(--text-1xs)",
+                fontSize: "var(--text-sm)",
                 border: "1px solid var(--color-border)",
                 borderRadius: 100,
                 background: activeFilter === wt.value ? "var(--color-text-primary)" : "var(--color-page)",
@@ -612,7 +612,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
         <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           {selectedIds.size > 0 && (
             <>
-              <span style={{ fontSize: "var(--text-1xs)", color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
                 {selectedIds.size} selected
               </span>
               {view === "archive" && (
@@ -621,7 +621,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
                   onClick={handleBulkRequeue}
                   style={{
                     padding: "4px 10px",
-                    fontSize: "var(--text-1xs)",
+                    fontSize: "var(--text-sm)",
                     border: "1px solid var(--color-border)",
                     borderRadius: "var(--radius-sm)",
                     background: "var(--color-page)",
@@ -639,7 +639,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
                 aria-controls="corrections-bulk-tag-chips"
                 style={{
                   padding: "4px 10px",
-                  fontSize: "var(--text-1xs)",
+                  fontSize: "var(--text-sm)",
                   border: "1px solid var(--color-border)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
@@ -654,11 +654,11 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
                 onClick={handleBulkDelete}
                 style={{
                   padding: "4px 10px",
-                  fontSize: "var(--text-1xs)",
-                  border: "1px solid var(--color-danger, #ef4444)",
+                  fontSize: "var(--text-sm)",
+                  border: "1px solid var(--color-danger, #c44b3f)",
                   borderRadius: "var(--radius-sm)",
                   background: "var(--color-page)",
-                  color: "var(--color-danger, #ef4444)",
+                  color: "var(--color-danger, #c44b3f)",
                   cursor: "pointer",
                 }}
               >

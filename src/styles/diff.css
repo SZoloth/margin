@@ -45,7 +45,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 24px;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-family: 'Instrument Sans', system-ui, sans-serif;
   color: var(--color-text-secondary);
   background-color: var(--color-sidebar);
@@ -66,7 +66,7 @@
 
 .diff-banner__time {
   color: var(--color-text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .diff-banner__actions {
@@ -78,7 +78,7 @@
 
 .diff-banner__btn {
   padding: 0;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 500;
   font-family: 'Instrument Sans', system-ui, sans-serif;
   border: none;
@@ -144,7 +144,7 @@
   align-items: center;
   gap: 12px;
   padding: 6px 16px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-family: 'Instrument Sans', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   color: #FFFFF8;
@@ -210,7 +210,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   font-family: 'Instrument Sans', system-ui, sans-serif;
   letter-spacing: 0.06em;

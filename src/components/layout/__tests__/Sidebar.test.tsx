@@ -58,7 +58,7 @@ describe("Sidebar", () => {
       render(<Sidebar {...defaultProps} />);
 
       const header = screen.getByText("Today");
-      expect(header.style.fontSize).toBe("11px");
+      expect(header.style.fontSize).toBe("var(--text-xs)");
     });
 
     it("renders with correct letter spacing", () => {

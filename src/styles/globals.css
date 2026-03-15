@@ -8,11 +8,11 @@
 @import "./diff.css";
 
 @theme {
-  --color-highlight-yellow: #f5edd2;
-  --color-highlight-green: #dce8d5;
-  --color-highlight-blue: #d8e2eb;
-  --color-highlight-pink: #ecdde3;
-  --color-highlight-orange: #f0e2cf;
+  --color-highlight-yellow: #f5ebb0;
+  --color-highlight-green: #d0e4c8;
+  --color-highlight-blue: #cddaed;
+  --color-highlight-pink: #e8d0db;
+  --color-highlight-orange: #f0d4b8;
 
 }
 
@@ -24,53 +24,52 @@
   --color-text-secondary: #6b6560;
   --color-border: #dfdbd3;
 
+  --radius-xs: 3px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-pill: 9999px;
 
   --hover-bg: rgba(0, 0, 0, 0.04);
   --active-bg: rgba(0, 0, 0, 0.07);
 
-  /* Semantic colors */
-  --color-success: #22c55e;
-  --color-danger: #ef4444;
-  --color-danger-text: #dc2626;
-  --color-warning: #eab308;
+  /* Semantic colors — warmed to match palette */
+  --color-success: #5a9a3e;
+  --color-danger: #c44b3f;
+  --color-danger-text: #a13a30;
+  --color-warning: #c49a2a;
   --color-accent: #8a6e1a;
-  --color-text-tertiary: #9e9892;
-  --color-green: #22c55e;
-  --color-red: #ef4444;
-  --color-amber: #f59e0b;
+  --color-text-tertiary: #7a756f;
+  --color-green: #5a9a3e;
+  --color-red: #c44b3f;
+  --color-amber: #c49a2a;
 
-  /* Severity badge tokens */
-  --color-severity-must-fix-bg: #fef2f2;
-  --color-severity-must-fix-text: #b91c1c;
-  --color-severity-must-fix-border: #fecaca;
-  --color-severity-should-fix-bg: #fffbeb;
-  --color-severity-should-fix-text: #92400e;
-  --color-severity-should-fix-border: #fde68a;
-  --color-severity-nice-to-fix-bg: #f0fdf4;
-  --color-severity-nice-to-fix-text: #166534;
-  --color-severity-nice-to-fix-border: #bbf7d0;
+  /* Severity badge tokens — warmed */
+  --color-severity-must-fix-bg: #f5e8e6;
+  --color-severity-must-fix-text: #8b3a2a;
+  --color-severity-must-fix-border: #e0c4bf;
+  --color-severity-should-fix-bg: #f5f0e0;
+  --color-severity-should-fix-text: #7a5c1a;
+  --color-severity-should-fix-border: #ddd3ac;
+  --color-severity-nice-to-fix-bg: #eaf2e4;
+  --color-severity-nice-to-fix-text: #3d6038;
+  --color-severity-nice-to-fix-border: #c4d9b8;
 
-  /* Elevation — barely there */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.07);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.09);
+  /* Elevation — wider differentiation */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 10px 32px rgba(0, 0, 0, 0.12);
 
   /* Surface tokens */
   --color-surface-subtle: rgba(0, 0, 0, 0.04);
   --color-surface-muted: rgba(0, 0, 0, 0.07);
   --color-overlay: rgba(0, 0, 0, 0.3);
 
-  /* UI Type Scale */
-  --text-3xs: 9px;
-  --text-2xs: 10px;
-  --text-1xs: 11px;
-  --text-xs: 12px;
-  --text-sm: 13px;
+  /* UI Type Scale — 6 perceptually distinct steps */
+  --text-xs: 10px;
+  --text-sm: 12px;
   --text-base: 14px;
-  --text-md: 15px;
   --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 28px;
@@ -87,12 +86,12 @@
   --duration-page: 250ms;
 }
 
-/* Dark theme */
+/* Dark theme — preserves warmth */
 :root[data-theme="dark"] {
-  --color-page: #1C1B19;
-  --color-sidebar: #24231F;
-  --color-text-primary: #E5E5E5;
-  --color-text-secondary: #A1A1A1;
+  --color-page: #1e1c18;
+  --color-sidebar: #262420;
+  --color-text-primary: #e8e4dc;
+  --color-text-secondary: #a39a8e;
   --color-border: #36342E;
 
   --hover-bg: rgba(255, 255, 255, 0.07);
@@ -103,46 +102,39 @@
   --color-surface-muted: rgba(255, 255, 255, 0.12);
   --color-overlay: rgba(0, 0, 0, 0.5);
 
-  /* Wire dark highlight colors into base tokens */
-  --color-highlight-yellow: rgba(245, 190, 30, 0.28);
-  --color-highlight-green: rgba(72, 190, 100, 0.22);
-  --color-highlight-blue: rgba(90, 150, 220, 0.22);
-  --color-highlight-pink: rgba(220, 90, 150, 0.22);
-  --color-highlight-orange: rgba(240, 130, 40, 0.25);
+  /* Wire dark highlight colors into base tokens — increased separation */
+  --color-highlight-yellow: rgba(245, 200, 40, 0.30);
+  --color-highlight-green: rgba(72, 190, 90, 0.24);
+  --color-highlight-blue: rgba(80, 140, 220, 0.24);
+  --color-highlight-pink: rgba(220, 80, 150, 0.24);
+  --color-highlight-orange: rgba(240, 120, 40, 0.28);
 
   /* Elevation — higher opacity for dark mode */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
 
-  /* Semantic colors */
-  --color-success: #4ade80;
-  --color-danger: #f87171;
-  --color-danger-text: #f87171;
-  --color-warning: #facc15;
-  --color-accent: #facc15;
-  --color-text-tertiary: #6e6e6e;
-  --color-green: #4ade80;
-  --color-red: #f87171;
-  --color-amber: #fbbf24;
+  /* Semantic colors — warmed dark variants */
+  --color-success: #8aad7a;
+  --color-danger: #d4786c;
+  --color-danger-text: #d4786c;
+  --color-warning: #c9a84c;
+  --color-accent: #c9a84c;
+  --color-text-tertiary: #8a857e;
+  --color-green: #8aad7a;
+  --color-red: #d4786c;
+  --color-amber: #c9a84c;
 
-  /* Severity badge tokens */
-  --color-severity-must-fix-bg: #3b1c1c;
-  --color-severity-must-fix-text: #f87171;
-  --color-severity-must-fix-border: #5c2020;
-  --color-severity-should-fix-bg: #3b3520;
-  --color-severity-should-fix-text: #facc15;
-  --color-severity-should-fix-border: #5c4a20;
-  --color-severity-nice-to-fix-bg: #1c3b25;
-  --color-severity-nice-to-fix-text: #4ade80;
-  --color-severity-nice-to-fix-border: #205c30;
-
-  /* Dark-mode highlight colors */
-  --color-highlight-yellow-dark: rgba(245, 190, 30, 0.28);
-  --color-highlight-green-dark: rgba(72, 190, 100, 0.22);
-  --color-highlight-blue-dark: rgba(90, 150, 220, 0.22);
-  --color-highlight-pink-dark: rgba(220, 90, 150, 0.22);
-  --color-highlight-orange-dark: rgba(240, 130, 40, 0.25);
+  /* Severity badge tokens — warmed dark */
+  --color-severity-must-fix-bg: #3b2420;
+  --color-severity-must-fix-text: #d4786c;
+  --color-severity-must-fix-border: #5c3530;
+  --color-severity-should-fix-bg: #3b3420;
+  --color-severity-should-fix-text: #c9a84c;
+  --color-severity-should-fix-border: #5c4a28;
+  --color-severity-nice-to-fix-bg: #243b28;
+  --color-severity-nice-to-fix-text: #8aad7a;
+  --color-severity-nice-to-fix-border: #305c38;
 }
 
 body {

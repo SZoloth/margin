@@ -315,7 +315,7 @@ export function AppShell({
                 alignItems: "center",
                 gap: 6,
                 padding: "4px 10px",
-                fontSize: 13, /* ds-lint-disable */
+                fontSize: "var(--text-base)",
                 fontWeight: 500,
                 color: "var(--color-text-secondary)",
                 border: "1px solid var(--color-border)",
@@ -383,7 +383,7 @@ export function AppShell({
                   style={{
                     fontFamily: "'Newsreader', Georgia, serif",
                     fontStyle: "italic",
-                    fontSize: "28px",
+                    fontSize: "var(--text-2xl)",
                     letterSpacing: "-0.01em",
                     lineHeight: 1.45,
                     color: "var(--color-text-primary)",
@@ -394,7 +394,7 @@ export function AppShell({
                 <p
                   className="mt-1"
                   style={{
-                    fontSize: "13px",
+                    fontSize: "var(--text-sm)",
                     letterSpacing: "0.02em",
                     textTransform: "uppercase",
                     color: "var(--color-text-tertiary)",
@@ -414,7 +414,7 @@ export function AppShell({
                 <p
                   style={{
                     fontFamily: "'Instrument Sans', system-ui, sans-serif",
-                    fontSize: "15px",
+                    fontSize: "var(--text-lg)",
                     color: "var(--color-text-secondary)",
                   }}
                 >
@@ -455,7 +455,7 @@ export function AppShell({
             position: "fixed",
             bottom: 10,
             right: 10,
-            fontSize: 9, /* ds-lint-disable */
+            fontSize: "var(--text-xs)",
             fontWeight: 700,
             fontFamily: "ui-monospace, 'SF Mono', SFMono-Regular, monospace",
             letterSpacing: "0.08em",

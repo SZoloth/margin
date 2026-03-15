@@ -196,7 +196,7 @@ export function Sidebar({
         <h1
           style={{
             fontFamily: "'Newsreader', Georgia, serif",
-            fontSize: 20,
+            fontSize: "var(--text-xl)",
             fontWeight: 600,
             letterSpacing: "-0.02em",
             color: "var(--color-text-primary)",
@@ -324,7 +324,7 @@ export function Sidebar({
                   <div className="text-sm font-medium truncate">{result.title}</div>
                   {result.snippet && (
                     <div
-                      className="text-xs mt-0.5 truncate"
+                      className="text-[length:var(--text-xs)] mt-0.5 truncate"
                       style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}
                       dangerouslySetInnerHTML={{ __html: sanitizeSnippet(result.snippet) }}
                     />
@@ -335,7 +335,7 @@ export function Sidebar({
             {/* Divider between FTS and file results */}
             {searchResults.length > 0 && fileResults.length > 0 && (
               <div
-                className="px-3 py-1.5 text-xs font-medium uppercase tracking-wider"
+                className="px-3 py-1.5 text-[length:var(--text-xs)] font-medium uppercase tracking-wider"
                 style={{ color: "var(--color-text-secondary)", opacity: 0.5 }}
               >
                 Files on disk
@@ -372,7 +372,7 @@ export function Sidebar({
                   <div className="text-sm font-medium truncate">{file.filename}</div>
                   {parentDir && (
                     <div
-                      className="text-xs mt-0.5 truncate"
+                      className="text-[length:var(--text-xs)] mt-0.5 truncate"
                       style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}
                     >
                       {parentDir}
@@ -407,8 +407,8 @@ export function Sidebar({
                   return (
                     <div key={group.label}>
                       <h2
-                        className="text-xs font-semibold uppercase tracking-wider mb-2 px-3"
-                        style={{ color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "0.08em" }}
+                        className="text-[length:var(--text-xs)] font-semibold uppercase tracking-wider mb-2 px-3"
+                        style={{ color: "var(--color-text-secondary)", fontSize: "var(--text-xs)", letterSpacing: "0.08em" }}
                       >
                         {group.label}
                       </h2>
@@ -505,7 +505,7 @@ export function Sidebar({
                                   {parentFolder && (
                                     <span
                                       className="block truncate"
-                                      style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}
+                                      style={{ fontSize: "var(--text-xs)", opacity: 0.6, fontWeight: 400 }}
                                     >
                                       {parentFolder}
                                     </span>

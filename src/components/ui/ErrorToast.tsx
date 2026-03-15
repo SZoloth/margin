@@ -68,7 +68,7 @@ export function ErrorToast({ message, duration = 4000 }: ErrorToastProps) {
       <button
         type="button"
         onClick={dismiss}
-        className="text-xs"
+        className="text-[length:var(--text-xs)]"
         style={{ color: "var(--color-text-secondary)", cursor: "pointer", padding: "2px 4px" }}
         aria-label="Dismiss"
       >

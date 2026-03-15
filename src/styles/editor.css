@@ -6,7 +6,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--color-text-secondary);
   white-space: pre-wrap;
@@ -20,7 +20,7 @@
   display: block;
   margin-bottom: var(--space-sm);
   font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -95,34 +95,9 @@
   padding: 1px 0;
 }
 
-/* Dark mode highlights — slightly more saturated */
+/* Dark mode selection — slightly more saturated */
 :root[data-theme="dark"] .tiptap ::selection {
   background: rgba(66, 133, 244, 0.35);
-}
-
-:root[data-theme="dark"] .tiptap mark[data-color="yellow"],
-:root[data-theme="dark"] .tiptap mark.highlight--yellow {
-  background-color: var(--color-highlight-yellow-dark);
-}
-
-:root[data-theme="dark"] .tiptap mark[data-color="green"],
-:root[data-theme="dark"] .tiptap mark.highlight--green {
-  background-color: var(--color-highlight-green-dark);
-}
-
-:root[data-theme="dark"] .tiptap mark[data-color="blue"],
-:root[data-theme="dark"] .tiptap mark.highlight--blue {
-  background-color: var(--color-highlight-blue-dark);
-}
-
-:root[data-theme="dark"] .tiptap mark[data-color="pink"],
-:root[data-theme="dark"] .tiptap mark.highlight--pink {
-  background-color: var(--color-highlight-pink-dark);
-}
-
-:root[data-theme="dark"] .tiptap mark[data-color="orange"],
-:root[data-theme="dark"] .tiptap mark.highlight--orange {
-  background-color: var(--color-highlight-orange-dark);
 }
 
 /* Floating toolbar button states */
