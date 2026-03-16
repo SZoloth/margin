@@ -1,0 +1,331 @@
+{
+  "architecture": "g (production)",
+  "pass_rate": 0.667,
+  "mean_dimension": 46.8,
+  "total_mechanical": 11,
+  "per_type": {
+    "general": {
+      "type": "general",
+      "passRate": 0.333,
+      "avgMechanical": 0.7,
+      "avgDimension": 45,
+      "samples": [
+        {
+          "type": "general",
+          "sample": 1,
+          "mechanicalIssues": 1,
+          "dimensionTotal": 46,
+          "pass": false,
+          "worstViolations": [
+            "Voice: repetitive-structure — 5 consecutive sentences with similar length (~10 words): \"That's the conversatio"
+          ]
+        },
+        {
+          "type": "general",
+          "sample": 2,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 45,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "general",
+          "sample": 3,
+          "mechanicalIssues": 1,
+          "dimensionTotal": 44,
+          "pass": false,
+          "worstViolations": [
+            "Voice: repetitive-structure — 8 consecutive sentences with similar length (~11 words): \"The frontend wiring, t"
+          ]
+        }
+      ]
+    },
+    "email": {
+      "type": "email",
+      "passRate": 0,
+      "avgMechanical": 1,
+      "avgDimension": 44.7,
+      "samples": [
+        {
+          "type": "email",
+          "sample": 1,
+          "mechanicalIssues": 1,
+          "dimensionTotal": 47,
+          "pass": false,
+          "worstViolations": [
+            "Voice: missing-period — Paragraph ends without punctuation: \"...ork sample] before you decide, I can hav"
+          ]
+        },
+        {
+          "type": "email",
+          "sample": 2,
+          "mechanicalIssues": 1,
+          "dimensionTotal": 45,
+          "pass": false,
+          "worstViolations": [
+            "Voice: missing-period — Paragraph ends without punctuation: \"...e room. Happy to send a quick writeup be"
+          ]
+        },
+        {
+          "type": "email",
+          "sample": 3,
+          "mechanicalIssues": 1,
+          "dimensionTotal": 42,
+          "pass": false,
+          "worstViolations": [
+            "Voice: missing-period — Paragraph ends without punctuation: \"... or work sample] if that's useful before"
+          ]
+        }
+      ]
+    },
+    "cover-letter": {
+      "type": "cover-letter",
+      "passRate": 0.333,
+      "avgMechanical": 0.7,
+      "avgDimension": 47.7,
+      "samples": [
+        {
+          "type": "cover-letter",
+          "sample": 1,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 48,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "cover-letter",
+          "sample": 2,
+          "mechanicalIssues": 1,
+          "dimensionTotal": 47,
+          "pass": false,
+          "worstViolations": [
+            "Voice: long-sentence — 41 words: \"I spent three years at DreamWorks Animation doing a version of that, "
+          ]
+        },
+        {
+          "type": "cover-letter",
+          "sample": 3,
+          "mechanicalIssues": 1,
+          "dimensionTotal": 48,
+          "pass": false,
+          "worstViolations": [
+            "Voice: long-sentence — 41 words: \"Reading your documentation for the first time gave me a model for wha"
+          ]
+        }
+      ]
+    },
+    "outreach": {
+      "type": "outreach",
+      "passRate": 1,
+      "avgMechanical": 0,
+      "avgDimension": 48,
+      "samples": [
+        {
+          "type": "outreach",
+          "sample": 1,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 48,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "outreach",
+          "sample": 2,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 48,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "outreach",
+          "sample": 3,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 48,
+          "pass": true,
+          "worstViolations": []
+        }
+      ]
+    },
+    "prd": {
+      "type": "prd",
+      "passRate": 0.667,
+      "avgMechanical": 0.7,
+      "avgDimension": 46.7,
+      "samples": [
+        {
+          "type": "prd",
+          "sample": 1,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 46,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "prd",
+          "sample": 2,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 44,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "prd",
+          "sample": 3,
+          "mechanicalIssues": 2,
+          "dimensionTotal": 50,
+          "pass": false,
+          "worstViolations": [
+            "Voice: long-sentence — 42 words: \"The pattern in the requests is consistent: they want to use Margin as",
+            "Voice: colon-excess — 2 prose colons found (limit: 1 per document)"
+          ]
+        }
+      ]
+    },
+    "blog": {
+      "type": "blog",
+      "passRate": 0.667,
+      "avgMechanical": 0.7,
+      "avgDimension": 46,
+      "samples": [
+        {
+          "type": "blog",
+          "sample": 1,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 48,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "blog",
+          "sample": 2,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 48,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "blog",
+          "sample": 3,
+          "mechanicalIssues": 2,
+          "dimensionTotal": 42,
+          "pass": false,
+          "worstViolations": [
+            "Kill word: leverage (high)",
+            "Voice: long-sentence — 43 words: \"Most product roadmaps answer the question \"what are we building?\" wit"
+          ]
+        }
+      ]
+    },
+    "resume": {
+      "type": "resume",
+      "passRate": 1,
+      "avgMechanical": 0,
+      "avgDimension": 47,
+      "samples": [
+        {
+          "type": "resume",
+          "sample": 1,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 47,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "resume",
+          "sample": 2,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 47,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "resume",
+          "sample": 3,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 47,
+          "pass": true,
+          "worstViolations": []
+        }
+      ]
+    },
+    "slack": {
+      "type": "slack",
+      "passRate": 1,
+      "avgMechanical": 0,
+      "avgDimension": 47,
+      "samples": [
+        {
+          "type": "slack",
+          "sample": 1,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 47,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "slack",
+          "sample": 2,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 47,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "slack",
+          "sample": 3,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 47,
+          "pass": true,
+          "worstViolations": []
+        }
+      ]
+    },
+    "pitch": {
+      "type": "pitch",
+      "passRate": 1,
+      "avgMechanical": 0,
+      "avgDimension": 49.3,
+      "samples": [
+        {
+          "type": "pitch",
+          "sample": 1,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 50,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "pitch",
+          "sample": 2,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 50,
+          "pass": true,
+          "worstViolations": []
+        },
+        {
+          "type": "pitch",
+          "sample": 3,
+          "mechanicalIssues": 0,
+          "dimensionTotal": 48,
+          "pass": true,
+          "worstViolations": []
+        }
+      ]
+    }
+  },
+  "worst_violations": [
+    "[general] Voice: repetitive-structure — 5 consecutive sentences with similar length (~10 words): \"That's the conversatio (x1)",
+    "[general] Voice: repetitive-structure — 8 consecutive sentences with similar length (~11 words): \"The frontend wiring, t (x1)",
+    "[email] Voice: missing-period — Paragraph ends without punctuation: \"...ork sample] before you decide, I can hav (x1)",
+    "[email] Voice: missing-period — Paragraph ends without punctuation: \"...e room. Happy to send a quick writeup be (x1)",
+    "[email] Voice: missing-period — Paragraph ends without punctuation: \"... or work sample] if that's useful before (x1)",
+    "[cover-letter] Voice: long-sentence — 41 words: \"I spent three years at DreamWorks Animation doing a version of that,  (x1)",
+    "[cover-letter] Voice: long-sentence — 41 words: \"Reading your documentation for the first time gave me a model for wha (x1)",
+    "[prd] Voice: long-sentence — 42 words: \"The pattern in the requests is consistent: they want to use Margin as (x1)",
+    "[prd] Voice: colon-excess — 2 prose colons found (limit: 1 per document) (x1)",
+    "[blog] Kill word: leverage (high) (x1)",
+    "[blog] Voice: long-sentence — 43 words: \"Most product roadmaps answer the question \"what are we building?\" wit (x1)"
+  ],
+  "total_samples": 27,
+  "duration_seconds": 684
+}
