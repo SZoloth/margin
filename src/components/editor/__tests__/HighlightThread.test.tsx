@@ -14,6 +14,7 @@ const mockHighlight: Highlight = {
   suffix_context: "",
   created_at: Date.now(),
   updated_at: Date.now(),
+  exported_at: null,
 };
 
 const mockNotes: MarginNote[] = [];

@@ -150,6 +150,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: create dashboard tables (test_runs, test_run_types)
     migrate_add_dashboard_tables(&conn)?;
 
+    // Migration: add exported_at column to highlights
+    migrate_highlights_add_exported_at(&conn)?;
+
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
         "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
@@ -837,6 +840,45 @@ mod tests {
         assert_eq!(notes, Some("From blog review".to_string()));
         assert_eq!(signal, 3);
     }
+
+    #[test]
+    fn migrate_adds_exported_at_column_to_highlights() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE documents (
+                id TEXT PRIMARY KEY, source TEXT NOT NULL,
+                last_opened_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+            );
+            CREATE TABLE highlights (
+                id TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                color TEXT NOT NULL DEFAULT 'yellow', text_content TEXT NOT NULL,
+                from_pos INTEGER NOT NULL, to_pos INTEGER NOT NULL,
+                prefix_context TEXT, suffix_context TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );",
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO documents (id, source, last_opened_at, created_at) VALUES ('d1', 'file', 1000, 1000)", [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO highlights (id, document_id, color, text_content, from_pos, to_pos, created_at, updated_at)
+             VALUES ('h1', 'd1', 'yellow', 'text', 0, 4, 1000, 1000)", [],
+        ).unwrap();
+
+        migrate_highlights_add_exported_at(&conn).unwrap();
+
+        let val: Option<i64> = conn.query_row("SELECT exported_at FROM highlights WHERE id = 'h1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(val, None);
+
+        conn.execute("UPDATE highlights SET exported_at = 5000 WHERE id = 'h1'", []).unwrap();
+        let val2: Option<i64> = conn.query_row("SELECT exported_at FROM highlights WHERE id = 'h1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(val2, Some(5000));
+
+        // Idempotent
+        migrate_highlights_add_exported_at(&conn).unwrap();
+    }
 }
 
 /// Adds a `writing_type` column to the corrections table if it doesn't exist.
@@ -1284,6 +1326,25 @@ fn migrate_writing_rules_add_register(conn: &Connection) -> Result<(), Box<dyn s
             "UPDATE writing_rules SET register = 'all' WHERE category = 'voice-calibration'
              AND register IS NULL;",
         )?;
+    }
+
+    Ok(())
+}
+
+/// Adds `exported_at` column to the highlights table.
+/// NULL = not yet exported; non-NULL = epoch millis when last exported.
+fn migrate_highlights_add_exported_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(highlights)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "exported_at")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE highlights ADD COLUMN exported_at INTEGER;")?;
     }
 
     Ok(())

@@ -48,6 +48,7 @@ function highlight(overrides: Partial<Highlight> = {}): Highlight {
     suffix_context: null,
     created_at: 1000,
     updated_at: 1000,
+    exported_at: null,
     ...overrides,
   };
 }
