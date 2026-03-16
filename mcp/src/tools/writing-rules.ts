@@ -52,7 +52,7 @@ export function getWritingRules(
 const VALID_SEVERITIES = ["must-fix", "should-fix", "nice-to-fix"] as const;
 const VALID_WRITING_TYPES = [
   "general", "email", "prd", "blog", "cover-letter",
-  "resume", "slack", "pitch", "outreach",
+  "resume", "slack", "pitch", "outreach", "text",
   "case-study", "email-hiring", "email-friend", "social-post", "text-friend",
 ] as const;
 

@@ -105,6 +105,7 @@ fn writing_type_label(wt: &str) -> &str {
         "slack" => "Slack",
         "pitch" => "Pitch",
         "outreach" => "Outreach",
+        "text" => "Text message",
         other => other,
     }
 }

@@ -29,7 +29,7 @@ var (
 	ValidSeverities  = []string{"must-fix", "should-fix", "nice-to-fix"}
 	ValidWritingTypes = []string{
 		"general", "email", "prd", "blog", "cover-letter",
-		"resume", "slack", "pitch", "outreach",
+		"resume", "slack", "pitch", "outreach", "text",
 	}
 	TypeLabels = map[string]string{
 		"general":      "General",
@@ -41,6 +41,7 @@ var (
 		"slack":        "Slack",
 		"pitch":        "Pitch",
 		"outreach":     "Outreach",
+		"text":         "Text message",
 	}
 )
 
@@ -248,6 +249,40 @@ func UpdateWritingRule(d *sql.DB, p UpdateRuleParams) (*WritingRule, error) {
 		return nil, err
 	}
 	return &r, nil
+}
+
+func GetHighSignalRules(d *sql.DB, limit int) ([]WritingRule, error) {
+	if limit < 1 {
+		limit = 30
+	}
+
+	rows, err := d.Query(
+		`SELECT id, writing_type, category, rule_text, when_to_apply,
+		        why, severity, example_before, example_after, source,
+		        signal_count, notes, created_at, updated_at
+		 FROM writing_rules
+		 WHERE signal_count >= 2 OR severity = 'must-fix'
+		 ORDER BY signal_count DESC
+		 LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []WritingRule
+	for rows.Next() {
+		var r WritingRule
+		if err := rows.Scan(&r.ID, &r.WritingType, &r.Category, &r.RuleText,
+			&r.WhenToApply, &r.Why, &r.Severity, &r.ExampleBefore, &r.ExampleAfter,
+			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
+	if rules == nil {
+		rules = []WritingRule{}
+	}
+	return rules, nil
 }
 
 func DeleteWritingRule(d *sql.DB, ruleID string) error {

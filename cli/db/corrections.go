@@ -77,6 +77,45 @@ func parseNotesJSON(raw string) []string {
 	return result
 }
 
+func GetCorrectionsWithNotes(d *sql.DB, limit int) ([]CorrectionRecord, error) {
+	if limit < 1 {
+		limit = 30
+	}
+
+	rows, err := d.Query(
+		`SELECT original_text, notes_json, highlight_color,
+		        document_title, document_id, created_at,
+		        writing_type, polarity, prefix_context,
+		        suffix_context, extended_context
+		 FROM corrections
+		 WHERE notes_json IS NOT NULL AND notes_json != '[]'
+		   AND session_id != '__backfilled__'
+		 ORDER BY created_at DESC
+		 LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []CorrectionRecord
+	for rows.Next() {
+		var r CorrectionRecord
+		var notesJSON string
+		if err := rows.Scan(&r.OriginalText, &notesJSON, &r.HighlightColor,
+			&r.DocumentTitle, &r.DocumentID, &r.CreatedAt,
+			&r.WritingType, &r.Polarity, &r.PrefixContext,
+			&r.SuffixContext, &r.ExtendedContext); err != nil {
+			return nil, err
+		}
+		r.Notes = parseNotesJSON(notesJSON)
+		records = append(records, r)
+	}
+	if records == nil {
+		records = []CorrectionRecord{}
+	}
+	return records, nil
+}
+
 func GetCorrections(d *sql.DB, documentID *string, limit int) ([]CorrectionRecord, error) {
 	if limit < 1 {
 		limit = 1

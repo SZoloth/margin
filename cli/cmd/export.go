@@ -39,9 +39,32 @@ var exportProfileCmd = &cobra.Command{
 	},
 }
 
+var exportCoachingCmd = &cobra.Command{
+	Use:   "coaching-prompt",
+	Short: "Generate Architecture G coaching prompt for writing",
+	Run: func(cmd *cobra.Command, args []string) {
+		dbPath := resolveDBPath()
+		writingType, _ := cmd.Flags().GetString("type")
+		register, _ := cmd.Flags().GetString("register")
+
+		if writingType == "" {
+			output.Error("--type flag is required")
+		}
+
+		result, err := profile.GenerateCoachingPrompt(dbPath, writingType, register)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		fmt.Print(result)
+	},
+}
+
 func init() {
 	exportWaitCmd.Flags().Int("timeout", 300, "timeout in seconds (max 600)")
 
-	exportCmd.AddCommand(exportWaitCmd, exportProfileCmd)
+	exportCoachingCmd.Flags().String("type", "", "writing type (email, blog, cover-letter, etc.)")
+	exportCoachingCmd.Flags().String("register", "", "register override (casual, professional, etc.)")
+
+	exportCmd.AddCommand(exportWaitCmd, exportProfileCmd, exportCoachingCmd)
 	rootCmd.AddCommand(exportCmd)
 }
