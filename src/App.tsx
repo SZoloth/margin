@@ -1062,33 +1062,12 @@ export default function App() {
         correctionsSaved,
       });
       if (shouldMarkExported) {
-        // Strip highlight and marginNote marks from the editor
-        const { state } = editor;
-        const { tr } = state;
-        state.doc.descendants((node, pos) => {
-          if (!node.isText) return;
-          const highlightMark = node.marks.find((m) => m.type.name === "highlight");
-          const marginNoteMark = node.marks.find((m) => m.type.name === "marginNote");
-          if (highlightMark) {
-            tr.removeMark(pos, pos + node.nodeSize, highlightMark.type);
-          }
-          if (marginNoteMark) {
-            tr.removeMark(pos, pos + node.nodeSize, marginNoteMark.type);
-          }
-        });
-        if (tr.steps.length > 0) {
-          tr.setMeta("addToHistory", false);
-          isRestoringMarksRef.current = true;
-          try {
-            editor.view.dispatch(tr);
-          } finally {
-            isRestoringMarksRef.current = false;
-          }
-        }
-
-        // Mark highlights as exported in DB instead of deleting
+        // Mark highlights as exported in DB (keep them visible in the editor)
         const exportedIds = highlights.map((h) => h.id);
         await markHighlightsExported(exportedIds);
+
+        // Reload annotations from DB so React state reflects the new exported_at values
+        await annotationsRef.current.loadAnnotations(currentDoc.id);
 
         // Close any open highlight popover
         setFocusHighlightId(null);
