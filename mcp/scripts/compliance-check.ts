@@ -223,7 +223,7 @@ function wordCount(sentence: string): number {
   return sentence.split(/\s+/).filter((w) => w.length > 0).length;
 }
 
-export function checkVoice(text: string): VoiceViolation[] {
+export function checkVoice(text: string, writingType?: string): VoiceViolation[] {
   const violations: VoiceViolation[] = [];
   const sentences = splitSentences(text);
 
@@ -240,7 +240,9 @@ export function checkVoice(text: string): VoiceViolation[] {
   }
 
   // Consecutive same-structure sentences (4+ in a row with similar length ±7 words)
-  if (sentences.length >= 4) {
+  // Skip for prd and pitch — structured prose naturally has consistent sentence lengths
+  const skipRepetitiveStructure = writingType === "prd" || writingType === "pitch";
+  if (sentences.length >= 4 && !skipRepetitiveStructure) {
     const lengths = sentences.map(wordCount);
     let runStart = 0;
 
@@ -769,7 +771,7 @@ function main(): void {
   const killWordHits = scanKillWords(text, killWords);
   const slopPatterns = loadSlopPatterns();
   const slopHits = scanSlopPatterns(text, slopPatterns);
-  const voiceViolations = checkVoice(text);
+  const voiceViolations = checkVoice(text, writingType);
   const structuralTells = scanStructuralTells(text);
 
   const mechanicalIssues =
@@ -835,7 +837,7 @@ export function runComplianceCheck(text: string, writingType?: string): Complian
   const killWordHits = scanKillWords(text, killWords);
   const slopPatterns = loadSlopPatterns(writingType);
   const slopHits = scanSlopPatterns(text, slopPatterns);
-  const voiceViolations = checkVoice(text);
+  const voiceViolations = checkVoice(text, writingType);
   const structuralTells = scanStructuralTells(text);
 
   const mechanicalIssues =
