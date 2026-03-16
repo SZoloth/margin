@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
+import { useChrome } from "@/hooks/useChrome";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Menu01Icon, Download01Icon } from "@hugeicons/core-free-icons";
+import { Download01Icon, Add01Icon } from "@hugeicons/core-free-icons";
 import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TabBar } from "@/components/layout/TabBar";
+import { CommandPalette } from "@/components/layout/CommandPalette";
 import type { useSearch } from "@/hooks/useSearch";
 import { useMcpStatus } from "@/hooks/useMcpStatus";
 import type { Editor } from "@tiptap/core";
@@ -150,13 +152,56 @@ export function AppShell({
     };
   }, []);
 
+  // ── Chrome auto-collapse ──────────────────────────────────────────
+  const { visible: chromeVisible, show: showChrome, showThenHide: showChromeThenHide, hide: hideChrome, cancelHide: cancelChromeHide } = useChrome(2000);
+
+  // Reveal chrome when a new tab is opened
+  const prevTabCountRef = useRef(tabs.length);
+  useEffect(() => {
+    if (tabs.length > prevTabCountRef.current) {
+      showChromeThenHide(2000);
+    }
+    prevTabCountRef.current = tabs.length;
+  }, [tabs.length, showChromeThenHide]);
+
+  // Chrome hover handlers
+  const handleHotzoneEnter = useCallback(() => {
+    showChrome();
+    cancelChromeHide();
+  }, [showChrome, cancelChromeHide]);
+
+  const handleChromeLeave = useCallback(() => {
+    hideChrome();
+  }, [hideChrome]);
+
+  // ── Command palette ───────────────────────────────────────────────
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (isMod && e.key === "k" && !e.shiftKey) {
+        e.preventDefault();
+        setCmdPaletteOpen((v) => !v);
+      }
+      // Cmd+\ — toggle sidebar
+      if (isMod && e.key === "\\") {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleSidebar]);
+
+  // ── Content animations ────────────────────────────────────────────
   const backdrop = useAnimatedPresence(isMobile && sidebarOpen, 200);
   const hasContent = currentDoc !== null || !!hasSampleContent;
   const showExport = !!hasAnnotations && !!onExport;
   const exportBtn = useAnimatedPresence(showExport, 150);
   const emptyState = useAnimatedPresence(!hasContent, 300);
   const [contentEntranceDone, setContentEntranceDone] = useState(false);
-  // Reset entrance animation when returning to empty state
+
   useEffect(() => {
     if (hasContent) {
       requestAnimationFrame(() => {
@@ -169,7 +214,7 @@ export function AppShell({
     }
   }, [hasContent]);
 
-  // Tab crossfade: brief opacity dip when switching tabs
+  // Tab crossfade
   const [tabFadeVisible, setTabFadeVisible] = useState(true);
   const prevTabIdRef = useRef(activeTabId);
   const tabFadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -178,7 +223,6 @@ export function AppShell({
       prevTabIdRef.current = activeTabId;
       if (tabFadeTimeoutRef.current) clearTimeout(tabFadeTimeoutRef.current);
       setTabFadeVisible(false);
-      // Brief fade out (80ms), then fade back in
       tabFadeTimeoutRef.current = setTimeout(() => {
         setTabFadeVisible(true);
       }, 80);
@@ -187,6 +231,12 @@ export function AppShell({
       if (tabFadeTimeoutRef.current) clearTimeout(tabFadeTimeoutRef.current);
     };
   }, [activeTabId]);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const hasTabs = tabs.length > 0;
+  const singleTab = tabs.length === 1;
+  // Show the standalone + button when there are 0 or 1 tabs (multi-tab mode has it inside TabBar)
+  const showStandaloneNewTab = tabs.length <= 1;
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -224,21 +274,21 @@ export function AppShell({
         }}
       >
         <div className="flex flex-col flex-1 min-w-0">
-        <Sidebar
-          onOpenFile={() => { onOpenFile(); closeSidebar(); }}
-          onSelectRecentDoc={(doc, newTab) => { onSelectRecentDoc(doc, newTab); closeSidebar(); }}
-          currentDoc={currentDoc}
-          recentDocs={recentDocs}
-          searchQuery={search.query}
-          onSearch={search.search}
-          searchResults={search.results}
-          fileResults={search.fileResults}
-          isSearching={search.isSearching}
-          onOpenFilePath={(path, newTab) => { onOpenFilePath(path, newTab); closeSidebar(); }}
-          onRenameFile={onRenameFile}
-          onOpenSettings={onOpenSettings}
-          tabs={tabs}
-        />
+          <Sidebar
+            onOpenFile={() => { onOpenFile(); closeSidebar(); }}
+            onSelectRecentDoc={(doc, newTab) => { onSelectRecentDoc(doc, newTab); closeSidebar(); }}
+            currentDoc={currentDoc}
+            recentDocs={recentDocs}
+            searchQuery={search.query}
+            onSearch={search.search}
+            searchResults={search.results}
+            fileResults={search.fileResults}
+            isSearching={search.isSearching}
+            onOpenFilePath={(path, newTab) => { onOpenFilePath(path, newTab); closeSidebar(); }}
+            onRenameFile={onRenameFile}
+            onOpenSettings={onOpenSettings}
+            tabs={tabs}
+          />
         </div>
 
         {/* Resize handle */}
@@ -252,7 +302,6 @@ export function AppShell({
               position: "relative",
             }}
           >
-            {/* Visible line on hover */}
             <div
               style={{
                 position: "absolute",
@@ -272,94 +321,117 @@ export function AppShell({
       </div>
 
       {/* Main reader pane */}
-      <div className="flex flex-1 flex-col h-full" style={{ minWidth: 0 }}>
-        {/* Title bar */}
+      <div className="flex flex-1 flex-col h-full" style={{ minWidth: 0, position: "relative" }}>
+
+        {/* ── Auto-collapsing chrome bar ──────────────────────────────── */}
+
+        {/* Invisible hover hotzone — sits just above the chrome bar at all times */}
         <div
+          className="chrome-hotzone"
+          onMouseEnter={handleHotzoneEnter}
+        />
+
+        {/* Chrome bar — slides in/out */}
+        <div
+          className={`chrome-bar ${chromeVisible ? "chrome-bar-visible" : "chrome-bar-hidden"}`}
+          onMouseEnter={handleHotzoneEnter}
+          onMouseLeave={handleChromeLeave}
           data-tauri-drag-region
-          className="flex items-center gap-2 px-6 py-3 flex-shrink-0 border-b select-none"
-          style={{
-            borderColor: "var(--color-border)",
-            paddingLeft: isMobile ? "0.75rem" : undefined,
-          }}
         >
-          {/* Hamburger toggle (left side) */}
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="toolbar-hamburger p-1.5"
-            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-          >
-            <HugeiconsIcon icon={Menu01Icon} size={18} color="currentColor" strokeWidth={1.5} />
-          </button>
+          {/* Traffic-light inset — empty zone reserved for macOS native controls */}
+          <div className="chrome-titlebar-inset" data-tauri-drag-region />
 
-          {/* Tab bar (inline) */}
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onSelectTab={onSelectTab}
-            onCloseTab={onCloseTab}
-            onReorderTabs={onReorderTabs}
-            onNewTab={onNewTab}
-          />
+          {/* Chrome content row */}
+          <div className="chrome-content-row">
+            {/* Tabs */}
+            {hasTabs && (
+              <div className="chrome-tab-area">
+                {singleTab ? (
+                  /* Single tab: minimal pill label */
+                  <div className="chrome-tab-single">
+                    {activeTab?.isDirty && (
+                      <span
+                        style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--color-text-secondary)", flexShrink: 0 }}
+                      />
+                    )}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {activeTab?.title || "Untitled"}
+                    </span>
+                  </div>
+                ) : (
+                  /* Multiple tabs: full tab bar */
+                  <TabBar
+                    tabs={tabs}
+                    activeTabId={activeTabId}
+                    onSelectTab={onSelectTab}
+                    onCloseTab={onCloseTab}
+                    onReorderTabs={onReorderTabs}
+                    onNewTab={onNewTab}
+                  />
+                )}
+              </div>
+            )}
 
-          {/* Spacer — only when no tabs */}
-          {tabs.length === 0 && <div className="flex-1" />}
+            {/* Spacer when no tabs */}
+            {!hasTabs && <div style={{ flex: 1 }} />}
 
-          {onExport && (
-            <button
-              type="button"
-              onClick={onExport}
-              className="btn-sm"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
-                fontSize: "var(--text-base)",
-                fontWeight: 500,
-                color: "var(--color-text-secondary)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius-sm)",
-                background: "none",
-                cursor: showExport ? "pointer" : "default",
-                opacity: exportBtn.isVisible ? 1 : 0,
-                transform: exportBtn.isVisible ? "scale(1)" : "scale(0.9)",
-                transition: exportBtn.isVisible
-                  ? "opacity 150ms var(--ease-entrance), transform 150ms var(--ease-entrance)"
-                  : "opacity 100ms var(--ease-exit), transform 100ms var(--ease-exit)",
-                pointerEvents: showExport ? "auto" : "none",
-              }}
-              aria-label="Export annotations"
-              title="Export annotations (⌘⇧E)"
-              aria-hidden={!showExport}
-              disabled={!showExport}
-              tabIndex={showExport ? 0 : -1}
-            >
-              <HugeiconsIcon icon={Download01Icon} size={14} color="currentColor" strokeWidth={1.5} />
-              Export
-            </button>
-          )}
-          {showExport && mcpConnected && (
-            <span
-              title="Connected to Claude"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                backgroundColor: "var(--color-success)",
-                flexShrink: 0,
-              }}
-            />
-          )}
+            {/* New tab button (shown in 0/1-tab mode; multi-tab mode has it inside TabBar) */}
+            {showStandaloneNewTab && (
+              <button
+                type="button"
+                className="chrome-new-tab"
+                onClick={onNewTab}
+                aria-label="Open file in new tab"
+                title="Open file (⌘O)"
+              >
+                <HugeiconsIcon icon={Add01Icon} size={14} color="currentColor" strokeWidth={2} />
+              </button>
+            )}
+
+            {/* Export button */}
+            {onExport && (
+              <button
+                type="button"
+                onClick={onExport}
+                className="chrome-action-btn"
+                style={{
+                  opacity: exportBtn.isVisible ? 1 : 0,
+                  transform: exportBtn.isVisible ? "scale(1)" : "scale(0.9)",
+                  transition: exportBtn.isVisible
+                    ? "opacity 150ms var(--ease-entrance), transform 150ms var(--ease-entrance)"
+                    : "opacity 100ms var(--ease-exit), transform 100ms var(--ease-exit)",
+                  pointerEvents: showExport ? "auto" : "none",
+                  marginLeft: 6,
+                }}
+                aria-label="Export annotations"
+                title="Export annotations (⌘⇧E)"
+                aria-hidden={!showExport}
+                disabled={!showExport}
+                tabIndex={showExport ? 0 : -1}
+              >
+                <HugeiconsIcon icon={Download01Icon} size={14} color="currentColor" strokeWidth={1.5} />
+                Export
+              </button>
+            )}
+
+            {/* MCP connected indicator */}
+            {showExport && mcpConnected && (
+              <span
+                className="chrome-mcp-dot"
+                title="Connected to Claude"
+                style={{ marginLeft: 6 }}
+              />
+            )}
+          </div>
         </div>
 
+        {/* Find bar — sits below chrome (not inside it so it's always accessible) */}
         <FindBar editor={editor} isOpen={findBarOpen} onClose={onCloseFindBar} />
 
         {welcomeBar}
 
-        {/* Scrollable reader area + empty state wrapper */}
+        {/* Scrollable reader area + empty state */}
         <div className="flex-1 min-h-0" style={{ position: "relative" }}>
-          {/* Empty state: absolutely fills the wrapper, not the scroll container */}
           {emptyState.isMounted && (
             <div
               className={!hasContent ? "empty-state-entrance" : undefined}
@@ -402,7 +474,6 @@ export function AppShell({
                 >
                   Edgar Allan Poe
                 </p>
-                {/* Divider between quote and CTA */}
                 <div
                   style={{
                     width: 40,
@@ -418,15 +489,15 @@ export function AppShell({
                     color: "var(--color-text-secondary)",
                   }}
                 >
-                  Open a file with ⌘O to start reading.
+                  Open a file with ⌘O or press ⌘K to navigate.
                 </p>
-                <div style={{ marginTop: 12 }}>
+                <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "center" }}>
                   <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd>
+                  <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘K</kbd>
                 </div>
               </div>
             </div>
           )}
-          {/* Scroll container only holds actual document content */}
           <div className="h-full overflow-y-auto" data-scroll-container>
             {hasContent && (
               <div
@@ -447,6 +518,20 @@ export function AppShell({
           </div>
         </div>
       </div>
+
+      {/* Command palette */}
+      <CommandPalette
+        isOpen={cmdPaletteOpen}
+        onClose={() => setCmdPaletteOpen(false)}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        recentDocs={recentDocs}
+        onSelectTab={onSelectTab}
+        onOpenFile={() => { onOpenFile(); }}
+        onSelectRecentDoc={(doc) => onSelectRecentDoc(doc, false)}
+        onOpenSettings={onOpenSettings}
+        onToggleSidebar={toggleSidebar}
+      />
 
       {/* Dev mode indicator */}
       {import.meta.env.DEV && (

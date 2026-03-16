@@ -1,0 +1,260 @@
+/* ─── Chrome bar ─────────────────────────────────────────────────── */
+
+:root {
+  --chrome-height: 42px;
+  --titlebar-height: 28px; /* macOS overlay titlebar — reserve space for traffic lights */
+}
+
+/* Invisible hotzone that catches mouse entry near the top of the reading area */
+.chrome-hotzone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  z-index: 49;
+  pointer-events: auto;
+  background: transparent;
+}
+
+/* The chrome bar itself — slides in from the top */
+.chrome-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--titlebar-height) + var(--chrome-height));
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  /* Drag region so the macOS title bar area supports window dragging */
+  -webkit-app-region: drag;
+  will-change: transform, opacity;
+}
+
+.chrome-bar-visible {
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    transform 220ms var(--ease-entrance),
+    opacity 220ms var(--ease-entrance);
+  pointer-events: auto;
+}
+
+.chrome-bar-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  transition:
+    transform 180ms var(--ease-exit),
+    opacity 180ms var(--ease-exit);
+  pointer-events: none;
+}
+
+/* Top inset — reserve space for macOS traffic lights in overlay mode */
+.chrome-titlebar-inset {
+  height: var(--titlebar-height);
+  /* drag region is inherited from .chrome-bar */
+}
+
+/* Actual chrome content row below the traffic-light zone */
+.chrome-content-row {
+  height: var(--chrome-height);
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 12px;
+  gap: 0;
+  -webkit-app-region: no-drag; /* interactive elements must disable drag */
+}
+
+/* Tabs take all remaining space */
+.chrome-tab-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+/* Compact tab in chrome — single-tab mode: just a pill label */
+.chrome-tab-single {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 30px;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background: var(--active-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+  -webkit-app-region: no-drag;
+}
+
+/* New-tab button in chrome */
+.chrome-new-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  transition: background-color var(--duration-fast) var(--ease-micro);
+}
+
+.chrome-new-tab:hover {
+  background-color: var(--hover-bg);
+  color: var(--color-text-primary);
+}
+
+.chrome-new-tab:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
+}
+
+/* Export button in chrome */
+.chrome-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  transition: background-color var(--duration-fast) var(--ease-micro);
+}
+
+.chrome-action-btn:hover {
+  background-color: var(--hover-bg);
+}
+
+/* MCP indicator dot */
+.chrome-mcp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-success);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+/* ─── Command palette ─────────────────────────────────────────────── */
+
+.cmd-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.cmd-palette {
+  width: min(560px, calc(100vw - 48px));
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+}
+
+.cmd-palette-input-row {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cmd-palette-input {
+  width: 100%;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: var(--text-lg);
+  color: var(--color-text-primary);
+  caret-color: var(--color-accent);
+}
+
+.cmd-palette-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.cmd-palette-list {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  flex: 1;
+  padding: 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cmd-palette-empty {
+  padding: 16px 12px;
+  font-size: var(--text-base);
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.cmd-palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-micro);
+}
+
+.cmd-palette-item-active {
+  background-color: var(--active-bg);
+}
+
+.cmd-palette-item:hover {
+  background-color: var(--hover-bg);
+}
+
+.cmd-palette-item-label {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.cmd-palette-item-sublabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  margin-left: 12px;
+}
