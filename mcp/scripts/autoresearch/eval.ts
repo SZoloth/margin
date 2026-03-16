@@ -42,6 +42,7 @@ const ARCH_LABELS: Record<string, string> = {
   d: "corrections",
   e: "hybrid",
   f: "aegis",
+  h: "dspy",
 };
 
 async function loadGenerator(arch: string): Promise<GenerateFn> {
@@ -58,8 +59,10 @@ async function loadGenerator(arch: string): Promise<GenerateFn> {
       return (await import("./generators/arch-e-hybrid.ts")).generate;
     case "f":
       return (await import("./generators/arch-f-aegis.ts")).generate;
+    case "h":
+      return (await import("./generators/arch-h-dspy.ts")).generate;
     default:
-      console.error(`Unknown architecture: ${arch}. Use a, b, c, d, e, or f.`);
+      console.error(`Unknown architecture: ${arch}. Use a, b, c, d, e, f, or h.`);
       process.exit(1);
   }
 }
@@ -71,8 +74,8 @@ function parseArch(): string {
   const archIdx = args.indexOf("--arch");
   if (archIdx === -1 || archIdx + 1 >= args.length) return "a";
   const value = args[archIdx + 1];
-  if (!value || !["a", "b", "c", "d", "e", "f"].includes(value)) {
-    console.error(`Invalid --arch value: ${value}. Use a, b, c, d, e, or f.`);
+  if (!value || !["a", "b", "c", "d", "e", "f", "h"].includes(value)) {
+    console.error(`Invalid --arch value: ${value}. Use a, b, c, d, e, f, or h.`);
     process.exit(1);
   }
   return value;
