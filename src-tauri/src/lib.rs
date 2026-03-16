@@ -51,6 +51,7 @@ pub fn run() {
             commands::annotations::delete_margin_note,
             commands::annotations::delete_all_highlights_for_document,
             commands::annotations::update_highlight_positions,
+            commands::annotations::mark_highlights_exported,
             commands::snapshots::save_content_snapshot,
             commands::snapshots::get_content_snapshot,
             commands::snapshots::delete_content_snapshot,

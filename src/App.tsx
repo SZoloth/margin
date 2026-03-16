@@ -22,7 +22,7 @@ import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
-import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -967,15 +967,26 @@ export default function App() {
         return { highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" };
       }
 
-      const highlights = highlightsRef.current;
+      const allHighlights = highlightsRef.current;
       const marginNotes = marginNotesRef.current;
       const currentDoc = doc.currentDoc;
+
+      // Only export highlights that haven't been exported yet
+      const highlights = allHighlights.filter((h) => h.exported_at == null);
+
+      if (highlights.length === 0) {
+        return { highlightCount: 0, noteCount: 0, snippets: [], correctionsSaved: false, correctionsFile: "" };
+      }
+
+      // Filter margin notes to only those attached to unexported highlights
+      const unexportedHighlightIds = new Set(highlights.map((h) => h.id));
+      const unexportedMarginNotes = marginNotes.filter((n) => unexportedHighlightIds.has(n.highlight_id));
 
       const markdown = await formatAnnotationsMarkdown({
         document: currentDoc,
         editor,
         highlights,
-        marginNotes,
+        marginNotes: unexportedMarginNotes,
         polarityMap,
       });
 
@@ -993,9 +1004,9 @@ export default function App() {
       let correctionsFile = "";
       let attemptedCorrectionPersist = false;
 
-      if (persistCorrectionsRef.current && highlights.length > 0 && marginNotes.length > 0) {
+      if (persistCorrectionsRef.current && highlights.length > 0 && unexportedMarginNotes.length > 0) {
         const notesByHighlight = new Map<string, string[]>();
-        for (const note of marginNotes) {
+        for (const note of unexportedMarginNotes) {
           const existing = notesByHighlight.get(note.highlight_id) ?? [];
           existing.push(note.content);
           notesByHighlight.set(note.highlight_id, existing);
@@ -1044,13 +1055,13 @@ export default function App() {
         }
       }
 
-      // Clear annotations from editor and DB after export (skip if correction persist failed)
-      const shouldClearAnnotations = shouldClearAnnotationsAfterExport({
+      // Mark exported highlights in DB (skip if correction persist failed)
+      const shouldMarkExported = shouldClearAnnotationsAfterExport({
         highlightCount: highlights.length,
         attemptedCorrectionPersist,
         correctionsSaved,
       });
-      if (shouldClearAnnotations) {
+      if (shouldMarkExported) {
         // Strip highlight and marginNote marks from the editor
         const { state } = editor;
         const { tr } = state;
@@ -1075,15 +1086,13 @@ export default function App() {
           }
         }
 
-        // Delete from DB and clear React state
-        await annotationsRef.current.clearAnnotations(currentDoc.id);
+        // Mark highlights as exported in DB instead of deleting
+        const exportedIds = highlights.map((h) => h.id);
+        await markHighlightsExported(exportedIds);
 
         // Close any open highlight popover
         setFocusHighlightId(null);
         setAnchorRect(null);
-
-        // Tell mark-restoration useEffect this doc is already handled
-        lastRestoredDocId.current = currentDoc.id;
 
         // Force-update the tab cache so tab switching doesn't resurrect stale annotations
         tabsHook.snapshotActive();
@@ -1100,7 +1109,7 @@ export default function App() {
 
       return {
         highlightCount: highlights.length,
-        noteCount: marginNotes.length,
+        noteCount: unexportedMarginNotes.length,
         snippets,
         correctionsSaved,
         correctionsFile,

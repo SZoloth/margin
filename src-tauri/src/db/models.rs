@@ -44,6 +44,7 @@ pub struct Highlight {
     pub suffix_context: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    pub exported_at: Option<i64>,
 }
 
 impl Highlight {
@@ -59,6 +60,7 @@ impl Highlight {
             suffix_context: row.get("suffix_context")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            exported_at: row.get("exported_at")?,
         })
     }
 }

@@ -9,6 +9,7 @@ export interface Highlight {
   suffix_context: string | null;
   created_at: number;
   updated_at: number;
+  exported_at: number | null;
 }
 
 export interface MarginNote {

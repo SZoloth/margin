@@ -61,7 +61,7 @@ fn fetch_highlights(conn: &Connection, document_id: &str) -> Result<Vec<Highligh
     let mut stmt = conn
         .prepare(
             "SELECT id, document_id, color, text_content, from_pos, to_pos,
-                    prefix_context, suffix_context, created_at, updated_at
+                    prefix_context, suffix_context, created_at, updated_at, exported_at
              FROM highlights
              WHERE document_id = ?1
              ORDER BY from_pos",
@@ -165,6 +165,22 @@ fn remove_all_highlights_for_document(conn: &Connection, document_id: &str) -> R
     .map_err(|e| e.to_string())
 }
 
+fn bulk_mark_highlights_exported(conn: &Connection, highlight_ids: &[String], now: i64) -> Result<usize, String> {
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let mut count = 0usize;
+    for id in highlight_ids {
+        let rows = tx
+            .execute(
+                "UPDATE highlights SET exported_at = ?1, updated_at = ?1 WHERE id = ?2",
+                rusqlite::params![now, id],
+            )
+            .map_err(|e| e.to_string())?;
+        count += rows;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(count)
+}
+
 // === Tauri command handlers ===
 
 #[allow(clippy::too_many_arguments)]
@@ -203,6 +219,7 @@ pub async fn create_highlight(
         suffix_context,
         created_at: now,
         updated_at: now,
+        exported_at: None,
     })
 }
 
@@ -307,6 +324,16 @@ pub async fn delete_all_highlights_for_document(
     remove_all_highlights_for_document(&conn, &document_id)
 }
 
+#[tauri::command]
+pub async fn mark_highlights_exported(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<usize, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let now = now_millis();
+    bulk_mark_highlights_exported(&conn, &highlight_ids, now)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,7 +364,8 @@ mod tests {
              prefix_context TEXT,
              suffix_context TEXT,
              created_at INTEGER NOT NULL,
-             updated_at INTEGER NOT NULL
+             updated_at INTEGER NOT NULL,
+             exported_at INTEGER
          );
          CREATE INDEX idx_highlights_document ON highlights(document_id);
          CREATE TABLE margin_notes (
@@ -397,7 +425,6 @@ mod tests {
         let conn = setup_db();
         insert_doc(&conn, "doc1");
 
-        // Insert out of order
         insert_highlight(&conn, "h2", "doc1", "yellow", "later", 50, 55, None, None, 1000).unwrap();
         insert_highlight(&conn, "h1", "doc1", "yellow", "earlier", 10, 17, None, None, 1001).unwrap();
 
@@ -431,7 +458,7 @@ mod tests {
         let highlights = fetch_highlights(&conn, "doc1").unwrap();
         assert_eq!(highlights[0].color, "green");
         assert_eq!(highlights[0].updated_at, 2000);
-        assert_eq!(highlights[0].created_at, 1000); // unchanged
+        assert_eq!(highlights[0].created_at, 1000);
     }
 
     #[test]
@@ -454,7 +481,7 @@ mod tests {
         assert_eq!(note_count(&conn), 1);
 
         remove_highlight(&conn, "h1").unwrap();
-        assert_eq!(note_count(&conn), 0); // cascade
+        assert_eq!(note_count(&conn), 0);
     }
 
     #[test]
@@ -573,23 +600,19 @@ mod tests {
         insert_doc(&conn, "doc1");
         insert_doc(&conn, "doc2");
 
-        // doc1: 2 highlights, 1 with a note
         insert_highlight(&conn, "h1", "doc1", "yellow", "text1", 0, 5, None, None, 1000).unwrap();
         insert_highlight(&conn, "h2", "doc1", "green", "text2", 10, 15, None, None, 1000).unwrap();
         insert_margin_note(&conn, "n1", "h1", "note on h1", 1000).unwrap();
 
-        // doc2: 1 highlight with a note (should be untouched)
         insert_highlight(&conn, "h3", "doc2", "blue", "text3", 0, 5, None, None, 1000).unwrap();
         insert_margin_note(&conn, "n2", "h3", "note on h3", 1000).unwrap();
 
         let deleted = remove_all_highlights_for_document(&conn, "doc1").unwrap();
         assert_eq!(deleted, 2);
 
-        // doc1 is empty
         assert!(fetch_highlights(&conn, "doc1").unwrap().is_empty());
         assert!(fetch_margin_notes(&conn, "doc1").unwrap().is_empty());
 
-        // doc2 untouched
         assert_eq!(fetch_highlights(&conn, "doc2").unwrap().len(), 1);
         assert_eq!(fetch_margin_notes(&conn, "doc2").unwrap().len(), 1);
     }
@@ -608,12 +631,10 @@ mod tests {
         bulk_update_highlight_positions(&conn, &updates).unwrap();
 
         let highlights = fetch_highlights(&conn, "doc1").unwrap();
-        // Sorted by from_pos, so h1 (100) first, h2 (200) second
         assert_eq!(highlights[0].from_pos, 100);
         assert_eq!(highlights[0].to_pos, 105);
         assert_eq!(highlights[1].from_pos, 200);
         assert_eq!(highlights[1].to_pos, 206);
-        // updated_at should be newer than created_at
         assert!(highlights[0].updated_at > highlights[0].created_at);
     }
 
@@ -625,5 +646,52 @@ mod tests {
         let deleted = remove_all_highlights_for_document(&conn, "doc1").unwrap();
         assert_eq!(deleted, 0);
     }
-}
 
+    // === Mark exported tests ===
+
+    #[test]
+    fn mark_highlights_exported_sets_exported_at() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text1", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "text2", 10, 15, None, None, 1000).unwrap();
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert!(highlights[0].exported_at.is_none());
+        assert!(highlights[1].exported_at.is_none());
+
+        let ids = vec!["h1".to_string()];
+        let count = bulk_mark_highlights_exported(&conn, &ids, 5000).unwrap();
+        assert_eq!(count, 1);
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights[0].exported_at, Some(5000));
+        assert!(highlights[1].exported_at.is_none());
+    }
+
+    #[test]
+    fn mark_highlights_exported_updates_multiple() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text1", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "text2", 10, 15, None, None, 1000).unwrap();
+
+        let ids = vec!["h1".to_string(), "h2".to_string()];
+        let count = bulk_mark_highlights_exported(&conn, &ids, 5000).unwrap();
+        assert_eq!(count, 2);
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights[0].exported_at, Some(5000));
+        assert_eq!(highlights[1].exported_at, Some(5000));
+    }
+
+    #[test]
+    fn mark_highlights_exported_nonexistent_id_returns_zero() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let ids = vec!["nonexistent".to_string()];
+        let count = bulk_mark_highlights_exported(&conn, &ids, 5000).unwrap();
+        assert_eq!(count, 0);
+    }
+}

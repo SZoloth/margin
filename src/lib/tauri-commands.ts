@@ -250,6 +250,10 @@ export async function updateHighlightPositions(
   return invoke<void>("update_highlight_positions", { updates });
 }
 
+export async function markHighlightsExported(highlightIds: string[]): Promise<number> {
+  return invoke<number>("mark_highlights_exported", { highlightIds });
+}
+
 export async function markCorrectionsUnsynthesized(highlightIds: string[]): Promise<number> {
   return invoke<number>("mark_corrections_unsynthesized", { highlightIds });
 }
