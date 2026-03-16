@@ -39,9 +39,26 @@ var exportProfileCmd = &cobra.Command{
 	},
 }
 
+var exportCodexCmd = &cobra.Command{
+	Use:   "codex",
+	Short: "Regenerate ~/.codex/AGENTS.md with writing rules for OpenAI Codex",
+	Long: `Writes writing rules from Margin into ~/.codex/AGENTS.md so OpenAI Codex CLI
+loads them as global instructions. Safe to run repeatedly — only the managed
+section is replaced; any existing user content in AGENTS.md is preserved.
+
+Note: requires ~/.codex directory to exist (i.e. Codex CLI installed).`,
+	Run: func(cmd *cobra.Command, args []string) {
+		dbPath := resolveDBPath()
+		if err := profile.ExportCodex(dbPath); err != nil {
+			output.ErrorE(err)
+		}
+		output.JSON(map[string]string{"status": "ok", "path": profile.CodexAgentsMDPath()}, pretty)
+	},
+}
+
 func init() {
 	exportWaitCmd.Flags().Int("timeout", 300, "timeout in seconds (max 600)")
 
-	exportCmd.AddCommand(exportWaitCmd, exportProfileCmd)
+	exportCmd.AddCommand(exportWaitCmd, exportProfileCmd, exportCodexCmd)
 	rootCmd.AddCommand(exportCmd)
 }

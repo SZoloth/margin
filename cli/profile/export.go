@@ -353,6 +353,7 @@ if __name__ == "__main__":
 }
 
 // ExportProfile writes ~/.margin/writing-rules.md and ~/.claude/hooks/writing_guard.py.
+// If ~/.codex exists (Codex CLI is installed), also updates ~/.codex/AGENTS.md.
 func ExportProfile(dbPath string) error {
 	d, err := db.OpenRead(dbPath)
 	if err != nil {
@@ -386,6 +387,21 @@ func ExportProfile(dbPath string) error {
 	guardPath := filepath.Join(hooksDir, "writing_guard.py")
 	if err := os.WriteFile(guardPath, []byte(guardPy), 0755); err != nil {
 		return fmt.Errorf("failed to write %s: %w", guardPath, err)
+	}
+
+	// Update ~/.codex/AGENTS.md if Codex CLI is installed (opt-in by directory presence).
+	// Errors are non-fatal — don't break the Claude Code pipeline if Codex isn't set up.
+	if _, statErr := os.Stat(CodexDir()); statErr == nil {
+		managed := FormatCodexAgentsMD(rules, corrections)
+		agentsPath := CodexAgentsMDPath()
+		existing, readErr := os.ReadFile(agentsPath)
+		var content string
+		if readErr == nil {
+			content = mergeCodexAgentsMD(string(existing), managed)
+		} else {
+			content = managed
+		}
+		_ = os.WriteFile(agentsPath, []byte(content), 0644)
 	}
 
 	return nil
