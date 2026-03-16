@@ -147,24 +147,28 @@ Decision: Architecture E (hybrid) is the leading candidate. A (rules-only) elimi
 **Tier 0.5 — Confirm E's lead — COMPLETE**
 E across 3 runs: 0.769, 0.593, 0.808. Mean: 72.3%. Exceeds the 65% threshold. 81 total samples. Decision: Architecture E confirmed as base for optimization. See `experiment-log.md` Run 5-6.
 
-**Tier 1 — Optimize Architecture E (CURRENT)**
-E is confirmed but untuned. Four optimization surfaces, to be attacked one at a time:
+**Tier 1 — Optimize Architecture E — PARTIALLY COMPLETE (via DSPy/GEPA)**
+Surfaces 1-3 tested via DSPy MIPROv2 (all 9 types). MIPROv2 kept defaults — the WriteInVoice signature is already well-structured. Surface 4 (rule quality) addressed by GEPA: 14 repeat corrections detected, 13 diagnosed, 13 fixes applied (7 vague→actionable rewrites, 6 near-miss variants). Architecture H ≈ Architecture E functionally (~68-70%, within noise at n=27).
+Key insight: **the data layer (corrections + rules) matters more than the presentation layer (prompt structure)**.
 
-Surfaces (attack sequentially, one hypothesis per experiment):
-1. **Negative parallelism intervention** — the one failure that persists across ALL architectures. Highest-leverage single fix. Add explicit prohibition + before/after example to E's prompt.
-2. **Correction selection** — which corrections, how many, ordered how. Currently: 30 most recent. Test: filter by writing type, order by recency, by signal strength.
-3. **Rule selection threshold** — currently signal_count ≥ 2 OR severity = must-fix, limit 30. Test: tighter thresholds, category filtering.
-4. **Prompt structure** — framing, section ordering, emphasis. The prompt in arch-e-hybrid.ts is a first draft.
+**Tier 1.5 — DSPy + GEPA infrastructure — COMPLETE (2026-03-16)**
+- `mcp/scripts/dspy/` — Python DSPy pipeline wrapping `claude -p` (no API key, subscription-based)
+- `ClaudeCLI(dspy.BaseLM)` — custom LM provider for DSPy via Claude Code CLI
+- `margin_gepa/` — repeat correction detection, LLM diagnosis, fix proposals
+- `arch-h-dspy.ts` — Architecture H generator (E's data pipeline + DSPy-optimized instruction)
+- `repeat_corrections` + `optimization_runs` SQLite tables (Rust migration)
+- Weekly launchd agent (`com.margin.gepa-pipeline`) runs GEPA every Sunday 3am (review mode)
+- Compliance check: prd/pitch exempt from repetitive-structure (2026-03-16)
 
 **Tier 2 — Audit the foundation**
 8. Eval confidence — bump to n=45 (5 samples/type) or run 3× at n=27
 9. Eval calibration — does the proxy score correlate with Sam's real corrections?
-10. Rule/signal quality — clean the inputs regardless of architecture
+10. ~~Rule/signal quality~~ — DONE via GEPA (Tier 1.5)
 
-**Tier 3 — Wire into production**
-11. Replace the current coaching-prompt.md approach with E's hybrid prompt in the actual writing pipeline
-12. Hook enforcement — update writing_guard.py to reflect the new architecture
-13. Synthesis pipeline — ensure new corrections feed back into E's correction pool
+**Tier 3 — Wire into production — COMPLETE**
+11. ~~Replace the current coaching-prompt.md approach with E's hybrid prompt in the actual writing pipeline~~ **DONE.** `margin export coaching-prompt --type <type>` implements Architecture G (production variant of E). Skills updated. See `feat/coaching-prompt` branch.
+12. Hook enforcement — update writing_guard.py to reflect the new architecture (deferred — hook still works with existing patterns)
+13. Synthesis pipeline — corrections already auto-synthesize into rules. No changes needed.
 
 ## Experimentation protocol
 
@@ -174,6 +178,84 @@ Surfaces (attack sequentially, one hypothesis per experiment):
 - After optimizing a surface, re-run earlier surfaces — improvements compound and interact
 - All experiments run in git worktrees. Main never sees a failed experiment.
 - Results accumulate in `results.tsv` with a `surface` column
+
+### The experiment loop
+
+**LOOP FOREVER. Never ask "should I continue?" — the user expects autonomous work.**
+
+1. **Read state** — check `experiment-log.md`, `results.tsv`, and `git log --oneline` for context.
+2. **Hypothesize** — before touching any code, write down what you expect to happen and why. Be specific: "I expect pass rate to increase by ~5pp because removing the redundant prohibition will reduce prompt confusion."
+3. **Modify** — a single, focused change to the generator or coaching prompt under test.
+4. **Run eval** — `npx tsx eval.ts --arch <letter>` — produces 27 samples scored by the compliance checker.
+5. **Record** — append result to `results.tsv` and update `experiment-log.md`.
+6. **Decide:**
+   - **Improved** (higher pass rate or equal rate with fewer tokens) → **keep**. Commit.
+   - **Equal or worse** → **discard**. Revert the change.
+   - **Crashed** → log as crash. If trivial (typo, missing import), fix and retry. Otherwise revert and move on.
+7. **Root-cause analysis** — this is NOT optional. For every result, trace the *causal mechanism*:
+   - **Bad:** "Pass rate dropped. Reverting." (no learning captured)
+   - **Good:** "Pass rate dropped 8pp. The new prohibition block triggered false negatives on 3 email samples — the model interpreted 'avoid colons' as 'avoid all punctuation after greetings', which caused it to drop periods too. Root cause: prohibition wording is ambiguous for email register. Learning: prohibition blocks need register-specific exceptions."
+   - Write the root cause and learning in `experiment-log.md`.
+8. **Update ideas backlog** — re-prioritize `autoresearch.ideas.md` based on new insights. Add new ideas sparked by the analysis. Deprioritize approaches that the root-cause analysis suggests won't work.
+9. **Repeat** — go to step 2. Never stop.
+
+### Simplicity criterion
+
+All else being equal, simpler is better:
+- Removing prompt content for equal or better pass rate → **keep** (simplification win)
+- Tiny improvement that adds ugly complexity to the generator → probably **discard**
+- Same pass rate but shorter coaching prompt → **keep** (fewer tokens = less noise)
+
+### When stuck
+
+Don't thrash on the same approach. If you've reverted the same idea twice, try something structurally different. Re-read the compliance checker output. Study which *specific samples* fail and why. The best improvements come from deep understanding of failure modes, not random prompt tweaks.
+
+### Strategic checkpoints
+
+Every **5 experiments**, pause the loop to analyze your optimization trajectory. Compute these metrics across your last 5 runs:
+
+| Metric | How to compute |
+|--------|---------------|
+| **Hit rate** | % of experiments that were kept (improved the metric) |
+| **Velocity** | Average pass rate delta per experiment |
+| **Diversity** | How many distinct approaches were tried (vs variations of one idea) |
+| **Crash rate** | % of experiments that crashed or produced invalid output |
+
+Based on these, select a strategy for the next batch:
+
+| Strategy | When | What to do |
+|----------|------|------------|
+| **Exploit** | High hit rate, metric improving | Keep refining the current approach |
+| **Explore** | Low hit rate, metric flat | Try something structurally different |
+| **Ablate** | Consecutive wins but slowing | Remove components to find what's actually needed |
+| **Combine** | Multiple individual wins in history | Merge previously successful changes |
+| **Stabilize** | High crash rate | Simplify, fix foundations before continuing |
+
+Write the checkpoint analysis in `experiment-log.md` as a "Strategic review" section. Include a "Current theory" — a running model of what affects pass rate and what doesn't. This compounds intelligence across experiments instead of treating each one independently.
+
+### Session resume protocol
+
+If you are starting a new session (context was reset, or you're a new agent instance):
+
+1. Read `experiment-log.md` — understand what's been tried and what worked.
+2. Read `results.tsv` — see the quantitative trajectory.
+3. Read `autoresearch.ideas.md` — see the current backlog.
+4. Read `git log --oneline` — see recent commits.
+5. Run a **strategic review** (see checkpoints above) before your first experiment.
+6. Write a "Session resume analysis" section in `experiment-log.md` with your findings and chosen strategy.
+
+Then start the loop.
+
+### Session files
+
+| File | Purpose |
+|------|---------|
+| `program.md` | These instructions (read-only) |
+| `experiment-log.md` | Detailed experiment log with root-cause analysis |
+| `results.tsv` | Tab-separated results: `arch\|pass_rate\|mechanical_issues\|status\|description` |
+| `autoresearch.ideas.md` | Ideas backlog — save promising deferred ideas, re-prioritize after each experiment |
+| `eval.ts` | Eval harness (read-only unless optimizing the eval itself) |
+| `generators/arch-*.ts` | Architecture generators (modify when optimizing a specific architecture) |
 
 ## Interaction effects
 
