@@ -137,6 +137,14 @@
   --color-severity-nice-to-fix-border: #305c38;
 }
 
+/* Chrome bar tab hover — show close button on hover */
+.chrome-tab-item:hover .chrome-tab-close {
+  opacity: 1 !important;
+}
+.chrome-tab-item:hover .chrome-tab-dirty {
+  display: none;
+}
+
 body {
   background-color: var(--color-page);
   color: var(--color-text-primary);
