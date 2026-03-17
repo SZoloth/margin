@@ -297,6 +297,7 @@ server.tool(
     writing_type: z.string().optional().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
     color: z.enum(["yellow", "green", "blue", "pink", "purple", "orange"]).optional().describe("Highlight color (default: yellow)"),
     feedback_type: z.enum(["question", "suggestion", "edit", "voice", "weakness", "evidence", "wordiness", "factcheck"]).optional().describe("Feedback type classification"),
+    suggested_edit: z.string().optional().describe("Replacement text for edit-type corrections — enables inline Accept in Margin UI"),
   },
   async (params) => withDbAndExport(() => {
     const db = getWriteDb();
@@ -307,6 +308,7 @@ server.tool(
       writing_type: params.writing_type,
       color: params.color,
       feedback_type: params.feedback_type,
+      suggested_edit: params.suggested_edit,
     });
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };

@@ -960,6 +960,29 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const handleAcceptEdit = useCallback(
+    (_highlightId: string, matchText: string, suggestedEdit: string) => {
+      if (!editor) return;
+      const { state, view } = editor;
+      let replaced = false;
+      const tr = state.tr;
+      state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
+        if (replaced) return false;
+        if (node.isText && node.text && node.text.includes(matchText)) {
+          const idx = node.text.indexOf(matchText);
+          tr.insertText(suggestedEdit, pos + idx, pos + idx + matchText.length);
+          replaced = true;
+          return false;
+        }
+        return true;
+      });
+      if (replaced) {
+        view.dispatch(tr);
+      }
+    },
+    [editor],
+  );
+
   const handleExportAnnotations = useCallback(
     async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
@@ -1429,6 +1452,7 @@ export default function App() {
             }}
             updater={updater}
             initialSection={settingsSection}
+            onAcceptEdit={handleAcceptEdit}
           />
         </div>
       )}

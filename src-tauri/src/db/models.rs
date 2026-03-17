@@ -98,5 +98,7 @@ pub struct CorrectionInput {
     pub writing_type: Option<String>,
     pub polarity: Option<String>,
     pub feedback_type: Option<String>,
+    #[serde(default)]
+    pub suggested_edit: Option<String>,
 }
 

@@ -69,6 +69,7 @@ pub fn run() {
             commands::corrections::get_corrections_by_document,
             commands::corrections::update_correction_writing_type,
             commands::corrections::delete_correction,
+            commands::corrections::accept_correction,
             commands::corrections::export_corrections_json,
             commands::corrections::get_corrections_flat,
             commands::corrections::bulk_delete_corrections,

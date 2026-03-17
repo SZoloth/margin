@@ -156,6 +156,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add feedback_type column to corrections
     migrate_corrections_add_feedback_type(&conn)?;
 
+    // Migration: add suggested_edit and accepted_at columns to corrections
+    migrate_corrections_add_suggested_edit(&conn)?;
+
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
         "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
@@ -1378,6 +1381,27 @@ fn migrate_corrections_add_feedback_type(conn: &Connection) -> Result<(), Box<dy
             "ALTER TABLE corrections ADD COLUMN feedback_type TEXT CHECK(feedback_type IN ({check_values}));
              CREATE INDEX IF NOT EXISTS idx_corrections_feedback_type ON corrections(feedback_type);"
         ))?;
+    }
+
+    Ok(())
+}
+
+/// Adds `suggested_edit` and `accepted_at` columns to the corrections table if they don't exist.
+fn migrate_corrections_add_suggested_edit(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        cols
+    };
+
+    if !columns.iter().any(|c| c == "suggested_edit") {
+        conn.execute_batch("ALTER TABLE corrections ADD COLUMN suggested_edit TEXT;")?;
+    }
+
+    if !columns.iter().any(|c| c == "accepted_at") {
+        conn.execute_batch("ALTER TABLE corrections ADD COLUMN accepted_at INTEGER;")?;
     }
 
     Ok(())

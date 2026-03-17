@@ -124,7 +124,11 @@ function SeedGuideSection({ onSeeded }: { onSeeded: () => void }) {
   );
 }
 
-export function StyleMemorySection() {
+interface StyleMemorySectionProps {
+  onAcceptEdit?: (highlightId: string, matchText: string, suggestedEdit: string) => void;
+}
+
+export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {}) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("corrections");
   const [statFilter, setStatFilter] = useState<StatFilter>(null);
   const [correctionStats, setCorrectionStats] = useState({
@@ -317,6 +321,7 @@ export function StyleMemorySection() {
                 : statFilter === "all-corrections" ? "all"
                 : null
             }
+            onAcceptEdit={onAcceptEdit}
           />
         </div>
       ) : (

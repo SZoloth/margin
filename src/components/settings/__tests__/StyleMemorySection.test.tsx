@@ -46,6 +46,8 @@ const makeCorrection = (id: string): CorrectionDetail => ({
   synthesizedAt: null,
   documentTitle: null,
   createdAt: Date.now(),
+  suggestedEdit: null,
+  acceptedAt: null,
 });
 
 describe("StyleMemorySection", () => {
