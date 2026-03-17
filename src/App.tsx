@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react"
 import type { Editor } from "@tiptap/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
+import { UIFork } from "uifork";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
@@ -95,6 +96,8 @@ function findTextInDoc(
   if (from === -1 || to === -1) return null;
   return { from, to };
 }
+
+const showUIFork = import.meta.env.MODE !== "production";
 
 export default function App() {
   const { settings, setSetting } = useSettings();
@@ -1132,6 +1135,7 @@ export default function App() {
   );
 
   return (
+    <>
     <AppShell
       onOpenSettings={() => {
         setSettingsSection(undefined);
@@ -1495,5 +1499,7 @@ export default function App() {
         </div>
       )}
     </AppShell>
+      {showUIFork && <UIFork />}
+    </>
   );
 }
