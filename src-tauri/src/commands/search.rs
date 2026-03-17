@@ -17,6 +17,7 @@ pub struct SearchResult {
 pub struct FileSearchResult {
     pub path: String,
     pub filename: String,
+    pub snippet: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -25,6 +26,26 @@ pub struct IndexAllResult {
     pub indexed: usize,
     pub skipped: usize,
     pub errors: usize,
+}
+
+/// Read the first meaningful line of a file for use as a preview snippet.
+/// Strips leading `#` heading markers and returns up to 120 characters.
+fn extract_file_snippet(path: &str) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Strip markdown heading markers
+        let text = trimmed.trim_start_matches('#').trim();
+        if text.is_empty() {
+            continue;
+        }
+        let snippet: String = text.chars().take(120).collect();
+        return Some(snippet);
+    }
+    None
 }
 
 /// Search all .md files on the machine using macOS Spotlight (mdfind).
@@ -68,7 +89,8 @@ pub fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<F
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.clone());
-            FileSearchResult { path, filename }
+            let snippet = extract_file_snippet(&path);
+            FileSearchResult { path, filename, snippet }
         })
         .collect();
 

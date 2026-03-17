@@ -23,7 +23,6 @@ interface AppShellProps {
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
   onReorderTabs: (fromIndex: number, toIndex: number) => void;
-  onNewTab: () => void;
   // Find bar
   editor: Editor | null;
   findBarOpen: boolean;
@@ -51,7 +50,6 @@ export function AppShell({
   onSelectTab,
   onCloseTab,
   onReorderTabs,
-  onNewTab,
   editor,
   findBarOpen,
   onCloseFindBar,
@@ -79,16 +77,23 @@ export function AppShell({
     }
   }, [tabs.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cmd+K to open/close palette
+  // Cmd+K and Cmd+O to open palette; margin:open-command-palette event as fallback
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
       }
+      // Cmd+O is intercepted here; useTabs also dispatches margin:open-command-palette for it
+      // but we suppress the native file dialog path by handling it in the palette
     };
+    const handleOpenPalette = () => setPaletteOpen(true);
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("margin:open-command-palette", handleOpenPalette);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("margin:open-command-palette", handleOpenPalette);
+    };
   }, []);
 
   const hasContent = currentDoc !== null || !!hasSampleContent;
@@ -152,7 +157,7 @@ export function AppShell({
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
         onReorderTabs={onReorderTabs}
-        onNewTab={onNewTab}
+        onNewTab={() => setPaletteOpen(true)}
         onMouseEnter={chrome.handleChromeEnter}
         onMouseLeave={chrome.handleChromeLeave}
       />

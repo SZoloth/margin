@@ -6,6 +6,7 @@ import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 interface FileResult {
   path: string;
   filename: string;
+  snippet?: string | null;
 }
 
 interface Action {
@@ -28,9 +29,22 @@ interface CommandPaletteProps {
   onOpenFind?: () => void;
 }
 
+type Column = "files" | "actions";
+
+function fuzzyMatch(query: string, text: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+  let qi = 0;
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) qi++;
+  }
+  return qi === q.length;
+}
+
 function ShortcutBadge({ keys }: { keys: string[] }) {
   return (
-    <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
+    <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
       {keys.map((k, i) => (
         <kbd
           key={i}
@@ -67,28 +81,36 @@ export function CommandPalette({
   const presence = useAnimatedPresence(isOpen, 150);
   const [query, setQuery] = useState("");
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedColumn, setSelectedColumn] = useState<Column>("files");
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
+  const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const actions: Action[] = [
-    { id: "open", label: "Open file", shortcut: ["⌘", "O"], onAction: () => { onClose(); onOpenFile(); } },
+    { id: "open", label: "Open new tab", shortcut: ["⌘", "O"], onAction: () => { onClose(); onOpenFile(); } },
     ...(onCloseTab ? [{ id: "close", label: "Close tab", shortcut: ["⌘", "W"], onAction: () => { onClose(); onCloseTab(); } }] : []),
     ...(onExport ? [{ id: "export", label: "Export annotations", shortcut: ["⌘", "⇧", "E"], onAction: () => { onClose(); onExport(); } }] : []),
     ...(onOpenFind ? [{ id: "find", label: "Find in document", shortcut: ["⌘", "F"], onAction: () => { onClose(); onOpenFind(); } }] : []),
     { id: "settings", label: "Settings", shortcut: ["⌘", ","], onAction: () => { onClose(); onOpenSettings(); } },
   ];
 
+  // File items: recent docs + mdfind results
   const filteredRecent = recentDocs.filter((d) => {
     if (!query) return true;
-    const q = query.toLowerCase();
-    return (d.title ?? "").toLowerCase().includes(q) || (d.file_path ?? "").toLowerCase().includes(q);
-  }).slice(0, 5);
+    return fuzzyMatch(query, d.title ?? "") || fuzzyMatch(query, d.file_path ?? "");
+  }).slice(0, 6);
 
   const filteredActions = actions.filter((a) => {
     if (!query) return true;
-    return a.label.toLowerCase().includes(query.toLowerCase());
+    return fuzzyMatch(query, a.label);
   });
+
+  // Combined left-column items
+  const fileItems: Array<{ type: "recent"; doc: Document } | { type: "file"; file: FileResult }> = [
+    ...filteredRecent.map((d) => ({ type: "recent" as const, doc: d })),
+    ...fileResults.map((f) => ({ type: "file" as const, file: f })),
+  ];
 
   // mdfind search
   useEffect(() => {
@@ -100,7 +122,6 @@ export function CommandPalette({
     searchTimerRef.current = setTimeout(() => {
       invoke<FileResult[]>("search_files_on_disk", { query, limit: 8 })
         .then((results) => {
-          // Deduplicate against recentDocs paths
           const recentPaths = new Set(recentDocs.map((d) => d.file_path).filter(Boolean));
           setFileResults(results.filter((r) => !recentPaths.has(r.path)));
         })
@@ -111,16 +132,10 @@ export function CommandPalette({
     };
   }, [query, recentDocs]);
 
-  // Total navigable items
-  const allItems = [
-    ...filteredRecent.map((d) => ({ type: "recent" as const, doc: d })),
-    ...filteredActions.map((a) => ({ type: "action" as const, action: a })),
-    ...fileResults.map((f) => ({ type: "file" as const, file: f })),
-  ];
-
   // Reset selection when results change
   useEffect(() => {
-    setSelectedIndex(0);
+    setSelectedFileIndex(0);
+    setSelectedActionIndex(0);
   }, [query, fileResults.length]);
 
   // Focus input on open, clear on close
@@ -128,44 +143,107 @@ export function CommandPalette({
     if (isOpen) {
       setQuery("");
       setFileResults([]);
-      setSelectedIndex(0);
+      setSelectedFileIndex(0);
+      setSelectedActionIndex(0);
+      setSelectedColumn("files");
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [isOpen]);
 
-  const activateItem = useCallback((index: number) => {
-    const item = allItems[index];
+  const activateFileItem = useCallback((index: number) => {
+    const item = fileItems[index];
     if (!item) return;
     if (item.type === "recent") {
       onClose();
       onSelectRecentDoc(item.doc, false);
-    } else if (item.type === "action") {
-      item.action.onAction();
-    } else if (item.type === "file") {
+    } else {
       onClose();
       onOpenFilePath(item.file.path, false);
     }
-  }, [allItems, onClose, onSelectRecentDoc, onOpenFilePath]);
+  }, [fileItems, onClose, onSelectRecentDoc, onOpenFilePath]);
+
+  const activateActionItem = useCallback((index: number) => {
+    const action = filteredActions[index];
+    if (!action) return;
+    action.onAction();
+  }, [filteredActions]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
       onClose();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setSelectedIndex((i) => Math.min(i + 1, allItems.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelectedIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      activateItem(selectedIndex);
+      return;
     }
-  }, [allItems.length, selectedIndex, activateItem, onClose]);
+
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      setSelectedColumn("files");
+      return;
+    }
+
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      setSelectedColumn("actions");
+      return;
+    }
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      setSelectedColumn((col) => col === "files" ? "actions" : "files");
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (selectedColumn === "files") {
+        setSelectedFileIndex((i) => Math.min(i + 1, fileItems.length - 1));
+      } else {
+        setSelectedActionIndex((i) => Math.min(i + 1, filteredActions.length - 1));
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (selectedColumn === "files") {
+        setSelectedFileIndex((i) => Math.max(i - 1, 0));
+      } else {
+        setSelectedActionIndex((i) => Math.max(i - 1, 0));
+      }
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (selectedColumn === "files") {
+        activateFileItem(selectedFileIndex);
+      } else {
+        activateActionItem(selectedActionIndex);
+      }
+      return;
+    }
+  }, [
+    selectedColumn,
+    selectedFileIndex,
+    selectedActionIndex,
+    fileItems.length,
+    filteredActions.length,
+    activateFileItem,
+    activateActionItem,
+    onClose,
+  ]);
 
   if (!presence.isMounted) return null;
 
-  let itemIndex = -1;
+  const sectionLabel: React.CSSProperties = {
+    padding: "8px 14px 4px",
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: "0.07em",
+    textTransform: "uppercase",
+    color: "#B0A89E",
+    fontFamily: "'Instrument Sans', system-ui, sans-serif",
+  };
 
   return (
     <div
@@ -176,7 +254,7 @@ export function CommandPalette({
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
-        paddingTop: "15vh",
+        paddingTop: "13vh",
         backgroundColor: presence.isVisible ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0)",
         transition: presence.isVisible
           ? "background-color 150ms var(--ease-entrance)"
@@ -191,12 +269,12 @@ export function CommandPalette({
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
         style={{
-          width: 520,
+          width: 680,
           maxWidth: "calc(100vw - 32px)",
           backgroundColor: "#FFFFF8",
           borderRadius: 12,
           border: "1px solid #DFDBD3",
-          boxShadow: "0 10px 32px rgba(0,0,0,0.12)",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)",
           overflow: "hidden",
           opacity: presence.isVisible ? 1 : 0,
           transform: presence.isVisible ? "translateY(0) scale(1)" : "translateY(-8px) scale(0.97)",
@@ -252,58 +330,137 @@ export function CommandPalette({
           </kbd>
         </div>
 
-        {/* Results */}
-        <div style={{ maxHeight: 340, overflowY: "auto" }}>
-          {/* RECENT section */}
-          {filteredRecent.length > 0 && (
-            <div>
+        {/* Two-column body */}
+        <div style={{ display: "flex", minHeight: 280, maxHeight: 420 }}>
+          {/* Left column — files */}
+          <div
+            style={{
+              flex: "0 0 55%",
+              borderRight: "1px solid #DFDBD3",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {fileItems.length === 0 && (
               <div
                 style={{
-                  padding: "8px 16px 4px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  color: "#A39A8E",
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "32px 16px",
+                  color: "#B0A89E",
+                  fontSize: 13,
                   fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                  textAlign: "center",
+                  lineHeight: 1.5,
                 }}
               >
-                Recent
+                {query ? `No files matching "${query}"` : "Type to search all .md files"}
               </div>
-              {filteredRecent.map((doc) => {
-                itemIndex++;
-                const idx = itemIndex;
-                const isSelected = selectedIndex === idx;
-                return (
-                  <button
-                    key={doc.id}
-                    type="button"
-                    onClick={() => activateItem(idx)}
-                    onMouseEnter={() => setSelectedIndex(idx)}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: 1,
-                      width: "100%",
-                      padding: "7px 16px",
-                      border: "none",
-                      background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    <span
+            )}
+
+            {/* Recent section */}
+            {filteredRecent.length > 0 && (
+              <div>
+                <div style={sectionLabel}>Recent</div>
+                {filteredRecent.map((doc, i) => {
+                  const isSelected = selectedColumn === "files" && selectedFileIndex === i;
+                  return (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => activateFileItem(i)}
+                      onMouseEnter={() => { setSelectedColumn("files"); setSelectedFileIndex(i); }}
                       style={{
-                        fontSize: 14,
-                        color: "#1A1714",
-                        fontFamily: "'Instrument Sans', system-ui, sans-serif",
-                        fontWeight: 500,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 2,
+                        width: "100%",
+                        padding: "7px 14px",
+                        border: "none",
+                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
                       }}
                     >
-                      {doc.title ?? "Untitled"}
-                    </span>
-                    {doc.file_path && (
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "#1A1714",
+                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {doc.title ?? "Untitled"}
+                      </span>
+                      {doc.file_path && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#A39A8E",
+                            fontFamily: "ui-monospace, 'SF Mono', monospace",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            maxWidth: "100%",
+                          }}
+                        >
+                          {doc.file_path.replace(/^\/Users\/[^/]+/, "~")}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* File search results section */}
+            {fileResults.length > 0 && (
+              <div>
+                <div style={sectionLabel}>Files</div>
+                {fileResults.map((file, i) => {
+                  const absIdx = filteredRecent.length + i;
+                  const isSelected = selectedColumn === "files" && selectedFileIndex === absIdx;
+                  return (
+                    <button
+                      key={file.path}
+                      type="button"
+                      onClick={() => activateFileItem(absIdx)}
+                      onMouseEnter={() => { setSelectedColumn("files"); setSelectedFileIndex(absIdx); }}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 2,
+                        width: "100%",
+                        padding: "7px 14px",
+                        border: "none",
+                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "#1A1714",
+                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {file.filename}
+                      </span>
                       <span
                         style={{
                           fontSize: 11,
@@ -315,157 +472,103 @@ export function CommandPalette({
                           maxWidth: "100%",
                         }}
                       >
-                        {doc.file_path.replace(/^\/Users\/[^/]+/, "~")}
+                        {file.path.replace(/^\/Users\/[^/]+/, "~")}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                      {file.snippet && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#8A8078",
+                            fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            maxWidth: "100%",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          {file.snippet}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
-          {/* ACTIONS section */}
-          {filteredActions.length > 0 && (
-            <div>
+          {/* Right column — actions */}
+          <div
+            style={{
+              flex: "0 0 45%",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {filteredActions.length > 0 ? (
+              <>
+                <div style={sectionLabel}>Actions</div>
+                {filteredActions.map((action, i) => {
+                  const isSelected = selectedColumn === "actions" && selectedActionIndex === i;
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => activateActionItem(i)}
+                      onMouseEnter={() => { setSelectedColumn("actions"); setSelectedActionIndex(i); }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        width: "100%",
+                        padding: "8px 14px",
+                        border: "none",
+                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "#1A1714",
+                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontWeight: 500,
+                          textAlign: "left",
+                        }}
+                      >
+                        {action.label}
+                      </span>
+                      <ShortcutBadge keys={action.shortcut} />
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
               <div
                 style={{
-                  padding: "8px 16px 4px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  color: "#A39A8E",
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "32px 16px",
+                  color: "#B0A89E",
+                  fontSize: 13,
                   fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                  textAlign: "center",
                 }}
               >
-                Actions
+                No matching actions
               </div>
-              {filteredActions.map((action) => {
-                itemIndex++;
-                const idx = itemIndex;
-                const isSelected = selectedIndex === idx;
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    onClick={() => activateItem(idx)}
-                    onMouseEnter={() => setSelectedIndex(idx)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      width: "100%",
-                      padding: "8px 16px",
-                      border: "none",
-                      background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 14,
-                        color: "#1A1714",
-                        fontFamily: "'Instrument Sans', system-ui, sans-serif",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {action.label}
-                    </span>
-                    <ShortcutBadge keys={action.shortcut} />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* FILE RESULTS section (from mdfind) */}
-          {fileResults.length > 0 && (
-            <div>
-              <div
-                style={{
-                  padding: "8px 16px 4px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  color: "#A39A8E",
-                  fontFamily: "'Instrument Sans', system-ui, sans-serif",
-                }}
-              >
-                Files
-              </div>
-              {fileResults.map((file) => {
-                itemIndex++;
-                const idx = itemIndex;
-                const isSelected = selectedIndex === idx;
-                return (
-                  <button
-                    key={file.path}
-                    type="button"
-                    onClick={() => activateItem(idx)}
-                    onMouseEnter={() => setSelectedIndex(idx)}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: 1,
-                      width: "100%",
-                      padding: "7px 16px",
-                      border: "none",
-                      background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 14,
-                        color: "#1A1714",
-                        fontFamily: "'Instrument Sans', system-ui, sans-serif",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {file.filename}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: "#A39A8E",
-                        fontFamily: "ui-monospace, 'SF Mono', monospace",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: "100%",
-                      }}
-                    >
-                      {file.path.replace(/^\/Users\/[^/]+/, "~")}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Empty state */}
-          {allItems.length === 0 && query && (
-            <div
-              style={{
-                padding: "24px 16px",
-                textAlign: "center",
-                color: "#A39A8E",
-                fontSize: 14,
-                fontFamily: "'Instrument Sans', system-ui, sans-serif",
-              }}
-            >
-              No results for &ldquo;{query}&rdquo;
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Footer */}
         <div
           style={{
-            padding: "8px 16px",
+            padding: "7px 14px",
             borderTop: "1px solid #DFDBD3",
             display: "flex",
             alignItems: "center",
@@ -475,22 +578,23 @@ export function CommandPalette({
           <span
             style={{
               fontSize: 11,
-              color: "#A39A8E",
+              color: "#B0A89E",
               fontFamily: "'Instrument Sans', system-ui, sans-serif",
             }}
           >
-            Type to search all .md files
+            {query ? "Fuzzy search across all .md files" : "Type to search all .md files"}
           </span>
           <span
             style={{
               fontSize: 11,
-              color: "#A39A8E",
+              color: "#B0A89E",
               fontFamily: "'Instrument Sans', system-ui, sans-serif",
               display: "flex",
-              gap: 8,
+              gap: 10,
             }}
           >
             <span>↑↓ navigate</span>
+            <span>←→ switch</span>
             <span>↩ open</span>
           </span>
         </div>
