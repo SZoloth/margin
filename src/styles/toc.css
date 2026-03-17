@@ -12,6 +12,7 @@
 /* TOC column — left gutter */
 .toc-column {
   min-width: 0;
+  padding-top: 3rem;
 }
 
 /* TOC nav */
@@ -160,6 +161,18 @@
 .margin-column {
   position: relative;
   min-width: 0;
+}
+
+/* Mid-width (769–1024px): content top padding drops to 2.5rem */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .toc-column {
+    padding-top: 2.5rem;
+  }
+
+  .toc {
+    top: 2.5rem;
+    max-height: calc(100vh - 5rem);
+  }
 }
 
 /* Hidden on mobile (<768px) */
