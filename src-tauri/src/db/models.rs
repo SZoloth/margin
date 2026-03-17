@@ -97,5 +97,6 @@ pub struct CorrectionInput {
     pub highlight_color: String,
     pub writing_type: Option<String>,
     pub polarity: Option<String>,
+    pub feedback_type: Option<String>,
 }
 

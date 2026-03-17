@@ -296,10 +296,18 @@ server.tool(
     notes: z.array(z.string()).describe("Correction notes (e.g. what's wrong, suggested fix)"),
     writing_type: z.string().optional().describe("Writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
     color: z.enum(["yellow", "green", "blue", "pink", "purple", "orange"]).optional().describe("Highlight color (default: yellow)"),
+    feedback_type: z.enum(["question", "suggestion", "edit", "voice", "weakness", "evidence", "wordiness", "factcheck"]).optional().describe("Feedback type classification"),
   },
   async (params) => withDbAndExport(() => {
     const db = getWriteDb();
-    const result = createCorrection(db, params);
+    const result = createCorrection(db, {
+      document_id: params.document_id,
+      original_text: params.original_text,
+      notes: params.notes,
+      writing_type: params.writing_type,
+      color: params.color,
+      feedback_type: params.feedback_type,
+    });
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
     }

@@ -744,7 +744,7 @@ pub async fn export_writing_rules(
 
 fn fetch_all_corrections_for_profile(conn: &Connection) -> rusqlite::Result<Vec<CorrectionRecord>> {
     let mut stmt = conn.prepare(
-        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity
+        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity, feedback_type
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC",
@@ -761,6 +761,7 @@ fn fetch_all_corrections_for_profile(conn: &Connection) -> rusqlite::Result<Vec<
             created_at: row.get(5)?,
             writing_type: row.get(6)?,
             polarity: row.get(7)?,
+            feedback_type: row.get(8)?,
         })
     })?;
 
@@ -920,7 +921,8 @@ mod tests {
                 highlight_color TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 writing_type TEXT,
-                polarity TEXT
+                polarity TEXT,
+                feedback_type TEXT
             );",
         )
         .unwrap();
@@ -1314,6 +1316,7 @@ mod tests {
                 created_at: 1000,
                 writing_type: None,
                 polarity: Some("positive".to_string()),
+                feedback_type: None,
             },
             CorrectionRecord {
                 original_text: "Bad pattern here.".to_string(),
@@ -1324,6 +1327,7 @@ mod tests {
                 created_at: 2000,
                 writing_type: None,
                 polarity: Some("corrective".to_string()),
+                feedback_type: None,
             },
         ];
 
@@ -1351,6 +1355,7 @@ mod tests {
                 created_at: 1000,
                 writing_type: None,
                 polarity: Some("positive".to_string()),
+                feedback_type: None,
             },
             CorrectionRecord {
                 original_text: "Corrective text.".to_string(),
@@ -1361,6 +1366,7 @@ mod tests {
                 created_at: 2000,
                 writing_type: None,
                 polarity: Some("corrective".to_string()),
+                feedback_type: None,
             },
         ];
 
@@ -1382,6 +1388,7 @@ mod tests {
             created_at: 1000,
             writing_type: None,
             polarity: Some("positive".to_string()),
+            feedback_type: None,
         }];
 
         // Should not panic — truncation must respect char boundaries
