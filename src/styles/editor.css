@@ -151,7 +151,7 @@
 
 .toolbar-color-btn:active {
   background-color: var(--active-bg);
-  transform: scale(0.92);
+  transform: scale(0.96);
 }
 
 /* Selected color in floating toolbar */
