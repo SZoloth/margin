@@ -1145,21 +1145,11 @@ export default function App() {
       recentDocs={doc.recentDocs}
       onOpenFile={doc.openFile}
       onSelectRecentDoc={handleSelectRecentDoc}
-      isDirty={doc.isDirty}
-      search={search}
-      hasAnnotations={annotations.isLoaded && annotations.highlights.length > 0}
       onExport={() => setShowExportPopover(true)}
       onOpenFilePath={(path: string, newTab: boolean) => {
         openAsNewTabRef.current = newTab;
         tabsHook.snapshotActive();
         void doc.openFilePath(path);
-      }}
-      onRenameFile={async (targetDoc, newName) => {
-        try {
-          await doc.renameDocFile(targetDoc, newName);
-        } catch (err) {
-          // Error already logged in the hook
-        }
       }}
       tabs={tabsHook.tabs}
       activeTabId={tabsHook.activeTabId}
@@ -1170,6 +1160,7 @@ export default function App() {
       editor={editor}
       findBarOpen={findBarOpen}
       onCloseFindBar={() => setFindBarOpen(false)}
+      onOpenFind={() => setFindBarOpen(true)}
       welcomeBar={
         onboarding.step === "welcome" ? (
           <WelcomeBar visible onDismiss={onboarding.dismissWelcome} />
