@@ -63,6 +63,7 @@
     "jsdom": "^26.1.0",
     "tailwindcss": "^4",
     "typescript": "^5.7",
+    "uifork": "^0.0.12",
     "vite": "^6",
     "vitest": "^4.0.18"
   }
