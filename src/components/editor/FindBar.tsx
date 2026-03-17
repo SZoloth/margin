@@ -82,12 +82,22 @@ export function FindBar({ editor, isOpen, onClose }: FindBarProps) {
 
   return (
     <div
-      className="flex items-center gap-2 px-4 py-1.5 border-b flex-shrink-0"
       style={{
-        borderColor: "var(--color-border)",
-        backgroundColor: "var(--color-surface-subtle)",
+        position: "fixed",
+        top: 16,
+        right: 16,
+        width: 260,
+        zIndex: 40,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "7px 10px",
+        backgroundColor: "var(--color-page)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius-md)",
+        boxShadow: "var(--shadow-md)",
         opacity: presence.isVisible ? 1 : 0,
-        transform: presence.isVisible ? "translateY(0)" : "translateY(-100%)",
+        transform: presence.isVisible ? "translateX(0)" : "translateX(calc(100% + 20px))",
         transition: presence.isVisible
           ? "opacity 150ms var(--ease-entrance), transform 150ms var(--ease-entrance)"
           : "opacity 100ms var(--ease-exit), transform 100ms var(--ease-exit)",
