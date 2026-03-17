@@ -153,6 +153,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add exported_at column to highlights
     migrate_highlights_add_exported_at(&conn)?;
 
+    // Migration: add feedback_type column to corrections
+    migrate_corrections_add_feedback_type(&conn)?;
+
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
         "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
@@ -1345,6 +1348,36 @@ fn migrate_highlights_add_exported_at(conn: &Connection) -> Result<(), Box<dyn s
 
     if !has_column {
         conn.execute_batch("ALTER TABLE highlights ADD COLUMN exported_at INTEGER;")?;
+    }
+
+    Ok(())
+}
+
+const VALID_FEEDBACK_TYPES: &[&str] = &[
+    "question", "suggestion", "edit", "voice", "weakness", "evidence", "wordiness", "factcheck",
+];
+
+/// Adds a `feedback_type` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_feedback_type(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "feedback_type")
+    };
+
+    if !has_column {
+        let check_values = VALID_FEEDBACK_TYPES
+            .iter()
+            .map(|v| format!("'{v}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        conn.execute_batch(&format!(
+            "ALTER TABLE corrections ADD COLUMN feedback_type TEXT CHECK(feedback_type IN ({check_values}));
+             CREATE INDEX IF NOT EXISTS idx_corrections_feedback_type ON corrections(feedback_type);"
+        ))?;
     }
 
     Ok(())

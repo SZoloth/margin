@@ -18,6 +18,7 @@ pub struct CorrectionRecord {
     pub created_at: i64,
     pub writing_type: Option<String>,
     pub polarity: Option<String>,
+    pub feedback_type: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -39,6 +40,7 @@ pub struct CorrectionDetail {
     pub highlight_color: String,
     pub writing_type: Option<String>,
     pub polarity: Option<String>,
+    pub feedback_type: Option<String>,
     pub document_title: Option<String>,
     pub created_at: i64,
     pub synthesized_at: Option<i64>,
@@ -62,7 +64,7 @@ fn sanitize_filename_component(input: &str) -> String {
 
 fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<CorrectionRecord>> {
     let mut stmt = conn.prepare(
-        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity
+        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity, feedback_type
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -78,6 +80,7 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
         let created_at: i64 = row.get(5)?;
         let writing_type: Option<String> = row.get(6)?;
         let polarity: Option<String> = row.get(7)?;
+        let feedback_type: Option<String> = row.get(8)?;
 
         let notes: Vec<String> = serde_json::from_str(&notes_json).unwrap_or_default();
 
@@ -90,6 +93,7 @@ fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Corr
             created_at,
             writing_type,
             polarity,
+            feedback_type,
         })
     })?;
 
@@ -167,8 +171,8 @@ pub async fn persist_corrections(
                 (id, highlight_id, document_id, session_id, original_text,
                  prefix_context, suffix_context, extended_context, notes_json,
                  document_title, document_source, document_path, category,
-                 highlight_color, created_at, updated_at, writing_type, polarity)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                 highlight_color, created_at, updated_at, writing_type, polarity, feedback_type)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             rusqlite::params![
                 id,
                 input.highlight_id,
@@ -188,6 +192,7 @@ pub async fn persist_corrections(
                 now,
                 input.writing_type,
                 input.polarity,
+                input.feedback_type,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -288,7 +293,7 @@ fn fetch_corrections_flat(
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
                 highlight_color, writing_type, polarity, document_title, created_at,
-                synthesized_at
+                synthesized_at, feedback_type
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY CASE WHEN synthesized_at IS NULL THEN 0 ELSE 1 END, created_at DESC
@@ -310,6 +315,7 @@ fn fetch_corrections_flat(
             document_title: row.get(7)?,
             created_at: row.get(8)?,
             synthesized_at: row.get(9)?,
+            feedback_type: row.get(10)?,
         })
     })?;
 
@@ -378,7 +384,7 @@ fn fetch_corrections_by_document(
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
                 highlight_color, writing_type, polarity, document_title, document_id,
-                document_path, created_at, synthesized_at
+                document_path, created_at, synthesized_at, feedback_type
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -404,6 +410,7 @@ fn fetch_corrections_by_document(
                 document_title: row.get(7)?,
                 created_at: row.get(10)?,
                 synthesized_at: row.get(11)?,
+                feedback_type: row.get(12)?,
             },
         ))
     })?;
@@ -473,6 +480,7 @@ pub struct ExportedCorrection {
     pub extended_context: Option<String>,
     pub writing_type: Option<String>,
     pub polarity: Option<String>,
+    pub feedback_type: Option<String>,
     pub document_title: Option<String>,
     pub highlight_color: String,
     pub created_at: i64,
@@ -516,7 +524,7 @@ fn unix_secs_to_iso8601(secs: u64) -> String {
 fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsExport> {
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context, writing_type, polarity,
-                document_title, highlight_color, created_at
+                feedback_type, document_title, highlight_color, created_at
          FROM corrections
          WHERE session_id != '__backfilled__' AND synthesized_at IS NULL
          ORDER BY created_at DESC",
@@ -534,9 +542,10 @@ fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsEx
                 extended_context: row.get(3)?,
                 writing_type: row.get(4)?,
                 polarity: row.get(5)?,
-                document_title: row.get(6)?,
-                highlight_color: row.get(7)?,
-                created_at: row.get(8)?,
+                feedback_type: row.get(6)?,
+                document_title: row.get(7)?,
+                highlight_color: row.get(8)?,
+                created_at: row.get(9)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -704,7 +713,7 @@ fn fetch_voice_signals(
         Some(p) => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
                     highlight_color, writing_type, polarity, document_title, created_at,
-                    synthesized_at
+                    synthesized_at, feedback_type
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity = ?1
              ORDER BY created_at DESC
@@ -714,7 +723,7 @@ fn fetch_voice_signals(
         None => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
                     highlight_color, writing_type, polarity, document_title, created_at,
-                    synthesized_at
+                    synthesized_at, feedback_type
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
              ORDER BY created_at DESC
@@ -740,6 +749,7 @@ fn fetch_voice_signals(
             document_title: row.get(7)?,
             created_at: row.get(8)?,
             synthesized_at: row.get(9)?,
+            feedback_type: row.get(10)?,
         })
     })?;
 
@@ -838,7 +848,8 @@ mod tests {
             updated_at INTEGER NOT NULL,
             writing_type TEXT,
             polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
-            synthesized_at INTEGER
+            synthesized_at INTEGER,
+            feedback_type TEXT CHECK(feedback_type IN ('question', 'suggestion', 'edit', 'voice', 'weakness', 'evidence', 'wordiness', 'factcheck'))
         );
         CREATE TABLE writing_rules (
             id TEXT PRIMARY KEY,
