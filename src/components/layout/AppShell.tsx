@@ -51,7 +51,8 @@ export function AppShell({
   onSelectTab,
   onCloseTab,
   onReorderTabs,
-  onNewTab,
+  // onNewTab is handled internally (opens command palette)
+  onNewTab: _onNewTab,
   editor,
   findBarOpen,
   onCloseFindBar,
@@ -89,6 +90,13 @@ export function AppShell({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cmd+O (via useTabs) opens the palette instead of native file picker
+  useEffect(() => {
+    const handler = () => setPaletteOpen(true);
+    window.addEventListener("margin:open-file-for-tab", handler);
+    return () => window.removeEventListener("margin:open-file-for-tab", handler);
   }, []);
 
   const hasContent = currentDoc !== null || !!hasSampleContent;
@@ -152,7 +160,7 @@ export function AppShell({
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
         onReorderTabs={onReorderTabs}
-        onNewTab={onNewTab}
+        onNewTab={() => setPaletteOpen(true)}
         onMouseEnter={chrome.handleChromeEnter}
         onMouseLeave={chrome.handleChromeLeave}
       />

@@ -129,7 +129,10 @@ export function CommandPalette({
       setQuery("");
       setFileResults([]);
       setSelectedIndex(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
+      // Double rAF to ensure the animated presence has rendered the input
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => inputRef.current?.focus());
+      });
     }
   }, [isOpen]);
 

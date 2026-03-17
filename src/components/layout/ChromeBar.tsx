@@ -181,7 +181,6 @@ export function ChromeBar({
               style={{
                 display: "flex",
                 alignItems: "stretch",
-                flex: 1,
                 minWidth: 0,
                 overflow: "hidden",
                 gap: 2,

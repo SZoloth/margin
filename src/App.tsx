@@ -160,12 +160,7 @@ export default function App() {
   });
   const unsavedDialog = useAnimatedPresence(!!tabsHook.pendingCloseTabId, 200);
 
-  // Listen for Cmd+O from useTabs keyboard shortcut
-  useEffect(() => {
-    const handler = () => { void doc.openFile(); };
-    window.addEventListener("margin:open-file-for-tab", handler);
-    return () => window.removeEventListener("margin:open-file-for-tab", handler);
-  }, [doc.openFile]);
+  // Cmd+O is now handled by AppShell (opens command palette)
 
   // Track whether next doc open should create a new tab vs replace active
   const openAsNewTabRef = useRef(true);
