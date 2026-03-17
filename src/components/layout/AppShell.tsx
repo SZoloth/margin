@@ -96,6 +96,13 @@ export function AppShell({
     };
   }, []);
 
+  // Cmd+O (via useTabs) opens the palette instead of native file picker
+  useEffect(() => {
+    const handler = () => setPaletteOpen(true);
+    window.addEventListener("margin:open-file-for-tab", handler);
+    return () => window.removeEventListener("margin:open-file-for-tab", handler);
+  }, []);
+
   const hasContent = currentDoc !== null || !!hasSampleContent;
   const emptyState = useAnimatedPresence(!hasContent, 300);
   const [contentEntranceDone, setContentEntranceDone] = useState(false);

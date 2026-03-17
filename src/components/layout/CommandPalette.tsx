@@ -146,7 +146,10 @@ export function CommandPalette({
       setSelectedFileIndex(0);
       setSelectedActionIndex(0);
       setSelectedColumn("files");
-      requestAnimationFrame(() => inputRef.current?.focus());
+      // Double rAF to ensure animated presence has rendered the input
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => inputRef.current?.focus());
+      });
     }
   }, [isOpen]);
 
