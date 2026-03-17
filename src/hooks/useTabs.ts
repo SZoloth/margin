@@ -375,11 +375,10 @@ export function useTabs({ snapshotFn, onFileMissing }: UseTabsOptions): UseTabsR
     function handleKeyDown(e: KeyboardEvent) {
       const isMod = e.metaKey || e.ctrlKey;
 
-      // Cmd+O — open file as new tab
+      // Cmd+O — open command palette (palette handles file/tab opening)
       if (isMod && e.key === "o" && !e.shiftKey) {
         e.preventDefault();
-        // Fire-and-forget: the dialog result is handled by App.tsx's openFile wrapper
-        window.dispatchEvent(new CustomEvent("margin:open-file-for-tab"));
+        window.dispatchEvent(new CustomEvent("margin:open-command-palette"));
       }
 
       // Cmd+W — close active tab

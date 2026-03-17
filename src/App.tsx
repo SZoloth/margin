@@ -162,6 +162,7 @@ export default function App() {
 
   // Cmd+O is now handled by AppShell (opens command palette)
 
+
   // Track whether next doc open should create a new tab vs replace active
   const openAsNewTabRef = useRef(true);
 
@@ -1151,7 +1152,6 @@ export default function App() {
       onSelectTab={tabsHook.switchTab}
       onCloseTab={tabsHook.closeTab}
       onReorderTabs={tabsHook.reorderTabs}
-      onNewTab={doc.openFile}
       editor={editor}
       findBarOpen={findBarOpen}
       onCloseFindBar={() => setFindBarOpen(false)}
