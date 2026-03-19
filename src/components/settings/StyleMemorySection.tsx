@@ -125,7 +125,11 @@ function SeedGuideSection({ onSeeded }: { onSeeded: () => void }) {
 }
 
 interface StyleMemorySectionProps {
-  onAcceptEdit?: (highlightId: string, matchText: string, suggestedEdit: string) => void;
+  onAcceptEdit?: (
+    highlightId: string,
+    matchText: string,
+    suggestedEdit: string,
+  ) => boolean | Promise<boolean>;
 }
 
 export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {}) {

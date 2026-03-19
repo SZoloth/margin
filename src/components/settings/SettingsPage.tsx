@@ -16,7 +16,11 @@ interface SettingsPageProps {
   onClose: () => void;
   updater: ReturnType<typeof useUpdater>;
   initialSection?: Section;
-  onAcceptEdit?: (highlightId: string, matchText: string, suggestedEdit: string) => void;
+  onAcceptEdit?: (
+    highlightId: string,
+    matchText: string,
+    suggestedEdit: string,
+  ) => boolean | Promise<boolean>;
 }
 
 export function SettingsPage({

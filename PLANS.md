@@ -7,56 +7,54 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Install the operator layer for Margin's harness workflow:
+Complete `SAM-134` from takeover state without losing the rework that exists only in this workspace:
 
-- short routing instructions in `AGENTS.md`
-- canonical repo docs for architecture, invariants, evals, and troubleshooting
-- a tier-aware `scripts/verify` entrypoint
+- keep the Linear workpad accurate during takeover
+- make Accept target the annotated `highlight_id`, not the first duplicate phrase in the editor
+- preserve the accepted-in-DB behavior only after the editor mutation succeeds
+- publish the rework onto PR `#33` before any merge action
 
 ### Outcome
 
-A fresh agent should be able to enter the repo, find the right docs quickly, and run the correct verification path without reconstructing repo conventions from chat history.
+The branch and PR both contain the anchor-safe Accept flow, the workpad matches reality, and the ticket lands only from the updated branch state.
 
 ### Constraints
 
-- Preserve the existing `bd` workflow.
-- Preserve the existing harness strategy in `docs/harness-engineering.md`.
+- Continue from the existing feature branch and PR because takeover happened mid-stream.
+- Do not discard the uncommitted rework that is ahead of PR `#33`.
+- Keep the issue state honest if the updated PR needs another human look after push.
 - Do not overwrite unrelated uncommitted user work.
-- Keep repo knowledge in files, not in `AGENTS.md`.
 
 ### Steps
 
-1. Read the existing repo instructions, napkin, and harness docs.
-2. Add the missing operational docs and verify entrypoint.
-3. Update `AGENTS.md` to route to those files.
-4. Run lightweight verification for the new shell/docs layer.
+1. Reconcile takeover state: local rework exists, PR is still on `985d990`, issue is already in `Merging`.
+2. Revalidate the rework from the current worktree.
+3. Update repo docs/workpad so blockers and validation notes match the current session.
+4. Commit and push the rework onto the existing branch.
+5. Re-check PR/issue state and only merge if the updated branch is still legitimately merge-ready.
 
 ## Decisions
 
-- `AGENTS.md` stays short and routes to canonical docs.
-- `docs/harness-engineering.md` remains the deep harness design doc; new docs cover day-to-day operator use.
-- `scripts/verify` encodes Margin's existing `standard` vs `data-layer` split instead of flattening it.
+- The editor mutation is now centralized in `src/lib/apply-accepted-correction.ts`.
+- The Accept flow treats editor mutation as the gate: no DB acceptance if the highlighted range cannot be safely updated.
+- Takeover continues on the existing feature branch instead of restarting from `origin/main`, because the necessary fix already exists locally and the PR attachment points at this branch.
 
 ## Surprises
 
-- Margin already had `.harness/` scaffolding and a strong architecture-level harness doc.
-- The missing piece was not strategy but operator-facing entrypoints and canonical repo docs.
-- The repo currently runs with two Node runtimes in practice: root shell commands on Node 25 and `mcp` package-local exec on Node 22. MCP native-module tests must use the package-local runtime.
+- The attached PR and Linear issue had advanced to `Merging` even though the safety rework was still only in the local worktree.
+- The earlier sandbox blockers cleared in this session: GitHub fetch/PR queries work, commits are possible, and `pnpm tauri dev` launches successfully.
+- The repo-local `.claude/skills/land/SKILL.md` path referenced by the workflow does not exist in this checkout, so landing has to use a safe fallback instead of that missing script.
 
 ## Verification
 
-- `bash -n scripts/verify`
-- `scripts/verify --help`
-- `node .harness/scripts/audit-gaps.mjs` → `gaps.jsonl is empty — nothing to audit.`
-- `bash scripts/verify standard` reproduced two harness issues and drove the fixes:
-  - root verify was mixing frontend and MCP tests
-  - MCP verification needed package-local `pnpm exec` to avoid Node ABI mismatch
-- Final state: `bash scripts/verify standard` passes end to end.
-- `bash scripts/verify data-layer`
-  - passed: typecheck, frontend tests, frontend build, MCP tests, MCP build, gap audit, `cargo check`, `cargo test`
-  - failed: `cargo clippy -- -D warnings` on pre-existing Rust lint issues in `src/commands/corrections.rs`, `src/commands/writing_rules.rs`, and `src/db/migrations.rs`
+- `pnpm exec vitest run src/components/style-memory/__tests__/CorrectionsTab.test.tsx src/lib/__tests__/apply-accepted-correction.test.tsx`
+- `pnpm tsc --noEmit`
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+- `pnpm test`
+- `cargo test --manifest-path src-tauri/Cargo.toml`
+- `pnpm tauri dev` launched successfully through Vite and `target/debug/margin`, then was stopped cleanly after startup verification
 
 ## Handoff
 
-- The operator layer is now installed.
-- The next useful task is to either fix the current Rust clippy backlog or decide whether `data-layer` mode should tolerate existing lint debt while the repo is in transition.
+- The rework is validated locally and ready to publish.
+- The remaining work is workflow correctness: push the rework to PR `#33`, refresh Linear, and only merge from that updated branch state.

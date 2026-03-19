@@ -21,7 +21,11 @@ type CorrectionFilterHint = "unsynthesized" | "untagged" | "all" | null;
 interface CorrectionsTabProps {
   onStatsChange: (stats: { total: number; documentCount: number; untaggedCount: number; unsynthesizedCount: number }) => void;
   filterHint?: CorrectionFilterHint;
-  onAcceptEdit?: (highlightId: string, matchText: string, suggestedEdit: string) => void;
+  onAcceptEdit?: (
+    highlightId: string,
+    matchText: string,
+    suggestedEdit: string,
+  ) => boolean | Promise<boolean>;
 }
 
 function formatDateLabel(timestamp: number, todayMs: number, yesterdayMs: number): string {
@@ -483,11 +487,13 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
 
   const handleAccept = useCallback(async (highlightId: string, matchText: string, suggestedEdit: string) => {
     try {
+      const applied = await onAcceptEdit?.(highlightId, matchText, suggestedEdit);
+      if (!applied) return;
+
       await acceptCorrection(highlightId);
       setCorrections((prev) =>
         prev.map((c) => c.highlightId === highlightId ? { ...c, acceptedAt: Date.now() } : c),
       );
-      onAcceptEdit?.(highlightId, matchText, suggestedEdit);
     } catch (err) {
       console.error("Failed to accept correction:", err);
     }

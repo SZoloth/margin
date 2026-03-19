@@ -21,6 +21,7 @@ import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
+import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported } from "@/lib/tauri-commands";
@@ -961,24 +962,14 @@ export default function App() {
   }, []);
 
   const handleAcceptEdit = useCallback(
-    (_highlightId: string, matchText: string, suggestedEdit: string) => {
-      if (!editor) return;
-      const { state, view } = editor;
-      let replaced = false;
-      const tr = state.tr;
-      state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
-        if (replaced) return false;
-        if (node.isText && node.text && node.text.includes(matchText)) {
-          const idx = node.text.indexOf(matchText);
-          tr.insertText(suggestedEdit, pos + idx, pos + idx + matchText.length);
-          replaced = true;
-          return false;
-        }
-        return true;
-      });
-      if (replaced) {
-        view.dispatch(tr);
-      }
+    (highlightId: string, matchText: string, suggestedEdit: string) => {
+      if (!editor) return false;
+      return applyAcceptedCorrection(
+        editor,
+        highlightId,
+        matchText,
+        suggestedEdit,
+      );
     },
     [editor],
   );
