@@ -10,6 +10,7 @@ vi.mock("@/lib/tauri-commands", () => ({
   getCorrectionsFlat: vi.fn(),
   updateCorrectionWritingType: vi.fn(),
   deleteCorrection: vi.fn(),
+  acceptCorrection: vi.fn(),
   bulkDeleteCorrections: vi.fn(),
   bulkTagCorrections: vi.fn(),
   markCorrectionsUnsynthesized: vi.fn(),
@@ -46,6 +47,8 @@ const makeCorrection = (id: string): CorrectionDetail => ({
   synthesizedAt: null,
   documentTitle: null,
   createdAt: Date.now(),
+  suggestedEdit: null,
+  acceptedAt: null,
 });
 
 describe("StyleMemorySection", () => {

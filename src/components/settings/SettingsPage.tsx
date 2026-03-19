@@ -16,6 +16,11 @@ interface SettingsPageProps {
   onClose: () => void;
   updater: ReturnType<typeof useUpdater>;
   initialSection?: Section;
+  onAcceptEdit?: (
+    highlightId: string,
+    matchText: string,
+    suggestedEdit: string,
+  ) => boolean | Promise<boolean>;
 }
 
 export function SettingsPage({
@@ -24,6 +29,7 @@ export function SettingsPage({
   onClose,
   updater,
   initialSection,
+  onAcceptEdit,
 }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<Section>(
     initialSection || "reading",
@@ -39,7 +45,7 @@ export function SettingsPage({
 
       <div className="flex-1 overflow-y-auto">
         {activeSection === "style-memory" ? (
-          <StyleMemorySection />
+          <StyleMemorySection onAcceptEdit={onAcceptEdit} />
         ) : activeSection === "dashboard" ? (
           <DashboardSection />
         ) : (

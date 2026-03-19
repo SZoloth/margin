@@ -4,6 +4,7 @@ import {
   getCorrectionsFlat,
   updateCorrectionWritingType,
   deleteCorrection,
+  acceptCorrection,
   bulkDeleteCorrections,
   bulkTagCorrections,
   markCorrectionsUnsynthesized,
@@ -20,6 +21,11 @@ type CorrectionFilterHint = "unsynthesized" | "untagged" | "all" | null;
 interface CorrectionsTabProps {
   onStatsChange: (stats: { total: number; documentCount: number; untaggedCount: number; unsynthesizedCount: number }) => void;
   filterHint?: CorrectionFilterHint;
+  onAcceptEdit?: (
+    highlightId: string,
+    matchText: string,
+    suggestedEdit: string,
+  ) => boolean | Promise<boolean>;
 }
 
 function formatDateLabel(timestamp: number, todayMs: number, yesterdayMs: number): string {
@@ -170,12 +176,14 @@ function CorrectionCard({
   onToggleSelect,
   onUpdateType,
   onDelete,
+  onAccept,
 }: {
   correction: CorrectionDetail;
   isSelected: boolean;
   onToggleSelect: (highlightId: string) => void;
   onUpdateType: (highlightId: string, writingType: WritingType) => void;
   onDelete: (highlightId: string) => void;
+  onAccept?: (highlightId: string, matchText: string, suggestedEdit: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showTypeChips, setShowTypeChips] = useState(false);
@@ -282,8 +290,31 @@ function CorrectionCard({
               opacity: 0.6,
             }}
           >
-            Delete
+            Dismiss
           </button>
+          {correction.suggestedEdit != null && onAccept && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAccept(correction.highlightId, correction.originalText, correction.suggestedEdit!);
+              }}
+              style={{
+                padding: "1px 8px",
+                fontSize: "var(--text-xs)",
+                color: "var(--color-page)",
+                background: "var(--color-text-primary)",
+                border: "1px solid var(--color-text-primary)",
+                borderRadius: 100,
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
+              Accept → "{correction.suggestedEdit.length > 40
+                ? correction.suggestedEdit.slice(0, 40) + "…"
+                : correction.suggestedEdit}"
+            </button>
+          )}
         </div>
 
         {showTypeChips && (
@@ -341,7 +372,7 @@ function highlightInContext(context: string, original: string): React.ReactNode 
   );
 }
 
-export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProps) {
+export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: CorrectionsTabProps) {
   const [corrections, setCorrections] = useState<CorrectionDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -453,6 +484,20 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
       console.error("Failed to delete correction:", err);
     }
   }, []);
+
+  const handleAccept = useCallback(async (highlightId: string, matchText: string, suggestedEdit: string) => {
+    try {
+      const applied = await onAcceptEdit?.(highlightId, matchText, suggestedEdit);
+      if (!applied) return;
+
+      await acceptCorrection(highlightId);
+      setCorrections((prev) =>
+        prev.map((c) => c.highlightId === highlightId ? { ...c, acceptedAt: Date.now() } : c),
+      );
+    } catch (err) {
+      console.error("Failed to accept correction:", err);
+    }
+  }, [onAcceptEdit]);
 
   const handleToggleSelect = useCallback((highlightId: string) => {
     setSelectedIds((prev) => {
@@ -712,6 +757,7 @@ export function CorrectionsTab({ onStatsChange, filterHint }: CorrectionsTabProp
                       onToggleSelect={handleToggleSelect}
                       onUpdateType={handleUpdateType}
                       onDelete={handleDelete}
+                      onAccept={onAcceptEdit ? handleAccept : undefined}
                     />
                   ))}
                 </div>

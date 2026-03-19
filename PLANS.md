@@ -7,46 +7,55 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Research what Margin can learn from Every's AI-assisted writing workflow and preserve the results in repo-local documentation for `SAM-158`.
+Finish `SAM-134` from takeover state now that the anchor-safe rework is committed locally:
+
+- keep the Linear workpad aligned with the real PR/branch state
+- publish the highlight-anchored Accept fix and regression tests to PR `#33`
+- sync the branch with `origin/main` without losing the active task memory
+- only merge if the updated PR state is still legitimately ready
 
 ### Outcome
 
-A future agent or human can open one research note and quickly understand which parts of Every's workflow are worth adapting for Margin's feedback loop, especially from the exact ticket-linked transcript, which parts are off-thesis, and which ideas deserve separate follow-up tickets.
+PR `#33` contains both the original inline Accept feature and the follow-up safety fix, the workpad reflects that updated branch state, and the issue ends in the correct final workflow state.
 
 ### Constraints
 
-- Keep the scope to research synthesis, not product implementation.
-- Treat inaccessible external sources as explicit blockers rather than guessing what they contained.
-- Use the exact ticket-linked Every transcript as the primary source now that it is confirmed public; keep the Readwise gap explicit.
+- Continue from the existing feature branch and attached PR.
+- Do not discard the committed safety rework (`a2349e7`) while resolving the `origin/main` sync.
+- Keep session-memory files accurate to the current task even though `origin/main` brought unrelated active-work context for another ticket.
+- Do not overwrite unrelated uncommitted user work.
 
 ### Steps
 
-1. Reconcile the earlier research against the exact ticket-linked Every transcript and the still-inaccessible Readwise item.
-2. Extract the high-signal operational patterns rather than generic AI-writing advice.
-3. Map those patterns onto Margin's product thesis and workflow.
-4. Land the corrected synthesis in `docs/research/` and refresh `THEORY.MD` / `PLANS.md`.
-5. Preserve backlog follow-up issues for any concrete out-of-scope product ideas discovered during the research.
+1. Resolve the `origin/main` merge conflict in `PLANS.md` and `THEORY.MD` in favor of the live `SAM-134` task context.
+2. Complete the merge from `origin/main` and rerun the required validation on the merged branch state.
+3. Push the updated branch to PR `#33`.
+4. Re-check PR checks/review state and choose the safe final ticket outcome:
+   - merge if the updated branch is still legitimately merge-ready
+   - otherwise move the issue out of `Merging` with explicit evidence
 
 ## Decisions
 
-- Use `docs/research/` as the durable home for the writeup, matching prior research tickets.
-- Favor specific product implications over broad commentary on AI and writing.
-- Explicitly document source-access gaps so later work can revisit them without re-investigating.
-- Treat the exact Every transcript as the anchor source and use adjacent Every materials only as supporting context.
+- The editor mutation remains centralized in `src/lib/apply-accepted-correction.ts`.
+- Accept only persists to the database after the targeted editor mutation succeeds.
+- Session-memory files should describe the active ticket, not whichever unrelated task most recently landed on `main`.
 
 ## Surprises
 
-- The earlier assumption that the ticket-linked Every transcript was inaccessible was wrong; the page is public and materially sharpens the research.
-- The Readwise saved-page URL still appears auth-bound or otherwise opaque from this environment, so it cannot be treated as an accessible citation.
-- The earlier `.git` write blocker was environment-specific and does not reproduce in this continuation workspace.
+- The branch sync conflict was limited to `PLANS.md` and `THEORY.MD`; product code merged cleanly.
+- `origin/main` now includes unrelated research-task working-memory updates, which is why these files conflicted.
+- The earlier environment blockers were stale: GitHub access, commits, and `pnpm tauri dev` all work in this session.
 
 ## Verification
 
-- Confirm the research note is grounded in the exact Every transcript plus any supporting public sources and ties each takeaway back to Margin.
-- Refresh `THEORY.MD` so the repo's current operating theory matches the corrected research.
-- Record the still-open Readwise source gap and the corrected git-state findings explicitly in the Linear workpad.
+- `pnpm exec vitest run src/components/style-memory/__tests__/CorrectionsTab.test.tsx src/lib/__tests__/apply-accepted-correction.test.tsx`
+- `pnpm tsc --noEmit`
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+- `pnpm test`
+- `cargo test --manifest-path src-tauri/Cargo.toml`
+- `pnpm tauri dev` launched successfully through Vite and `target/debug/margin`, then was stopped cleanly after startup verification
 
 ## Handoff
 
-- The durable deliverable is the research note plus the already-filed backlog tickets created from it.
-- The only remaining source blocker is external access to the underlying Readwise article.
+- The local rework is already committed as `a2349e7`.
+- Remaining work is purely branch/PR/ticket synchronization.

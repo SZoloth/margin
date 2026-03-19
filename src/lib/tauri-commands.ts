@@ -88,6 +88,10 @@ export async function deleteCorrection(highlightId: string): Promise<void> {
   return invoke<void>("delete_correction", { highlightId });
 }
 
+export async function acceptCorrection(highlightId: string): Promise<string | null> {
+  return invoke<string | null>("accept_correction", { highlightId });
+}
+
 export interface ExportResult {
   count: number;
   highlightIds: string[];

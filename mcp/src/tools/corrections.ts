@@ -148,6 +148,7 @@ export function createCorrection(
     writing_type?: string;
     color?: string;
     feedback_type?: string;
+    suggested_edit?: string;
   },
 ): CreateCorrectionResult | { error: string } {
   const color = params.color ?? "yellow";
@@ -179,8 +180,8 @@ export function createCorrection(
        (id, highlight_id, document_id, session_id, original_text,
         prefix_context, suffix_context, notes_json,
         document_title, document_source, document_path,
-        highlight_color, created_at, updated_at, writing_type, feedback_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        highlight_color, created_at, updated_at, writing_type, feedback_type, suggested_edit)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     correctionId,
     highlight.id,
@@ -198,6 +199,7 @@ export function createCorrection(
     now,
     params.writing_type ?? null,
     params.feedback_type ?? null,
+    params.suggested_edit ?? null,
   );
 
   return {

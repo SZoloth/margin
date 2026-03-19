@@ -21,6 +21,7 @@ import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
+import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported } from "@/lib/tauri-commands";
@@ -960,6 +961,19 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const handleAcceptEdit = useCallback(
+    (highlightId: string, matchText: string, suggestedEdit: string) => {
+      if (!editor) return false;
+      return applyAcceptedCorrection(
+        editor,
+        highlightId,
+        matchText,
+        suggestedEdit,
+      );
+    },
+    [editor],
+  );
+
   const handleExportAnnotations = useCallback(
     async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
@@ -1429,6 +1443,7 @@ export default function App() {
             }}
             updater={updater}
             initialSection={settingsSection}
+            onAcceptEdit={handleAcceptEdit}
           />
         </div>
       )}

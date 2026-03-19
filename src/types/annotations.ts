@@ -30,6 +30,7 @@ export interface CorrectionInput {
   highlight_color: string;
   writing_type: string | null;
   polarity: "positive" | "corrective" | null;
+  suggested_edit?: string | null;
 }
 
 export interface CorrectionRecord {
@@ -54,6 +55,8 @@ export interface CorrectionDetail {
   synthesizedAt: number | null;
   documentTitle: string | null;
   createdAt: number;
+  suggestedEdit: string | null;
+  acceptedAt: number | null;
 }
 
 export interface DocumentCorrections {
