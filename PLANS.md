@@ -7,56 +7,46 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Install the operator layer for Margin's harness workflow:
-
-- short routing instructions in `AGENTS.md`
-- canonical repo docs for architecture, invariants, evals, and troubleshooting
-- a tier-aware `scripts/verify` entrypoint
+Research what Margin can learn from Every's AI-assisted writing workflow and preserve the results in repo-local documentation for `SAM-158`.
 
 ### Outcome
 
-A fresh agent should be able to enter the repo, find the right docs quickly, and run the correct verification path without reconstructing repo conventions from chat history.
+A future agent or human can open one research note and quickly understand which parts of Every's workflow are worth adapting for Margin's feedback loop, especially from the exact ticket-linked transcript, which parts are off-thesis, and which ideas deserve separate follow-up tickets.
 
 ### Constraints
 
-- Preserve the existing `bd` workflow.
-- Preserve the existing harness strategy in `docs/harness-engineering.md`.
-- Do not overwrite unrelated uncommitted user work.
-- Keep repo knowledge in files, not in `AGENTS.md`.
+- Keep the scope to research synthesis, not product implementation.
+- Treat inaccessible external sources as explicit blockers rather than guessing what they contained.
+- Use the exact ticket-linked Every transcript as the primary source now that it is confirmed public; keep the Readwise gap explicit.
 
 ### Steps
 
-1. Read the existing repo instructions, napkin, and harness docs.
-2. Add the missing operational docs and verify entrypoint.
-3. Update `AGENTS.md` to route to those files.
-4. Run lightweight verification for the new shell/docs layer.
+1. Reconcile the earlier research against the exact ticket-linked Every transcript and the still-inaccessible Readwise item.
+2. Extract the high-signal operational patterns rather than generic AI-writing advice.
+3. Map those patterns onto Margin's product thesis and workflow.
+4. Land the corrected synthesis in `docs/research/` and refresh `THEORY.MD` / `PLANS.md`.
+5. Preserve backlog follow-up issues for any concrete out-of-scope product ideas discovered during the research.
 
 ## Decisions
 
-- `AGENTS.md` stays short and routes to canonical docs.
-- `docs/harness-engineering.md` remains the deep harness design doc; new docs cover day-to-day operator use.
-- `scripts/verify` encodes Margin's existing `standard` vs `data-layer` split instead of flattening it.
+- Use `docs/research/` as the durable home for the writeup, matching prior research tickets.
+- Favor specific product implications over broad commentary on AI and writing.
+- Explicitly document source-access gaps so later work can revisit them without re-investigating.
+- Treat the exact Every transcript as the anchor source and use adjacent Every materials only as supporting context.
 
 ## Surprises
 
-- Margin already had `.harness/` scaffolding and a strong architecture-level harness doc.
-- The missing piece was not strategy but operator-facing entrypoints and canonical repo docs.
-- The repo currently runs with two Node runtimes in practice: root shell commands on Node 25 and `mcp` package-local exec on Node 22. MCP native-module tests must use the package-local runtime.
+- The earlier assumption that the ticket-linked Every transcript was inaccessible was wrong; the page is public and materially sharpens the research.
+- The Readwise saved-page URL still appears auth-bound or otherwise opaque from this environment, so it cannot be treated as an accessible citation.
+- The earlier `.git` write blocker was environment-specific and does not reproduce in this continuation workspace.
 
 ## Verification
 
-- `bash -n scripts/verify`
-- `scripts/verify --help`
-- `node .harness/scripts/audit-gaps.mjs` → `gaps.jsonl is empty — nothing to audit.`
-- `bash scripts/verify standard` reproduced two harness issues and drove the fixes:
-  - root verify was mixing frontend and MCP tests
-  - MCP verification needed package-local `pnpm exec` to avoid Node ABI mismatch
-- Final state: `bash scripts/verify standard` passes end to end.
-- `bash scripts/verify data-layer`
-  - passed: typecheck, frontend tests, frontend build, MCP tests, MCP build, gap audit, `cargo check`, `cargo test`
-  - failed: `cargo clippy -- -D warnings` on pre-existing Rust lint issues in `src/commands/corrections.rs`, `src/commands/writing_rules.rs`, and `src/db/migrations.rs`
+- Confirm the research note is grounded in the exact Every transcript plus any supporting public sources and ties each takeaway back to Margin.
+- Refresh `THEORY.MD` so the repo's current operating theory matches the corrected research.
+- Record the still-open Readwise source gap and the corrected git-state findings explicitly in the Linear workpad.
 
 ## Handoff
 
-- The operator layer is now installed.
-- The next useful task is to either fix the current Rust clippy backlog or decide whether `data-layer` mode should tolerate existing lint debt while the repo is in transition.
+- The durable deliverable is the research note plus the already-filed backlog tickets created from it.
+- The only remaining source blocker is external access to the underlying Readwise article.
