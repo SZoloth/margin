@@ -7,43 +7,44 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Complete `SAM-134` from takeover state without losing the rework that exists only in this workspace:
+Finish `SAM-134` from takeover state now that the anchor-safe rework is committed locally:
 
-- keep the Linear workpad accurate during takeover
-- make Accept target the annotated `highlight_id`, not the first duplicate phrase in the editor
-- preserve the accepted-in-DB behavior only after the editor mutation succeeds
-- publish the rework onto PR `#33` before any merge action
+- keep the Linear workpad aligned with the real PR/branch state
+- publish the highlight-anchored Accept fix and regression tests to PR `#33`
+- sync the branch with `origin/main` without losing the active task memory
+- only merge if the updated PR state is still legitimately ready
 
 ### Outcome
 
-The branch and PR both contain the anchor-safe Accept flow, the workpad matches reality, and the ticket lands only from the updated branch state.
+PR `#33` contains both the original inline Accept feature and the follow-up safety fix, the workpad reflects that updated branch state, and the issue ends in the correct final workflow state.
 
 ### Constraints
 
-- Continue from the existing feature branch and PR because takeover happened mid-stream.
-- Do not discard the uncommitted rework that is ahead of PR `#33`.
-- Keep the issue state honest if the updated PR needs another human look after push.
+- Continue from the existing feature branch and attached PR.
+- Do not discard the committed safety rework (`a2349e7`) while resolving the `origin/main` sync.
+- Keep session-memory files accurate to the current task even though `origin/main` brought unrelated active-work context for another ticket.
 - Do not overwrite unrelated uncommitted user work.
 
 ### Steps
 
-1. Reconcile takeover state: local rework exists, PR is still on `985d990`, issue is already in `Merging`.
-2. Revalidate the rework from the current worktree.
-3. Update repo docs/workpad so blockers and validation notes match the current session.
-4. Commit and push the rework onto the existing branch.
-5. Re-check PR/issue state and only merge if the updated branch is still legitimately merge-ready.
+1. Resolve the `origin/main` merge conflict in `PLANS.md` and `THEORY.MD` in favor of the live `SAM-134` task context.
+2. Complete the merge from `origin/main` and rerun the required validation on the merged branch state.
+3. Push the updated branch to PR `#33`.
+4. Re-check PR checks/review state and choose the safe final ticket outcome:
+   - merge if the updated branch is still legitimately merge-ready
+   - otherwise move the issue out of `Merging` with explicit evidence
 
 ## Decisions
 
-- The editor mutation is now centralized in `src/lib/apply-accepted-correction.ts`.
-- The Accept flow treats editor mutation as the gate: no DB acceptance if the highlighted range cannot be safely updated.
-- Takeover continues on the existing feature branch instead of restarting from `origin/main`, because the necessary fix already exists locally and the PR attachment points at this branch.
+- The editor mutation remains centralized in `src/lib/apply-accepted-correction.ts`.
+- Accept only persists to the database after the targeted editor mutation succeeds.
+- Session-memory files should describe the active ticket, not whichever unrelated task most recently landed on `main`.
 
 ## Surprises
 
-- The attached PR and Linear issue had advanced to `Merging` even though the safety rework was still only in the local worktree.
-- The earlier sandbox blockers cleared in this session: GitHub fetch/PR queries work, commits are possible, and `pnpm tauri dev` launches successfully.
-- The repo-local `.claude/skills/land/SKILL.md` path referenced by the workflow does not exist in this checkout, so landing has to use a safe fallback instead of that missing script.
+- The branch sync conflict was limited to `PLANS.md` and `THEORY.MD`; product code merged cleanly.
+- `origin/main` now includes unrelated research-task working-memory updates, which is why these files conflicted.
+- The earlier environment blockers were stale: GitHub access, commits, and `pnpm tauri dev` all work in this session.
 
 ## Verification
 
@@ -56,5 +57,5 @@ The branch and PR both contain the anchor-safe Accept flow, the workpad matches 
 
 ## Handoff
 
-- The rework is validated locally and ready to publish.
-- The remaining work is workflow correctness: push the rework to PR `#33`, refresh Linear, and only merge from that updated branch state.
+- The local rework is already committed as `a2349e7`.
+- Remaining work is purely branch/PR/ticket synchronization.
