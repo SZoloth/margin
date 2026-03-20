@@ -101,7 +101,7 @@
 }
 
 .tab-close:active {
-  transform: scale(0.85);
+  transform: scale(0.96);
 }
 
 .tab-item:hover .tab-close {

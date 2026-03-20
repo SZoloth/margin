@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react"
 import type { Editor } from "@tiptap/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
+import { UIFork } from "uifork";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
@@ -20,6 +21,7 @@ import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
+import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported } from "@/lib/tauri-commands";
@@ -95,6 +97,8 @@ function findTextInDoc(
   if (from === -1 || to === -1) return null;
   return { from, to };
 }
+
+const showUIFork = import.meta.env.MODE !== "production";
 
 export default function App() {
   const { settings, setSetting } = useSettings();
@@ -957,6 +961,19 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const handleAcceptEdit = useCallback(
+    (highlightId: string, matchText: string, suggestedEdit: string) => {
+      if (!editor) return false;
+      return applyAcceptedCorrection(
+        editor,
+        highlightId,
+        matchText,
+        suggestedEdit,
+      );
+    },
+    [editor],
+  );
+
   const handleExportAnnotations = useCallback(
     async (writingType: string | null): Promise<ExportResult> => {
       if (!editor || !doc.currentDoc) {
@@ -1132,6 +1149,7 @@ export default function App() {
   );
 
   return (
+    <>
     <AppShell
       onOpenSettings={() => {
         setSettingsSection(undefined);
@@ -1425,6 +1443,7 @@ export default function App() {
             }}
             updater={updater}
             initialSection={settingsSection}
+            onAcceptEdit={handleAcceptEdit}
           />
         </div>
       )}
@@ -1495,5 +1514,7 @@ export default function App() {
         </div>
       )}
     </AppShell>
+      {showUIFork && <UIFork />}
+    </>
   );
 }
