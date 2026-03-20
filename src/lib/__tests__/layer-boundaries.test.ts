@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /**
  * Structural dependency tests: enforce layer boundaries so agents can't introduce
  * architectural violations that compile but corrode the codebase.
