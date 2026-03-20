@@ -29,6 +29,12 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 }
 
 afterEach(async () => {
+  // Discard all pending fake timers before restoring real ones. Without
+  // clearAllTimers(), a fake setInterval registered in the previous test
+  // (e.g. DiffBanner's 15s tick interval) survives into the next file:
+  // React 19's act() sees the orphaned fake callback and spin-waits for
+  // 30s until the test timeout fires.
+  vi.clearAllTimers();
   // Restore real timers after every test so fake timers from one file
   // don't leak into subsequent files in the same worker thread.
   vi.useRealTimers();

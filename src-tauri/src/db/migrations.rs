@@ -156,8 +156,10 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add feedback_type column to corrections
     migrate_corrections_add_feedback_type(&conn)?;
 
+
     // Migration: add suggested_edit and accepted_at columns to corrections
     migrate_corrections_add_suggested_edit(&conn)?;
+
 
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
