@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SegmentedControl } from "../SegmentedControl";
 
@@ -91,9 +91,8 @@ describe("SegmentedControl", () => {
     expect(onChange).toHaveBeenCalledWith("system");
   });
 
-  it("Home/End jump to first/last option", async () => {
+  it("Home/End jump to first/last option", () => {
     const onChange = vi.fn();
-    const user = userEvent.setup();
 
     render(
       <SegmentedControl
@@ -106,11 +105,13 @@ describe("SegmentedControl", () => {
     const radios = screen.getAllByRole("radio");
     radios[1]!.focus();
 
-    await user.keyboard("{Home}");
+    // userEvent.keyboard("{Home/End}" hangs in JSDOM on button elements;
+    // fireEvent.keyDown directly exercises the onKeyDown handler.
+    fireEvent.keyDown(radios[1]!, { key: "Home" });
     expect(onChange).toHaveBeenCalledWith("light");
 
     onChange.mockClear();
-    await user.keyboard("{End}");
+    fireEvent.keyDown(radios[1]!, { key: "End" });
     expect(onChange).toHaveBeenCalledWith("system");
   });
 
