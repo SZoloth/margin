@@ -8,11 +8,13 @@ interface HighlightThreadProps {
   highlight: Highlight;
   notes: MarginNote[];
   polarity?: Polarity;
+  rationale?: string | null;
   onAddNote: (highlightId: string, content: string) => void;
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
   onDeleteHighlight: (id: string) => void;
   onSetPolarity?: (highlightId: string, polarity: Polarity) => void;
+  onUpdateRationale?: (highlightId: string, rationale: string | null) => void;
   onClose: () => void;
   anchorRect: DOMRect | null;
   autoFocusNew?: boolean;
@@ -136,20 +138,29 @@ export function HighlightThread({
   highlight,
   notes,
   polarity,
+  rationale,
   onAddNote,
   onUpdateNote,
   onDeleteNote,
   onDeleteHighlight,
   onSetPolarity,
+  onUpdateRationale,
   onClose,
   anchorRect,
   autoFocusNew,
   isVisible,
 }: HighlightThreadProps) {
   const [newNoteValue, setNewNoteValue] = useState("");
+  const [rationaleValue, setRationaleValue] = useState(rationale ?? "");
+  const [rationaleSaving, setRationaleSaving] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
+
+  // Sync rationale value when prop changes
+  useEffect(() => {
+    setRationaleValue(rationale ?? "");
+  }, [rationale]);
 
   // Save previous focus on mount
   useEffect(() => {
@@ -339,6 +350,32 @@ export function HighlightThread({
       >
         <p>{highlight.text_content}</p>
       </div>
+
+      {/* Rationale input — shown when polarity is positive */}
+      {polarity === "positive" && onUpdateRationale && (
+        <div style={{ padding: "8px 0 4px" }}>
+          <textarea
+            value={rationaleValue}
+            onChange={(e) => setRationaleValue(e.target.value)}
+            onBlur={() => {
+              if (!rationaleSaving) {
+                setRationaleSaving(true);
+                onUpdateRationale(highlight.id, rationaleValue.trim() || null);
+                setRationaleSaving(false);
+              }
+            }}
+            placeholder="Why does this work?"
+            rows={2}
+            className="thread-textarea"
+            style={{
+              fontSize: "var(--text-xs)",
+              color: "var(--color-positive, #2d8a4e)",
+              borderColor: "var(--color-positive-bg, rgba(45, 138, 78, 0.3))",
+              resize: "none",
+            }}
+          />
+        </div>
+      )}
 
       {/* Notes thread */}
       <div className="thread-body">

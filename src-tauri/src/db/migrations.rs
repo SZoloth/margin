@@ -160,6 +160,11 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add suggested_edit and accepted_at columns to corrections
     migrate_corrections_add_suggested_edit(&conn)?;
 
+    // Migration: add rationale column to corrections
+    migrate_corrections_add_rationale(&conn)?;
+
+    // Migration: add polarity column to writing_rules
+    migrate_writing_rules_add_polarity(&conn)?;
 
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
@@ -1404,6 +1409,47 @@ fn migrate_corrections_add_suggested_edit(conn: &Connection) -> Result<(), Box<d
 
     if !columns.iter().any(|c| c == "accepted_at") {
         conn.execute_batch("ALTER TABLE corrections ADD COLUMN accepted_at INTEGER;")?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `rationale` column to the corrections table if it doesn't exist.
+/// Rationale captures *why* a positive annotation works, turning taste into reusable criteria.
+fn migrate_corrections_add_rationale(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "rationale")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE corrections ADD COLUMN rationale TEXT;")?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `polarity` column to the writing_rules table if it doesn't exist.
+/// Polarity distinguishes taste criteria ("positive" — do this) from corrective rules (NULL/"corrective" — avoid this).
+fn migrate_writing_rules_add_polarity(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "polarity")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE writing_rules ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));
+             CREATE INDEX IF NOT EXISTS idx_writing_rules_polarity ON writing_rules(polarity);",
+        )?;
     }
 
     Ok(())

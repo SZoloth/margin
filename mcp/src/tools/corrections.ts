@@ -17,6 +17,7 @@ export interface CorrectionRecord {
   prefixContext: string | null;
   suffixContext: string | null;
   extendedContext: string | null;
+  rationale: string | null;
 }
 
 export interface CorrectionsSummary {
@@ -38,7 +39,8 @@ export function getCorrections(
         `SELECT original_text as originalText, notes_json as notesJson, highlight_color as highlightColor,
                 document_title as documentTitle, document_id as documentId, created_at as createdAt,
                 writing_type as writingType, polarity, prefix_context as prefixContext,
-                suffix_context as suffixContext, extended_context as extendedContext
+                suffix_context as suffixContext, extended_context as extendedContext,
+                rationale
          FROM corrections
          WHERE document_id = ? AND session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -53,7 +55,8 @@ export function getCorrections(
       `SELECT original_text as originalText, notes_json as notesJson, highlight_color as highlightColor,
               document_title as documentTitle, document_id as documentId, created_at as createdAt,
               writing_type as writingType, polarity, prefix_context as prefixContext,
-              suffix_context as suffixContext, extended_context as extendedContext
+              suffix_context as suffixContext, extended_context as extendedContext,
+              rationale
        FROM corrections
        WHERE session_id != '__backfilled__'
        ORDER BY created_at DESC
@@ -72,7 +75,8 @@ export function getAllCorrectionsForProfile(
       `SELECT original_text as originalText, notes_json as notesJson, highlight_color as highlightColor,
               document_title as documentTitle, document_id as documentId, created_at as createdAt,
               writing_type as writingType, polarity, prefix_context as prefixContext,
-              suffix_context as suffixContext, extended_context as extendedContext
+              suffix_context as suffixContext, extended_context as extendedContext,
+              rationale
        FROM corrections
        WHERE session_id != '__backfilled__'
        ORDER BY created_at DESC`,
@@ -131,6 +135,7 @@ interface RawCorrectionRow {
   prefixContext: string | null;
   suffixContext: string | null;
   extendedContext: string | null;
+  rationale: string | null;
 }
 
 export interface CreateCorrectionResult {
@@ -276,6 +281,7 @@ export interface VoiceSignalRecord {
   polarity: string;
   documentTitle: string | null;
   createdAt: number;
+  rationale: string | null;
 }
 
 export function getVoiceSignals(
@@ -291,7 +297,7 @@ export function getVoiceSignals(
         `SELECT highlight_id as highlightId, original_text as originalText, notes_json as notesJson,
                 extended_context as extendedContext, highlight_color as highlightColor,
                 writing_type as writingType, polarity, document_title as documentTitle,
-                created_at as createdAt
+                created_at as createdAt, rationale
          FROM corrections
          WHERE session_id != '__backfilled__' AND polarity = ?
          ORDER BY created_at DESC
@@ -306,7 +312,7 @@ export function getVoiceSignals(
       `SELECT highlight_id as highlightId, original_text as originalText, notes_json as notesJson,
               extended_context as extendedContext, highlight_color as highlightColor,
               writing_type as writingType, polarity, document_title as documentTitle,
-              created_at as createdAt
+              created_at as createdAt, rationale
        FROM corrections
        WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
        ORDER BY created_at DESC
@@ -326,6 +332,7 @@ interface RawVoiceSignalRow {
   polarity: string;
   documentTitle: string | null;
   createdAt: number;
+  rationale: string | null;
 }
 
 function parseNotesJson(notesJson: string): string[] {
@@ -351,6 +358,7 @@ function parseVoiceSignalRow(row: RawVoiceSignalRow): VoiceSignalRecord {
     polarity: row.polarity,
     documentTitle: row.documentTitle,
     createdAt: row.createdAt,
+    rationale: row.rationale ?? null,
   };
 }
 
@@ -397,5 +405,6 @@ function parseRow(row: RawCorrectionRow): CorrectionRecord {
     prefixContext: row.prefixContext,
     suffixContext: row.suffixContext,
     extendedContext: row.extendedContext,
+    rationale: row.rationale ?? null,
   };
 }

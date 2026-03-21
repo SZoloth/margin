@@ -100,5 +100,7 @@ pub struct CorrectionInput {
     pub feedback_type: Option<String>,
     #[serde(default)]
     pub suggested_edit: Option<String>,
+    #[serde(default)]
+    pub rationale: Option<String>,
 }
 

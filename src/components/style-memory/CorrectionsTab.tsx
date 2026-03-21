@@ -190,12 +190,22 @@ function CorrectionCard({
   const typeChipsId = `writing-type-chips-${correction.highlightId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
   const isSynthesized = correction.synthesizedAt != null;
 
+  const isPositive = correction.polarity === "positive";
+  const isCorrective = correction.polarity === "corrective";
+  const polarityAccentColor = isPositive
+    ? "var(--color-positive, #2d8a4e)"
+    : isCorrective
+      ? "var(--color-corrective, #d97706)"
+      : undefined;
+
   return (
     <div
       onClick={() => setExpanded(!expanded)}
       style={{
         padding: "14px 0",
         borderBottom: "1px solid var(--color-border)",
+        borderLeft: polarityAccentColor ? `3px solid ${polarityAccentColor}` : undefined,
+        paddingLeft: polarityAccentColor ? 10 : 0,
         display: "flex",
         gap: 10,
         alignItems: "flex-start",
@@ -240,6 +250,11 @@ function CorrectionCard({
         {correction.notes.length > 0 && (
           <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: "var(--text-base)", color: "var(--color-text-primary)", lineHeight: 1.4, marginBottom: 6 }}>
             {correction.notes.join("; ")}
+          </div>
+        )}
+        {isPositive && correction.rationale && (
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--color-positive, #2d8a4e)", fontStyle: "italic", marginBottom: 6 }}>
+            {correction.rationale}
           </div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-xs)", color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
@@ -382,6 +397,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
   const [showBulkTypeChips, setShowBulkTypeChips] = useState(false);
   const [view, setView] = useState<CorrectionView>("inbox");
   const [untaggedOnly, setUntaggedOnly] = useState(false);
+  const [polarityFilter, setPolarityFilter] = useState<"positive" | "corrective" | null>(null);
   const loadedRef = useRef(false);
   const prevFilterHintRef = useRef(filterHint);
 
@@ -448,6 +464,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       if (view === "archive" && c.synthesizedAt == null) return false;
       if (untaggedOnly && c.writingType) return false;
       if (activeFilter && c.writingType !== activeFilter) return false;
+      if (polarityFilter && c.polarity !== polarityFilter) return false;
       if (searchText) {
         const q = searchText.toLowerCase();
         if (!c.originalText.toLowerCase().includes(q) &&
@@ -455,7 +472,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       }
       return true;
     }),
-    [corrections, view, activeFilter, searchText, untaggedOnly],
+    [corrections, view, activeFilter, searchText, untaggedOnly, polarityFilter],
   );
 
   const dateGroups = useMemo(() => groupByDate(filtered), [filtered]);
@@ -594,6 +611,42 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
           inboxCount={inboxCount}
           archiveCount={archiveCount}
         />
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            onClick={() => setPolarityFilter(polarityFilter === "positive" ? null : "positive")}
+            title="Show positive corrections only"
+            style={{
+              padding: "2px 8px",
+              fontSize: "var(--text-xs)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+              background: polarityFilter === "positive" ? "var(--color-positive-bg, rgba(45, 138, 78, 0.1))" : "var(--color-page)",
+              color: polarityFilter === "positive" ? "var(--color-positive, #2d8a4e)" : "var(--color-text-secondary)",
+              fontWeight: polarityFilter === "positive" ? 600 : 400,
+            }}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => setPolarityFilter(polarityFilter === "corrective" ? null : "corrective")}
+            title="Show corrective corrections only"
+            style={{
+              padding: "2px 8px",
+              fontSize: "var(--text-xs)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+              cursor: "pointer",
+              background: polarityFilter === "corrective" ? "var(--color-corrective-bg, rgba(217, 119, 6, 0.1))" : "var(--color-page)",
+              color: polarityFilter === "corrective" ? "var(--color-corrective, #d97706)" : "var(--color-text-secondary)",
+              fontWeight: polarityFilter === "corrective" ? 600 : 400,
+            }}
+          >
+            −
+          </button>
+        </div>
         <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
           <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 7, color: "var(--color-text-secondary)", fontSize: "var(--text-xs)", pointerEvents: "none" }}>
             &#x1F50D;
