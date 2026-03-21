@@ -23,7 +23,7 @@ describe("SettingsNav", () => {
 
     expect(screen.getByText("Reading")).toBeInTheDocument();
     expect(screen.getByText("Writing")).toBeInTheDocument();
-    expect(screen.getByText("Style Memory")).toBeInTheDocument();
+    expect(screen.getByText("Writing rules")).toBeInTheDocument();
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Integrations")).toBeInTheDocument();
     expect(screen.getByText("Help")).toBeInTheDocument();

@@ -63,7 +63,6 @@ export function SettingsPage({
               <WritingSection
                 settings={settings}
                 setSetting={setSetting}
-                onOpenCorrections={() => setActiveSection("style-memory")}
               />
             )}
             {activeSection === "integrations" && <IntegrationsSection />}

@@ -7,7 +7,7 @@ export type Section = "reading" | "writing" | "style-memory" | "dashboard" | "in
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "reading", label: "Reading" },
   { id: "writing", label: "Writing" },
-  { id: "style-memory", label: "Style Memory" },
+  { id: "style-memory", label: "Writing rules" },
   { id: "dashboard", label: "Dashboard" },
   { id: "integrations", label: "Integrations" },
   { id: "help", label: "Help" },
