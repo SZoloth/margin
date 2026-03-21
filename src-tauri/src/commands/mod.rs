@@ -8,6 +8,7 @@ pub mod search;
 pub mod seed_rules;
 pub mod snapshots;
 pub mod tabs;
+pub mod thesis;
 pub mod writing_rules;
 
 /// Returns the current time as milliseconds since the Unix epoch.

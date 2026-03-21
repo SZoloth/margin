@@ -39,6 +39,13 @@ import {
   updateWritingRule,
   deleteWritingRule,
 } from "./tools/writing-rules.js";
+import {
+  gatherAnnotationCluster,
+  distillTheses,
+  saveThesis,
+  getTheses,
+  updateThesisStatus,
+} from "./tools/thesis.js";
 
 const server = new McpServer({
   name: "margin",
@@ -777,6 +784,98 @@ server.resource(
       }],
     };
   },
+);
+
+// --- Thesis Distillation Tools ---
+
+server.tool(
+  "margin_gather_annotation_cluster",
+  "Gather all highlights, margin notes, and corrections for one or more documents, grouped by document. " +
+  "Use this to inspect the raw annotation corpus before distillation. " +
+  "Filter by documentIds (array of document IDs) or writingType (e.g. 'blog', 'general'). " +
+  "If neither filter is provided, returns highlights across all documents.",
+  {
+    document_ids: z.array(z.string()).optional().describe("Document IDs to include (optional)"),
+    writing_type: z.string().optional().describe("Filter by writing type: general, email, prd, blog, cover-letter, resume, slack, pitch, outreach"),
+  },
+  async ({ document_ids, writing_type }) => withDb(() => {
+    const cluster = gatherAnnotationCluster(getReadDb(), {
+      documentIds: document_ids,
+      writingType: writing_type,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(cluster, null, 2) }] };
+  }),
+);
+
+server.tool(
+  "margin_distill_theses",
+  "Return an annotation cluster plus a synthesis prompt for thesis distillation. " +
+  "Use this when helping a writer identify the central claim their reading notes support. " +
+  "The tool returns the cluster (your annotation data) and a synthesisPrompt. " +
+  "Use the synthesisPrompt as instructions and the cluster as evidence to generate 3 candidate thesis statements. " +
+  "Each thesis must be a single sentence grounded in specific highlights (cite by highlightId). " +
+  "Do NOT generate generic writing advice — only theses defensible from the annotations provided.",
+  {
+    document_ids: z.array(z.string()).optional().describe("Document IDs to distill from (optional)"),
+    writing_type: z.string().optional().describe("Filter by writing type to narrow the corpus"),
+  },
+  async ({ document_ids, writing_type }) => withDb(() => {
+    const result = distillTheses(getReadDb(), {
+      documentIds: document_ids,
+      writingType: writing_type,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }),
+);
+
+server.tool(
+  "margin_save_thesis",
+  "Persist a thesis candidate to the database with status 'draft'. " +
+  "Call this after distilling theses to save ones the user wants to keep for review. " +
+  "evidenceJson must be a JSON array of { highlightId, text, relevance } objects. " +
+  "sourceDocumentIdsJson must be a JSON array of document ID strings.",
+  {
+    statement: z.string().describe("One-sentence thesis statement"),
+    evidence_json: z.string().describe("JSON array of evidence objects: [{highlightId, text, relevance}]"),
+    confidence: z.string().optional().describe("Confidence note, e.g. 'high — 4 highlights converge on this'"),
+    source_document_ids_json: z.string().describe("JSON array of source document IDs"),
+  },
+  async ({ statement, evidence_json, confidence, source_document_ids_json }) => withDb(() => {
+    const thesis = saveThesis(getWriteDb(), {
+      statement,
+      evidenceJson: evidence_json,
+      confidence,
+      sourceDocumentIdsJson: source_document_ids_json,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(thesis, null, 2) }] };
+  }),
+);
+
+server.tool(
+  "margin_get_theses",
+  "Retrieve saved thesis candidates. Optionally filter by status: draft, accepted, or rejected.",
+  {
+    status: z.enum(["draft", "accepted", "rejected"]).optional().describe("Filter by thesis status"),
+  },
+  async ({ status }) => withDb(() => ({
+    content: [{ type: "text", text: JSON.stringify(getTheses(getReadDb(), status), null, 2) }],
+  })),
+);
+
+server.tool(
+  "margin_update_thesis_status",
+  "Update the status of a saved thesis candidate: draft, accepted, or rejected.",
+  {
+    thesis_id: z.string().describe("Thesis candidate ID"),
+    status: z.enum(["draft", "accepted", "rejected"]).describe("New status"),
+  },
+  async ({ thesis_id, status }) => withDb(() => {
+    const result = updateThesisStatus(getWriteDb(), thesis_id, status);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  }),
 );
 
 // --- Start server ---

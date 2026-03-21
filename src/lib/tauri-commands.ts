@@ -353,3 +353,43 @@ export async function startTestRun(): Promise<string> {
 export async function exportDashboardMarkdown(): Promise<string> {
   return invoke<string>("export_dashboard_markdown");
 }
+
+// --- Thesis candidates ---
+
+export interface ThesisCandidate {
+  id: string;
+  statement: string;
+  /** JSON string: [{highlightId, text, relevance}] */
+  evidenceJson: string;
+  confidence: string | null;
+  /** JSON string: [documentId, ...] */
+  sourceDocumentIdsJson: string;
+  status: "draft" | "accepted" | "rejected";
+  createdAt: number;
+  updatedAt: number;
+}
+
+export async function saveThesisCandidate(
+  statement: string,
+  evidenceJson: string,
+  confidence: string | null,
+  sourceDocumentIdsJson: string,
+): Promise<ThesisCandidate> {
+  return invoke<ThesisCandidate>("save_thesis_candidate", {
+    statement,
+    evidenceJson,
+    confidence,
+    sourceDocumentIdsJson,
+  });
+}
+
+export async function getThesisCandidates(): Promise<ThesisCandidate[]> {
+  return invoke<ThesisCandidate[]>("get_thesis_candidates");
+}
+
+export async function updateThesisStatus(
+  id: string,
+  status: "draft" | "accepted" | "rejected",
+): Promise<boolean> {
+  return invoke<boolean>("update_thesis_status", { id, status });
+}
