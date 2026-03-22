@@ -52,15 +52,24 @@ pub fn extract_file_snippet(path: &str) -> Option<String> {
 }
 
 /// Search all .md files on the machine using macOS Spotlight (mdfind).
-/// Matches filename OR content.
+/// Matches filename OR content. Runs on a blocking thread to avoid
+/// starving the async command pool while mdfind + file I/O execute.
 #[tauri::command]
-pub fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<FileSearchResult>, String> {
+pub async fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<FileSearchResult>, String> {
     let limit = limit.unwrap_or(20);
 
     if query.trim().is_empty() {
         return Ok(Vec::new());
     }
 
+    tauri::async_runtime::spawn_blocking(move || {
+        search_files_on_disk_inner(&query, limit)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn search_files_on_disk_inner(query: &str, limit: usize) -> Result<Vec<FileSearchResult>, String> {
     // Strip characters that could alter Spotlight query semantics
     let safe_query: String = query
         .chars()
@@ -86,7 +95,6 @@ pub fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<F
     let results: Vec<FileSearchResult> = stdout
         .lines()
         .filter(|line| !line.is_empty())
-        // Skip hidden directories (e.g. .git, node_modules is not hidden but skip .dirs)
         .filter(|line| !line.split('/').any(|seg| seg.starts_with('.') && seg.len() > 1))
         .take(limit)
         .map(|line| {
