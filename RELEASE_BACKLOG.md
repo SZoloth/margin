@@ -10,6 +10,10 @@ Unreleased changes ready to ship.
 
 ## Shipped
 
+### v1.16.1 (2026-03-22)
+
+- `fix(search): move mdfind to spawn_blocking to unblock FTS queries` — mdfind was synchronous, starving the fast FTS5 path
+
 ### v1.16.0 (2026-03-21)
 
 - `feat(search): optimize command palette with FTS5 + benchmarks` — instant FTS search on keystroke, buffered snippet reads, Criterion benchmarks
