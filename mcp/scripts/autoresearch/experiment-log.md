@@ -12,25 +12,28 @@ SAM-189: Architecture comparison — empirical evidence for/against Margin's cor
 | arch-a | 63.0% | 51.9% | 57.5% | Rules-only (baseline) |
 | arch-a-top10 | 70.4% | — | 70.4% | Top-10 rules only (Klaassen variant, 1 run) |
 | arch-b | 63.0% | 63.0% | 63.0% | Exemplars / few-shot |
-| arch-c | FAILED | — | — | Two-pass editor (FAILED — timeout) |
+| arch-c | 88.9% | — | 88.9% | Two-pass editor (1 run — NEW LEADER, needs confirmation) |
 | arch-d | 77.8% | 66.7% | 72.2% | Corrections newest-first (Lehmann method) |
 | arch-d-chrono | 59.3% | — | 59.3% | Corrections oldest-first (Lehmann chrono variant, 1 run) |
 | arch-e | 66.7% | 55.6% | 61.2% | Hybrid corrections + high-signal rules |
 | arch-f | 66.7% | 74.1% | 70.4% | Aegis governance schema |
 
 **Ranking by mean pass rate:**
-1. arch-null: 77.8% 🥇
-2. arch-d: 72.2% 🥈
-3. arch-f: 70.4% 🥉
-4. arch-a-top10: 70.4% 
-5. arch-b: 63.0% 
-6. arch-e: 61.2% 
-7. arch-d-chrono: 59.3% 
-8. arch-a: 57.5% 
+1. arch-c: 88.9% 🥇 *(1 run — needs confirmation)*
+2. arch-null: 77.8% 🥈 *(1 run — needs confirmation)*
+3. arch-d: 72.2% 🥉 *(2-run mean — most stable result)*
+4. arch-f: 70.4% *(2-run mean)*
+5. arch-a-top10: 70.4% *(1 run)*
+6. arch-b: 63.0% *(2-run mean)*
+7. arch-e: 61.2% *(2-run mean)*
+8. arch-d-chrono: 59.3% *(1 run)*
+9. arch-a: 57.5% *(2-run mean)*
 
-## Key Finding
+## Key Findings
 
-**arch-d (corrections-only, newest-first) leads at 72.2% mean, outperforming arch-e (hybrid) at 61.2% by 11.1%.**
+**arch-c (two-pass editor, 88.9% — 1 run) is the new leader, but a single run with prior timeout failures.** Before making architectural decisions, run arch-c a second time to confirm.
+
+**arch-d (corrections-only, newest-first) leads at 72.2% mean — the most stable result across 2 runs.** Outperforms arch-e (hybrid) at 61.2% by 11.1%. This is the actionable finding: corrections alone outperform corrections+rules.
 
 Adding rules to corrections *hurts* performance. The hybrid's rule component (247 high-signal rules) introduces complexity that generates more mechanical violations than corrections alone.
 
@@ -79,9 +82,14 @@ Expected ~56%. Got 63.0%. Consistent across both rounds (both 63%).
 
 **Root cause:** Exemplar quality is low. With only 14/258 corrections having polarity tags, arch-b falls back to loading random recent corrections as examples. These aren't curated positive examples — they're arbitrary flagged text. The Every.to method requires high-quality before/after pairs to work. With low-quality exemplars, performance converges to the rules-only baseline.
 
-### arch-c (two-pass editor, FAILED)
-Excluded from comparison due to `spawnSync ETIMEDOUT` on two-pass calls. The two-pass approach generates twice per sample (unconstrained write → edit with rules), requiring ~2× the per-sample time. At 90s timeout, edge cases time out.
-**Prior prediction:** ~63%. Prior manual result available from `regression/baseline-2026-03-04.json`.
+### arch-c (two-pass editor, 88.9% — 1 run)
+**Result: 88.9% pass rate, only 3 mechanical issues in 27 samples.** If confirmed, this is the new architecture leader.
+
+**Why two-pass might work:** The unconstrained first pass generates natural prose. The second pass edits with rules applied after the fact — Claude reviews its own output with a critic's eye. This matches how Sam edits: draft freely, then apply corrections. The separation of generative and evaluative modes may reduce the cognitive load that makes single-pass rule injection counterproductive.
+
+**Caution:** This result had prior timeout failures in the same session (90s timeout on some samples). The 88.9% result may have been a lucky draw where no samples hit timeout. Needs a second run to confirm.
+
+**Action required:** Run arch-c a second time. If ≥80%, two-pass editor should be investigated as the production architecture.
 
 ### arch-d (corrections newest-first, 72.2% mean)
 Expected ~67%. Got 72.2% mean (within range). **Leading coached architecture.**
@@ -123,7 +131,7 @@ Got 70.4% mean. Interesting: r1=66.7%, r2=74.1% — highest variance in the comp
 |---|---|---|
 | Every.to paired examples | 14/258 corrections have polarity tags | Tag corrections in Margin UI |
 | arch-null second run | Not yet run | `npx tsx eval.ts --arch null` — needed to confirm 77.8% result |
-| arch-c two-pass editor | 90s timeout on 2× claude calls | Increase generator timeout to 150s |
+| arch-c confirmation run | 88.9% single-run result (prior timeout issues in same session) | `npx tsx eval.ts --arch c` — second run needed before acting on this result |
 
 ## Implications for Margin Architecture
 
