@@ -10,6 +10,10 @@
  *   npx tsx eval.ts --arch b     # Architecture B (exemplars)
  *   npx tsx eval.ts --arch c     # Architecture C (two-pass editor)
  *   npx tsx eval.ts --arch d     # Architecture D (corrections)
+ *   npx tsx eval.ts --arch e     # Architecture E (hybrid, leading)
+ *   npx tsx eval.ts --arch f     # Architecture F (Aegis governance schema)
+ *   npx tsx eval.ts --arch h     # Architecture H (DSPy-optimized)
+ *   npx tsx eval.ts --arch null  # Null hypothesis (zero-shot, no coaching)
  */
 
 import {
@@ -37,32 +41,41 @@ type GenerateFn = (type: string, prompt: string, register: string) => string;
 
 const ARCH_LABELS: Record<string, string> = {
   a: "rules",
+  "a-top10": "rules-top10-klaassen",
   b: "exemplars",
   c: "editor",
   d: "corrections",
+  "d-chrono": "corrections-chrono-lehmann",
   e: "hybrid",
   f: "aegis",
   h: "dspy",
+  null: "null-hypothesis",
 };
 
 async function loadGenerator(arch: string): Promise<GenerateFn> {
   switch (arch) {
     case "a":
       return (await import("./generators/arch-a-rules.ts")).generate;
+    case "a-top10":
+      return (await import("./generators/arch-a-top10.ts")).generate;
     case "b":
       return (await import("./generators/arch-b-exemplars.ts")).generate;
     case "c":
       return (await import("./generators/arch-c-editor.ts")).generate;
     case "d":
       return (await import("./generators/arch-d-corrections.ts")).generate;
+    case "d-chrono":
+      return (await import("./generators/arch-d-chrono.ts")).generate;
     case "e":
       return (await import("./generators/arch-e-hybrid.ts")).generate;
     case "f":
       return (await import("./generators/arch-f-aegis.ts")).generate;
     case "h":
       return (await import("./generators/arch-h-dspy.ts")).generate;
+    case "null":
+      return (await import("./generators/arch-null.ts")).generate;
     default:
-      console.error(`Unknown architecture: ${arch}. Use a, b, c, d, e, f, or h.`);
+      console.error(`Unknown architecture: ${arch}. Use a, a-top10, b, c, d, d-chrono, e, f, h, or null.`);
       process.exit(1);
   }
 }
@@ -74,8 +87,8 @@ function parseArch(): string {
   const archIdx = args.indexOf("--arch");
   if (archIdx === -1 || archIdx + 1 >= args.length) return "a";
   const value = args[archIdx + 1];
-  if (!value || !["a", "b", "c", "d", "e", "f", "h"].includes(value)) {
-    console.error(`Invalid --arch value: ${value}. Use a, b, c, d, e, f, or h.`);
+  if (!value || !["a", "a-top10", "b", "c", "d", "d-chrono", "e", "f", "h", "null"].includes(value)) {
+    console.error(`Invalid --arch value: ${value}. Use a, a-top10, b, c, d, d-chrono, e, f, h, or null.`);
     process.exit(1);
   }
   return value;

@@ -1,0 +1,22 @@
+run	pass_rate	mean_dimension	total_mechanical	hypothesis	kept	notes	timestamp
+1	0.778	47.1	8	baseline: arch-null (zero-shot)	true	worst: structural tells	2026-03-22T13:30:00Z
+2	0.63	47.4	12	baseline: arch-a (rules-only)	true	worst: slop patterns	2026-03-22T13:30:00Z
+3	0.63	47.5	12	baseline: arch-b (exemplars)	true	worst: slop structural	2026-03-22T13:30:00Z
+4	0.778	47.2	7	baseline: arch-d (corrections-as-context)	true	best non-null arch	2026-03-22T13:30:00Z
+5	0.667	46.6	13	baseline: arch-e (hybrid corrections+rules)	true	underperformed vs arch-d	2026-03-22T13:30:00Z
+6	0.667	47.0	13	baseline: arch-f (Aegis governance)	true	matches arch-e	2026-03-22T13:30:00Z
+7	0.519	46.6	14	baseline comparison round 2: arch-a	true	voice:long-sentence (×7), voice:repetitive-structure (×3), structural:Negative parallelism (isn't X. It's Y) (×2)	2026-03-22T13:28:05Z
+8	0.63	47.1	13	baseline comparison round 2: arch-b	true	voice:long-sentence (×6), voice:repetitive-structure (×4), kill-word:leverage (×1)	2026-03-22T13:28:05Z
+9	0.667	46.9	11	baseline comparison round 2: arch-d	true	voice:long-sentence (×5), voice:repetitive-structure (×4), kill-word:dynamic (×1)	2026-03-22T13:28:05Z
+10	0.556	46.7	18	baseline comparison round 2: arch-e	true	voice:long-sentence (×10), voice:repetitive-structure (×4), kill-word:leverage (×1)	2026-03-22T13:28:05Z
+11	0.741	47.2	10	baseline comparison round 2: arch-f	true	voice:long-sentence (×5), voice:repetitive-structure (×4), kill-word:leverage (×1)	2026-03-22T13:28:05Z
+12	0.704	47.1	8	external method variant: arch-a-top10	true	voice:long-sentence (×6), voice:repetitive-structure (×1), kill-word:leverage (×1)	2026-03-22T13:28:05Z
+13	0.593	46.7	12	external method variant: arch-d-chrono	true	voice:long-sentence (×5), voice:repetitive-structure (×4), structural:Negative parallelism (isn't X — it's Y) (×2)	2026-03-22T13:28:05Z
+14	0.519	46.6	14	rules-only: arch-a round-2	true	voice:long-sentence (×7), voice:repetitive-structure (×3), structural:Negative parallelism (isn't X. It's Y) (×2)	2026-03-22T13:28:22Z
+15	0.63	47.1	13	exemplars/few-shot: arch-b round-2	true	voice:long-sentence (×6), voice:repetitive-structure (×4), kill-word:leverage (×1)	2026-03-22T13:28:22Z
+16	0.889	47.8	3	two-pass editor: arch-c round-1	true	voice:repetitive-structure (×2), voice:long-sentence (×1)	2026-03-22T13:28:22Z
+17	0.667	46.9	11	corrections-as-context: arch-d round-2	true	voice:long-sentence (×5), voice:repetitive-structure (×4), kill-word:dynamic (×1)	2026-03-22T13:28:22Z
+18	0.556	46.7	18	hybrid corrections+rules: arch-e round-2	true	voice:long-sentence (×10), voice:repetitive-structure (×4), kill-word:leverage (×1)	2026-03-22T13:28:22Z
+19	0.741	47.2	10	Aegis governance: arch-f round-2	true	voice:long-sentence (×5), voice:repetitive-structure (×4), kill-word:leverage (×1)	2026-03-22T13:28:22Z
+20	0.704	47.1	8	Klaassen top-10 rules: arch-a-top10	true	voice:long-sentence (×6), voice:repetitive-structure (×1), kill-word:leverage (×1)	2026-03-22T13:28:22Z
+21	0.593	46.7	12	Lehmann chronological: arch-d-chrono	true	voice:long-sentence (×5), voice:repetitive-structure (×4), structural:Negative parallelism (isn't X — it's Y) (×2)	2026-03-22T13:28:22Z

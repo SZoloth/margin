@@ -265,6 +265,51 @@ Surfaces are not independent. Changing one affects others:
 - **Rule quality** improvements propagate through every downstream surface
 - **Eval fidelity** changes may invalidate previous experiment results — re-baseline after eval changes
 
+## Falsification Protocol
+
+This section encodes the "disprove the thesis" requirement. The hypothesis behind Margin is that the correction→rule→enforcement pipeline produces measurably better output than simpler approaches. We must test this empirically.
+
+### The falsification test
+
+After establishing architecture baselines, run a head-to-head comparison:
+
+| Competitor | Architecture | Rationale |
+|------------|--------------|-----------|
+| **Null hypothesis** | `arch-null` | Zero-shot Claude with no coaching. If this scores within 5pp of arch-e, the entire pipeline adds no measurable value. |
+| **Klaassen minimal** | `arch-a` with top-10 rules | "10 rules beat 100" — maybe a curated short list outperforms a full dump. |
+| **Corrections only** | `arch-d` | Raw diffs without rules. If this matches arch-e, the rule synthesis step is unnecessary overhead. |
+| **Full pipeline** | `arch-e` | The current leader (72.3% mean). Baseline to beat. |
+
+### Threshold
+
+If any simpler architecture scores within **5 percentage points** of arch-e's mean pass rate:
+- Log "**thesis challenged**" in `experiment-log.md`
+- Document which simpler approach and the pass rate delta
+- Flag for Sam's judgment — do not make an architectural decision autonomously
+- Note: a single eval round is not conclusive (27-sample variance is real). Flag requires 2+ consistent runs.
+
+If all simpler approaches are >5pp below arch-e:
+- Log "**thesis confirmed**" with the specific deltas
+- Continue optimizing arch-e
+
+### When to run
+
+Run the falsification comparison:
+1. After the initial architecture baselines are established (before loop.ts optimization)
+2. After every major pipeline change that might shift the relative advantage
+
+### Commands
+
+```bash
+# Run all falsification architectures
+npx tsx eval.ts --arch null > /tmp/result-null.json
+npx tsx eval.ts --arch a   > /tmp/result-a.json
+npx tsx eval.ts --arch d   > /tmp/result-d.json
+npx tsx eval.ts --arch e   > /tmp/result-e.json
+```
+
+Log results in `experiment-log.md` under a `## Falsification checkpoint` section with explicit "thesis confirmed/challenged" conclusion.
+
 ## Standing research questions
 
 - ~~Is the rule-based loop the right architecture at all?~~ **ANSWERED: No.** Rules alone (A) is the worst performer. Corrections + high-signal rules (E) is the best. The system should pivot from rules-first to corrections-first with rules as structural backstop.
