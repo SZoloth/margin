@@ -22,6 +22,7 @@ pub struct WritingRule {
     pub updated_at: i64,
     pub reviewed_at: Option<i64>,
     pub register: Option<String>,
+    pub polarity: Option<String>,
 }
 
 fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
@@ -42,13 +43,14 @@ fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
         updated_at: row.get(13)?,
         reviewed_at: row.get(14)?,
         register: row.get(15)?,
+        polarity: row.get(16)?,
     })
 }
 
 const RULES_SELECT: &str =
     "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
             example_before, example_after, source, signal_count, notes, created_at, updated_at,
-            reviewed_at, register
+            reviewed_at, register, polarity
      FROM writing_rules";
 
 fn fetch_writing_rules(
@@ -353,29 +355,55 @@ fn generate_writing_profile_markdown(
 #[cfg(test)]
 fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
     let mut lines = Vec::new();
+
+    // Taste criteria section (positive polarity)
+    let taste_rules: Vec<&WritingRule> = rules
+        .iter()
+        .filter(|r| r.polarity.as_deref() == Some("positive"))
+        .collect();
+    if !taste_rules.is_empty() {
+        lines.push("# Taste Criteria (Do This)".to_string());
+        lines.push(String::new());
+        lines.push("_Patterns to emulate — these represent good writing to do more of._".to_string());
+        format_rules_section(&mut lines, &taste_rules);
+        lines.push(String::new());
+    }
+
+    // Corrective rules section (NULL or corrective polarity)
+    let corrective_rules: Vec<&WritingRule> = rules
+        .iter()
+        .filter(|r| r.polarity.as_deref() != Some("positive"))
+        .collect();
     lines.push("# Writing Rules".to_string());
     lines.push(String::new());
     lines.push("_For AI agents: apply rules matching the writing type. General rules always apply._".to_string());
-
-    let rule_refs: Vec<&WritingRule> = rules.iter().collect();
-    format_rules_section(&mut lines, &rule_refs);
-
+    if !corrective_rules.is_empty() {
+        format_rules_section(&mut lines, &corrective_rules);
+    }
     lines.push(String::new());
+
     lines.join("\n")
 }
 
 /// Retained for test coverage — production export delegates to `margin` CLI.
 #[cfg(test)]
 fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
+    // Only corrective rules (polarity IS NULL or polarity = 'corrective') feed the guard.
+    // Taste criteria (polarity = 'positive') are guidance only — never hard-blocked.
+    let corrective_rules: Vec<&WritingRule> = rules
+        .iter()
+        .filter(|r| r.polarity.as_deref() != Some("positive"))
+        .collect();
+
     // Collect kill words from must-fix rules
-    let kill_words: Vec<&str> = rules
+    let kill_words: Vec<&str> = corrective_rules
         .iter()
         .filter(|r| r.severity == "must-fix" && r.category == "kill-words")
         .map(|r| r.rule_text.as_str())
         .collect();
 
     // Collect slop patterns
-    let slop_patterns: Vec<(&str, &str)> = rules
+    let slop_patterns: Vec<(&str, &str)> = corrective_rules
         .iter()
         .filter(|r| r.category == "ai-slop" && r.example_before.is_some())
         .filter_map(|r| {
@@ -386,7 +414,7 @@ fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
         .collect();
 
     // Collect heading patterns
-    let heading_patterns: Vec<(&str, &str)> = rules
+    let heading_patterns: Vec<(&str, &str)> = corrective_rules
         .iter()
         .filter(|r| r.category == "heading-patterns" && r.severity == "must-fix" && r.example_before.is_some())
         .filter_map(|r| {
@@ -397,7 +425,7 @@ fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
         .collect();
 
     // Collect auto-synthesized corrections (substring match on original text, capped at 80 chars)
-    let auto_corrections: Vec<(&str, &str)> = rules
+    let auto_corrections: Vec<(&str, &str)> = corrective_rules
         .iter()
         .filter(|r| {
             r.category == "auto-synthesized"
@@ -904,6 +932,16 @@ mod tests {
         };
         if !has_register {
             conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN register TEXT;").unwrap();
+        }
+        // Add polarity column (matches production migration)
+        let has_polarity: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)").unwrap();
+            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap()
+                .filter_map(|r| r.ok()).collect();
+            cols.iter().any(|c| c == "polarity")
+        };
+        if !has_polarity {
+            conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));").unwrap();
         }
         conn
     }

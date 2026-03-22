@@ -163,6 +163,12 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: create thesis_candidates table
     migrate_add_thesis_candidates_table(&conn)?;
 
+    // Migration: add rationale column to corrections
+    migrate_corrections_add_rationale(&conn)?;
+
+    // Migration: add polarity column to writing_rules
+    migrate_writing_rules_add_polarity(&conn)?;
+
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
         "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
@@ -1428,5 +1434,46 @@ pub fn migrate_add_thesis_candidates_table(conn: &Connection) -> Result<(), Box<
         CREATE INDEX IF NOT EXISTS idx_thesis_status ON thesis_candidates(status);
         CREATE INDEX IF NOT EXISTS idx_thesis_created ON thesis_candidates(created_at);",
     )?;
+    Ok(())
+}
+
+/// Adds a `rationale` column to the corrections table if it doesn't exist.
+/// Rationale captures *why* a positive annotation works, turning taste into reusable criteria.
+fn migrate_corrections_add_rationale(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "rationale")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE corrections ADD COLUMN rationale TEXT;")?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `polarity` column to the writing_rules table if it doesn't exist.
+/// Polarity distinguishes taste criteria ("positive" — do this) from corrective rules (NULL/"corrective" — avoid this).
+fn migrate_writing_rules_add_polarity(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "polarity")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE writing_rules ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));
+             CREATE INDEX IF NOT EXISTS idx_writing_rules_polarity ON writing_rules(polarity);",
+        )?;
+    }
+
     Ok(())
 }

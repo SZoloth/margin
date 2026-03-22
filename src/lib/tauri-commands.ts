@@ -84,6 +84,10 @@ export async function updateCorrectionWritingType(highlightId: string, writingTy
   return invoke<void>("update_correction_writing_type", { highlightId, writingType });
 }
 
+export async function updateCorrectionRationale(highlightId: string, rationale: string | null): Promise<void> {
+  return invoke<void>("update_correction_rationale", { highlightId, rationale });
+}
+
 export async function deleteCorrection(highlightId: string): Promise<void> {
   return invoke<void>("delete_correction", { highlightId });
 }

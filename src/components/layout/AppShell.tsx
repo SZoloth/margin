@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { useChrome } from "@/hooks/useChrome";
 import { ChromeBar } from "@/components/layout/ChromeBar";
@@ -68,7 +68,7 @@ export function AppShell({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-reveal chrome when a new tab is created (tabs.length increases)
-  const prevTabCountRef = { current: tabs.length };
+  const prevTabCountRef = useRef(tabs.length);
   useEffect(() => {
     const prev = prevTabCountRef.current;
     prevTabCountRef.current = tabs.length;
@@ -119,8 +119,8 @@ export function AppShell({
 
   // Tab crossfade
   const [tabFadeVisible, setTabFadeVisible] = useState(true);
-  const prevTabIdRef = { current: activeTabId };
-  const tabFadeTimerRef = { current: null as ReturnType<typeof setTimeout> | null };
+  const prevTabIdRef = useRef(activeTabId);
+  const tabFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (activeTabId && activeTabId !== prevTabIdRef.current) {
       prevTabIdRef.current = activeTabId;
