@@ -18,6 +18,7 @@ export interface WritingRule {
   createdAt: number;
   updatedAt: number;
   register: string | null;
+  polarity: string | null;
 }
 
 export function getWritingRules(
@@ -30,7 +31,7 @@ export function getWritingRules(
         `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
                 why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
                 signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
-                register
+                register, polarity
          FROM writing_rules WHERE writing_type = ?
          ORDER BY signal_count DESC, created_at DESC`,
       )
@@ -42,7 +43,7 @@ export function getWritingRules(
       `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
               why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
               signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
-              register
+              register, polarity
        FROM writing_rules
        ORDER BY writing_type, signal_count DESC, created_at DESC`,
     )
@@ -69,6 +70,7 @@ export interface CreateWritingRuleParams {
   source?: string;
   signal_count?: number;
   register?: string | null;
+  polarity?: string | null;
 }
 
 export function createWritingRule(
@@ -91,9 +93,14 @@ export function createWritingRule(
     return { error: `Invalid signal_count "${String(params.signal_count)}". Must be an integer >= 1.` };
   }
 
+  if (params.polarity !== undefined && params.polarity !== null &&
+      params.polarity !== "positive" && params.polarity !== "corrective") {
+    return { error: `Invalid polarity "${params.polarity}". Allowed: positive, corrective` };
+  }
+
   db.prepare(
-    `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at, register)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at, register, polarity)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(writing_type, category, rule_text) DO UPDATE SET
        when_to_apply = COALESCE(excluded.when_to_apply, writing_rules.when_to_apply),
        why = COALESCE(excluded.why, writing_rules.why),
@@ -107,13 +114,14 @@ export function createWritingRule(
        signal_count = writing_rules.signal_count + excluded.signal_count,
        notes = COALESCE(excluded.notes, writing_rules.notes),
        register = COALESCE(excluded.register, writing_rules.register),
+       polarity = COALESCE(excluded.polarity, writing_rules.polarity),
        updated_at = excluded.updated_at`,
   ).run(
     id, params.writing_type, params.category, params.rule_text,
     params.when_to_apply ?? null, params.why ?? null, params.severity,
     params.example_before ?? null, params.example_after ?? null,
     source, signalCount, params.notes ?? null, now, now,
-    params.register ?? null,
+    params.register ?? null, params.polarity ?? null,
   );
 
   return db
@@ -121,7 +129,7 @@ export function createWritingRule(
       `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
               why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
               signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
-              register
+              register, polarity
        FROM writing_rules WHERE writing_type = ? AND category = ? AND rule_text = ?`,
     )
     .get(params.writing_type, params.category, params.rule_text) as WritingRule;
@@ -191,7 +199,7 @@ export function updateWritingRule(
       `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
               why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
               signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
-              register
+              register, polarity
        FROM writing_rules WHERE id = ?`,
     )
     .get(params.id) as WritingRule;
@@ -338,12 +346,30 @@ export function getWritingProfileMarkdown(
     }
   }
 
-  // Non-voice rules
-  const nonVoiceRules = rules.filter((r) => r.category !== "voice-calibration");
-  if (nonVoiceRules.length > 0) {
+  // Taste criteria (positive polarity non-voice rules)
+  const tasteCriteria = rules.filter(
+    (r) => r.category !== "voice-calibration" && r.polarity === "positive",
+  );
+  if (tasteCriteria.length > 0) {
+    lines.push("", "---", "", "## Taste Criteria (Do This)", "");
+    lines.push("_Patterns to emulate — positive examples of the voice and craft to replicate._");
+    for (const rule of tasteCriteria) {
+      lines.push("", `- **${rule.ruleText}**`);
+      if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+      if (rule.exampleBefore) lines.push(`  - Example: ${truncate(rule.exampleBefore, 200)}`);
+      lines.push(`  - Signal: seen ${rule.signalCount} time(s)`);
+    }
+  }
+
+  // Corrective rules (NULL or corrective polarity, non-voice)
+  const correctiveRules = rules.filter(
+    (r) => r.category !== "voice-calibration" && r.polarity !== "positive",
+  );
+  if (correctiveRules.length > 0) {
     lines.push("", "---", "", "# Writing Rules", "");
     lines.push("_Synthesized from corrections and editorial preferences._");
-    lines.push(...formatRulesSection(nonVoiceRules));
+    lines.push(...formatRulesSection(correctiveRules));
   }
 
   lines.push("");

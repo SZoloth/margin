@@ -119,6 +119,7 @@ export default function App() {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
   const [polarityMap, setPolarityMap] = useState<Map<string, "positive" | "corrective">>(new Map());
+  const [rationaleMap, setRationaleMap] = useState<Map<string, string>>(new Map());
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [errorToast, setErrorToast] = useState<{ message: string; id: number } | null>(null);
   const errorIdRef = useRef(0);
@@ -1040,6 +1041,7 @@ export default function App() {
             highlight_color: h.color,
             writing_type: writingType,
             polarity: polarityMap.get(h.id) ?? null,
+            rationale: rationaleMap.get(h.id) ?? null,
           });
         }
 
@@ -1098,6 +1100,7 @@ export default function App() {
         else if (p === "corrective") correctiveCount++;
       }
       setPolarityMap(new Map());
+      setRationaleMap(new Map());
 
       return {
         highlightCount: highlights.length,
@@ -1110,7 +1113,7 @@ export default function App() {
         correctiveCount,
       };
     },
-    [editor, doc.currentDoc, polarityMap],
+    [editor, doc.currentDoc, polarityMap, rationaleMap],
   );
 
   // Open a recent document from the sidebar (now goes through tabs)
@@ -1265,6 +1268,7 @@ export default function App() {
             highlight={highlight}
             notes={notes}
             polarity={polarityMap.get(highlight.id) ?? null}
+            rationale={rationaleMap.get(highlight.id) ?? null}
             onAddNote={annotations.createMarginNote}
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
@@ -1276,6 +1280,17 @@ export default function App() {
                   next.delete(highlightId);
                 } else {
                   next.set(highlightId, polarity);
+                }
+                return next;
+              });
+            }}
+            onUpdateRationale={(highlightId, rationale) => {
+              setRationaleMap((prev) => {
+                const next = new Map(prev);
+                if (rationale === null) {
+                  next.delete(highlightId);
+                } else {
+                  next.set(highlightId, rationale);
                 }
                 return next;
               });

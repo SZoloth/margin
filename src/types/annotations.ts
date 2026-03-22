@@ -31,6 +31,7 @@ export interface CorrectionInput {
   writing_type: string | null;
   polarity: "positive" | "corrective" | null;
   suggested_edit?: string | null;
+  rationale?: string | null;
 }
 
 export interface CorrectionRecord {
@@ -57,6 +58,7 @@ export interface CorrectionDetail {
   createdAt: number;
   suggestedEdit: string | null;
   acceptedAt: number | null;
+  rationale?: string | null;
 }
 
 export interface DocumentCorrections {

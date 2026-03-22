@@ -46,6 +46,7 @@ pub struct CorrectionDetail {
     pub synthesized_at: Option<i64>,
     pub suggested_edit: Option<String>,
     pub accepted_at: Option<i64>,
+    pub rationale: Option<String>,
 }
 
 fn sanitize_filename_component(input: &str) -> String {
@@ -174,8 +175,8 @@ pub async fn persist_corrections(
                  prefix_context, suffix_context, extended_context, notes_json,
                  document_title, document_source, document_path, category,
                  highlight_color, created_at, updated_at, writing_type, polarity, feedback_type,
-                 suggested_edit)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                 suggested_edit, rationale)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
             rusqlite::params![
                 id,
                 input.highlight_id,
@@ -197,6 +198,7 @@ pub async fn persist_corrections(
                 input.polarity,
                 input.feedback_type,
                 input.suggested_edit,
+                input.rationale,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -297,7 +299,7 @@ fn fetch_corrections_flat(
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
                 highlight_color, writing_type, polarity, document_title, created_at,
-                synthesized_at, feedback_type, suggested_edit, accepted_at
+                synthesized_at, feedback_type, suggested_edit, accepted_at, rationale
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY CASE WHEN synthesized_at IS NULL THEN 0 ELSE 1 END, created_at DESC
@@ -322,6 +324,7 @@ fn fetch_corrections_flat(
             feedback_type: row.get(10)?,
             suggested_edit: row.get(11)?,
             accepted_at: row.get(12)?,
+            rationale: row.get(13)?,
         })
     })?;
 
@@ -391,7 +394,7 @@ fn fetch_corrections_by_document(
         "SELECT highlight_id, original_text, notes_json, extended_context,
                 highlight_color, writing_type, polarity, document_title, document_id,
                 document_path, created_at, synthesized_at, feedback_type,
-                suggested_edit, accepted_at
+                suggested_edit, accepted_at, rationale
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -420,6 +423,7 @@ fn fetch_corrections_by_document(
                 feedback_type: row.get(12)?,
                 suggested_edit: row.get(13)?,
                 accepted_at: row.get(14)?,
+                rationale: row.get(15)?,
             },
         ))
     })?;
@@ -689,6 +693,31 @@ pub async fn bulk_set_polarity_corrections(
     bulk_set_polarity(&conn, &highlight_ids, &polarity).map_err(|e| e.to_string())
 }
 
+fn update_rationale(
+    conn: &Connection,
+    highlight_id: &str,
+    rationale: Option<&str>,
+) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE corrections SET rationale = ?1, updated_at = ?2 WHERE highlight_id = ?3",
+        rusqlite::params![rationale, now_millis(), highlight_id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_correction_rationale(
+    state: tauri::State<'_, DbPool>,
+    highlight_id: String,
+    rationale: Option<String>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    update_rationale(&conn, &highlight_id, rationale.as_deref()).map_err(|e| e.to_string())
+}
+
 fn mark_unsynthesized(
     conn: &Connection,
     highlight_ids: &[String],
@@ -744,7 +773,7 @@ fn fetch_voice_signals(
         Some(p) => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
                     highlight_color, writing_type, polarity, document_title, created_at,
-                    synthesized_at, feedback_type, suggested_edit, accepted_at
+                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity = ?1
              ORDER BY created_at DESC
@@ -754,7 +783,7 @@ fn fetch_voice_signals(
         None => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
                     highlight_color, writing_type, polarity, document_title, created_at,
-                    synthesized_at, feedback_type, suggested_edit, accepted_at
+                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
              ORDER BY created_at DESC
@@ -783,6 +812,7 @@ fn fetch_voice_signals(
             feedback_type: row.get(10)?,
             suggested_edit: row.get(11)?,
             accepted_at: row.get(12)?,
+            rationale: row.get(13)?,
         })
     })?;
 
@@ -884,7 +914,8 @@ mod tests {
             synthesized_at INTEGER,
             feedback_type TEXT CHECK(feedback_type IN ('question', 'suggestion', 'edit', 'voice', 'weakness', 'evidence', 'wordiness', 'factcheck')),
             suggested_edit TEXT,
-            accepted_at INTEGER
+            accepted_at INTEGER,
+            rationale TEXT
         );
         CREATE TABLE writing_rules (
             id TEXT PRIMARY KEY,
@@ -903,6 +934,7 @@ mod tests {
             updated_at INTEGER NOT NULL,
             reviewed_at INTEGER,
             register TEXT,
+            polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
             UNIQUE(writing_type, category, rule_text)
         );"
     }
