@@ -10,6 +10,10 @@
  *   npx tsx eval.ts --arch b     # Architecture B (exemplars)
  *   npx tsx eval.ts --arch c     # Architecture C (two-pass editor)
  *   npx tsx eval.ts --arch d     # Architecture D (corrections)
+ *   npx tsx eval.ts --arch e     # Architecture E (hybrid, leading)
+ *   npx tsx eval.ts --arch f     # Architecture F (Aegis governance schema)
+ *   npx tsx eval.ts --arch h     # Architecture H (DSPy-optimized)
+ *   npx tsx eval.ts --arch null  # Null hypothesis (zero-shot, no coaching)
  */
 
 import {
@@ -43,6 +47,7 @@ const ARCH_LABELS: Record<string, string> = {
   e: "hybrid",
   f: "aegis",
   h: "dspy",
+  null: "null-hypothesis",
 };
 
 async function loadGenerator(arch: string): Promise<GenerateFn> {
@@ -61,8 +66,10 @@ async function loadGenerator(arch: string): Promise<GenerateFn> {
       return (await import("./generators/arch-f-aegis.ts")).generate;
     case "h":
       return (await import("./generators/arch-h-dspy.ts")).generate;
+    case "null":
+      return (await import("./generators/arch-null.ts")).generate;
     default:
-      console.error(`Unknown architecture: ${arch}. Use a, b, c, d, e, f, or h.`);
+      console.error(`Unknown architecture: ${arch}. Use a, b, c, d, e, f, h, or null.`);
       process.exit(1);
   }
 }
@@ -74,8 +81,8 @@ function parseArch(): string {
   const archIdx = args.indexOf("--arch");
   if (archIdx === -1 || archIdx + 1 >= args.length) return "a";
   const value = args[archIdx + 1];
-  if (!value || !["a", "b", "c", "d", "e", "f", "h"].includes(value)) {
-    console.error(`Invalid --arch value: ${value}. Use a, b, c, d, e, f, or h.`);
+  if (!value || !["a", "b", "c", "d", "e", "f", "h", "null"].includes(value)) {
+    console.error(`Invalid --arch value: ${value}. Use a, b, c, d, e, f, h, or null.`);
     process.exit(1);
   }
   return value;
