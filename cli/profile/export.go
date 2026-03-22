@@ -352,9 +352,16 @@ if __name__ == "__main__":
 `, string(killWordsJSON), string(slopPatternsJSON), string(headingPatternsJSON), string(autoCorrectionsJSON))
 }
 
-// ExportProfile writes ~/.margin/writing-rules.md and ~/.claude/hooks/writing_guard.py.
-// If ~/.codex exists (Codex CLI is installed), also updates ~/.codex/AGENTS.md.
-func ExportProfile(dbPath string) error {
+// ExportProfile writes the unified writing profile and agent-specific artifacts.
+//
+// target="" (default): writes ~/.margin/writing-rules.md and
+// ~/.claude/hooks/writing_guard.py. Also updates ~/.codex/AGENTS.md if
+// ~/.codex exists (opt-in by directory presence). Errors updating Codex are
+// non-fatal — they don't break the Claude pipeline if Codex isn't set up.
+//
+// target="codex": writes ~/.margin/writing-rules.md and ~/.codex/AGENTS.md.
+// Skips writing_guard.py — Codex uses prompt-level instructions instead of a hook.
+func ExportProfile(dbPath string, target string) error {
 	d, err := db.OpenRead(dbPath)
 	if err != nil {
 		return err
@@ -373,14 +380,19 @@ func ExportProfile(dbPath string) error {
 
 	home, _ := os.UserHomeDir()
 
-	// Write writing-rules.md
+	// Always write writing-rules.md — the universal, LLM-agnostic artifact.
 	profileMD := FormatProfileMarkdown(rules, corrections)
 	rulesPath := filepath.Join(home, ".margin", "writing-rules.md")
 	if err := os.WriteFile(rulesPath, []byte(profileMD), 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", rulesPath, err)
 	}
 
-	// Write writing_guard.py
+	if target == "codex" {
+		// Codex target: update AGENTS.md instead of writing the Claude hook.
+		return ExportCodex(dbPath)
+	}
+
+	// Default (Claude) target: write writing_guard.py.
 	guardPy := GenerateWritingGuardPy(rules)
 	hooksDir := filepath.Join(home, ".claude", "hooks")
 	os.MkdirAll(hooksDir, 0755)
@@ -389,8 +401,8 @@ func ExportProfile(dbPath string) error {
 		return fmt.Errorf("failed to write %s: %w", guardPath, err)
 	}
 
-	// Update ~/.codex/AGENTS.md if Codex CLI is installed (opt-in by directory presence).
-	// Errors are non-fatal — don't break the Claude Code pipeline if Codex isn't set up.
+	// Also update ~/.codex/AGENTS.md if Codex CLI is installed (opt-in by directory presence).
+	// Errors are non-fatal — don't break the Claude pipeline if Codex isn't set up.
 	if _, statErr := os.Stat(CodexDir()); statErr == nil {
 		managed := FormatCodexAgentsMD(rules, corrections)
 		agentsPath := CodexAgentsMDPath()

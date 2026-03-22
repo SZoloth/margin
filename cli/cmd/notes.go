@@ -30,7 +30,7 @@ var notesCreateCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(note, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -52,7 +52,7 @@ var notesUpdateCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(note, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -72,7 +72,7 @@ var notesDeleteCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(map[string]bool{"success": true}, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 

@@ -82,7 +82,7 @@ var correctionsCreateCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(result, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -102,7 +102,7 @@ var correctionsDeleteCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(map[string]bool{"success": true}, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -123,7 +123,7 @@ var correctionsSetTypeCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(map[string]bool{"success": true}, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -144,7 +144,7 @@ var correctionsSetPolarityCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(map[string]bool{"success": true}, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
