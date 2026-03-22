@@ -185,8 +185,8 @@ Key insight: **the data layer (corrections + rules) matters more than the presen
 
 1. **Read state** — check `experiment-log.md`, `results.tsv`, and `git log --oneline` for context.
 2. **Hypothesize** — before touching any code, write down what you expect to happen and why. Be specific: "I expect pass rate to increase by ~5pp because removing the redundant prohibition will reduce prompt confusion."
-3. **Modify** — a single, focused change to the generator or coaching prompt under test.
-4. **Run eval** — `npx tsx eval.ts --arch <letter>` — produces 27 samples scored by the compliance checker.
+3. **Modify** — a single, focused change to the generator or coaching prompt under test. Classify this experiment as one of: `architecture` (structural changes to generators/pipeline), `parameter` (tuning thresholds, counts, weights), `simplification` (removing code/prompt content), `algorithmic` (different approach to the same problem), `infrastructure` (build/tooling/eval changes), `other`.
+4. **Run eval** — `npx tsx eval.ts --arch <letter> > last_run.log 2>&1` — produces 27 samples scored by the compliance checker. Full output saved to `last_run.log` for analysis.
 5. **Record** — append result to `results.tsv` and update `experiment-log.md`.
 6. **Decide:**
    - **Improved** (higher pass rate or equal rate with fewer tokens) → **keep**. Commit.
@@ -230,8 +230,44 @@ Based on these, select a strategy for the next batch:
 | **Ablate** | Consecutive wins but slowing | Remove components to find what's actually needed |
 | **Combine** | Multiple individual wins in history | Merge previously successful changes |
 | **Stabilize** | High crash rate | Simplify, fix foundations before continuing |
+| **Specialize** | One experiment type has high hit rate | Focus on productive types (e.g., if `parameter` wins 60% but `architecture` wins 10%, do more parameter tuning) |
+| **Branch** | Two competing hypotheses, unclear winner | Test each on a sub-branch (see branch protocol below) |
 
 Write the checkpoint analysis in `experiment-log.md` as a "Strategic review" section. Include a "Current theory" — a running model of what affects pass rate and what doesn't. This compounds intelligence across experiments instead of treating each one independently.
+
+#### Meta-optimization review
+
+After every **3rd strategic checkpoint** (i.e., every 15 experiments), run this additional review:
+
+1. **Audit instruction effectiveness** — which rules from this program.md correlated with successful experiments? Which did you never reference or that led you astray?
+2. **Identify dead weight** — any instruction you haven't applied in the last 15 experiments is a candidate for removal.
+3. **Per-type success rates** — compute hit rate per experiment type (architecture/parameter/simplification/algorithmic/infrastructure). Use this to inform Specialize strategy decisions.
+4. **Propose improvements** — write a `## Meta-optimization review` section in `experiment-log.md`:
+   - Rules that helped (with evidence from experiment results)
+   - Rules that are dead weight (with reasoning)
+   - Proposed additions based on patterns discovered during experiments
+5. **Do NOT modify program.md** — it is read-only. Record proposals in `experiment-log.md` for the human to review.
+
+#### Branch strategy protocol
+
+When a checkpoint selects **Branch**:
+
+1. Note the current commit hash as your branch point.
+2. Pick 2-3 competing approaches from your ideas backlog.
+3. For each approach, create a sub-branch:
+   ```bash
+   git checkout -b autoresearch/branch-<approach> <branch-point-hash>
+   ```
+4. Run 3-5 experiments on each sub-branch following the normal loop.
+5. Compare the best metric from each sub-branch.
+6. Merge the winner back to the main session branch:
+   ```bash
+   git checkout <original-branch>
+   git merge autoresearch/branch-<winner>
+   ```
+7. Delete losing sub-branches: `git branch -D autoresearch/branch-<loser>`
+8. Log the comparison and decision in `experiment-log.md`.
+9. Resume the normal experiment loop from the merged state.
 
 ### Session resume protocol
 
@@ -252,7 +288,8 @@ Then start the loop.
 |------|---------|
 | `program.md` | These instructions (read-only) |
 | `experiment-log.md` | Detailed experiment log with root-cause analysis |
-| `results.tsv` | Tab-separated results: `arch\|pass_rate\|mechanical_issues\|status\|description` |
+| `results.tsv` | Tab-separated results: `arch\|pass_rate\|mechanical_issues\|status\|type\|description` |
+| `last_run.log` | Full eval output from the last run — redirect with `npx tsx eval.ts --arch e > last_run.log 2>&1` |
 | `autoresearch.ideas.md` | Ideas backlog — save promising deferred ideas, re-prioritize after each experiment |
 | `eval.ts` | Eval harness (read-only unless optimizing the eval itself) |
 | `generators/arch-*.ts` | Architecture generators (modify when optimizing a specific architecture) |
@@ -309,6 +346,12 @@ npx tsx eval.ts --arch e   > /tmp/result-e.json
 ```
 
 Log results in `experiment-log.md` under a `## Falsification checkpoint` section with explicit "thesis confirmed/challenged" conclusion.
+
+## Lessons from previous sessions
+
+If `~/.autoresearch/skills.md` exists, read it before starting. It contains patterns extracted from past autoresearch sessions (via `autoresearch learn`). Use them as starting context — they may or may not apply to this specific optimization target.
+
+After completing a session or reaching a significant milestone, run `autoresearch learn` from the Margin autoresearch directory to extract and persist what worked.
 
 ## Standing research questions
 
