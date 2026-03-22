@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, Add01Icon } from "@hugeicons/core-free-icons";
 import type { Tab } from "@/types/tab";
+import { startWindowDrag } from "@/lib/tauri-commands";
 
 interface ChromeBarProps {
   isVisible: boolean;
@@ -85,9 +86,10 @@ export function ChromeBar({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      {/* Titlebar row — 28px — contains traffic lights (macOS) and drag region */}
+      {/* Titlebar row — 28px — contains traffic lights (macOS), drag region, "Margin" label */}
       <div
         data-tauri-drag-region
+        onMouseDown={(e) => { if (e.button === 0 && e.target === e.currentTarget) startWindowDrag(); }}
         style={{
           height: 28,
           paddingLeft: 80,
@@ -95,10 +97,25 @@ export function ChromeBar({
           display: "flex",
           alignItems: "center",
         }}
-      />
+      >
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--color-text-secondary)",
+            fontFamily: "'Instrument Sans', system-ui, sans-serif",
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+        >
+          Margin
+        </span>
+      </div>
 
       {/* Tab row — 42px */}
       <div
+        data-tauri-drag-region
+        onMouseDown={(e) => { if (e.button === 0 && e.target === e.currentTarget) startWindowDrag(); }}
         style={{
           height: 42,
           display: "flex",

@@ -1,4 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+export function startWindowDrag(): void {
+  void getCurrentWindow().startDragging();
+}
 import type { Document, FileEntry } from "@/types/document";
 import type { CorrectionInput, CorrectionRecord, CorrectionDetail, DocumentCorrections } from "@/types/annotations";
 import type { PersistedTab } from "@/types/tab";

@@ -7,6 +7,7 @@ import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
 import type { Editor } from "@tiptap/core";
 import { FindBar } from "@/components/editor/FindBar";
+import { startWindowDrag } from "@/lib/tauri-commands";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -139,18 +140,19 @@ export function AppShell({
       className="flex flex-col h-dvh overflow-hidden"
       style={{ backgroundColor: "var(--color-page)" }}
     >
-      {/* Invisible hover hotzone — 24px — triggers chrome reveal + drag region */}
+      {/* Invisible hover hotzone — 24px — triggers chrome reveal + drag */}
       <div
         data-tauri-drag-region
         onMouseEnter={chrome.handleHotzoneEnter}
         onMouseLeave={chrome.handleChromeLeave}
+        onMouseDown={(e) => { if (e.button === 0) startWindowDrag(); }}
         style={{
           position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           height: 24,
-          zIndex: 10,
+          zIndex: chrome.chromeVisible ? 0 : 10,
           pointerEvents: chrome.chromeVisible ? "none" : "auto",
         }}
       />
