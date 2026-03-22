@@ -9,6 +9,13 @@ interface FileResult {
   snippet?: string | null;
 }
 
+interface FtsResult {
+  documentId: string;
+  title: string;
+  snippet: string;
+  rank: number;
+}
+
 interface Action {
   id: string;
   label: string;
@@ -80,12 +87,14 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const presence = useAnimatedPresence(isOpen, 150);
   const [query, setQuery] = useState("");
+  const [ftsResults, setFtsResults] = useState<FtsResult[]>([]);
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
   const [selectedColumn, setSelectedColumn] = useState<Column>("files");
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ftsIdRef = useRef(0);
 
   const actions: Action[] = [
     { id: "open", label: "Open new tab", shortcut: ["⌘", "O"], onAction: () => { onClose(); onOpenFile(); } },
@@ -106,13 +115,37 @@ export function CommandPalette({
     return fuzzyMatch(query, a.label);
   });
 
-  // Combined left-column items
-  const fileItems: Array<{ type: "recent"; doc: Document } | { type: "file"; file: FileResult }> = [
+  // Combined left-column items: recent → FTS → mdfind
+  const fileItems: Array<
+    | { type: "recent"; doc: Document }
+    | { type: "fts"; result: FtsResult }
+    | { type: "file"; file: FileResult }
+  > = [
     ...filteredRecent.map((d) => ({ type: "recent" as const, doc: d })),
+    ...ftsResults.map((r) => ({ type: "fts" as const, result: r })),
     ...fileResults.map((f) => ({ type: "file" as const, file: f })),
   ];
 
-  // mdfind search
+  // FTS5 search — fires immediately on keystroke (~1-5ms local SQLite)
+  useEffect(() => {
+    const thisId = ++ftsIdRef.current;
+    if (!query.trim()) {
+      setFtsResults([]);
+      return;
+    }
+    invoke<FtsResult[]>("search_documents", { query: query.trim(), limit: 6 })
+      .then((results) => {
+        if (ftsIdRef.current !== thisId) return;
+        // Deduplicate against recent docs by document ID
+        const recentIds = new Set(recentDocs.map((d) => d.id));
+        setFtsResults(results.filter((r) => !recentIds.has(r.documentId)));
+      })
+      .catch(() => {
+        if (ftsIdRef.current === thisId) setFtsResults([]);
+      });
+  }, [query, recentDocs]);
+
+  // mdfind search — debounced 200ms, secondary tier for unindexed files
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (!query.trim()) {
@@ -126,7 +159,7 @@ export function CommandPalette({
           setFileResults(results.filter((r) => !recentPaths.has(r.path)));
         })
         .catch(() => setFileResults([]));
-    }, 150);
+    }, 200);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
@@ -136,12 +169,13 @@ export function CommandPalette({
   useEffect(() => {
     setSelectedFileIndex(0);
     setSelectedActionIndex(0);
-  }, [query, fileResults.length]);
+  }, [query, ftsResults.length, fileResults.length]);
 
   // Focus input on open, clear on close
   useEffect(() => {
     if (isOpen) {
       setQuery("");
+      setFtsResults([]);
       setFileResults([]);
       setSelectedFileIndex(0);
       setSelectedActionIndex(0);
@@ -156,14 +190,20 @@ export function CommandPalette({
   const activateFileItem = useCallback((index: number) => {
     const item = fileItems[index];
     if (!item) return;
+    onClose();
     if (item.type === "recent") {
-      onClose();
       onSelectRecentDoc(item.doc, false);
+    } else if (item.type === "fts") {
+      // FTS results have a documentId — find matching recent doc or open by ID
+      const matchingDoc = recentDocs.find((d) => d.id === item.result.documentId);
+      if (matchingDoc) {
+        onSelectRecentDoc(matchingDoc, false);
+      }
+      // If not in recentDocs, the doc was indexed but not recently opened — no file path available
     } else {
-      onClose();
       onOpenFilePath(item.file.path, false);
     }
-  }, [fileItems, onClose, onSelectRecentDoc, onOpenFilePath]);
+  }, [fileItems, onClose, onSelectRecentDoc, onOpenFilePath, recentDocs]);
 
   const activateActionItem = useCallback((index: number) => {
     const action = filteredActions[index];
@@ -418,6 +458,64 @@ export function CommandPalette({
                           {doc.file_path.replace(/^\/Users\/[^/]+/, "~")}
                         </span>
                       )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* FTS results section — instant results from indexed documents */}
+            {ftsResults.length > 0 && (
+              <div>
+                <div style={sectionLabel}>Matches</div>
+                {ftsResults.map((result, i) => {
+                  const absIdx = filteredRecent.length + i;
+                  const isSelected = selectedColumn === "files" && selectedFileIndex === absIdx;
+                  return (
+                    <button
+                      key={result.documentId}
+                      type="button"
+                      onClick={() => activateFileItem(absIdx)}
+                      onMouseEnter={() => { setSelectedColumn("files"); setSelectedFileIndex(absIdx); }}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 2,
+                        width: "100%",
+                        padding: "7px 14px",
+                        border: "none",
+                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "#1A1714",
+                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {result.title}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "#A39A8E",
+                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "100%",
+                        }}
+                        dangerouslySetInnerHTML={{ __html: result.snippet }}
+                      />
                     </button>
                   );
                 })}

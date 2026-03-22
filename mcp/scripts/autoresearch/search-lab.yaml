@@ -1,0 +1,30 @@
+name: optimize-search-latency
+description: Reduce Margin's Rust search latency (FTS5 queries, snippet extraction, query sanitization)
+
+metric:
+  name: search_latency_us
+  unit: microseconds
+  direction: lower
+  extract: regexp "time:\\s+\\[(\\d+\\.\\d+) .s"
+
+eval: |
+  cd src-tauri && cargo bench --bench search 2>&1
+
+mutable:
+  - src-tauri/src/commands/search.rs
+
+immutable:
+  - src-tauri/benches/search.rs
+  - src-tauri/src/commands/search.rs::tests
+  - Cargo.lock
+
+constraints:
+  - All tests must pass (cargo test --manifest-path src-tauri/Cargo.toml)
+  - Search result ordering must remain identical for same inputs
+  - No unsafe code without doc comments
+  - No schema changes to the FTS5 virtual table
+  - Do not remove existing test cases
+
+rigor: standard
+checkpoint_interval: 5
+timeout: 600

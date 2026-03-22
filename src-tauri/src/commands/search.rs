@@ -30,20 +30,23 @@ pub struct IndexAllResult {
 
 /// Read the first meaningful line of a file for use as a preview snippet.
 /// Strips leading `#` heading markers and returns up to 120 characters.
-fn extract_file_snippet(path: &str) -> Option<String> {
-    let content = std::fs::read_to_string(path).ok()?;
-    for line in content.lines() {
+/// Uses a 1KB buffered reader instead of reading the entire file.
+#[doc(hidden)]
+pub fn extract_file_snippet(path: &str) -> Option<String> {
+    use std::io::{BufRead, BufReader};
+    let file = std::fs::File::open(path).ok()?;
+    let reader = BufReader::with_capacity(1024, file);
+    for line in reader.lines().take(20) {
+        let line = line.ok()?;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        // Strip markdown heading markers
         let text = trimmed.trim_start_matches('#').trim();
         if text.is_empty() {
             continue;
         }
-        let snippet: String = text.chars().take(120).collect();
-        return Some(snippet);
+        return Some(text.chars().take(120).collect());
     }
     None
 }
@@ -58,8 +61,11 @@ pub fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<F
         return Ok(Vec::new());
     }
 
-    // Strip single quotes to prevent mdfind query injection
-    let safe_query = query.replace('\'', "");
+    // Strip characters that could alter Spotlight query semantics
+    let safe_query: String = query
+        .chars()
+        .filter(|c| !matches!(c, '\'' | '*' | '(' | ')' | '|' | '&'))
+        .collect();
 
     // mdfind query: markdown files where name or content matches
     let mdfind_query = format!(
@@ -109,7 +115,8 @@ fn ensure_fts_table(conn: &Connection) -> Result<(), String> {
 }
 
 /// Sanitize a user query for FTS5: strip operators, escape quotes, append * for prefix matching.
-fn sanitize_fts_query(query: &str) -> String {
+#[doc(hidden)]
+pub fn sanitize_fts_query(query: &str) -> String {
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return String::new();
@@ -167,7 +174,8 @@ fn truncate_to_char_boundary(s: &str, max: usize) -> &str {
     &s[..boundary]
 }
 
-fn index_document_inner(conn: &Connection, document_id: &str, title: &str, content: &str) -> Result<(), String> {
+#[doc(hidden)]
+pub fn index_document_inner(conn: &Connection, document_id: &str, title: &str, content: &str) -> Result<(), String> {
     ensure_fts_table(conn)?;
 
     let content = truncate_to_char_boundary(content, MAX_INDEX_CHARS);
@@ -187,7 +195,8 @@ fn index_document_inner(conn: &Connection, document_id: &str, title: &str, conte
     Ok(())
 }
 
-fn search_documents_inner(conn: &Connection, query: &str, limit: i32) -> Result<Vec<SearchResult>, String> {
+#[doc(hidden)]
+pub fn search_documents_inner(conn: &Connection, query: &str, limit: i32) -> Result<Vec<SearchResult>, String> {
     ensure_fts_table(conn)?;
 
     let fts_query = sanitize_fts_query(query);
