@@ -10,6 +10,25 @@ Unreleased changes ready to ship.
 
 ## Shipped
 
+### v1.15.0 (2026-03-21)
+
+- `feat(SAM-27): v2 push-down chrome, Cmd+K palette, sidebar removal` — new chrome bar, Raycast-style command palette
+- `feat: redesign command palette as Raycast-style two-column navigation hub`
+- `feat: reposition FindBar as fixed gutter card (SAM-97)`
+- `feat(corrections): inline Accept action for edit-type corrections (SAM-134)` — anchored to highlight
+- `feat(SAM-133): add feedback_type enum to corrections schema`
+- `feat(design-system): warm palette, consolidate type scale, fix WCAG contrast`
+- `feat: consolidate artifact generation to single-writer CLI pattern`
+- `feat(dev): add UIFork for in-app design variation testing`
+- `style: apply make-interfaces-feel-better polish checklist`
+- `fix: align TOC column top with document content start`
+- `fix: capitalize titleBarStyle "Overlay" for Tauri v2 compatibility`
+- `fix: truncate FTS5 content to 50k chars to prevent snippet() perf hang`
+- `fix: exported annotations should not appear in next export`
+- `fix(SAM-27): chrome bar QA fixes — palette focus, + button, ⌘O behavior`
+- `fix: broken useRef patterns in AppShell (tab chrome reveal, crossfade timer leak)`
+- 20+ test stability fixes (vitest worker pool, timer cleanup, fake timer isolation)
+
 ### v1.14.0 (2026-03-09)
 
 - `feat: seed writing rules from style guide` — upload/paste style guide, LLM extraction into DB
