@@ -41,9 +41,11 @@ type GenerateFn = (type: string, prompt: string, register: string) => string;
 
 const ARCH_LABELS: Record<string, string> = {
   a: "rules",
+  "a-top10": "rules-top10-klaassen",
   b: "exemplars",
   c: "editor",
   d: "corrections",
+  "d-chrono": "corrections-chrono-lehmann",
   e: "hybrid",
   f: "aegis",
   h: "dspy",
@@ -54,12 +56,16 @@ async function loadGenerator(arch: string): Promise<GenerateFn> {
   switch (arch) {
     case "a":
       return (await import("./generators/arch-a-rules.ts")).generate;
+    case "a-top10":
+      return (await import("./generators/arch-a-top10.ts")).generate;
     case "b":
       return (await import("./generators/arch-b-exemplars.ts")).generate;
     case "c":
       return (await import("./generators/arch-c-editor.ts")).generate;
     case "d":
       return (await import("./generators/arch-d-corrections.ts")).generate;
+    case "d-chrono":
+      return (await import("./generators/arch-d-chrono.ts")).generate;
     case "e":
       return (await import("./generators/arch-e-hybrid.ts")).generate;
     case "f":
@@ -69,7 +75,7 @@ async function loadGenerator(arch: string): Promise<GenerateFn> {
     case "null":
       return (await import("./generators/arch-null.ts")).generate;
     default:
-      console.error(`Unknown architecture: ${arch}. Use a, b, c, d, e, f, h, or null.`);
+      console.error(`Unknown architecture: ${arch}. Use a, a-top10, b, c, d, d-chrono, e, f, h, or null.`);
       process.exit(1);
   }
 }
@@ -81,8 +87,8 @@ function parseArch(): string {
   const archIdx = args.indexOf("--arch");
   if (archIdx === -1 || archIdx + 1 >= args.length) return "a";
   const value = args[archIdx + 1];
-  if (!value || !["a", "b", "c", "d", "e", "f", "h", "null"].includes(value)) {
-    console.error(`Invalid --arch value: ${value}. Use a, b, c, d, e, f, h, or null.`);
+  if (!value || !["a", "a-top10", "b", "c", "d", "d-chrono", "e", "f", "h", "null"].includes(value)) {
+    console.error(`Invalid --arch value: ${value}. Use a, a-top10, b, c, d, d-chrono, e, f, h, or null.`);
     process.exit(1);
   }
   return value;

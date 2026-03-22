@@ -1,0 +1,6 @@
+run	pass_rate	mean_dimension	total_mechanical	hypothesis	kept	notes	timestamp
+1	0.63	47.4	12	baseline comparison: arch-a	true	voice:long-sentence (×7), voice:repetitive-structure (×3), structural:Negative parallelism (isn't X. It's Y) (×1)	2026-03-22T13:07:11Z
+2	0.63	47.5	12	baseline comparison: arch-b	true	voice:long-sentence (×7), voice:repetitive-structure (×5)	2026-03-22T13:07:11Z
+3	0.778	47.2	7	baseline comparison: arch-d	true	voice:long-sentence (×4), structural:Negative parallelism (isn't X — it's Y) (×1), voice:repetitive-structure (×1)	2026-03-22T13:07:11Z
+4	0.667	46.6	13	baseline comparison: arch-e	true	voice:long-sentence (×9), voice:repetitive-structure (×2), structural:Negative parallelism (isn't X. It's Y) (×2)	2026-03-22T13:07:11Z
+5	0.667	47	13	baseline comparison: arch-f	true	voice:long-sentence (×6), voice:repetitive-structure (×3), kill-word:leverage (×2)	2026-03-22T13:07:11Z
