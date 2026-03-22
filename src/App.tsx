@@ -1160,7 +1160,6 @@ export default function App() {
       }}
       currentDoc={doc.currentDoc}
       recentDocs={doc.recentDocs}
-      onOpenFile={doc.openFile}
       onSelectRecentDoc={handleSelectRecentDoc}
       onExport={() => setShowExportPopover(true)}
       onOpenFilePath={(path: string, newTab: boolean) => {

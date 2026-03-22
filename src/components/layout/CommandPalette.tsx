@@ -26,9 +26,9 @@ interface Action {
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
+  openForNewTab?: boolean;
   recentDocs: Document[];
   onSelectRecentDoc: (doc: Document, newTab: boolean) => void;
-  onOpenFile: () => void;
   onOpenFilePath: (path: string, newTab: boolean) => void;
   onExport?: () => void;
   onOpenSettings: () => void;
@@ -76,9 +76,9 @@ function ShortcutBadge({ keys }: { keys: string[] }) {
 export function CommandPalette({
   isOpen,
   onClose,
+  openForNewTab = false,
   recentDocs,
   onSelectRecentDoc,
-  onOpenFile,
   onOpenFilePath,
   onExport,
   onOpenSettings,
@@ -92,12 +92,13 @@ export function CommandPalette({
   const [selectedColumn, setSelectedColumn] = useState<Column>("files");
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
+  const [isNewTabMode, setIsNewTabMode] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ftsIdRef = useRef(0);
 
   const actions: Action[] = [
-    { id: "open", label: "Open new tab", shortcut: ["⌘", "O"], onAction: () => { onClose(); onOpenFile(); } },
+    { id: "open", label: "Open new tab", shortcut: ["⌘", "O"], onAction: () => { setIsNewTabMode(true); setQuery(""); setSelectedFileIndex(0); setSelectedColumn("files"); } },
     ...(onCloseTab ? [{ id: "close", label: "Close tab", shortcut: ["⌘", "W"], onAction: () => { onClose(); onCloseTab(); } }] : []),
     ...(onExport ? [{ id: "export", label: "Export annotations", shortcut: ["⌘", "⇧", "E"], onAction: () => { onClose(); onExport(); } }] : []),
     ...(onOpenFind ? [{ id: "find", label: "Find in document", shortcut: ["⌘", "F"], onAction: () => { onClose(); onOpenFind(); } }] : []),
@@ -180,6 +181,7 @@ export function CommandPalette({
       setSelectedFileIndex(0);
       setSelectedActionIndex(0);
       setSelectedColumn("files");
+      setIsNewTabMode(false);
       // Double rAF to ensure animated presence has rendered the input
       requestAnimationFrame(() => {
         requestAnimationFrame(() => inputRef.current?.focus());
@@ -190,20 +192,21 @@ export function CommandPalette({
   const activateFileItem = useCallback((index: number) => {
     const item = fileItems[index];
     if (!item) return;
+    const asNewTab = openForNewTab || isNewTabMode;
     onClose();
     if (item.type === "recent") {
-      onSelectRecentDoc(item.doc, false);
+      onSelectRecentDoc(item.doc, asNewTab);
     } else if (item.type === "fts") {
       // FTS results have a documentId — find matching recent doc or open by ID
       const matchingDoc = recentDocs.find((d) => d.id === item.result.documentId);
       if (matchingDoc) {
-        onSelectRecentDoc(matchingDoc, false);
+        onSelectRecentDoc(matchingDoc, asNewTab);
       }
       // If not in recentDocs, the doc was indexed but not recently opened — no file path available
     } else {
-      onOpenFilePath(item.file.path, false);
+      onOpenFilePath(item.file.path, asNewTab);
     }
-  }, [fileItems, onClose, onSelectRecentDoc, onOpenFilePath, recentDocs]);
+  }, [fileItems, onClose, onSelectRecentDoc, onOpenFilePath, recentDocs, openForNewTab, isNewTabMode]);
 
   const activateActionItem = useCallback((index: number) => {
     const action = filteredActions[index];
@@ -343,7 +346,7 @@ export function CommandPalette({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search files and actions…"
+            placeholder={(openForNewTab || isNewTabMode) ? "Select a file to open in new tab…" : "Search files and actions…"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{
@@ -683,7 +686,7 @@ export function CommandPalette({
               fontFamily: "'Instrument Sans', system-ui, sans-serif",
             }}
           >
-            {query ? "Fuzzy search across all .md files" : "Type to search all .md files"}
+            {(openForNewTab || isNewTabMode) ? "Opening in new tab" : query ? "Fuzzy search across all .md files" : "Type to search all .md files"}
           </span>
           <span
             style={{

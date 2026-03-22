@@ -13,7 +13,6 @@ interface AppShellProps {
   onOpenSettings: () => void;
   currentDoc: Document | null;
   recentDocs: Document[];
-  onOpenFile: () => void;
   onSelectRecentDoc: (doc: Document, newTab: boolean) => void;
   onOpenFilePath: (path: string, newTab: boolean) => void;
   onExport?: () => void;
@@ -41,7 +40,6 @@ export function AppShell({
   onOpenSettings,
   currentDoc,
   recentDocs,
-  onOpenFile,
   onSelectRecentDoc,
   onOpenFilePath,
   onExport,
@@ -61,6 +59,7 @@ export function AppShell({
 }: AppShellProps) {
   const chrome = useChrome();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [openForNewTab, setOpenForNewTab] = useState(false);
 
   // Auto-reveal chrome on mount, hide after 1500ms
   useEffect(() => {
@@ -133,7 +132,7 @@ export function AppShell({
     };
   }, [activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleClosePalette = useCallback(() => setPaletteOpen(false), []);
+  const handleClosePalette = useCallback(() => { setPaletteOpen(false); setOpenForNewTab(false); }, []);
 
   return (
     <div
@@ -164,7 +163,7 @@ export function AppShell({
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
         onReorderTabs={onReorderTabs}
-        onNewTab={() => setPaletteOpen(true)}
+        onNewTab={() => { setOpenForNewTab(true); setPaletteOpen(true); }}
         onMouseEnter={chrome.handleChromeEnter}
         onMouseLeave={chrome.handleChromeLeave}
       />
@@ -263,9 +262,9 @@ export function AppShell({
       <CommandPalette
         isOpen={paletteOpen}
         onClose={handleClosePalette}
+        openForNewTab={openForNewTab}
         recentDocs={recentDocs}
         onSelectRecentDoc={onSelectRecentDoc}
-        onOpenFile={onOpenFile}
         onOpenFilePath={onOpenFilePath}
         onExport={onExport}
         onOpenSettings={onOpenSettings}
