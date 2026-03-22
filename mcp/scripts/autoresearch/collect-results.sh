@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 # Collect completed eval results and write to experiment-log.md + results.tsv
 # Run after run-baseline-evals.sh completes.
 
