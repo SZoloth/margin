@@ -69,7 +69,7 @@ describe("StyleMemorySection", () => {
 
     render(<StyleMemorySection />);
 
-    const exportButton = await screen.findByRole("button", { name: "Export 3 for synthesis" }, { timeout: 5000 });
+    const exportButton = await screen.findByRole("button", { name: "Synthesize 3 pending" }, { timeout: 5000 });
     await user.click(exportButton);
 
     await waitFor(() => {
@@ -78,7 +78,7 @@ describe("StyleMemorySection", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /Export .* for synthesis/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Synthesize .* pending/ })).not.toBeInTheDocument();
     });
   });
 });

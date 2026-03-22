@@ -64,7 +64,7 @@ function SeedGuideSection({ onSeeded }: { onSeeded: () => void }) {
       <div className="flex items-center gap-3">
         <div className="flex-1">
           <span className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">
-            Seed from style guide
+            Import from style guide
           </span>
           {result && (
             <span className="ml-3 text-[length:var(--text-xs)] text-[var(--color-accent)]">
@@ -91,13 +91,13 @@ function SeedGuideSection({ onSeeded }: { onSeeded: () => void }) {
           ))}
         </select>
         <SettingsButton onClick={handleUpload} disabled={loading}>
-          Upload guide
+          Upload
         </SettingsButton>
         <SettingsButton
           onClick={() => setMode(mode === "paste" ? "closed" : "paste")}
           disabled={loading}
         >
-          {mode === "paste" ? "Cancel" : "Paste instead"}
+          {mode === "paste" ? "Cancel" : "Paste text"}
         </SettingsButton>
       </div>
 
@@ -203,7 +203,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
       <div className="flex items-center gap-12 border-b border-[var(--color-border)] px-8 py-6">
         <Stat
           value={correctionStats.total}
-          label="Corrections"
+          label="Flagged"
           active={statFilter === "all-corrections"}
           onClick={() => {
             const next = statFilter === "all-corrections" ? null : ("all-corrections" as StatFilter);
@@ -213,7 +213,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
         />
         <Stat
           value={ruleStats.ruleCount}
-          label="Rules"
+          label="Active rules"
           active={statFilter === "all-rules"}
           onClick={() => {
             const next = statFilter === "all-rules" ? null : ("all-rules" as StatFilter);
@@ -224,7 +224,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
         {correctionStats.unsynthesizedCount > 0 && (
           <Stat
             value={correctionStats.unsynthesizedCount}
-            label="To process"
+            label="Pending"
             accent
             active={statFilter === "to-process"}
             onClick={() => {
@@ -250,7 +250,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
         {correctionStats.untaggedCount > 0 && (
           <Stat
             value={correctionStats.untaggedCount}
-            label="Needs attention"
+            label="Untagged"
             active={statFilter === "needs-attention"}
             onClick={() => {
               const next = statFilter === "needs-attention" ? null : ("needs-attention" as StatFilter);
@@ -275,7 +275,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
               onClick={handleExportForSynthesis}
               className="shrink-0 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--hover-bg)] px-3 py-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-text-secondary)] transition-colors duration-150 hover:bg-[var(--color-surface-muted)]"
             >
-              Export {correctionStats.unsynthesizedCount} for synthesis
+              Synthesize {correctionStats.unsynthesizedCount} pending
             </button>
           )}
         </div>
@@ -287,7 +287,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
       {/* Tab bar */}
       <div
         role="tablist"
-        aria-label="Style Memory sections"
+        aria-label="Writing rules sections"
         className="flex gap-0 border-b border-[var(--color-border)] px-8"
       >
         <TabButton
@@ -296,7 +296,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
           active={activeTab === "corrections"}
           onClick={() => setActiveTab("corrections")}
         >
-          Corrections
+          Flagged patterns
         </TabButton>
         <TabButton
           id={rulesTabId}
@@ -304,7 +304,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
           active={activeTab === "rules"}
           onClick={() => setActiveTab("rules")}
         >
-          Rules
+          Active rules
         </TabButton>
       </div>
 
