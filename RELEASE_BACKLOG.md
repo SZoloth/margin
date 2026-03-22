@@ -10,6 +10,13 @@ Unreleased changes ready to ship.
 
 ## Shipped
 
+### v1.16.0 (2026-03-21)
+
+- `feat(search): optimize command palette with FTS5 + benchmarks` — instant FTS search on keystroke, buffered snippet reads, Criterion benchmarks
+- `feat(annotations): turn positive highlights into reusable taste criteria`
+- `feat(cli): add margin export coaching-prompt subcommand (SAM-177)`
+- `refactor(settings): rename Style Memory to Writing rules IA`
+
 ### v1.15.0 (2026-03-21)
 
 - `feat(SAM-27): v2 push-down chrome, Cmd+K palette, sidebar removal` — new chrome bar, Raycast-style command palette
