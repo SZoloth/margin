@@ -152,7 +152,7 @@ export function AppShell({
           right: 0,
           height: 24,
           zIndex: 10,
-          pointerEvents: chrome.chromeVisible ? "none" : "auto",
+          pointerEvents: "auto",
         }}
       />
 

@@ -95,10 +95,24 @@ export function ChromeBar({
           display: "flex",
           alignItems: "center",
         }}
-      />
+      >
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: "var(--color-text-secondary)",
+            fontFamily: "'Instrument Sans', system-ui, sans-serif",
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+        >
+          Margin
+        </span>
+      </div>
 
       {/* Tab row — 42px */}
       <div
+        data-tauri-drag-region
         style={{
           height: 42,
           display: "flex",

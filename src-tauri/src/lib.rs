@@ -105,10 +105,10 @@ pub fn run() {
             let pool = db::migrations::init_db()?;
             app.manage(pool);
 
-            // Set window title to "Margin (Dev)" in debug builds
+            // Clear native window title in debug builds (title is rendered in ChromeBar)
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_title("Margin (Dev)");
+                let _ = window.set_title("");
             }
 
             Ok(())
