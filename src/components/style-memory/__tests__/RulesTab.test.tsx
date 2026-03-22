@@ -72,18 +72,17 @@ describe("RulesTab — SeverityBadge", () => {
   });
 
   it("auto-exports profile artifacts after rule update", async () => {
-    const user = userEvent.setup();
     render(<RulesTab onStatsChange={vi.fn()} />);
 
     await screen.findByText("Test rule");
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    // Use fireEvent.click instead of user.click to avoid userEvent pointer-event
+    // deadlock when stale rAF callbacks from preceding test files are still pending
+    // in the jsdom queue (matches IntegrationsSection fix pattern).
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const input = screen.getByDisplayValue("Test rule");
-    // Use fireEvent.change instead of user.clear()+user.type() to avoid userEvent
-    // keyboard-event deadlock when stale rAF callbacks from preceding test files are
-    // still pending in the jsdom queue (matches IntegrationsSection fix pattern).
     fireEvent.change(input, { target: { value: "Updated rule text" } });
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(updateWritingRule).toHaveBeenCalled();
