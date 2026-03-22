@@ -5,7 +5,7 @@
  * candidate thesis statements, grounded in their own highlights and notes.
  *
  * Design: MCP stays a pure data layer. `distillTheses` returns the annotation
- * cluster plus a synthesis prompt. The calling agent (Claude) performs the
+ * cluster plus a synthesis prompt. The calling agent performs the
  * LLM reasoning and presents candidate theses to the user. The user can then
  * call `saveThesis` to persist a thesis for later review.
  */

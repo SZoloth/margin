@@ -112,7 +112,7 @@ var rulesCreateCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(rule, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -171,7 +171,7 @@ var rulesUpdateCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(rule, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -191,7 +191,7 @@ var rulesDeleteCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(map[string]bool{"success": true}, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 

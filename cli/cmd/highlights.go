@@ -59,7 +59,7 @@ var highlightsCreateCmd = &cobra.Command{
 			output.JSON(result, pretty)
 		}
 
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -79,7 +79,7 @@ var highlightsDeleteCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(map[string]bool{"success": true}, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 
@@ -100,7 +100,7 @@ var highlightsColorCmd = &cobra.Command{
 			output.ErrorE(err)
 		}
 		output.JSON(map[string]bool{"success": true}, pretty)
-		profile.ExportProfile(dbPath)
+		profile.ExportProfile(dbPath, "")
 	},
 }
 

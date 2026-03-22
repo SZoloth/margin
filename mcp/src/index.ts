@@ -54,12 +54,12 @@ const server = new McpServer({
 
 const bridge = new ExportBridge();
 
-// Push notifications to Claude Code when exports arrive
+// Push notifications to the connected agent when exports arrive
 bridge.onExport((prompt) => {
   // 1. Resource-updated notification — tells the client margin://latest-export changed
   server.server.sendResourceUpdated({ uri: "margin://latest-export" }).catch(() => {});
 
-  // 2. Logging notification — surfaces in Claude Code's output as an alert
+  // 2. Logging notification — surfaces in the agent's output as an alert
   server.sendLoggingMessage({
     level: "alert",
     data: `New annotations exported from Margin. Call margin_wait_for_export to receive them, or read the margin://latest-export resource.`,
@@ -91,9 +91,9 @@ function dbErrorMessage(err: unknown): string {
 
 /**
  * Auto-export unified writing profile via the `margin` CLI (single-writer pattern).
- * The CLI reads from SQLite and writes both ~/.margin/writing-rules.md and
- * ~/.claude/hooks/writing_guard.py. Fire-and-forget — errors are logged but don't
- * fail the mutation.
+ * The CLI reads from SQLite and writes ~/.margin/writing-rules.md and any
+ * agent-specific artifacts (e.g. ~/.claude/hooks/writing_guard.py for Claude Code).
+ * Fire-and-forget — errors are logged but don't fail the mutation.
  */
 async function autoExportWritingProfile(): Promise<void> {
   return new Promise((resolve) => {

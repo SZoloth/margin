@@ -96,6 +96,24 @@ func FormatCodexAgentsMD(rules []db.WritingRule, corrections []db.CorrectionReco
 		lines = append(lines, formatRulesSection(editorialRules)...)
 	}
 
+	// Positive examples — patterns to emulate
+	var positive []db.CorrectionRecord
+	for _, c := range corrections {
+		if c.Polarity != nil && *c.Polarity == "positive" {
+			positive = append(positive, c)
+		}
+	}
+	if len(positive) > 0 {
+		lines = append(lines, "", "## Writing Samples")
+		lines = append(lines, "")
+		lines = append(lines, "_Patterns to emulate — do more of this._")
+		for _, c := range positive {
+			snippet := truncateUnicode(c.OriginalText, 200)
+			note := strings.Join(c.Notes, "; ")
+			lines = append(lines, fmt.Sprintf("- Emulate: \"%s\" — %s", snippet, note))
+		}
+	}
+
 	// Corrective examples — patterns to avoid
 	var corrective []db.CorrectionRecord
 	for _, c := range corrections {
