@@ -160,6 +160,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add suggested_edit and accepted_at columns to corrections
     migrate_corrections_add_suggested_edit(&conn)?;
 
+    // Migration: create thesis_candidates table
+    migrate_add_thesis_candidates_table(&conn)?;
+
     // Migration: add rationale column to corrections
     migrate_corrections_add_rationale(&conn)?;
 
@@ -1411,6 +1414,26 @@ fn migrate_corrections_add_suggested_edit(conn: &Connection) -> Result<(), Box<d
         conn.execute_batch("ALTER TABLE corrections ADD COLUMN accepted_at INTEGER;")?;
     }
 
+    Ok(())
+}
+
+/// Creates the `thesis_candidates` table for persisting thesis distillation results.
+pub fn migrate_add_thesis_candidates_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS thesis_candidates (
+            id TEXT PRIMARY KEY,
+            statement TEXT NOT NULL,
+            evidence_json TEXT NOT NULL DEFAULT '[]',
+            confidence TEXT,
+            source_document_ids_json TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'draft'
+                CHECK(status IN ('draft', 'accepted', 'rejected')),
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_thesis_status ON thesis_candidates(status);
+        CREATE INDEX IF NOT EXISTS idx_thesis_created ON thesis_candidates(created_at);",
+    )?;
     Ok(())
 }
 

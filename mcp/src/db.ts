@@ -162,6 +162,21 @@ export const SCHEMA_SQL = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_writing_rules_type ON writing_rules(writing_type);
+
+  CREATE TABLE IF NOT EXISTS thesis_candidates (
+    id TEXT PRIMARY KEY,
+    statement TEXT NOT NULL,
+    evidence_json TEXT NOT NULL DEFAULT '[]',
+    confidence TEXT,
+    source_document_ids_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'draft'
+        CHECK(status IN ('draft', 'accepted', 'rejected')),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_thesis_status ON thesis_candidates(status);
+  CREATE INDEX IF NOT EXISTS idx_thesis_created ON thesis_candidates(created_at);
 `;
 
 export function createTestDb(): Database.Database {
