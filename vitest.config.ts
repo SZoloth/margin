@@ -9,8 +9,10 @@ import path from "path";
 // is 60s), so late-running workers fail intermittently.
 //
 // Fix: run hook, lib, and lightweight component tests first, before heavy TipTap editor tests
-// exhaust system resources. Reader.test runs first of all (unshift) because it has the heaviest
-// TipTap editor setup and times out if the system is resource-depleted after 30+ other files.
+// exhaust system resources. Reader.test and DiffBanner.test run first of all (unshift) because
+// they time out if system resources are depleted after 30+ other files. Reader.test has the
+// heaviest TipTap editor setup; DiffBanner.test is lightweight but its worker startup times out
+// when it lands late in the 40-file run.
 // Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
 // FloatingToolbar, search) run in the "small" bucket. Heavy editor tests (HighlightThread,
 // ExportAnnotationsPopover, TabBar, etc.) run in "rest".
@@ -27,7 +29,10 @@ class HookFirstSequencer extends BaseSequencer {
       } else if (
         // Reader.test renders the heaviest TipTap editor (all extensions). Run it
         // first so it gets a fresh worker before system resources are depleted.
-        rel.includes("Reader.test")
+        // DiffBanner.test is lightweight but its worker times out when it lands
+        // late in a 40-file serial run — unshift it here too.
+        rel.includes("Reader.test") ||
+        rel.includes("DiffBanner.test")
       ) {
         small.unshift(f);
       } else if (
@@ -35,7 +40,6 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("/lib/__tests__/") ||
         rel.includes("/settings/__tests__/") ||
         rel.includes("DiffNavChip.test") ||
-        rel.includes("DiffBanner.test") ||
         rel.includes("FloatingToolbar.test") ||
         rel.includes("Sidebar.test") ||
         rel.includes("StyleMemorySection.test") ||
