@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { Reader } from "../Reader";
 import type { Editor } from "@tiptap/core";
@@ -37,6 +37,15 @@ describe("Search extension", () => {
       expect(editorRef).not.toBeNull();
     });
     editor = editorRef!;
+  });
+
+  // Explicitly destroy the TipTap editor after all tests complete. Without this,
+  // TipTap's async cleanup callbacks (scheduled via ProseMirror's internal scheduler)
+  // outlive the component unmount from the global afterEach cleanup() call. React 19's
+  // act() in the next test file's first render() spin-waits for these stale callbacks,
+  // blocking the main thread for ~85 seconds until act() gives up.
+  afterAll(() => {
+    editor.destroy();
   });
 
   describe("findAllMatches", () => {

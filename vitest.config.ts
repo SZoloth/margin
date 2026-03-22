@@ -13,9 +13,9 @@ import path from "path";
 // they time out if system resources are depleted after 30+ other files. Reader.test has the
 // heaviest TipTap editor setup; DiffBanner.test is lightweight but its worker startup times out
 // when it lands late in the 40-file run.
-// Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
-// FloatingToolbar, search) run in the "small" bucket. Heavy editor tests (HighlightThread,
-// ExportAnnotationsPopover, TabBar, etc.) run in "rest".
+// Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, layout/TabBar,
+// DiffNavChip, FloatingToolbar, search) run in the "small" bucket. Heavy editor tests
+// (HighlightThread, ExportAnnotationsPopover, etc.) run in "rest".
 // Uses explicit push-based bucketing — every file ends up in exactly one bucket so nothing is dropped.
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
@@ -32,7 +32,10 @@ class HookFirstSequencer extends BaseSequencer {
         // DiffBanner.test is lightweight but its worker times out when it lands
         // late in a 40-file serial run — unshift it here too.
         rel.includes("Reader.test") ||
-        rel.includes("DiffBanner.test")
+        rel.includes("DiffBanner.test") ||
+        // front-matter.test imports Reader (heavy TipTap setup) — same timeout risk
+        // as Reader.test when it lands late in a 40+ file serial run.
+        rel.includes("front-matter.test")
       ) {
         small.unshift(f);
       } else if (
@@ -44,6 +47,8 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("Sidebar.test") ||
         rel.includes("StyleMemorySection.test") ||
         rel.includes("RulesTab.test") ||
+        rel.includes("CorrectionsTab.test") ||
+        rel.includes("TabBar.test") ||
         rel.includes("search.test")
       ) {
         small.push(f);
