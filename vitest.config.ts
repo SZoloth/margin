@@ -40,7 +40,8 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("apply-accepted-correction.test") ||
         rel.includes("browser-stubs.test") ||
         rel.includes("FloatingToolbar.test") ||
-        rel.includes("useFileWatcher.test")
+        rel.includes("useFileWatcher.test") ||
+        rel.includes("ToggleSwitch.test")
       ) {
         small.unshift(f);
       } else if (
