@@ -22,21 +22,24 @@ import path from "path";
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
     const sorted = await super.sort(files);
-    // mustRunFirst: all three files mock @/lib/tauri-commands with different factory shapes.
-    // With vmThreads + maxWorkers:1 the module registry is shared — whichever file runs first
-    // wins the mock. StyleMemorySection.test uses a comprehensive factory; CorrectionsTab/RulesTab
-    // use partial factories. All three must run before useTabs, useDocument, and SettingsPage
-    // (which also mock @/lib/tauri-commands) contaminate the registry with their own shapes.
+    // mustRunFirst: these three files mock @/lib/tauri-commands with different factory shapes
+    // and must all run before other files that also mock it (useTabs, useDocument, SettingsPage).
+    // Within this bucket, StyleMemorySection must run FIRST: its findByRole(5000ms timeout) is
+    // blocked if CorrectionsTab or RulesTab run before it and leave stale userEvent callbacks.
+    // The global afterEach 3-drain cycles clear StyleMemorySection's callbacks fast enough for
+    // CorrectionsTab/RulesTab to pass, but not vice-versa — so StyleMemorySection goes first
+    // via unshift(), regardless of duration-sort order.
     const mustRunFirst: typeof sorted = [];
     const early: typeof sorted = [];
     const small: typeof sorted = [];
     const rest: typeof sorted = [];
     for (const f of sorted) {
       const rel = (f.moduleId ?? "").replace(/\\/g, "/");
-      if (
+      if (rel.includes("StyleMemorySection.test")) {
+        mustRunFirst.unshift(f); // force before CorrectionsTab/RulesTab regardless of duration
+      } else if (
         rel.includes("RulesTab.test") ||
-        rel.includes("CorrectionsTab.test") ||
-        rel.includes("StyleMemorySection.test")
+        rel.includes("CorrectionsTab.test")
       ) {
         mustRunFirst.push(f);
       } else if (
