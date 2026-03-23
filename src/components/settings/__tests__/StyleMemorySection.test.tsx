@@ -1,25 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { CorrectionDetail } from "@/types/annotations";
 
-// Provide all functions that CorrectionsTab, RulesTab, and StyleMemorySection need.
-// Component-level vi.mock() hoisting is unreliable with vmForks pool so we mock the
-// underlying tauri-commands instead and let the real child components render.
+// Stub child components so they don't pull @/lib/tauri-commands into the shared vmThreads
+// module registry. With maxWorkers:1 all files share one registry; if CorrectionsTab/RulesTab
+// are imported here with their real tauri-commands references, those cached instances
+// contaminate CorrectionsTab.test and RulesTab.test (or vice-versa) when they run later.
+vi.mock("@/components/style-memory/CorrectionsTab", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useEffect } = require("react") as typeof import("react");
+  return {
+    CorrectionsTab: ({
+      onStatsChange,
+    }: {
+      onStatsChange: (s: {
+        total: number;
+        documentCount: number;
+        untaggedCount: number;
+        unsynthesizedCount: number;
+      }) => void;
+    }) => {
+      useEffect(() => {
+        onStatsChange({ total: 3, documentCount: 1, untaggedCount: 0, unsynthesizedCount: 3 });
+      }, [onStatsChange]);
+      return null;
+    },
+  };
+});
+
+vi.mock("@/components/style-memory/RulesTab", () => ({
+  RulesTab: () => null,
+}));
+
 vi.mock("@/lib/tauri-commands", () => ({
-  getCorrectionsFlat: vi.fn(),
-  updateCorrectionWritingType: vi.fn(),
-  deleteCorrection: vi.fn(),
-  acceptCorrection: vi.fn(),
-  bulkDeleteCorrections: vi.fn(),
-  bulkTagCorrections: vi.fn(),
-  markCorrectionsUnsynthesized: vi.fn(),
-  getWritingRules: vi.fn(),
-  updateWritingRule: vi.fn(),
-  deleteWritingRule: vi.fn(),
-  exportWritingRules: vi.fn(),
-  markRulesReviewed: vi.fn(),
   exportCorrectionsJson: vi.fn(),
+  markCorrectionsUnsynthesized: vi.fn(),
   seedRulesFromGuide: vi.fn(),
   openStyleGuideDialog: vi.fn(),
 }));
@@ -29,37 +44,12 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 
 import { StyleMemorySection } from "../StyleMemorySection";
-import {
-  getCorrectionsFlat,
-  getWritingRules,
-  exportCorrectionsJson,
-} from "@/lib/tauri-commands";
+import { exportCorrectionsJson } from "@/lib/tauri-commands";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-
-const makeCorrection = (id: string): CorrectionDetail => ({
-  highlightId: id,
-  originalText: `text ${id}`,
-  notes: [],
-  extendedContext: null,
-  highlightColor: "yellow",
-  writingType: null,
-  polarity: null,
-  synthesizedAt: null,
-  documentTitle: null,
-  createdAt: Date.now(),
-  suggestedEdit: null,
-  acceptedAt: null,
-});
 
 describe("StyleMemorySection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getCorrectionsFlat).mockResolvedValue([
-      makeCorrection("h1"),
-      makeCorrection("h2"),
-      makeCorrection("h3"),
-    ]);
-    vi.mocked(getWritingRules).mockResolvedValue([]);
   });
 
   it("hides export CTA after successful synthesis export of all pending corrections", async () => {

@@ -8,24 +8,34 @@ import path from "path";
 // TipTap initialization. Each worker thread takes ~52s to start (vitest's hardcoded START_TIMEOUT
 // is 60s), so late-running workers fail intermittently.
 //
-// Fix: run hook, lib, and lightweight component tests first, before heavy TipTap editor tests
-// exhaust system resources. Reader.test, apply-accepted-correction.test, browser-stubs.test,
-// FloatingToolbar.test, ExportAnnotationsPopover.test, and export-annotations-footer.test run
-// first (unshift) — all either render heavy TipTap extensions or timeout on worker startup
-// when run after memory is depleted by prior tests.
+// Fix: with vmThreads + maxWorkers:1, all files share one module registry. Two issues:
+// 1. StyleMemorySection.test renders real RulesTab/CorrectionsTab children, caching their
+//    @/lib/tauri-commands references. If RulesTab.test/CorrectionsTab.test run later, their
+//    new vi.mock factories create different fn instances than the cached components use.
+//    Fix: "mustRunFirst" bucket for those two files, guaranteed to run before StyleMemorySection.
+// 2. Several files timeout on worker startup when run after Reader.test depletes memory.
+//    Fix: "early" bucket for those files — all run before the heavy editor tests.
 // Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
-// search) run in the "small" bucket. Heavy editor tests (HighlightThread,
-// ExportAnnotationsPopover, TabBar, etc.) run in "rest".
+// search) run in "small". Heavy editor tests (HighlightThread, TabBar, etc.) run in "rest".
 // Uses explicit push-based bucketing — every file ends up in exactly one bucket so nothing is dropped.
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
     const sorted = await super.sort(files);
+    // mustRunFirst: files whose vi.mock() instances get cached by StyleMemorySection.test.tsx
+    // (which renders the real RulesTab + CorrectionsTab children). With vmThreads + maxWorkers:1
+    // the module registry is shared, so they must run BEFORE StyleMemorySection.test caches
+    // their tauri-commands references with a different mock factory.
+    const mustRunFirst: typeof sorted = [];
+    const early: typeof sorted = [];
     const small: typeof sorted = [];
     const rest: typeof sorted = [];
     for (const f of sorted) {
       const rel = (f.moduleId ?? "").replace(/\\/g, "/");
-      if (!rel) {
-        small.unshift(f);
+      if (
+        rel.includes("RulesTab.test") ||
+        rel.includes("CorrectionsTab.test")
+      ) {
+        mustRunFirst.push(f);
       } else if (
         // Reader.test renders the heaviest TipTap editor (all extensions). Run it
         // first so it gets a fresh worker before system resources are depleted.
@@ -37,21 +47,18 @@ class HookFirstSequencer extends BaseSequencer {
         // START_TIMEOUT even with mocks — run it early too.
         // useFileWatcher.test uses fake timers; worker startup times out when run
         // after memory is depleted by heavy tests — run it early for a fresh worker.
+        !rel ||
         rel.includes("Reader.test") ||
         rel.includes("apply-accepted-correction.test") ||
         rel.includes("browser-stubs.test") ||
         rel.includes("FloatingToolbar.test") ||
         rel.includes("useFileWatcher.test") ||
         rel.includes("ToggleSwitch.test") ||
-        // StyleMemorySection.test hangs under resource pressure when run after Reader.test
-        // exhausts system memory — run it before the heavy tests on a fresh worker.
         rel.includes("StyleMemorySection.test") ||
-        // ExportAnnotationsPopover.test and export-annotations-footer.test time out on
-        // worker startup when run late (after heavy TipTap tests deplete memory).
         rel.includes("ExportAnnotationsPopover.test") ||
         rel.includes("export-annotations-footer.test")
       ) {
-        small.unshift(f);
+        early.push(f);
       } else if (
         rel.includes("/hooks/__tests__/") ||
         rel.includes("/lib/__tests__/") ||
@@ -67,10 +74,10 @@ class HookFirstSequencer extends BaseSequencer {
         rest.push(f);
       }
     }
-    // Safety net: catch any file not in either bucket (should be impossible).
-    const bucketed = new Set([...small, ...rest]);
+    // Safety net: catch any file not in any bucket (should be impossible).
+    const bucketed = new Set([...mustRunFirst, ...early, ...small, ...rest]);
     const unclassified = files.filter((f) => !bucketed.has(f));
-    return [...small, ...rest, ...unclassified];
+    return [...mustRunFirst, ...early, ...small, ...rest, ...unclassified];
   }
 }
 
