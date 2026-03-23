@@ -9,10 +9,11 @@ import path from "path";
 // is 60s), so late-running workers fail intermittently.
 //
 // Fix: run hook, lib, and lightweight component tests first, before heavy TipTap editor tests
-// exhaust system resources. Reader.test and apply-accepted-correction.test run first (unshift)
-// because both render Reader (all TipTap extensions) and time out when the system is depleted.
+// exhaust system resources. Reader.test, apply-accepted-correction.test, browser-stubs.test,
+// and FloatingToolbar.test run first (unshift) — all either render heavy TipTap extensions or
+// load large CJS bundles that trigger worker START_TIMEOUT when run late.
 // Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
-// FloatingToolbar, search) run in the "small" bucket. Heavy editor tests (HighlightThread,
+// search) run in the "small" bucket. Heavy editor tests (HighlightThread,
 // ExportAnnotationsPopover, TabBar, etc.) run in "rest".
 // Uses explicit push-based bucketing — every file ends up in exactly one bucket so nothing is dropped.
 class HookFirstSequencer extends BaseSequencer {
@@ -45,7 +46,6 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("/settings/__tests__/") ||
         rel.includes("DiffNavChip.test") ||
         rel.includes("DiffBanner.test") ||
-        rel.includes("FloatingToolbar.test") ||
         rel.includes("Sidebar.test") ||
         rel.includes("StyleMemorySection.test") ||
         rel.includes("/style-memory/__tests__/") ||
