@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import { afterAll, afterEach, vi } from "vitest";
 
 // Node.js 25 introduced a native localStorage stub that lacks the full Storage API.
 // Redefine it with a proper in-memory implementation so tests can call localStorage.clear() etc.
@@ -28,6 +28,15 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as unknown as typeof globalThis.ResizeObserver;
 }
 
+// With vmThreads pool, multiple test files run in the same worker thread and share a
+// module registry. vi.mock() factories from file A can bleed into file B when both
+// mock the same module (e.g. @/lib/tauri-commands) with different factory shapes.
+// Calling vi.resetModules() after each file clears the module cache, so the next
+// file's hoisted vi.mock() call creates a fresh module instance from its own factory.
+afterAll(() => {
+  vi.resetModules();
+});
+
 afterEach(async () => {
   // Discard all pending fake timers before restoring real ones. Without
   // clearAllTimers(), a fake setInterval registered in the previous test
@@ -39,9 +48,11 @@ afterEach(async () => {
   // don't leak into subsequent files in the same worker thread.
   vi.useRealTimers();
   cleanup();
-  // Yield one macrotask cycle so any stale jsdom timer callbacks (e.g. rAF-as-setTimeout
-  // left by userEvent.setup()) can fire and drain before the next test file begins.
-  // Without this, React 19's synchronous act() in the first render() of the next file
-  // spin-waits for stale callbacks that never fire in jsdom, hitting the 30s testTimeout.
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  // Drain stale jsdom timer callbacks left by userEvent.setup() and RTL waitFor before
+  // the next test file begins. React 19's act() spin-waits for any pending callbacks,
+  // hitting the 30s testTimeout. Complex tests (click + multiple waitFor) leave nested
+  // callback chains that require multiple macrotask cycles to fully drain.
+  for (let i = 0; i < 3; i++) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
 });
