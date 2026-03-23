@@ -34,10 +34,13 @@ class HookFirstSequencer extends BaseSequencer {
         // depletes system resources — must also run before the heavy tests.
         // FloatingToolbar.test loads a 41k-line CJS icon bundle that causes worker
         // START_TIMEOUT even with mocks — run it early too.
+        // useFileWatcher.test uses fake timers; worker startup times out when run
+        // after memory is depleted by heavy tests — run it early for a fresh worker.
         rel.includes("Reader.test") ||
         rel.includes("apply-accepted-correction.test") ||
         rel.includes("browser-stubs.test") ||
-        rel.includes("FloatingToolbar.test")
+        rel.includes("FloatingToolbar.test") ||
+        rel.includes("useFileWatcher.test")
       ) {
         small.unshift(f);
       } else if (
