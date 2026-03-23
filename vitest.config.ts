@@ -29,8 +29,14 @@ class HookFirstSequencer extends BaseSequencer {
         // first so it gets a fresh worker before system resources are depleted.
         // apply-accepted-correction.test also renders Reader and must run early
         // for the same reason — even though it lives in lib/__tests__/, it's heavy.
+        // browser-stubs.test times out on worker startup when run after Reader.test
+        // depletes system resources — must also run before the heavy tests.
+        // FloatingToolbar.test loads a 41k-line CJS icon bundle that causes worker
+        // START_TIMEOUT even with mocks — run it early too.
         rel.includes("Reader.test") ||
-        rel.includes("apply-accepted-correction.test")
+        rel.includes("apply-accepted-correction.test") ||
+        rel.includes("browser-stubs.test") ||
+        rel.includes("FloatingToolbar.test")
       ) {
         small.unshift(f);
       } else if (
@@ -42,7 +48,7 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("FloatingToolbar.test") ||
         rel.includes("Sidebar.test") ||
         rel.includes("StyleMemorySection.test") ||
-        rel.includes("RulesTab.test") ||
+        rel.includes("/style-memory/__tests__/") ||
         rel.includes("search.test")
       ) {
         small.push(f);
