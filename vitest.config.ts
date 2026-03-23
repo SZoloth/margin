@@ -9,8 +9,8 @@ import path from "path";
 // is 60s), so late-running workers fail intermittently.
 //
 // Fix: run hook, lib, and lightweight component tests first, before heavy TipTap editor tests
-// exhaust system resources. Reader.test runs first of all (unshift) because it has the heaviest
-// TipTap editor setup and times out if the system is resource-depleted after 30+ other files.
+// exhaust system resources. Reader.test and apply-accepted-correction.test run first (unshift)
+// because both render Reader (all TipTap extensions) and time out when the system is depleted.
 // Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
 // FloatingToolbar, search) run in the "small" bucket. Heavy editor tests (HighlightThread,
 // ExportAnnotationsPopover, TabBar, etc.) run in "rest".
@@ -27,7 +27,10 @@ class HookFirstSequencer extends BaseSequencer {
       } else if (
         // Reader.test renders the heaviest TipTap editor (all extensions). Run it
         // first so it gets a fresh worker before system resources are depleted.
-        rel.includes("Reader.test")
+        // apply-accepted-correction.test also renders Reader and must run early
+        // for the same reason — even though it lives in lib/__tests__/, it's heavy.
+        rel.includes("Reader.test") ||
+        rel.includes("apply-accepted-correction.test")
       ) {
         small.unshift(f);
       } else if (
