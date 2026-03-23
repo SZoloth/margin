@@ -4,8 +4,12 @@ import { DiffBanner } from "../DiffBanner";
 
 describe("DiffBanner", () => {
   afterEach(() => {
-    vi.useRealTimers();
+    // cleanup() must run while fake timers are still active so the component's
+    // clearInterval() cleanup uses the fake clearInterval and properly cancels
+    // the fake interval. If vi.useRealTimers() runs first, the orphaned fake
+    // interval survives and React 19's act() spin-waits on it indefinitely.
     cleanup();
+    vi.useRealTimers();
   });
 
   it("renders a review label when not reviewing", () => {
