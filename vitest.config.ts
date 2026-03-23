@@ -9,10 +9,11 @@ import path from "path";
 // is 60s), so late-running workers fail intermittently.
 //
 // Fix: with vmThreads + maxWorkers:1, all files share one module registry. Two issues:
-// 1. StyleMemorySection.test renders real RulesTab/CorrectionsTab children, caching their
-//    @/lib/tauri-commands references. If RulesTab.test/CorrectionsTab.test run later, their
-//    new vi.mock factories create different fn instances than the cached components use.
-//    Fix: "mustRunFirst" bucket for those two files, guaranteed to run before StyleMemorySection.
+// 1. RulesTab.test, CorrectionsTab.test, and StyleMemorySection.test each mock @/lib/tauri-commands
+//    with different factory shapes. Other files (useTabs, useDocument, SettingsPage) also mock the
+//    same module. With a shared registry, whichever partial factory runs first wins, breaking the
+//    others. Fix: "mustRunFirst" bucket for those three files so they all run before any other
+//    @/lib/tauri-commands mock can contaminate the registry.
 // 2. Several files timeout on worker startup when run after Reader.test depletes memory.
 //    Fix: "early" bucket for those files — all run before the heavy editor tests.
 // Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
@@ -21,10 +22,11 @@ import path from "path";
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
     const sorted = await super.sort(files);
-    // mustRunFirst: files whose vi.mock() instances get cached by StyleMemorySection.test.tsx
-    // (which renders the real RulesTab + CorrectionsTab children). With vmThreads + maxWorkers:1
-    // the module registry is shared, so they must run BEFORE StyleMemorySection.test caches
-    // their tauri-commands references with a different mock factory.
+    // mustRunFirst: all three files mock @/lib/tauri-commands with different factory shapes.
+    // With vmThreads + maxWorkers:1 the module registry is shared — whichever file runs first
+    // wins the mock. StyleMemorySection.test uses a comprehensive factory; CorrectionsTab/RulesTab
+    // use partial factories. All three must run before useTabs, useDocument, and SettingsPage
+    // (which also mock @/lib/tauri-commands) contaminate the registry with their own shapes.
     const mustRunFirst: typeof sorted = [];
     const early: typeof sorted = [];
     const small: typeof sorted = [];
@@ -33,7 +35,8 @@ class HookFirstSequencer extends BaseSequencer {
       const rel = (f.moduleId ?? "").replace(/\\/g, "/");
       if (
         rel.includes("RulesTab.test") ||
-        rel.includes("CorrectionsTab.test")
+        rel.includes("CorrectionsTab.test") ||
+        rel.includes("StyleMemorySection.test")
       ) {
         mustRunFirst.push(f);
       } else if (
@@ -54,7 +57,6 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("FloatingToolbar.test") ||
         rel.includes("useFileWatcher.test") ||
         rel.includes("ToggleSwitch.test") ||
-        rel.includes("StyleMemorySection.test") ||
         rel.includes("ExportAnnotationsPopover.test") ||
         rel.includes("export-annotations-footer.test")
       ) {
