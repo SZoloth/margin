@@ -87,10 +87,15 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    // pool: "threads" + fileParallelism: false + maxWorkers: 1 runs files serially to avoid
-    // memory exhaustion from concurrent TipTap/jsdom worker threads.
-    // HookFirstSequencer ensures lightweight tests run first while the system is fresh —
-    // prevents resource exhaustion from pushing fast tests past the 60s START_TIMEOUT.
+    // isolate: false + pool: "threads" + fileParallelism: false runs all files in ONE worker
+    // thread instead of spawning a new worker per file. Each new thread startup requires jsdom +
+    // TipTap to initialize (~60-80s), so 42 files × ~80s = ~57 min. With isolate: false, the
+    // worker is reused across all files — startup happens once and transform/import caches are
+    // shared. vi.mock() calls still work per-file (vitest restores them after each file).
+    //
+    // HookFirstSequencer is retained for safety: running Reader/apply-accepted-correction first
+    // ensures TipTap extensions are loaded once during the "warm" period and stay cached.
+    isolate: false,
     pool: "threads",
     fileParallelism: false,
     maxWorkers: 1,
