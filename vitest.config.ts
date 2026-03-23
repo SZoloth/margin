@@ -68,6 +68,11 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    environmentOptions: {
+      jsdom: {
+        url: "http://localhost",
+      },
+    },
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
