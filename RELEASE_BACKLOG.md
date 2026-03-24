@@ -10,6 +10,13 @@ Unreleased changes ready to ship.
 
 ## Shipped
 
+### v1.16.2 (2026-03-23)
+
+- `fix(sam-199): programmatic window drag + suppress native title bleed` — removes native title bar bleed-through
+- `fix(sam-200): open new tab from + button and palette action` — both tab creation paths now work
+- `feat(multi-llm): make skill and export pipeline portable across agents` — CLI works with Codex, pi, and other agents
+- 12+ test stability fixes (vitest vmThreads pool, timer cleanup, sequencer ordering)
+
 ### v1.16.1 (2026-03-22)
 
 - `fix(search): move mdfind to spawn_blocking to unblock FTS queries` — mdfind was synchronous, starving the fast FTS5 path

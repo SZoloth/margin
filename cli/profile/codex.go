@@ -110,7 +110,11 @@ func FormatCodexAgentsMD(rules []db.WritingRule, corrections []db.CorrectionReco
 		for _, c := range positive {
 			snippet := truncateUnicode(c.OriginalText, 200)
 			note := strings.Join(c.Notes, "; ")
-			lines = append(lines, fmt.Sprintf("- Emulate: \"%s\" — %s", snippet, note))
+			if note != "" {
+				lines = append(lines, fmt.Sprintf("- Emulate: \"%s\" — %s", snippet, note))
+			} else {
+				lines = append(lines, fmt.Sprintf("- Emulate: \"%s\"", snippet))
+			}
 		}
 	}
 
@@ -128,7 +132,11 @@ func FormatCodexAgentsMD(rules []db.WritingRule, corrections []db.CorrectionReco
 		for _, c := range corrective {
 			snippet := truncateUnicode(c.OriginalText, 200)
 			note := strings.Join(c.Notes, "; ")
-			lines = append(lines, fmt.Sprintf("- Avoid: \"%s\" — %s", snippet, note))
+			if note != "" {
+				lines = append(lines, fmt.Sprintf("- Avoid: \"%s\" — %s", snippet, note))
+			} else {
+				lines = append(lines, fmt.Sprintf("- Avoid: \"%s\"", snippet))
+			}
 		}
 	}
 

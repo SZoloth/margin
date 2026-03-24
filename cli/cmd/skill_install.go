@@ -15,6 +15,7 @@ var skillInstallCmd = &cobra.Command{
 		path, err := skill.Install(force, target)
 		if err != nil {
 			output.ErrorE(err)
+			return
 		}
 		output.JSON(map[string]string{"status": "installed", "path": path}, pretty)
 	},
