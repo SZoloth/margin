@@ -68,10 +68,12 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("ReadingSection.test") ||
         // SettingsPage.test hangs when run late in the suite — accumulated stale async
         // work from prior files causes React 19's act() to spin-wait indefinitely.
-        // Moving it early gives it a clean worker before resources are depleted.
+        // Must run FIRST in early bucket (unshift) so fake-timer tests in early
+        // (useFileWatcher, FloatingToolbar, ExportAnnotationsPopover) can't contaminate
+        // React 19's scheduler before it runs.
         rel.includes("SettingsPage.test")
       ) {
-        early.push(f);
+        rel.includes("SettingsPage.test") ? early.unshift(f) : early.push(f);
       } else if (
         rel.includes("/hooks/__tests__/") ||
         rel.includes("/lib/__tests__/") ||
