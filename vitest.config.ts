@@ -61,7 +61,11 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("useFileWatcher.test") ||
         rel.includes("ToggleSwitch.test") ||
         rel.includes("ExportAnnotationsPopover.test") ||
-        rel.includes("export-annotations-footer.test")
+        rel.includes("export-annotations-footer.test") ||
+        // TabBar.test and ReadingSection.test hang when run after heavier tests
+        // deplete VM worker resources — same pattern as FloatingToolbar/ToggleSwitch.
+        rel.includes("TabBar.test") ||
+        rel.includes("ReadingSection.test")
       ) {
         early.push(f);
       } else if (
