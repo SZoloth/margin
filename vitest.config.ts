@@ -15,7 +15,8 @@ import path from "path";
 //    others. Fix: "mustRunFirst" bucket for those three files so they all run before any other
 //    @/lib/tauri-commands mock can contaminate the registry.
 // 2. Several files timeout on worker startup when run after Reader.test depletes memory.
-//    Fix: "early" bucket for those files — all run before the heavy editor tests.
+//    Fix: layered early buckets — "earlyFirst" (SettingsPage), "earlyLight" (pure tests whose
+//    afterEach hook times out after heavy tests deplete the worker), "early" (heavy TipTap tests).
 // Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
 // search) run in "small". Heavy editor tests (HighlightThread, TabBar, etc.) run in "rest".
 // Uses explicit push-based bucketing — every file ends up in exactly one bucket so nothing is dropped.
@@ -29,7 +30,19 @@ class HookFirstSequencer extends BaseSequencer {
     // The global afterEach 3-drain cycles clear StyleMemorySection's callbacks fast enough for
     // CorrectionsTab/RulesTab to pass, but not vice-versa — so StyleMemorySection goes first
     // via unshift(), regardless of duration-sort order.
+    //
+    // earlyFirst: SettingsPage runs before all heavy tests — accumulated stale async work from
+    // prior files causes React 19's act() to spin-wait indefinitely when it runs late.
+    //
+    // earlyLight: pure/lightweight tests that don't render TipTap but whose afterEach hook
+    // (cleanup + 3x setTimeout drain) times out when run after heavy TipTap tests deplete
+    // the vmThreads worker. Must run before the heavy early tests.
+    //
+    // early: heavy TipTap tests (Reader, front-matter, etc.) and tests that timeout on a
+    // depleted worker but are themselves heavy enough to need a warm TipTap cache.
     const mustRunFirst: typeof sorted = [];
+    const earlyFirst: typeof sorted = []; // SettingsPage: must precede all heavy tests
+    const earlyLight: typeof sorted = []; // lightweight tests sensitive to resource depletion
     const early: typeof sorted = [];
     const small: typeof sorted = [];
     const rest: typeof sorted = [];
@@ -42,13 +55,27 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("CorrectionsTab.test")
       ) {
         mustRunFirst.push(f);
+      } else if (rel.includes("SettingsPage.test")) {
+        // SettingsPage must be first in the early group: fake-timer tests later in early
+        // (useFileWatcher, FloatingToolbar, ExportAnnotationsPopover) contaminate React 19's
+        // scheduler and cause act() to spin-wait indefinitely if they run before it.
+        earlyFirst.push(f);
+      } else if (
+        // browser-stubs.test: pure async, no TipTap — but afterEach hook (cleanup +
+        // 3x setTimeout drain) times out when run after Reader/apply-accepted-correction
+        // deplete the vmThreads worker. Must run before the heavy tests.
+        // diff-engine.test: @vitest-environment node, pure computation — afterEach hook
+        // times out for the same resource-depletion reason when it runs in small bucket
+        // after all heavy early tests.
+        rel.includes("browser-stubs.test") ||
+        rel.includes("diff-engine.test")
+      ) {
+        earlyLight.push(f);
       } else if (
         // Reader.test renders the heaviest TipTap editor (all extensions). Run it
         // first so it gets a fresh worker before system resources are depleted.
         // apply-accepted-correction.test also renders Reader and must run early
         // for the same reason — even though it lives in lib/__tests__/, it's heavy.
-        // browser-stubs.test times out on worker startup when run after Reader.test
-        // depletes system resources — must also run before the heavy tests.
         // FloatingToolbar.test loads a 41k-line CJS icon bundle that causes worker
         // START_TIMEOUT even with mocks — run it early too.
         // useFileWatcher.test uses fake timers; worker startup times out when run
@@ -56,7 +83,6 @@ class HookFirstSequencer extends BaseSequencer {
         !rel ||
         rel.includes("Reader.test") ||
         rel.includes("apply-accepted-correction.test") ||
-        rel.includes("browser-stubs.test") ||
         rel.includes("FloatingToolbar.test") ||
         rel.includes("useFileWatcher.test") ||
         rel.includes("ToggleSwitch.test") ||
@@ -66,14 +92,11 @@ class HookFirstSequencer extends BaseSequencer {
         // deplete VM worker resources — same pattern as FloatingToolbar/ToggleSwitch.
         rel.includes("TabBar.test") ||
         rel.includes("ReadingSection.test") ||
-        // SettingsPage.test hangs when run late in the suite — accumulated stale async
-        // work from prior files causes React 19's act() to spin-wait indefinitely.
-        // Must run FIRST in early bucket (unshift) so fake-timer tests in early
-        // (useFileWatcher, FloatingToolbar, ExportAnnotationsPopover) can't contaminate
-        // React 19's scheduler before it runs.
-        rel.includes("SettingsPage.test")
+        // front-matter.test renders Reader multiple times (beforeAll + 5 tests) and
+        // times out when run after memory is depleted by heavy tests.
+        rel.includes("front-matter.test")
       ) {
-        rel.includes("SettingsPage.test") ? early.unshift(f) : early.push(f);
+        early.push(f);
       } else if (
         rel.includes("/hooks/__tests__/") ||
         rel.includes("/lib/__tests__/") ||
@@ -90,9 +113,9 @@ class HookFirstSequencer extends BaseSequencer {
       }
     }
     // Safety net: catch any file not in any bucket (should be impossible).
-    const bucketed = new Set([...mustRunFirst, ...early, ...small, ...rest]);
+    const bucketed = new Set([...mustRunFirst, ...earlyFirst, ...earlyLight, ...early, ...small, ...rest]);
     const unclassified = files.filter((f) => !bucketed.has(f));
-    return [...mustRunFirst, ...early, ...small, ...rest, ...unclassified];
+    return [...mustRunFirst, ...earlyFirst, ...earlyLight, ...early, ...small, ...rest, ...unclassified];
   }
 }
 
