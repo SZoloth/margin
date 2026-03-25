@@ -63,25 +63,26 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("radiogroup", { name: "Theme" })).toBeInTheDocument();
   });
 
-  it("switching sections shows correct content", async () => {
-    const user = userEvent.setup();
-
+  it("switching sections shows correct content", () => {
     renderWithProvider(<SettingsPage {...defaultProps} />);
 
-    // Click "Writing" nav item
-    await user.click(screen.getByText("Writing"));
+    // Click "Writing" nav item — fireEvent (sync) avoids async act() hang from
+    // TestRunProvider's listen() resolved-Promise effects in React 19.
+    fireEvent.click(screen.getByText("Writing"));
 
     // Writing section content should now be visible
     expect(screen.getByText("Remember corrections")).toBeInTheDocument();
   });
 
-  it("escape key closes settings", async () => {
+  it("escape key closes settings", () => {
     const onClose = vi.fn();
-    const user = userEvent.setup();
 
     renderWithProvider(<SettingsPage {...defaultProps} onClose={onClose} />);
 
-    await user.keyboard("{Escape}");
+    fireEvent.keyDown(document.activeElement || document.body, {
+      key: "Escape",
+      code: "Escape",
+    });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
