@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -37,6 +37,18 @@ const baseRule = {
   createdAt: Date.now(),
   updatedAt: Date.now(),
 } as const;
+
+// RulesTab runs last in mustRunFirst, immediately before SettingsPage (earlyFirst).
+// Its userEvent chains (2 clicks + 2 waitFor in the delete test) leave more stale
+// async callbacks than the 3 global drain cycles clear. SettingsPage's act() then
+// spin-waits on them, causing intermittent test failures under system load.
+// Extra drain cycles here run after ALL RulesTab tests complete (before vi.resetModules
+// and before SettingsPage loads), giving the jsdom queue a chance to fully flush.
+afterAll(async () => {
+  for (let i = 0; i < 8; i++) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
