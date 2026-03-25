@@ -1,4 +1,4 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { render, waitFor, act } from "@testing-library/react";
 import type { Editor } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 import { Reader } from "@/components/editor/Reader";
@@ -23,7 +23,9 @@ describe("applyAcceptedCorrection", () => {
       expect(editorRef).toBeTruthy();
     });
 
-    await act(async () => {
+    // Use sync act() — avoids async act() hang caused by TipTap's pending state updates
+    // in React 19 (async act() waits indefinitely for the scheduler to drain).
+    act(() => {
       expect(
         applyAcceptedCorrection(
           editorRef!,
@@ -38,7 +40,7 @@ describe("applyAcceptedCorrection", () => {
       const html = editorRef!.getHTML();
       expect(html).toContain('data-highlight-id="h-1">duplicate phrase</mark>');
       expect(html).toContain('data-highlight-id="h-2">specific phrase</mark>');
-    });
+    }, { timeout: 10000 });
   });
 
   it("returns false and leaves the document unchanged when the highlight is missing", async () => {

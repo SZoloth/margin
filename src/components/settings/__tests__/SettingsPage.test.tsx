@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { SettingsPage } from "../SettingsPage";
 import { DEFAULT_SETTINGS } from "@/hooks/useSettings";
 import { TestRunProvider } from "@/hooks/useTestRunContext";
@@ -93,17 +92,18 @@ describe("SettingsPage", () => {
     expect(heading).toBeInTheDocument();
   });
 
-  it("passes settings and setSetting to section components", async () => {
+  it("passes settings and setSetting to section components", () => {
     const setSetting = vi.fn();
-    const user = userEvent.setup();
 
     renderWithProvider(<SettingsPage {...defaultProps} setSetting={setSetting} />);
 
-    // Click a theme option to verify setSetting is wired through
+    // Click a theme option to verify setSetting is wired through.
+    // Uses fireEvent (sync) instead of userEvent.click() to avoid the async act()
+    // hang caused by TestRunProvider's listen() resolved-Promise effects in React 19.
     const radios = screen.getByRole("radiogroup", { name: "Theme" });
     const darkOption = radios.querySelector("[aria-checked='false']");
     if (darkOption) {
-      await user.click(darkOption);
+      fireEvent.click(darkOption as HTMLElement);
       expect(setSetting).toHaveBeenCalled();
     }
   });
