@@ -18,7 +18,7 @@ import path from "path";
 //    Fix: layered early buckets — "earlyFirst" (SettingsPage), "earlyLight" (pure tests whose
 //    afterEach hook times out after heavy tests deplete the worker), "early" (heavy TipTap tests).
 // Lightweight tests (hooks, lib, settings/*, style-memory/*, layout/Sidebar, DiffNavChip,
-// search) run in "small". Heavy editor tests (HighlightThread, TabBar, etc.) run in "rest".
+// search) run in "small". Heavy editor tests (HighlightThread, etc.) run in "rest".
 // Uses explicit push-based bucketing — every file ends up in exactly one bucket so nothing is dropped.
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
@@ -55,12 +55,17 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("CorrectionsTab.test")
       ) {
         mustRunFirst.push(f);
+      } else if (rel.includes("SettingsPage.test")) {
+        // SettingsPage must be FIRST in earlyFirst: fake-timer tests in earlyLight/early
+        // (FloatingToolbar, ExportAnnotationsPopover, useFileWatcher, DiffBanner) contaminate
+        // React 19's scheduler and cause act() to spin-wait if they run before it.
+        // unshift() ensures SettingsPage stays at index 0 regardless of sort order.
+        earlyFirst.unshift(f);
       } else if (
-        rel.includes("SettingsPage.test") ||
         // useSettings.test and DiffBanner.test hang with the same act() spin-wait pattern:
         // fake-timer tests in early (FloatingToolbar, ExportAnnotationsPopover, useFileWatcher)
         // leave orphaned callbacks that React 19's scheduler picks up when these render.
-        // Must run in earlyFirst (before all fake-timer tests) to avoid contamination.
+        // Must run after SettingsPage but before fake-timer tests in earlyLight/early.
         rel.includes("useSettings.test") ||
         rel.includes("DiffBanner.test")
       ) {
@@ -72,8 +77,12 @@ class HookFirstSequencer extends BaseSequencer {
         // diff-engine.test: @vitest-environment node, pure computation — afterEach hook
         // times out for the same resource-depletion reason when it runs in small bucket
         // after all heavy early tests.
+        // TabBar.test and ReadingSection.test: lightweight, no TipTap — same afterEach
+        // timeout pattern. Run before heavy early tests so they get a fresh worker.
         rel.includes("browser-stubs.test") ||
-        rel.includes("diff-engine.test")
+        rel.includes("diff-engine.test") ||
+        rel.includes("TabBar.test") ||
+        rel.includes("ReadingSection.test")
       ) {
         earlyLight.push(f);
       } else if (
@@ -93,10 +102,6 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("ToggleSwitch.test") ||
         rel.includes("ExportAnnotationsPopover.test") ||
         rel.includes("export-annotations-footer.test") ||
-        // TabBar.test and ReadingSection.test hang when run after heavier tests
-        // deplete VM worker resources — same pattern as FloatingToolbar/ToggleSwitch.
-        rel.includes("TabBar.test") ||
-        rel.includes("ReadingSection.test") ||
         // front-matter.test renders Reader multiple times (beforeAll + 5 tests) and
         // times out when run after memory is depleted by heavy tests.
         rel.includes("front-matter.test")
