@@ -23,6 +23,12 @@ import path from "path";
 class HookFirstSequencer extends BaseSequencer {
   async sort(files: Parameters<BaseSequencer["sort"]>[0]) {
     const sorted = await super.sort(files);
+    // preFirst: useSettings.test and DiffBanner.test don't mock @/lib/tauri-commands so they
+    // can safely precede mustRunFirst. StyleMemorySection (mustRunFirst) triggers a real
+    // window.setTimeout(6000) for its toast; vi.clearAllTimers() only clears fake timers so
+    // this real timer persists and fires during the first act() of the next file, causing
+    // React 19 to spin-wait for 30s. Running these two files first avoids that entirely.
+    //
     // mustRunFirst: these three files mock @/lib/tauri-commands with different factory shapes
     // and must all run before other files that also mock it (useTabs, useDocument, SettingsPage).
     // Within this bucket, StyleMemorySection must run FIRST: its findByRole(5000ms timeout) is
@@ -40,6 +46,7 @@ class HookFirstSequencer extends BaseSequencer {
     //
     // early: heavy TipTap tests (Reader, front-matter, etc.) and tests that timeout on a
     // depleted worker but are themselves heavy enough to need a warm TipTap cache.
+    const preFirst: typeof sorted = [];
     const mustRunFirst: typeof sorted = [];
     const earlyFirst: typeof sorted = []; // SettingsPage: must precede all heavy tests
     const earlyLight: typeof sorted = []; // lightweight tests sensitive to resource depletion
@@ -48,7 +55,15 @@ class HookFirstSequencer extends BaseSequencer {
     const rest: typeof sorted = [];
     for (const f of sorted) {
       const rel = (f.moduleId ?? "").replace(/\\/g, "/");
-      if (rel.includes("StyleMemorySection.test")) {
+      if (
+        // useSettings.test and DiffBanner.test: pure tests that don't mock @/lib/tauri-commands.
+        // Must run before mustRunFirst to avoid StyleMemorySection's real 6000ms toast
+        // setTimeout contaminating React 19's act() in their first tests.
+        rel.includes("useSettings.test") ||
+        rel.includes("DiffBanner.test")
+      ) {
+        preFirst.push(f);
+      } else if (rel.includes("StyleMemorySection.test")) {
         mustRunFirst.unshift(f); // force before CorrectionsTab/RulesTab regardless of duration
       } else if (
         rel.includes("RulesTab.test") ||
@@ -57,19 +72,10 @@ class HookFirstSequencer extends BaseSequencer {
         mustRunFirst.push(f);
       } else if (rel.includes("SettingsPage.test")) {
         // SettingsPage must be FIRST in earlyFirst: fake-timer tests in earlyLight/early
-        // (FloatingToolbar, ExportAnnotationsPopover, useFileWatcher, DiffBanner) contaminate
+        // (FloatingToolbar, ExportAnnotationsPopover, useFileWatcher) contaminate
         // React 19's scheduler and cause act() to spin-wait if they run before it.
         // unshift() ensures SettingsPage stays at index 0 regardless of sort order.
         earlyFirst.unshift(f);
-      } else if (
-        // useSettings.test and DiffBanner.test hang with the same act() spin-wait pattern:
-        // fake-timer tests in early (FloatingToolbar, ExportAnnotationsPopover, useFileWatcher)
-        // leave orphaned callbacks that React 19's scheduler picks up when these render.
-        // Must run after SettingsPage but before fake-timer tests in earlyLight/early.
-        rel.includes("useSettings.test") ||
-        rel.includes("DiffBanner.test")
-      ) {
-        earlyFirst.push(f);
       } else if (
         // browser-stubs.test: pure async, no TipTap — but afterEach hook (cleanup +
         // 3x setTimeout drain) times out when run after Reader/apply-accepted-correction
@@ -122,9 +128,9 @@ class HookFirstSequencer extends BaseSequencer {
       }
     }
     // Safety net: catch any file not in any bucket (should be impossible).
-    const bucketed = new Set([...mustRunFirst, ...earlyFirst, ...earlyLight, ...early, ...small, ...rest]);
+    const bucketed = new Set([...preFirst, ...mustRunFirst, ...earlyFirst, ...earlyLight, ...early, ...small, ...rest]);
     const unclassified = files.filter((f) => !bucketed.has(f));
-    return [...mustRunFirst, ...earlyFirst, ...earlyLight, ...early, ...small, ...rest, ...unclassified];
+    return [...preFirst, ...mustRunFirst, ...earlyFirst, ...earlyLight, ...early, ...small, ...rest, ...unclassified];
   }
 }
 
