@@ -55,10 +55,15 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("CorrectionsTab.test")
       ) {
         mustRunFirst.push(f);
-      } else if (rel.includes("SettingsPage.test")) {
-        // SettingsPage must be first in the early group: fake-timer tests later in early
-        // (useFileWatcher, FloatingToolbar, ExportAnnotationsPopover) contaminate React 19's
-        // scheduler and cause act() to spin-wait indefinitely if they run before it.
+      } else if (
+        rel.includes("SettingsPage.test") ||
+        // useSettings.test and DiffBanner.test hang with the same act() spin-wait pattern:
+        // fake-timer tests in early (FloatingToolbar, ExportAnnotationsPopover, useFileWatcher)
+        // leave orphaned callbacks that React 19's scheduler picks up when these render.
+        // Must run in earlyFirst (before all fake-timer tests) to avoid contamination.
+        rel.includes("useSettings.test") ||
+        rel.includes("DiffBanner.test")
+      ) {
         earlyFirst.push(f);
       } else if (
         // browser-stubs.test: pure async, no TipTap — but afterEach hook (cleanup +
@@ -102,7 +107,6 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("/lib/__tests__/") ||
         rel.includes("/settings/__tests__/") ||
         rel.includes("DiffNavChip.test") ||
-        rel.includes("DiffBanner.test") ||
         rel.includes("Sidebar.test") ||
         rel.includes("/style-memory/__tests__/") ||
         rel.includes("search.test")
@@ -138,7 +142,9 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     testTimeout: 30000,
-    hookTimeout: 30000,
+    // hookTimeout is doubled to 60s: the afterEach drain loop (3x setTimeout(0)) can stall
+    // under V8 GC pressure in a long-running vmThreads worker — 30s is too tight.
+    hookTimeout: 60000,
     // pool: "vmThreads" + fileParallelism: false solves both the worker startup timeout and
     // module isolation problems. With pool: "threads", vitest spawns a fresh OS-level worker
     // thread per test file — 42 files × ~80s startup = ~57 min, and late files hit the hardcoded

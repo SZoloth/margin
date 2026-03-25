@@ -137,7 +137,8 @@ describe("Front matter round-trip", () => {
 
     // Should start with --- (no leading blank line)
     expect(md).toMatch(/^---\n/);
-  });
+  // Extra timeout: two renders + waitFor can exceed 30s on a warm vmThreads worker under GC pressure.
+  }, 60_000);
 
   it("round-trips after simulated user edit", async () => {
     let editorRef: Editor | null = null;
@@ -178,6 +179,10 @@ describe("Front matter round-trip", () => {
     expect(lastMd).toContain("title: Test");
   });
 
+  // FULL_DOC contains task lists, HR, blockquote, and multiple sections.
+  // TipTap creates more state updates parsing complex content, so React 19's act()
+  // (wrapping the render() call) needs more time to drain than with simple FM_DOC.
+  // 90s matches the beforeAll pre-warm timeout.
   it("preserves front matter with full document including HR and task lists", async () => {
     let editorRef: Editor | null = null;
 
@@ -192,7 +197,7 @@ describe("Front matter round-trip", () => {
 
     await waitFor(() => {
       expect(editorRef).toBeTruthy();
-    });
+    }, { timeout: 60_000 });
 
     const md = editorRef!.storage.markdown.getMarkdown() as string;
     const json = editorRef!.getJSON();
@@ -205,7 +210,7 @@ describe("Front matter round-trip", () => {
     expect(md).toContain("title: The Marginal Annotator");
     // The trailing --- should be an HR, not front matter
     expect(md).toContain("# The Marginal Annotator");
-  });
+  }, 90_000);
 
   it("does not produce front matter for documents without it", async () => {
     let editorRef: Editor | null = null;
