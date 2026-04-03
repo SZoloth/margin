@@ -152,8 +152,11 @@ export default defineConfig({
     },
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
-    testTimeout: 30000,
-    // hookTimeout is doubled to 60s: the afterEach drain loop (3x setTimeout(0)) can stall
+    // testTimeout matches hookTimeout: under CPU throttling (background agents, indexing),
+    // jsdom initialization and test execution slow dramatically. Tests that take <5ms normally
+    // can hit 30s+ under load. 60s gives enough headroom without hiding real hangs.
+    testTimeout: 60000,
+    // hookTimeout is 60s: the afterEach drain loop (3x setTimeout(0)) can stall
     // under V8 GC pressure in a long-running vmThreads worker — 30s is too tight.
     hookTimeout: 60000,
     // pool: "vmThreads" + fileParallelism: false solves both the worker startup timeout and
