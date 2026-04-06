@@ -9,6 +9,10 @@ describe("DiffBanner", () => {
     // the fake interval. If vi.useRealTimers() runs first, the orphaned fake
     // interval survives and React 19's act() spin-waits on it indefinitely.
     cleanup();
+    // Drain any remaining fake-timer callbacks (e.g. React scheduler work queued
+    // via fake setTimeout) before restoring real timers. Without this, orphaned
+    // fake callbacks survive into the next test file and cause act() spin-waits.
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 
