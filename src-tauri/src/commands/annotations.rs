@@ -46,6 +46,10 @@ fn insert_highlight(
     suffix_context: Option<&str>,
     now: i64,
 ) -> Result<(), String> {
+    if text_content.trim().is_empty() {
+        return Err("empty highlight text is not allowed".to_string());
+    }
+
     conn.execute(
         "INSERT INTO highlights
             (id, document_id, color, text_content, from_pos, to_pos,
@@ -91,6 +95,7 @@ fn remove_highlight(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 fn insert_margin_note(
     conn: &Connection,
     id: &str,
@@ -98,10 +103,21 @@ fn insert_margin_note(
     content: &str,
     now: i64,
 ) -> Result<(), String> {
+    insert_margin_note_with_intent(conn, id, highlight_id, content, "correction", now)
+}
+
+fn insert_margin_note_with_intent(
+    conn: &Connection,
+    id: &str,
+    highlight_id: &str,
+    content: &str,
+    intent: &str,
+    now: i64,
+) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO margin_notes (id, highlight_id, content, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![id, highlight_id, content, now, now],
+        "INSERT INTO margin_notes (id, highlight_id, content, intent, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![id, highlight_id, content, intent, now, now],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -110,7 +126,7 @@ fn insert_margin_note(
 fn fetch_margin_notes(conn: &Connection, document_id: &str) -> Result<Vec<MarginNote>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT mn.id, mn.highlight_id, mn.content, mn.created_at, mn.updated_at
+            "SELECT mn.id, mn.highlight_id, mn.content, mn.intent, mn.created_at, mn.updated_at
              FROM margin_notes mn
              JOIN highlights h ON mn.highlight_id = h.id
              WHERE h.document_id = ?1
@@ -258,12 +274,19 @@ pub async fn create_margin_note(
     state: tauri::State<'_, DbPool>,
     highlight_id: String,
     content: String,
+    intent: Option<String>,
 ) -> Result<MarginNote, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let id = Uuid::new_v4().to_string();
     let now = now_millis();
+    let intent = intent.unwrap_or_else(|| "correction".to_string());
+    if !matches!(intent.as_str(), "correction" | "note" | "prompt") {
+        return Err(format!(
+            "invalid note intent: {intent:?} (expected \"correction\", \"note\", or \"prompt\")"
+        ));
+    }
 
-    insert_margin_note(&conn, &id, &highlight_id, &content, now)?;
+    insert_margin_note_with_intent(&conn, &id, &highlight_id, &content, &intent, now)?;
 
     let doc_id = document_id_for_highlight(&conn, &highlight_id)?;
     touch_document(&conn, &doc_id)?;
@@ -272,6 +295,7 @@ pub async fn create_margin_note(
         id,
         highlight_id,
         content,
+        intent,
         created_at: now,
         updated_at: now,
     })
@@ -372,6 +396,7 @@ mod tests {
              id TEXT PRIMARY KEY,
              highlight_id TEXT NOT NULL REFERENCES highlights(id) ON DELETE CASCADE,
              content TEXT NOT NULL,
+             intent TEXT NOT NULL DEFAULT 'correction' CHECK(intent IN ('correction', 'note', 'prompt')),
              created_at INTEGER NOT NULL,
              updated_at INTEGER NOT NULL
          );
@@ -445,6 +470,18 @@ mod tests {
         let highlights = fetch_highlights(&conn, "doc1").unwrap();
         assert_eq!(highlights.len(), 1);
         assert_eq!(highlights[0].document_id, "doc1");
+    }
+
+    #[test]
+    fn insert_highlight_rejects_whitespace_text_content() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let err = insert_highlight(&conn, "h1", "doc1", "yellow", " \n\t", 0, 3, None, None, 1000)
+            .expect_err("whitespace-only highlights should be rejected");
+
+        assert!(err.contains("empty highlight text"));
+        assert_eq!(highlight_count(&conn), 0);
     }
 
     #[test]

@@ -209,6 +209,12 @@ export function ExportAnnotationsPopover({
               {result.noteCount > 0 && (
                 <> · {result.noteCount} {result.noteCount === 1 ? "note" : "notes"}</>
               )}
+              {result.correctionCount !== undefined && (
+                <>
+                  {" "}· {result.correctionCount} {result.correctionCount === 1 ? "correction" : "corrections"}
+                  {result.promptCount ? `, ${result.promptCount} ${result.promptCount === 1 ? "prompt" : "prompts"} skipped` : ""}
+                </>
+              )}
             </div>
 
             {/* Snippets */}

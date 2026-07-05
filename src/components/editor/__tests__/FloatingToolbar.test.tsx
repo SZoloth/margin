@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, act } from "@testing-library/react";
+import { fireEvent, render, act } from "@testing-library/react";
 
 // @hugeicons/core-free-icons is a 41k-line CJS bundle — loading it in a worker thread
 // causes a startup timeout before any test code runs. Mock both packages so only the
@@ -174,6 +174,41 @@ describe("FloatingToolbar", () => {
       // Either way, it should use CSS variables, not hardcoded cubic-bezier
       expect(toolbar.style.transition).toMatch(/var\(--ease-(entrance|exit)\)/);
       expect(toolbar.style.transition).not.toContain("cubic-bezier");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("passes the mousedown selection range to the note action", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor(true);
+      (editor.state.selection as { from: number; to: number }).from = 3;
+      (editor.state.selection as { from: number; to: number }).to = 8;
+      const onNote = vi.fn();
+
+      render(
+        <FloatingToolbar
+          editor={editor}
+          onHighlight={vi.fn()}
+          onNote={onNote}
+        />,
+      );
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.runAllTimers();
+      });
+
+      const noteButton = document.body.querySelector("[aria-label='Add note']") as HTMLButtonElement;
+      expect(noteButton).toBeTruthy();
+
+      fireEvent.mouseDown(noteButton);
+      (editor.state.selection as { from: number; to: number }).from = 4;
+      (editor.state.selection as { from: number; to: number }).to = 5;
+      fireEvent.click(noteButton);
+
+      expect(onNote).toHaveBeenCalledWith({ from: 3, to: 8 });
     } finally {
       vi.useRealTimers();
     }

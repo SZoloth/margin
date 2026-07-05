@@ -9,7 +9,7 @@ import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 interface FloatingToolbarProps {
   editor: Editor | null;
   onHighlight: (color?: string) => void;
-  onNote: () => void;
+  onNote: (range?: { from: number; to: number }) => void;
   defaultColor?: string;
 }
 
@@ -24,6 +24,14 @@ export function FloatingToolbar({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [isFlipped, setIsFlipped] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const noteSelectionRef = useRef<{ from: number; to: number } | null>(null);
+
+  const currentSelectionRange = useCallback(() => {
+    if (!editor) return null;
+    const { from, to, empty } = editor.state.selection;
+    if (empty || from === to) return null;
+    return { from, to };
+  }, [editor]);
 
   const updatePosition = useCallback(() => {
     if (!editor) return;
@@ -185,7 +193,13 @@ export function FloatingToolbar({
       {/* Note */}
       <button
         type="button"
-        onClick={onNote}
+        onMouseDown={() => {
+          noteSelectionRef.current = currentSelectionRange();
+        }}
+        onClick={() => {
+          onNote(noteSelectionRef.current ?? currentSelectionRange() ?? undefined);
+          noteSelectionRef.current = null;
+        }}
         className="toolbar-btn"
         aria-label="Add note"
       >

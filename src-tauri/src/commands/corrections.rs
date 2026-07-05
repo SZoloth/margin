@@ -4,6 +4,7 @@ use crate::db::models::CorrectionInput;
 use rusqlite::Connection;
 use std::fs;
 use std::io::Write;
+use std::path::Path;
 use std::time::SystemTime;
 use uuid::Uuid;
 
@@ -47,6 +48,13 @@ pub struct CorrectionDetail {
     pub suggested_edit: Option<String>,
     pub accepted_at: Option<i64>,
     pub rationale: Option<String>,
+}
+
+#[derive(Debug)]
+struct PersistCorrectionsOutcome {
+    session_id: String,
+    correction_count: usize,
+    prompt_count: usize,
 }
 
 fn sanitize_filename_component(input: &str) -> String {
@@ -138,34 +146,100 @@ pub async fn persist_corrections(
     document_path: Option<String>,
     export_date: String,
 ) -> Result<String, String> {
+    let corrections_dir = dirs::home_dir()
+        .ok_or("Could not determine home directory")?
+        .join(".margin")
+        .join("corrections");
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let outcome = persist_corrections_inner(
+        &conn,
+        &corrections,
+        &document_id,
+        document_title.as_deref(),
+        &document_source,
+        document_path.as_deref(),
+        &export_date,
+        &corrections_dir,
+    )?;
+    let _ = (outcome.correction_count, outcome.prompt_count);
+    Ok(outcome.session_id)
+}
+
+fn persist_corrections_inner(
+    conn: &Connection,
+    corrections: &[CorrectionInput],
+    document_id: &str,
+    document_title: Option<&str>,
+    document_source: &str,
+    document_path: Option<&str>,
+    export_date: &str,
+    corrections_dir: &Path,
+) -> Result<PersistCorrectionsOutcome, String> {
     let session_id = Uuid::new_v4().to_string();
     let now = now_millis();
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
     let safe_export_date = sanitize_filename_component(&export_date);
-    let mut jsonl_file = dirs::home_dir()
-        .map(|home| home.join(".margin").join("corrections"))
-        .and_then(|dir| {
-            if let Err(e) = fs::create_dir_all(&dir) {
-                eprintln!("Failed to create corrections directory: {e}");
-                return None;
-            }
-            Some(dir.join(format!("corrections-{}.jsonl", safe_export_date)))
-        })
-        .and_then(|jsonl_path| {
-            fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&jsonl_path)
-                .map_err(|e| {
-                    eprintln!("Failed to open corrections JSONL file: {e}");
-                    e
-                })
-                .ok()
-        });
+    fs::create_dir_all(corrections_dir)
+        .map_err(|e| format!("Failed to create corrections directory: {e}"))?;
+    let mut jsonl_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(corrections_dir.join(format!("corrections-{}.jsonl", safe_export_date)))
+        .map_err(|e| format!("Failed to open corrections JSONL file: {e}"))?;
+    let mut prompt_file: Option<fs::File> = None;
+    let mut correction_count = 0usize;
+    let mut prompt_count = 0usize;
 
-    for input in &corrections {
+    for input in corrections {
+        match input.intent.as_str() {
+            "correction" => {
+                if input.original_text.trim().is_empty() {
+                    return Err("empty original_text is not allowed for corrections".to_string());
+                }
+            }
+            "note" => continue,
+            "prompt" => {
+                if prompt_file.is_none() {
+                    prompt_file = Some(
+                        fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(corrections_dir.join(format!("prompts-{}.jsonl", safe_export_date)))
+                            .map_err(|e| format!("Failed to open prompts JSONL file: {e}"))?,
+                    );
+                }
+                if let Some(file) = prompt_file.as_mut() {
+                    let jsonl_record = serde_json::json!({
+                        "highlight_id": input.highlight_id,
+                        "session_id": session_id,
+                        "original_text": input.original_text,
+                        "prefix_context": input.prefix_context,
+                        "suffix_context": input.suffix_context,
+                        "extended_context": input.extended_context,
+                        "notes": input.notes,
+                        "document_id": document_id,
+                        "document_title": document_title,
+                        "document_source": document_source,
+                        "document_path": document_path,
+                        "highlight_color": input.highlight_color,
+                        "writing_type": input.writing_type,
+                        "intent": input.intent,
+                        "exported_at": now,
+                    });
+                    writeln!(file, "{}", jsonl_record)
+                        .map_err(|e| format!("Failed to append prompts JSONL record: {e}"))?;
+                }
+                prompt_count += 1;
+                continue;
+            }
+            other => {
+                return Err(format!(
+                    "invalid correction intent: {other:?} (expected \"correction\", \"note\", or \"prompt\")"
+                ));
+            }
+        }
+
         let id = Uuid::new_v4().to_string();
         let notes_json = serde_json::to_string(&input.notes).map_err(|e| e.to_string())?;
 
@@ -202,10 +276,10 @@ pub async fn persist_corrections(
             ],
         )
         .map_err(|e| e.to_string())?;
+        correction_count += 1;
 
         // Append JSONL record
-        if let Some(file) = jsonl_file.as_mut() {
-            let jsonl_record = serde_json::json!({
+        let jsonl_record = serde_json::json!({
             "highlight_id": input.highlight_id,
             "session_id": session_id,
             "original_text": input.original_text,
@@ -220,14 +294,12 @@ pub async fn persist_corrections(
             "highlight_color": input.highlight_color,
             "writing_type": input.writing_type,
             "polarity": input.polarity,
+            "intent": input.intent,
             "exported_at": now,
         });
 
-            if let Err(e) = writeln!(file, "{}", jsonl_record) {
-                eprintln!("Failed to append corrections JSONL record: {e}");
-                jsonl_file = None;
-            }
-        }
+        writeln!(jsonl_file, "{}", jsonl_record)
+            .map_err(|e| format!("Failed to append corrections JSONL record: {e}"))?;
 
         // Auto-synthesize writing rule from correction notes
         if !input.notes.is_empty() {
@@ -244,11 +316,16 @@ pub async fn persist_corrections(
     }
 
     tx.commit().map_err(|e| e.to_string())?;
-    if let Some(mut file) = jsonl_file {
+    let _ = jsonl_file.flush();
+    if let Some(mut file) = prompt_file {
         let _ = file.flush();
     }
 
-    Ok(session_id)
+    Ok(PersistCorrectionsOutcome {
+        session_id,
+        correction_count,
+        prompt_count,
+    })
 }
 
 /// Auto-synthesize a writing rule from a correction's notes.
@@ -1070,6 +1147,116 @@ mod tests {
         let conn = setup_full_db();
         insert_correction(&conn, "nonexistent-highlight", "some text", r#"["note"]"#);
         assert_eq!(count_corrections(&conn).unwrap(), 1);
+    }
+
+    #[test]
+    fn persist_corrections_filters_by_intent_and_writes_prompt_sidecar() {
+        let conn = setup_full_db();
+        let out_dir = tempfile::tempdir().unwrap();
+        let inputs = vec![
+            CorrectionInput {
+                highlight_id: "h1".to_string(),
+                original_text: "bad phrase".to_string(),
+                prefix_context: None,
+                suffix_context: None,
+                extended_context: None,
+                notes: vec!["AI filler".to_string()],
+                highlight_color: "yellow".to_string(),
+                writing_type: Some("general".to_string()),
+                polarity: Some("corrective".to_string()),
+                feedback_type: None,
+                intent: "correction".to_string(),
+                suggested_edit: None,
+                rationale: None,
+            },
+            CorrectionInput {
+                highlight_id: "h2".to_string(),
+                original_text: "research request".to_string(),
+                prefix_context: None,
+                suffix_context: None,
+                extended_context: None,
+                notes: vec!["Turn this into a prompt".to_string()],
+                highlight_color: "blue".to_string(),
+                writing_type: Some("general".to_string()),
+                polarity: None,
+                feedback_type: None,
+                intent: "prompt".to_string(),
+                suggested_edit: None,
+                rationale: None,
+            },
+            CorrectionInput {
+                highlight_id: "h3".to_string(),
+                original_text: "reader thought".to_string(),
+                prefix_context: None,
+                suffix_context: None,
+                extended_context: None,
+                notes: vec!["Save this thought".to_string()],
+                highlight_color: "green".to_string(),
+                writing_type: Some("general".to_string()),
+                polarity: None,
+                feedback_type: None,
+                intent: "note".to_string(),
+                suggested_edit: None,
+                rationale: None,
+            },
+        ];
+
+        let outcome = persist_corrections_inner(
+            &conn,
+            &inputs,
+            "doc1",
+            Some("Test"),
+            "file",
+            Some("/tmp/test.md"),
+            "2026-07-05",
+            out_dir.path(),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.correction_count, 1);
+        assert_eq!(outcome.prompt_count, 1);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+
+        let prompt_sidecar = out_dir.path().join("prompts-2026-07-05.jsonl");
+        let sidecar = fs::read_to_string(prompt_sidecar).unwrap();
+        assert!(sidecar.contains("Turn this into a prompt"));
+        assert!(!sidecar.contains("Save this thought"));
+    }
+
+    #[test]
+    fn persist_corrections_rejects_empty_original_text() {
+        let conn = setup_full_db();
+        let out_dir = tempfile::tempdir().unwrap();
+        let inputs = vec![CorrectionInput {
+            highlight_id: "h1".to_string(),
+            original_text: " \n\t".to_string(),
+            prefix_context: None,
+            suffix_context: None,
+            extended_context: None,
+            notes: vec!["This would become garbage".to_string()],
+            highlight_color: "yellow".to_string(),
+            writing_type: Some("general".to_string()),
+            polarity: Some("corrective".to_string()),
+            feedback_type: None,
+            intent: "correction".to_string(),
+            suggested_edit: None,
+            rationale: None,
+        }];
+
+        let err = persist_corrections_inner(
+            &conn,
+            &inputs,
+            "doc1",
+            Some("Test"),
+            "file",
+            Some("/tmp/test.md"),
+            "2026-07-05",
+            out_dir.path(),
+        )
+        .expect_err("empty correction text should be rejected");
+
+        assert!(err.contains("empty original_text"));
+        assert_eq!(count_corrections(&conn).unwrap(), 0);
     }
 
     // --- writing_type tests ---

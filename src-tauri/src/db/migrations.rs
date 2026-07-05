@@ -76,6 +76,7 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
             id TEXT PRIMARY KEY,
             highlight_id TEXT NOT NULL REFERENCES highlights(id) ON DELETE CASCADE,
             content TEXT NOT NULL,
+            intent TEXT NOT NULL DEFAULT 'correction' CHECK(intent IN ('correction', 'note', 'prompt')),
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
         );
@@ -156,6 +157,8 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add feedback_type column to corrections
     migrate_corrections_add_feedback_type(&conn)?;
 
+    // Migration: add intent column to margin notes
+    migrate_margin_notes_add_intent(&conn)?;
 
     // Migration: add suggested_edit and accepted_at columns to corrections
     migrate_corrections_add_suggested_edit(&conn)?;
@@ -1391,6 +1394,25 @@ fn migrate_corrections_add_feedback_type(conn: &Connection) -> Result<(), Box<dy
             "ALTER TABLE corrections ADD COLUMN feedback_type TEXT CHECK(feedback_type IN ({check_values}));
              CREATE INDEX IF NOT EXISTS idx_corrections_feedback_type ON corrections(feedback_type);"
         ))?;
+    }
+
+    Ok(())
+}
+
+fn migrate_margin_notes_add_intent(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(margin_notes)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "intent")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE margin_notes ADD COLUMN intent TEXT NOT NULL DEFAULT 'correction' CHECK(intent IN ('correction', 'note', 'prompt'));",
+        )?;
     }
 
     Ok(())

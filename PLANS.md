@@ -7,55 +7,57 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Finish `SAM-134` from takeover state now that the anchor-safe rework is committed locally:
-
-- keep the Linear workpad aligned with the real PR/branch state
-- publish the highlight-anchored Accept fix and regression tests to PR `#33`
-- sync the branch with `origin/main` without losing the active task memory
-- only merge if the updated PR state is still legitimately ready
+Execute `plans/repair-spec-2026-07.md` on branch `fix/loop-repair-2026-07`.
 
 ### Outcome
 
-PR `#33` contains both the original inline Accept feature and the follow-up safety fix, the workpad reflects that updated branch state, and the issue ends in the correct final workflow state.
+The July repair P0s are implemented with failing-test-first evidence, verified locally, and reported in `plans/repair-report-2026-07.md`. Commit/push is blocked in this sandbox because `.git` is read-only.
 
 ### Constraints
 
-- Continue from the existing feature branch and attached PR.
-- Do not discard the committed safety rework (`a2349e7`) while resolving the `origin/main` sync.
-- Keep session-memory files accurate to the current task even though `origin/main` brought unrelated active-work context for another ticket.
-- Do not overwrite unrelated uncommitted user work.
+- Work only on `fix/loop-repair-2026-07`.
+- Implement P0 fixes first; P1 only after all P0s are verified.
+- Write a failing test before each fix.
+- Stop and write `plans/repair-bounceback.md` if a spec bounce-back trigger or discard condition is hit.
+- Do not touch anything under `mcp/scripts/`.
+- Run all four required quality gates before committing:
+  - `cargo check --manifest-path src-tauri/Cargo.toml`
+  - `cargo test --manifest-path src-tauri/Cargo.toml`
+  - `pnpm tsc --noEmit`
+  - `pnpm test`
+- Stage only files changed for this repair.
 
 ### Steps
 
-1. Resolve the `origin/main` merge conflict in `PLANS.md` and `THEORY.MD` in favor of the live `SAM-134` task context.
-2. Complete the merge from `origin/main` and rerun the required validation on the merged branch state.
-3. Push the updated branch to PR `#33`.
-4. Re-check PR checks/review state and choose the safe final ticket outcome:
-   - merge if the updated branch is still legitimately merge-ready
-   - otherwise move the issue out of `Merging` with explicit evidence
+1. P0-1: add note intent taxonomy, schema migration, export filtering, prompt sidecar, summary counts, and tests.
+2. P0-2: fix note-button selection capture, reject whitespace highlights, reject empty correction text, surface failures, and tests.
+3. P0-3: resolve `margin` CLI robustly for GUI PATH, surface auto-export failures, log failures, and tests.
+4. Run the required quality gates.
+5. Write the repair report with exact outputs.
+6. Commit and push the branch.
 
-## Decisions
+### Decisions
 
-- The editor mutation remains centralized in `src/lib/apply-accepted-correction.ts`.
-- Accept only persists to the database after the targeted editor mutation succeeds.
-- Session-memory files should describe the active ticket, not whichever unrelated task most recently landed on `main`.
+- The three note intents are fixed by spec: `correction`, `note`, and `prompt`.
+- Only `correction` notes become correction rows.
+- `prompt` notes are skipped from corrections and written to a prompt sidecar.
+- Silent pipeline failures should become visible app errors and log entries.
 
-## Surprises
+### Surprises
 
-- The branch sync conflict was limited to `PLANS.md` and `THEORY.MD`; product code merged cleanly.
-- `origin/main` now includes unrelated research-task working-memory updates, which is why these files conflicted.
-- The earlier environment blockers were stale: GitHub access, commits, and `pnpm tauri dev` all work in this session.
+- The working tree started with many untracked files, including `mcp/scripts/`; those are treated as pre-existing and must not be staged.
+- Several open branches touch high-collision files. Keep high-collision edits narrow and bounce if an actual hunk conflict appears.
 
-## Verification
+### Verification
 
-- `pnpm exec vitest run src/components/style-memory/__tests__/CorrectionsTab.test.tsx src/lib/__tests__/apply-accepted-correction.test.tsx`
-- `pnpm tsc --noEmit`
-- `cargo check --manifest-path src-tauri/Cargo.toml`
-- `pnpm test`
-- `cargo test --manifest-path src-tauri/Cargo.toml`
-- `pnpm tauri dev` launched successfully through Vite and `target/debug/margin`, then was stopped cleanly after startup verification
+- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml` passed: 228 Rust tests, 0 failed; doc-tests passed.
+- `pnpm tsc --noEmit` passed with no output.
+- `pnpm test` passed: 42 files, 289 tests.
+- Targeted failing-test-first evidence and passing reruns are recorded in `plans/repair-report-2026-07.md`.
 
-## Handoff
+### Handoff
 
-- The local rework is already committed as `a2349e7`.
-- Remaining work is purely branch/PR/ticket synchronization.
+P0 repair completed and verified. P1 was not attempted in this pass to keep the medium-risk data-path diff reviewable after all four P0 gates passed.
+
+Commit/push blocker: `git add ...` failed with `fatal: Unable to create '/Users/samzoloth/Projects/margin/.git/index.lock': Operation not permitted`. No files are staged.

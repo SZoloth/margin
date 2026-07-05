@@ -16,6 +16,7 @@ export interface MarginNote {
   id: string;
   highlight_id: string;
   content: string;
+  intent: "correction" | "note" | "prompt";
   created_at: number;
   updated_at: number;
 }
@@ -30,6 +31,7 @@ export interface CorrectionInput {
   highlight_color: string;
   writing_type: string | null;
   polarity: "positive" | "corrective" | null;
+  intent: "correction" | "note" | "prompt";
   suggested_edit?: string | null;
   rationale?: string | null;
 }

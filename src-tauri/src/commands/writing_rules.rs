@@ -2,6 +2,9 @@ use crate::commands::corrections::CorrectionRecord;
 use crate::commands::now_millis;
 use crate::db::migrations::DbPool;
 use rusqlite::Connection;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -719,6 +722,63 @@ pub async fn get_writing_rules(
     fetch_writing_rules(&conn, writing_type.as_deref()).map_err(|e| e.to_string())
 }
 
+fn margin_app_log(message: &str) {
+    let Some(home) = dirs::home_dir() else {
+        return;
+    };
+    let log_path = home.join(".margin").join("margin-app.log");
+    if let Some(parent) = log_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = writeln!(file, "[{}] {message}", now_millis());
+    }
+}
+
+fn resolve_margin_cli_from_path(home: &Path, path: &str) -> Result<PathBuf, String> {
+    let local_candidate = home.join(".local").join("bin").join("margin");
+    if local_candidate.is_file() {
+        return Ok(local_candidate);
+    }
+
+    for dir in std::env::split_paths(path) {
+        let candidate = dir.join("margin");
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(format!(
+        "Could not resolve margin CLI. Checked $HOME/.local/bin/margin and PATH={path:?}."
+    ))
+}
+
+fn resolve_margin_cli() -> Result<PathBuf, String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    let path = std::env::var("PATH").unwrap_or_default();
+    if let Ok(found) = resolve_margin_cli_from_path(&home, &path) {
+        return Ok(found);
+    }
+
+    let output = std::process::Command::new("/bin/zsh")
+        .args(["-lc", "command -v margin"])
+        .output()
+        .map_err(|e| format!("Could not resolve margin CLI via login shell: {e}"))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let candidate = PathBuf::from(stdout.trim());
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(format!(
+        "Could not resolve margin CLI. Checked $HOME/.local/bin/margin, PATH, and login shell. {stderr}"
+    ))
+}
+
 /// Delegate file generation to the `margin` CLI (single-writer pattern).
 /// The CLI reads from SQLite and writes both ~/.margin/writing-rules.md
 /// and ~/.claude/hooks/writing_guard.py.
@@ -726,15 +786,25 @@ fn run_cli_export() -> Result<(String, String), String> {
     let home = dirs::home_dir().ok_or("Could not determine home directory")?;
     let md_path = home.join(".margin").join("writing-rules.md");
     let hook_path = home.join(".claude").join("hooks").join("writing_guard.py");
+    let margin_cli = resolve_margin_cli().map_err(|e| {
+        margin_app_log(&format!("Writing rules export failed: {e}"));
+        e
+    })?;
 
-    let output = std::process::Command::new("margin")
+    let output = std::process::Command::new(&margin_cli)
         .args(["export", "profile"])
         .output()
-        .map_err(|e| format!("Failed to run `margin export profile`: {e}"))?;
+        .map_err(|e| {
+            let message = format!("Failed to run `{}` export profile: {e}", margin_cli.display());
+            margin_app_log(&format!("Writing rules export failed: {message}"));
+            message
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("margin export profile failed: {stderr}"));
+        let message = format!("margin export profile failed: {stderr}");
+        margin_app_log(&format!("Writing rules export failed: {message}"));
+        return Err(message);
     }
 
     Ok((
@@ -1163,6 +1233,16 @@ mod tests {
     fn hook_get_extension_has_single_empty_path_guard() {
         let py = generate_writing_guard_py(&[]);
         assert_eq!(py.matches("if not path:").count(), 1);
+    }
+
+    #[test]
+    fn resolver_returns_typed_error_when_margin_cli_is_missing() {
+        let home = tempfile::tempdir().unwrap();
+        let err = resolve_margin_cli_from_path(home.path(), "/usr/bin:/bin")
+            .expect_err("missing CLI should return an actionable resolver error");
+
+        assert!(err.contains("Could not resolve margin CLI"));
+        assert!(err.contains("$HOME/.local/bin/margin"));
     }
 
     // --- update_rule tests ---

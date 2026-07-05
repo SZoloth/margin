@@ -22,7 +22,7 @@ import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
-import { formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
+import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
@@ -847,14 +847,15 @@ export default function App() {
         }
       } catch (err) {
         console.error("Failed to save highlight:", err, "documentId:", doc.currentDoc.id);
+        setErrorToast({ message: `Could not save highlight: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
       }
     },
     [editor, doc.currentDoc, annotations, settings.defaultHighlightColor, onboarding.step],
   );
 
-  const handleNote = useCallback(async () => {
+  const handleNote = useCallback(async (range?: { from: number; to: number }) => {
     if (!editor) return;
-    const { from, to } = editor.state.selection;
+    const { from, to } = range ?? editor.state.selection;
     if (from === to) return;
 
     // Onboarding: visual-only highlight+note, advance to complete
@@ -912,6 +913,7 @@ export default function App() {
       });
     } catch (err) {
       console.error("Failed to save highlight for note:", err);
+      setErrorToast({ message: `Could not save note highlight: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
     }
   }, [editor, doc.currentDoc, annotations, onboarding.step, settings.defaultHighlightColor]);
 
@@ -1017,33 +1019,23 @@ export default function App() {
       let correctionsSaved = false;
       let correctionsFile = "";
       let attemptedCorrectionPersist = false;
+      let correctionCount = 0;
+      let promptCount = 0;
+      let noteOnlyCount = 0;
 
       if (persistCorrectionsRef.current && highlights.length > 0 && unexportedMarginNotes.length > 0) {
-        const notesByHighlight = new Map<string, string[]>();
-        for (const note of unexportedMarginNotes) {
-          const existing = notesByHighlight.get(note.highlight_id) ?? [];
-          existing.push(note.content);
-          notesByHighlight.set(note.highlight_id, existing);
-        }
-
-        const correctionInputs: CorrectionInput[] = [];
-        for (const h of highlights) {
-          const notes = notesByHighlight.get(h.id);
-          if (!notes || notes.length === 0) continue;
-
-          correctionInputs.push({
-            highlight_id: h.id,
-            original_text: h.text_content,
-            prefix_context: h.prefix_context,
-            suffix_context: h.suffix_context,
-            extended_context: getExtendedContext(editor, h.from_pos, h.to_pos),
-            notes,
-            highlight_color: h.color,
-            writing_type: writingType,
-            polarity: polarityMap.get(h.id) ?? null,
-            rationale: rationaleMap.get(h.id) ?? null,
-          });
-        }
+        const exportInputs = buildCorrectionExportInputs({
+          highlights,
+          marginNotes: unexportedMarginNotes,
+          writingType,
+          polarityMap,
+          rationaleMap,
+          getExtendedContext: (h) => getExtendedContext(editor, h.from_pos, h.to_pos),
+        });
+        const correctionInputs: CorrectionInput[] = exportInputs.inputs;
+        correctionCount = exportInputs.correctionCount;
+        promptCount = exportInputs.promptCount;
+        noteOnlyCount = exportInputs.noteOnlyCount;
 
         if (correctionInputs.length > 0) {
           attemptedCorrectionPersist = true;
@@ -1061,9 +1053,10 @@ export default function App() {
             correctionsSaved = true;
 
             // Auto-export writing rules after corrections persist
-            exportWritingRules().catch((err: unknown) =>
-              console.error("Auto-export writing rules failed:", err),
-            );
+            exportWritingRules().catch((err: unknown) => {
+              console.error("Auto-export writing rules failed:", err);
+              setErrorToast({ message: `Writing rules export failed: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
+            });
           } catch (err) {
             console.error("Failed to persist corrections:", err);
           }
@@ -1111,6 +1104,9 @@ export default function App() {
         sentToClaude: mcpResult.sent,
         positiveCount,
         correctiveCount,
+        correctionCount,
+        promptCount,
+        noteOnlyCount,
       };
     },
     [editor, doc.currentDoc, polarityMap, rationaleMap],
@@ -1268,7 +1264,7 @@ export default function App() {
             notes={notes}
             polarity={polarityMap.get(highlight.id) ?? null}
             rationale={rationaleMap.get(highlight.id) ?? null}
-            onAddNote={annotations.createMarginNote}
+            onAddNote={annotations.createMarginNoteWithIntent}
             onUpdateNote={annotations.updateMarginNote}
             onDeleteNote={annotations.deleteMarginNote}
             onDeleteHighlight={handleDeleteHighlight}

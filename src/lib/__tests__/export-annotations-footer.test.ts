@@ -58,6 +58,7 @@ function marginNote(overrides: Partial<MarginNote> = {}): MarginNote {
     id: "n1",
     highlight_id: "h1",
     content: "This needs work",
+    intent: "correction",
     created_at: 1000,
     updated_at: 1000,
     ...overrides,
