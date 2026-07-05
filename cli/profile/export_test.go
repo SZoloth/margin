@@ -142,6 +142,97 @@ func TestGenerateWritingGuardPy(t *testing.T) {
 	}
 }
 
+func TestIsSafeAutoCorrection(t *testing.T) {
+	// These are the substrings that caused the guard to fire on every document.
+	// A single space, common single words, and bare punctuation must be rejected.
+	unsafe := []string{
+		" ",
+		"  ",
+		"doing",
+		"landscape",
+		"Questions",
+		"a mandate",
+		"I learned",
+		"—",
+		"reframed",
+		"that short", // 10 runes, still under the 12-rune floor
+	}
+	for _, s := range unsafe {
+		if isSafeAutoCorrection(s) {
+			t.Errorf("isSafeAutoCorrection(%q) = true, want false (would over-fire)", s)
+		}
+	}
+
+	// Distinctive multi-word phrases are specific enough to substring-match safely.
+	safe := []string{
+		"The most useful thing I did last year had nothing to do with roadmaps.",
+		"is the kind of problem I want to be working on.",
+		"They stop filtering what they tell you.",
+	}
+	for _, s := range safe {
+		if !isSafeAutoCorrection(s) {
+			t.Errorf("isSafeAutoCorrection(%q) = false, want true (distinctive phrase)", s)
+		}
+	}
+}
+
+func TestGenerateWritingGuardPyFiltersAndScopes(t *testing.T) {
+	rules := []db.WritingRule{
+		// A garbage auto-correction that would match every document.
+		{Category: "auto-synthesized", Severity: "must-fix", RuleText: "remove space", ExampleBefore: ptr(" ")},
+		{Category: "auto-synthesized", Severity: "must-fix", RuleText: "vague", ExampleBefore: ptr("doing")},
+		// A legit, distinctive auto-correction that should survive.
+		{Category: "auto-synthesized", Severity: "must-fix", RuleText: "kill hyperbole",
+			ExampleBefore: ptr("The most useful thing I did last year had nothing to do with roadmaps.")},
+		// A letterless slop "pattern" (bare em dash) that would regex-match everything.
+		{Category: "ai-slop", Severity: "must-fix", RuleText: "no em dash", ExampleBefore: ptr("—")},
+	}
+
+	py := GenerateWritingGuardPy(rules)
+
+	// PEP 263 encoding cookie must be on line 2 so interpreters that default
+	// source decoding to ASCII (Apple python3 under a C locale) don't choke on
+	// the non-ASCII em-dash bytes in the rule data.
+	guardLines := strings.SplitN(py, "\n", 3)
+	if len(guardLines) < 2 || !strings.Contains(guardLines[1], "coding: utf-8") {
+		t.Errorf("generated hook missing utf-8 encoding cookie on line 2; got line 2 = %q", func() string {
+			if len(guardLines) >= 2 {
+				return guardLines[1]
+			}
+			return ""
+		}())
+	}
+
+	// Path scoping must be present so internal docs are advisory-only.
+	for _, marker := range []string{"PUBLISHED_PATH_MARKERS", "def is_published", "advisory"} {
+		if !strings.Contains(py, marker) {
+			t.Errorf("generated hook missing %q — internal/published scoping absent", marker)
+		}
+	}
+
+	// The distinctive correction survives; the garbage ones are filtered out.
+	if !strings.Contains(py, "The most useful thing I did last year") {
+		t.Error("distinctive auto-correction was dropped")
+	}
+	autoStart := strings.Index(py, "AUTO_CORRECTIONS = json.loads(")
+	autoEnd := strings.Index(py, "def get_extension")
+	if autoStart == -1 || autoEnd == -1 || autoEnd < autoStart {
+		t.Fatal("could not locate AUTO_CORRECTIONS blob in generated hook")
+	}
+	autoBlob := py[autoStart:autoEnd]
+	if strings.Contains(autoBlob, `["doing"`) || strings.Contains(autoBlob, `[" "`) {
+		t.Error("garbage auto-correction (\" \" or \"doing\") leaked into AUTO_CORRECTIONS")
+	}
+	// The letterless em-dash slop pattern must not appear as a slop pattern.
+	slopStart := strings.Index(py, "SLOP_PATTERNS = json.loads(")
+	slopEnd := strings.Index(py, "HEADING_PATTERNS = json.loads(")
+	if slopStart != -1 && slopEnd != -1 && slopEnd > slopStart {
+		if strings.Contains(py[slopStart:slopEnd], `"—"`) {
+			t.Error("letterless em-dash slop pattern leaked into SLOP_PATTERNS")
+		}
+	}
+}
+
 func TestCategoryLabel(t *testing.T) {
 	tests := []struct {
 		input    string
