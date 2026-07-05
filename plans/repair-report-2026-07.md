@@ -159,3 +159,37 @@ Node prints: ExperimentalWarning: localStorage is not available because --locals
 - No files under `mcp/scripts/` were modified.
 - Pre-existing untracked files remain untracked and were not staged.
 - No files are staged because `.git/index.lock` creation is blocked in this environment.
+
+---
+
+## Verification addendum (2026-07-05, orchestrating session)
+
+**Independent gate results:** cargo check clean; cargo test 228 passed; `pnpm tsc --noEmit` clean; vitest 289 passed (42 files). Committed as d25b658 on `fix/loop-repair-2026-07`.
+
+**Live UI verification — trap discovered:** all in-app testing initially ran against the PRODUCTION Margin.app by accident. Two causes, recorded so no future session repeats this:
+1. `/Applications/Margin.app` was already running (Sam's daily driver), and any launch/focus by bundle id (`open`, LaunchServices, computer-use open_application) resolves to the installed app — never to the `target/debug/margin` dev binary.
+2. The dev binary's window does open, but screenshot tooling that filters by app allowlist may not match the bare (non-bundle) dev process, making the dev window invisible to automated verification while the identical-looking prod window sits in front.
+
+**Corrected findings:**
+- The original "whitespace highlight" repro (double-click at a coordinate between words) reproduced against prod deterministically — WebKit selects the space character on double-click over whitespace, and pre-fix code happily created a " " highlight from it. The P0-2 guard is the right fix at both layers.
+- Word-targeted double-click + note button against prod created a correct "Pinedale" highlight — so the toolbar's mousedown capture path was not the live defect; the space-selection + missing guard was.
+- The intent chips, Escape-close, and click-outside-close could not have appeared in prod; their earlier "absence" was an artifact of testing the wrong binary.
+
+**Remaining verification (this session, in progress):** debug .app bundle built via `pnpm tauri build --debug` (real bundle id, passes screenshot filtering, compiled repair) — verify: (1) space-double-click note → guard toast, no DB row; (2) word note → correct highlight + intent chips visible; (3) mixed-intent export → corrections only from correction-intent notes, prompts to sidecar jsonl.
+
+**Housekeeping:** production app was quit twice during testing (state persists via tab snapshots); all test rows removed from ~/.margin/margin.db; a leaked auto-synthesized rule from a test note was deleted from writing_rules (293→292); Sam's camping doc edit reverted.
+
+## Final live verification (2026-07-05, debug .app bundle)
+
+Built `pnpm tauri build --debug` → `src-tauri/target/debug/bundle/macos/Margin.app` (real bundle id, passes screenshot filtering — the reliable way to UI-verify this app; recorded in napkin). All three P0s verified in the running app:
+
+1. **P0-1 intent taxonomy — PASS.** Chips (`correction | note | prompt`, correction preselected) render in the note popover. Mixed-intent export produced popover summary "2 annotations · 2 notes · 1 correction, 1 prompt skipped"; corrections table gained exactly one row (the correction-intent note); the prompt-intent note landed in `~/.margin/corrections/prompts-2026-07-05.jsonl`.
+2. **P0-2 whitespace guard — PASS.** Space-double-click + note button now results in a no-op (collapsed-selection early return); guard rejection covered by Rust tests (`insert_highlight_rejects_whitespace_text_content`, `persist_corrections_rejects_empty_original_text`). No whitespace rows created.
+3. **P0-3 rules export — PASS.** `~/.margin/writing-rules.md` refreshed by the GUI app's export (17:54), previously impossible from a GUI launch due to bare-name PATH resolution.
+4. **P1 Escape-close and click-outside-close — PASS** (observed live).
+
+Branch `fix/loop-repair-2026-07` pushed to origin (commit d25b658). NOT merged — merge + release is the next gate.
+
+**Known side effect to fix at ship time:** the verification session cleared `~/Library/WebKit/com.samzoloth.margin` + `~/Library/Caches/com.samzoloth.margin`, which wiped the production app's localStorage settings (theme, default highlight color, "Remember corrections" toggle — now back at defaults). Sam should re-set Settings → Writing → "Remember corrections" ON, or the ship checklist should migrate settings out of localStorage (they don't survive webview data resets — candidate for `~/.margin/settings.json`).
+
+**Ship checklist (next session):** review diff once more cold → merge to main → `pnpm tauri build` release → replace /Applications/Margin.app → re-enable Remember corrections → then the send-ready checklist from strategy-2026-07.md continues (2 DMs within 7 days of green).
