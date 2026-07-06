@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { SettingsPage } from "../SettingsPage";
 import { DEFAULT_SETTINGS } from "@/hooks/useSettings";
 import { TestRunProvider } from "@/hooks/useTestRunContext";
@@ -64,25 +63,26 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("radiogroup", { name: "Theme" })).toBeInTheDocument();
   });
 
-  it("switching sections shows correct content", async () => {
-    const user = userEvent.setup();
-
+  it("switching sections shows correct content", () => {
     renderWithProvider(<SettingsPage {...defaultProps} />);
 
-    // Click "Writing" nav item
-    await user.click(screen.getByText("Writing"));
+    // Click "Writing" nav item — fireEvent (sync) avoids async act() hang from
+    // TestRunProvider's listen() resolved-Promise effects in React 19.
+    fireEvent.click(screen.getByText("Writing"));
 
     // Writing section content should now be visible
     expect(screen.getByText("Remember corrections")).toBeInTheDocument();
   });
 
-  it("escape key closes settings", async () => {
+  it("escape key closes settings", () => {
     const onClose = vi.fn();
-    const user = userEvent.setup();
 
     renderWithProvider(<SettingsPage {...defaultProps} onClose={onClose} />);
 
-    await user.keyboard("{Escape}");
+    fireEvent.keyDown(document.activeElement || document.body, {
+      key: "Escape",
+      code: "Escape",
+    });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -93,17 +93,18 @@ describe("SettingsPage", () => {
     expect(heading).toBeInTheDocument();
   });
 
-  it("passes settings and setSetting to section components", async () => {
+  it("passes settings and setSetting to section components", () => {
     const setSetting = vi.fn();
-    const user = userEvent.setup();
 
     renderWithProvider(<SettingsPage {...defaultProps} setSetting={setSetting} />);
 
-    // Click a theme option to verify setSetting is wired through
+    // Click a theme option to verify setSetting is wired through.
+    // Uses fireEvent (sync) instead of userEvent.click() to avoid the async act()
+    // hang caused by TestRunProvider's listen() resolved-Promise effects in React 19.
     const radios = screen.getByRole("radiogroup", { name: "Theme" });
     const darkOption = radios.querySelector("[aria-checked='false']");
     if (darkOption) {
-      await user.click(darkOption);
+      fireEvent.click(darkOption as HTMLElement);
       expect(setSetting).toHaveBeenCalled();
     }
   });

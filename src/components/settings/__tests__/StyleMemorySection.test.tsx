@@ -53,6 +53,10 @@ describe("StyleMemorySection", () => {
   });
 
   it("hides export CTA after successful synthesis export of all pending corrections", async () => {
+    // This test runs ~9s in isolation (handleExportForSynthesis sets window.setTimeout(6000) for
+    // a toast, and React 19's act() drains pending work before resolving). Under system load
+    // (multiple background agent processes) the test has been observed to exceed the 30s global
+    // testTimeout. Explicit timeout gives headroom without masking real regressions.
     vi.mocked(exportCorrectionsJson).mockResolvedValue({ count: 3, highlightIds: ["h1", "h2", "h3"] });
     vi.mocked(writeText).mockResolvedValue(undefined);
     const user = userEvent.setup();
@@ -70,5 +74,5 @@ describe("StyleMemorySection", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /Synthesize .* pending/ })).not.toBeInTheDocument();
     });
-  });
+  }, 60000);
 });
