@@ -24,6 +24,11 @@ export interface UseAnnotationsReturn {
   deleteHighlight: (id: string) => Promise<void>;
 
   createMarginNote: (highlightId: string, content: string) => Promise<MarginNote>;
+  createMarginNoteWithIntent: (
+    highlightId: string,
+    content: string,
+    intent: MarginNote["intent"],
+  ) => Promise<MarginNote>;
   updateMarginNote: (id: string, content: string) => Promise<void>;
   deleteMarginNote: (id: string) => Promise<void>;
 
@@ -100,17 +105,28 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
     onMutate?.();
   }, [onMutate]);
 
-  const createMarginNote = useCallback(
-    async (highlightId: string, content: string): Promise<MarginNote> => {
+  const createMarginNoteWithIntent = useCallback(
+    async (
+      highlightId: string,
+      content: string,
+      intent: MarginNote["intent"],
+    ): Promise<MarginNote> => {
       const note = await invoke<MarginNote>("create_margin_note", {
         highlightId,
         content,
+        intent,
       });
       setMarginNotes((prev) => [...prev, note]);
       onMutate?.();
       return note;
     },
     [onMutate],
+  );
+
+  const createMarginNote = useCallback(
+    (highlightId: string, content: string): Promise<MarginNote> =>
+      createMarginNoteWithIntent(highlightId, content, "correction"),
+    [createMarginNoteWithIntent],
   );
 
   const updateMarginNote = useCallback(
@@ -157,6 +173,7 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
     createHighlight,
     deleteHighlight,
     createMarginNote,
+    createMarginNoteWithIntent,
     updateMarginNote,
     deleteMarginNote,
     clearAnnotations,

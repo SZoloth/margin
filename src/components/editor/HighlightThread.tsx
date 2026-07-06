@@ -3,13 +3,14 @@ import { createPortal } from "react-dom";
 import type { Highlight, MarginNote } from "@/types/annotations";
 
 type Polarity = "positive" | "corrective" | null;
+type NoteIntent = MarginNote["intent"];
 
 interface HighlightThreadProps {
   highlight: Highlight;
   notes: MarginNote[];
   polarity?: Polarity;
   rationale?: string | null;
-  onAddNote: (highlightId: string, content: string) => void;
+  onAddNote: (highlightId: string, content: string, intent: NoteIntent) => void;
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
   onDeleteHighlight: (id: string) => void;
@@ -151,6 +152,7 @@ export function HighlightThread({
   isVisible,
 }: HighlightThreadProps) {
   const [newNoteValue, setNewNoteValue] = useState("");
+  const [newNoteIntent, setNewNoteIntent] = useState<NoteIntent>("correction");
   const [rationaleValue, setRationaleValue] = useState(rationale ?? "");
   const [rationaleSaving, setRationaleSaving] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -246,9 +248,10 @@ export function HighlightThread({
   const handleAddNote = useCallback(() => {
     const trimmed = newNoteValue.trim();
     if (!trimmed) return;
-    onAddNote(highlight.id, trimmed);
+    onAddNote(highlight.id, trimmed, newNoteIntent);
     setNewNoteValue("");
-  }, [newNoteValue, highlight.id, onAddNote]);
+    setNewNoteIntent("correction");
+  }, [newNoteValue, newNoteIntent, highlight.id, onAddNote]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -391,6 +394,30 @@ export function HighlightThread({
 
       {/* New note input */}
       <div className="thread-footer">
+        <div
+          role="radiogroup"
+          aria-label="Note intent"
+          style={{ display: "flex", gap: 4, marginBottom: 6 }}
+        >
+          {(["correction", "note", "prompt"] as const).map((intent) => (
+            <button
+              key={intent}
+              type="button"
+              role="radio"
+              aria-checked={newNoteIntent === intent}
+              onClick={() => setNewNoteIntent(intent)}
+              className="note-action-btn text-[length:var(--text-xs)]"
+              style={{
+                fontWeight: newNoteIntent === intent ? 600 : 400,
+                background: newNoteIntent === intent ? "var(--hover-bg)" : "transparent",
+                borderRadius: "var(--radius-sm)",
+                padding: "1px 6px",
+              }}
+            >
+              {intent}
+            </button>
+          ))}
+        </div>
         <textarea
           ref={textareaRef}
           value={newNoteValue}

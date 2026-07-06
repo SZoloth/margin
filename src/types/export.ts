@@ -7,4 +7,7 @@ export interface ExportResult {
   sentToClaude?: boolean;
   positiveCount?: number;
   correctiveCount?: number;
+  correctionCount?: number;
+  promptCount?: number;
+  noteOnlyCount?: number;
 }

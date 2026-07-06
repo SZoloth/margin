@@ -70,6 +70,7 @@ pub struct MarginNote {
     pub id: String,
     pub highlight_id: String,
     pub content: String,
+    pub intent: String,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -80,10 +81,15 @@ impl MarginNote {
             id: row.get("id")?,
             highlight_id: row.get("highlight_id")?,
             content: row.get("content")?,
+            intent: row.get("intent")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
         })
     }
+}
+
+fn default_correction_intent() -> String {
+    "correction".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,9 +104,10 @@ pub struct CorrectionInput {
     pub writing_type: Option<String>,
     pub polarity: Option<String>,
     pub feedback_type: Option<String>,
+    #[serde(default = "default_correction_intent")]
+    pub intent: String,
     #[serde(default)]
     pub suggested_edit: Option<String>,
     #[serde(default)]
     pub rationale: Option<String>,
 }
-

@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import type { Highlight, MarginNote, CorrectionRecord } from "@/types/annotations";
+import type { Highlight, MarginNote, CorrectionInput, CorrectionRecord } from "@/types/annotations";
 import type { Document } from "@/types/document";
 
 interface ExportParams {
@@ -8,6 +8,76 @@ interface ExportParams {
   highlights: Highlight[];
   marginNotes: MarginNote[];
   polarityMap?: Map<string, "positive" | "corrective">;
+}
+
+export interface BuildCorrectionExportInputsParams {
+  highlights: Highlight[];
+  marginNotes: MarginNote[];
+  writingType: string | null;
+  polarityMap: Map<string, "positive" | "corrective">;
+  rationaleMap: Map<string, string>;
+  getExtendedContext: (highlight: Highlight) => string | null;
+}
+
+export interface BuildCorrectionExportInputsResult {
+  inputs: CorrectionInput[];
+  correctionCount: number;
+  promptCount: number;
+  noteOnlyCount: number;
+}
+
+export function buildCorrectionExportInputs({
+  highlights,
+  marginNotes,
+  writingType,
+  polarityMap,
+  rationaleMap,
+  getExtendedContext,
+}: BuildCorrectionExportInputsParams): BuildCorrectionExportInputsResult {
+  const notesByHighlightAndIntent = new Map<string, Map<MarginNote["intent"], string[]>>();
+  for (const note of marginNotes) {
+    const intent = note.intent ?? "correction";
+    const byIntent = notesByHighlightAndIntent.get(note.highlight_id) ?? new Map<MarginNote["intent"], string[]>();
+    const notes = byIntent.get(intent) ?? [];
+    notes.push(note.content);
+    byIntent.set(intent, notes);
+    notesByHighlightAndIntent.set(note.highlight_id, byIntent);
+  }
+
+  const inputs: CorrectionInput[] = [];
+  let noteOnlyCount = 0;
+
+  for (const h of highlights) {
+    const byIntent = notesByHighlightAndIntent.get(h.id);
+    if (!byIntent) continue;
+
+    for (const intent of ["correction", "prompt"] as const) {
+      const notes = byIntent.get(intent);
+      if (!notes || notes.length === 0) continue;
+      inputs.push({
+        highlight_id: h.id,
+        original_text: h.text_content,
+        prefix_context: h.prefix_context,
+        suffix_context: h.suffix_context,
+        extended_context: getExtendedContext(h),
+        notes,
+        highlight_color: h.color,
+        writing_type: writingType,
+        polarity: intent === "correction" ? polarityMap.get(h.id) ?? null : null,
+        intent,
+        rationale: intent === "correction" ? rationaleMap.get(h.id) ?? null : null,
+      });
+    }
+
+    noteOnlyCount += byIntent.get("note")?.length ?? 0;
+  }
+
+  return {
+    inputs,
+    correctionCount: inputs.filter((input) => input.intent === "correction").length,
+    promptCount: inputs.filter((input) => input.intent === "prompt").length,
+    noteOnlyCount,
+  };
 }
 
 function posToLineNumber(editor: Editor, pos: number): number {
