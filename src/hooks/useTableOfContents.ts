@@ -50,9 +50,12 @@ export function useTableOfContents(editor: Editor | null, documentId?: string | 
       debounceRef.current = setTimeout(extractHeadings, 300);
     };
 
-    editor.on("update", handleUpdate);
+    // "transaction" fires on every dispatch, including external content sets
+    // (setContentExternal uses emitUpdate=false, so "update" alone misses
+    // restored tabs — the TOC stayed empty after app relaunch until first edit).
+    editor.on("transaction", handleUpdate);
     return () => {
-      editor.off("update", handleUpdate);
+      editor.off("transaction", handleUpdate);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [editor, extractHeadings]);
