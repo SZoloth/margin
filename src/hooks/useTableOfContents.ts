@@ -60,13 +60,22 @@ export function useTableOfContents(editor: Editor | null, documentId?: string | 
     };
   }, [editor, extractHeadings]);
 
-  // Immediately re-extract when the active document changes (tab switch)
+  // Re-extract when the active document changes (tab switch / restore).
+  // Content arrives asynchronously and, on app relaunch, can land either
+  // before this hook subscribes or after the first frame — a single rAF
+  // lost that race intermittently. Bounded retries make it deterministic.
   useEffect(() => {
-    if (editor && documentId) {
-      // Small delay to let editor content settle after setContent
-      requestAnimationFrame(() => extractHeadings());
+    if (!editor || !documentId) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    requestAnimationFrame(() => extractHeadings());
+    for (const delay of [250, 750, 1500]) {
+      timers.push(setTimeout(() => extractHeadings(), delay));
     }
-  }, [documentId]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => timers.forEach(clearTimeout);
+    // `editor` must be a dep: on app relaunch the restored documentId can be
+    // set while the editor is still null; without re-running when the editor
+    // arrives, extraction never happens and the TOC stays empty.
+  }, [documentId, editor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Active heading tracking via IntersectionObserver
   useEffect(() => {
