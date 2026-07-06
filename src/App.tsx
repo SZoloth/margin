@@ -939,6 +939,40 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [doc.currentDoc, annotations.isLoaded]);
 
+  // Native menu items. On macOS the menu accelerators consume the shortcut
+  // before the webview sees it, so each id re-dispatches the equivalent
+  // keyboard event — one code path whether invoked by menu or by keyboard.
+  useEffect(() => {
+    const redispatch = (key: string, code: string, shiftKey: boolean) => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { metaKey: true, shiftKey, key, code, bubbles: true, cancelable: true }),
+      );
+    };
+    const unlisten = listen<string>("menu-action", (event) => {
+      switch (event.payload) {
+        case "open-file":
+          redispatch("o", "KeyO", false);
+          break;
+        case "export-annotations":
+          redispatch("E", "KeyE", true);
+          break;
+        case "find":
+          redispatch("f", "KeyF", false);
+          break;
+        case "style-memory":
+          redispatch("m", "KeyM", true);
+          break;
+        case "settings":
+          setSettingsSection(undefined);
+          setShowSettings(true);
+          break;
+      }
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
+
   // Style Memory: Cmd+Shift+M
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

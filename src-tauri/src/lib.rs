@@ -3,6 +3,7 @@ pub mod db;
 pub mod watcher;
 
 use std::sync::Mutex;
+use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 
 use commands::keep_local::HttpClient;
@@ -110,6 +111,73 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title("");
             }
+
+            // Native menu bar. Custom items emit "menu-action" with their id;
+            // the frontend maps ids onto the same handlers the shortcuts use.
+            let settings_item = MenuItemBuilder::with_id("settings", "Settings…")
+                .accelerator("Cmd+,")
+                .build(app)?;
+            let open_item = MenuItemBuilder::with_id("open-file", "Open…")
+                .accelerator("Cmd+O")
+                .build(app)?;
+            let export_item =
+                MenuItemBuilder::with_id("export-annotations", "Export Annotations…")
+                    .accelerator("Cmd+Shift+E")
+                    .build(app)?;
+            let find_item = MenuItemBuilder::with_id("find", "Find in Document…")
+                .accelerator("Cmd+F")
+                .build(app)?;
+            let style_memory_item = MenuItemBuilder::with_id("style-memory", "Style Memory")
+                .accelerator("Cmd+Shift+M")
+                .build(app)?;
+
+            let app_menu = SubmenuBuilder::new(app, "Margin")
+                .about(Some(AboutMetadata::default()))
+                .separator()
+                .item(&settings_item)
+                .separator()
+                .services()
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .item(&open_item)
+                .separator()
+                .item(&export_item)
+                .separator()
+                .close_window()
+                .build()?;
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+            let view_menu = SubmenuBuilder::new(app, "View")
+                .item(&find_item)
+                .item(&style_memory_item)
+                .separator()
+                .fullscreen()
+                .build()?;
+            let window_menu = SubmenuBuilder::new(app, "Window")
+                .minimize()
+                .maximize()
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+                .build()?;
+            app.set_menu(menu)?;
+            app.on_menu_event(|app_handle, event| {
+                let _ = app_handle.emit("menu-action", event.id().as_ref());
+            });
 
             Ok(())
         })
