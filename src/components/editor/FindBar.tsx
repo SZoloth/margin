@@ -54,6 +54,20 @@ export function FindBar({ editor, isOpen, onClose }: FindBarProps) {
     onClose();
   }, [onClose]);
 
+  // Escape closes the bar even when focus has moved back to the document —
+  // previously the bar only listened on its own input, so an open-but-unfocused
+  // find bar was unclosable from the keyboard.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onWindowKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [isOpen, handleClose]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {

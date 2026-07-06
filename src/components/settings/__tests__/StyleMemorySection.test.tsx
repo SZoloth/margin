@@ -37,6 +37,7 @@ vi.mock("@/lib/tauri-commands", () => ({
   markCorrectionsUnsynthesized: vi.fn(),
   seedRulesFromGuide: vi.fn(),
   openStyleGuideDialog: vi.fn(),
+  getWritingRules: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({

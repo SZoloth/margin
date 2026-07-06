@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { exportCorrectionsJson, seedRulesFromGuide, openStyleGuideDialog } from "@/lib/tauri-commands";
+import { exportCorrectionsJson, seedRulesFromGuide, openStyleGuideDialog, getWritingRules } from "@/lib/tauri-commands";
 import type { SeedRulesResult } from "@/lib/tauri-commands";
 import { CorrectionsTab } from "@/components/style-memory/CorrectionsTab";
 import { RulesTab } from "@/components/style-memory/RulesTab";
@@ -144,6 +144,25 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
   const [ruleStats, setRuleStats] = useState({ ruleCount: 0, unreviewedCount: 0 });
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const exportTimeoutRef = useRef<number | null>(null);
+
+  // The header stat is otherwise only populated by RulesTab's own load, which
+  // doesn't run until that tab is opened — the page showed "0 active rules"
+  // over a corpus of hundreds until the user clicked the Rules tab.
+  useEffect(() => {
+    let cancelled = false;
+    getWritingRules()
+      .then((rules) => {
+        if (cancelled) return;
+        setRuleStats({
+          ruleCount: rules.length,
+          unreviewedCount: rules.filter((r) => r.reviewedAt == null).length,
+        });
+      })
+      .catch((err: unknown) => console.error("Failed to load rule stats:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {

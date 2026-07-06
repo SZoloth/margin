@@ -91,7 +91,7 @@
   height: 5px;
   border-radius: 50%;
   background-color: currentColor;
-  opacity: 0.4;
+  opacity: 0.55;
   flex-shrink: 0;
   transition: transform var(--duration-fast) var(--ease-micro), opacity var(--duration-fast) var(--ease-micro);
 }
