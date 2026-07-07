@@ -181,6 +181,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Seed: voice calibration + editorial rules into writing_rules table
     seed_voice_and_editorial_rules(&conn)?;
 
+    // Seed: coaching-prompt prohibitions (DB is the source of truth, not the Go binary)
+    seed_prohibition_rules(&conn)?;
+
     Ok(DbPool::new(conn))
 }
 
@@ -898,6 +901,45 @@ mod tests {
         // Idempotent
         migrate_highlights_add_exported_at(&conn).unwrap();
     }
+
+    #[test]
+    fn seed_prohibition_rules_seeds_once_with_ids() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_writing_rules_add_reviewed_at(&conn).unwrap();
+
+        seed_prohibition_rules(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND source = 'seed-prohibitions-v1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 5);
+
+        // Every prohibition carries a stable block id in notes
+        let missing_id: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND (notes IS NULL OR notes NOT LIKE 'prohibition-id:%')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(missing_id, 0);
+
+        // Re-run is a no-op (sentinel check)
+        seed_prohibition_rules(&conn).unwrap();
+        let count2: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count2, 5);
+    }
 }
 
 /// Adds a `writing_type` column to the corrections table if it doesn't exist.
@@ -1247,6 +1289,91 @@ pub fn seed_voice_and_editorial_rules(conn: &Connection) -> Result<(), Box<dyn s
                 when_to_apply,
                 why,
                 signal_count,
+                now,
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Seeds the coaching-prompt prohibitions into writing_rules so the DB — not
+/// the Go binary — is the source of truth for them. The coaching prompt
+/// renders category='prohibition' rows in its <prohibitions> section; the
+/// notes field carries the stable block id ("prohibition-id:...").
+pub fn seed_prohibition_rules(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let already_seeded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM writing_rules WHERE source = 'seed-prohibitions-v1' LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_seeded {
+        return Ok(());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Each tuple: (id_tag, rule_text, severity, when_to_apply, why, example_before, example_after)
+    let prohibitions: Vec<(&str, &str, &str, Option<&str>, Option<&str>, Option<&str>, Option<&str>)> = vec![
+        ("NEG_PARALLELISM",
+         "Never contrast what something \"isn't\" with what it \"is.\"",
+         "must-fix",
+         Some("Match variants: \"isn't X — it's Y\", \"isn't X. It's Y\", \"not about X — it's about Y\", \"wasn't X — was Y\", \"don't X — Y\", \"more X, not Y\", \"X works. It fails Y\""),
+         Some("Instead: state what it IS directly. Drop the contrast."),
+         Some("The challenge isn't technical — it's organizational"),
+         Some("The challenge is organizational")),
+        ("EM_DASH_LIMIT",
+         "Maximum 2 em dashes (—) per document. Zero is fine. Three or more is a violation.",
+         "must-fix",
+         None,
+         Some("Instead: use periods, commas, or restructure the sentence."),
+         None,
+         None),
+        ("TERMINAL_PUNCTUATION",
+         "Every paragraph of prose must end with a period, question mark, or exclamation point. No trailing off without punctuation.",
+         "must-fix",
+         Some("This applies to email bodies, message bodies, and all prose — not headers or signatures."),
+         None,
+         None,
+         None),
+        ("AI_SLOP",
+         "Never use \"is the kind of X that\" — this is a recognized AI writing tell.",
+         "must-fix",
+         Some("Also avoid: hyperbolic claims like \"the most [adj] thing\", \"thing nobody mentions\", \"the real X is\""),
+         None,
+         Some("This is the kind of problem I want to work on"),
+         Some("I want to work on this problem")),
+        ("COLON_LIMIT",
+         "Maximum 1 colon in prose per document. Use sparingly.",
+         "should-fix",
+         None,
+         None,
+         None,
+         None),
+    ];
+
+    for (id_tag, rule_text, severity, when_to_apply, why, before, after) in &prohibitions {
+        conn.execute(
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, when_to_apply, why, example_before, example_after, notes, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES (?1, 'general', 'prohibition', ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'seed-prohibitions-v1', 10, ?9, ?9, ?9)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                rule_text,
+                severity,
+                when_to_apply,
+                why,
+                before,
+                after,
+                format!("prohibition-id:{id_tag}"),
                 now,
             ],
         )?;
