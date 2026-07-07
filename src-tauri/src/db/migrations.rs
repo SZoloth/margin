@@ -172,6 +172,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add polarity column to writing_rules
     migrate_writing_rules_add_polarity(&conn)?;
 
+    // Migration: add detection_pattern column to writing_rules
+    migrate_writing_rules_add_detection_pattern(&conn)?;
+
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
         "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
@@ -180,6 +183,12 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
 
     // Seed: voice calibration + editorial rules into writing_rules table
     seed_voice_and_editorial_rules(&conn)?;
+
+    // Seed: coaching-prompt prohibitions (DB is the source of truth, not the Go binary)
+    seed_prohibition_rules(&conn)?;
+
+    // Seed: guard v2 detection patterns (prohibition regexes + soft AI-tell families)
+    seed_guard_patterns_v2(&conn)?;
 
     Ok(DbPool::new(conn))
 }
@@ -898,6 +907,87 @@ mod tests {
         // Idempotent
         migrate_highlights_add_exported_at(&conn).unwrap();
     }
+
+    #[test]
+    fn seed_prohibition_rules_seeds_once_with_ids() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_writing_rules_add_reviewed_at(&conn).unwrap();
+
+        seed_prohibition_rules(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND source = 'seed-prohibitions-v1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 5);
+
+        // Every prohibition carries a stable block id in notes
+        let missing_id: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND (notes IS NULL OR notes NOT LIKE 'prohibition-id:%')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(missing_id, 0);
+
+        // Re-run is a no-op (sentinel check)
+        seed_prohibition_rules(&conn).unwrap();
+        let count2: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count2, 5);
+    }
+
+    #[test]
+    fn seed_guard_patterns_v2_attaches_regexes_and_families() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_writing_rules_add_reviewed_at(&conn).unwrap();
+        migrate_writing_rules_add_detection_pattern(&conn).unwrap();
+
+        seed_prohibition_rules(&conn).unwrap();
+        seed_guard_patterns_v2(&conn).unwrap();
+
+        // Soft families seeded with detection patterns
+        let soft: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE source = 'seed-slop-v2' AND detection_pattern IS NOT NULL AND notes LIKE 'slop-family:%'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(soft, 10);
+
+        // Mechanically-detectable prohibitions got their regexes
+        let hard: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND detection_pattern IS NOT NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(hard, 2);
+
+        // Idempotent
+        seed_guard_patterns_v2(&conn).unwrap();
+        let total: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE source = 'seed-slop-v2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(total, 10);
+    }
 }
 
 /// Adds a `writing_type` column to the corrections table if it doesn't exist.
@@ -1256,6 +1346,91 @@ pub fn seed_voice_and_editorial_rules(conn: &Connection) -> Result<(), Box<dyn s
     Ok(())
 }
 
+/// Seeds the coaching-prompt prohibitions into writing_rules so the DB — not
+/// the Go binary — is the source of truth for them. The coaching prompt
+/// renders category='prohibition' rows in its <prohibitions> section; the
+/// notes field carries the stable block id ("prohibition-id:...").
+pub fn seed_prohibition_rules(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let already_seeded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM writing_rules WHERE source = 'seed-prohibitions-v1' LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_seeded {
+        return Ok(());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Each tuple: (id_tag, rule_text, severity, when_to_apply, why, example_before, example_after)
+    let prohibitions: Vec<(&str, &str, &str, Option<&str>, Option<&str>, Option<&str>, Option<&str>)> = vec![
+        ("NEG_PARALLELISM",
+         "Never contrast what something \"isn't\" with what it \"is.\"",
+         "must-fix",
+         Some("Match variants: \"isn't X — it's Y\", \"isn't X. It's Y\", \"not about X — it's about Y\", \"wasn't X — was Y\", \"don't X — Y\", \"more X, not Y\", \"X works. It fails Y\""),
+         Some("Instead: state what it IS directly. Drop the contrast."),
+         Some("The challenge isn't technical — it's organizational"),
+         Some("The challenge is organizational")),
+        ("EM_DASH_LIMIT",
+         "Maximum 2 em dashes (—) per document. Zero is fine. Three or more is a violation.",
+         "must-fix",
+         None,
+         Some("Instead: use periods, commas, or restructure the sentence."),
+         None,
+         None),
+        ("TERMINAL_PUNCTUATION",
+         "Every paragraph of prose must end with a period, question mark, or exclamation point. No trailing off without punctuation.",
+         "must-fix",
+         Some("This applies to email bodies, message bodies, and all prose — not headers or signatures."),
+         None,
+         None,
+         None),
+        ("AI_SLOP",
+         "Never use \"is the kind of X that\" — this is a recognized AI writing tell.",
+         "must-fix",
+         Some("Also avoid: hyperbolic claims like \"the most [adj] thing\", \"thing nobody mentions\", \"the real X is\""),
+         None,
+         Some("This is the kind of problem I want to work on"),
+         Some("I want to work on this problem")),
+        ("COLON_LIMIT",
+         "Maximum 1 colon in prose per document. Use sparingly.",
+         "should-fix",
+         None,
+         None,
+         None,
+         None),
+    ];
+
+    for (id_tag, rule_text, severity, when_to_apply, why, before, after) in &prohibitions {
+        conn.execute(
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, when_to_apply, why, example_before, example_after, notes, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES (?1, 'general', 'prohibition', ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'seed-prohibitions-v1', 10, ?9, ?9, ?9)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                rule_text,
+                severity,
+                when_to_apply,
+                why,
+                before,
+                after,
+                format!("prohibition-id:{id_tag}"),
+                now,
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
 /// Adds `access_count` and `indexed_at` columns to the documents table if they don't exist.
 fn migrate_documents_add_frecency_columns(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let columns: Vec<String> = {
@@ -1291,6 +1466,115 @@ fn migrate_corrections_add_synthesized_at(conn: &Connection) -> Result<(), Box<d
             "ALTER TABLE corrections ADD COLUMN synthesized_at INTEGER;
              CREATE INDEX IF NOT EXISTS idx_corrections_synthesized ON corrections(synthesized_at);",
         )?;
+    }
+
+    Ok(())
+}
+
+/// Seeds curated guard detection patterns (v2). Two parts:
+/// (1) gives the mechanically-detectable prohibitions their regexes, and
+/// (2) inserts soft AI-tell pattern families (derived from the humanizer /
+/// Wikipedia "Signs of AI writing" taxonomy, MIT) that the guard
+/// cluster-scores — a doc is flagged only when >= 2 families co-occur.
+pub fn seed_guard_patterns_v2(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let already_seeded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM writing_rules WHERE source = 'seed-slop-v2' LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_seeded {
+        return Ok(());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Hard patterns: attach regexes to the seeded prohibitions (matched by id tag).
+    tx.execute(
+        "UPDATE writing_rules SET detection_pattern = ?1, updated_at = ?2
+         WHERE category = 'prohibition' AND notes = 'prohibition-id:NEG_PARALLELISM'",
+        rusqlite::params![r"(?i)\bisn'?t [^.!?\n]{2,50}[—–] ?it'?s\b", now],
+    )?;
+    tx.execute(
+        "UPDATE writing_rules SET detection_pattern = ?1, updated_at = ?2
+         WHERE category = 'prohibition' AND notes = 'prohibition-id:AI_SLOP'",
+        rusqlite::params![r"(?i)\bthe kind of \w+ that\b", now],
+    )?;
+
+    // Soft families: (family, rule_text, detection_pattern)
+    let families: Vec<(&str, &str, &str)> = vec![
+        ("copula-avoidance",
+         "Plain is/has beats inflated copulas: 'serves as a', 'stands as a', 'boasts a'.",
+         r"(?i)\b(serves as a|stands as a|boasts (a|an|the))\b"),
+        ("ai-vocabulary",
+         "AI-vocabulary tell: delve, tapestry, testament, underscore, intricacies, garner, foster, showcase, ever-evolving.",
+         r"(?i)\b(delve|delving|delved|tapestry|a testament to|underscor(es|ing|ed)|intricacies|garner(ed|ing)?|foster(ing|ed)|showcas(es|ing)|ever-evolving)\b"),
+        ("significance-inflation",
+         "Significance inflation: 'pivotal moment', 'evolving landscape', 'indelible mark', 'deeply rooted', 'enduring legacy'.",
+         r"(?i)\b(stands as a testament|pivotal (moment|role)|rich tapestry|evolving landscape|indelible mark|deeply rooted|enduring legacy)\b"),
+        ("aphorism-formula",
+         "Aphorism formula: 'X is the currency/architecture/language of Y', 'becomes a trap'.",
+         r"(?i)\b((is|becomes) the (currency|architecture|language|lifeblood|backbone|engine) of|becomes a trap)\b"),
+        ("filler-phrases",
+         "Filler phrases: 'in order to', 'due to the fact that', 'it should be noted', 'it is worth noting'.",
+         r"(?i)\b(in order to|due to the fact that|at this point in time|it should be noted|it is worth noting)\b"),
+        ("hedging-pileup",
+         "Stacked hedges: 'could potentially', 'may possibly'. One hedge is calibration; two is mush.",
+         r"(?i)\b(could potentially|may possibly|might potentially)\b"),
+        ("chatbot-artifacts",
+         "Chatbot register leaking into prose: 'I hope this helps', 'Would you like me to', 'feel free to reach out'.",
+         r"(?i)\b(i hope this (helps|finds you)|would you like me to|feel free to reach out)\b"),
+        ("inline-header-bullets",
+         "Inline-header bullet lists ('- **Label:** restates the label...') are an AI formatting tell.",
+         r"(?m)^[-*] \*\*[^*\n]+:\*\*"),
+        ("predicate-hyphenation",
+         "Hyphenated compounds in predicate position: 'is high-quality', 'is data-driven'. Humans drop the hyphen there.",
+         r"(?i)\b(is|are|was|were|feels|seems) (high-quality|data-driven|cross-functional|best-in-class|cutting-edge|world-class|user-friendly)\b"),
+        ("staccato-drama",
+         "Manufactured punchlines: runs of clipped 'No X. No Y.' fragments stacked for false emphasis.",
+         r"(?m)^No \w+( \w+)?\.( No \w+( \w+)?\.)+"),
+    ];
+
+    for (family, rule_text, pattern) in &families {
+        conn.execute(
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, detection_pattern, notes, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES (?1, 'general', 'ai-slop', ?2, 'should-fix', ?3, ?4, 'seed-slop-v2', 3, ?5, ?5, ?5)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                rule_text,
+                pattern,
+                format!("slop-family:{family}"),
+                now,
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Adds a `detection_pattern` column to writing_rules if it doesn't exist.
+/// A rule contributes to the mechanical guard hook ONLY via this column
+/// (a validated regex); example_before is illustrative, never executable.
+fn migrate_writing_rules_add_detection_pattern(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "detection_pattern")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN detection_pattern TEXT;")?;
     }
 
     Ok(())

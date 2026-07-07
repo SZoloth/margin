@@ -122,7 +122,10 @@ func TestTruncateUnicode(t *testing.T) {
 func TestGenerateWritingGuardPy(t *testing.T) {
 	rules := []db.WritingRule{
 		{Category: "kill-words", Severity: "must-fix", RuleText: "leverage"},
-		{Category: "ai-slop", Severity: "should-fix", RuleText: "Don't start with In today's", ExampleBefore: ptr(`(?i)^in today'?s`)},
+		{Category: "ai-slop", Severity: "should-fix", RuleText: "AI-vocabulary tell",
+			DetectionPattern: ptr(`(?i)\bdelve\b`), Notes: ptr("slop-family:ai-vocabulary")},
+		{Category: "prohibition", Severity: "must-fix", RuleText: "Never negative parallelism",
+			DetectionPattern: ptr(`(?i)\bisn'?t [^.!?\n]{2,50}[—–] ?it'?s\b`)},
 	}
 
 	py := GenerateWritingGuardPy(rules)
@@ -131,7 +134,9 @@ func TestGenerateWritingGuardPy(t *testing.T) {
 		"#!/usr/bin/env python3",
 		"KILL_WORDS",
 		`"leverage"`,
-		"SLOP_PATTERNS",
+		"HARD_PATTERNS",
+		"SOFT_PATTERNS",
+		"ai-vocabulary",
 		"PROSE_EXTENSIONS",
 		"permissionDecision",
 	}
@@ -142,50 +147,19 @@ func TestGenerateWritingGuardPy(t *testing.T) {
 	}
 }
 
-func TestIsSafeAutoCorrection(t *testing.T) {
-	// These are the substrings that caused the guard to fire on every document.
-	// A single space, common single words, and bare punctuation must be rejected.
-	unsafe := []string{
-		" ",
-		"  ",
-		"doing",
-		"landscape",
-		"Questions",
-		"a mandate",
-		"I learned",
-		"—",
-		"reframed",
-		"that short", // 10 runes, still under the 12-rune floor
-	}
-	for _, s := range unsafe {
-		if isSafeAutoCorrection(s) {
-			t.Errorf("isSafeAutoCorrection(%q) = true, want false (would over-fire)", s)
-		}
-	}
-
-	// Distinctive multi-word phrases are specific enough to substring-match safely.
-	safe := []string{
-		"The most useful thing I did last year had nothing to do with roadmaps.",
-		"is the kind of problem I want to be working on.",
-		"They stop filtering what they tell you.",
-	}
-	for _, s := range safe {
-		if !isSafeAutoCorrection(s) {
-			t.Errorf("isSafeAutoCorrection(%q) = false, want true (distinctive phrase)", s)
-		}
-	}
-}
-
 func TestGenerateWritingGuardPyFiltersAndScopes(t *testing.T) {
 	rules := []db.WritingRule{
-		// A garbage auto-correction that would match every document.
-		{Category: "auto-synthesized", Severity: "must-fix", RuleText: "remove space", ExampleBefore: ptr(" ")},
-		{Category: "auto-synthesized", Severity: "must-fix", RuleText: "vague", ExampleBefore: ptr("doing")},
-		// A legit, distinctive auto-correction that should survive.
-		{Category: "auto-synthesized", Severity: "must-fix", RuleText: "kill hyperbole",
-			ExampleBefore: ptr("The most useful thing I did last year had nothing to do with roadmaps.")},
-		// A letterless slop "pattern" (bare em dash) that would regex-match everything.
+		// example_before must NEVER become an executable pattern (the v1 defect:
+		// verbatim past sentences shipped as regexes that matched nothing or
+		// misfired on regex metacharacters).
+		{Category: "ai-slop", Severity: "must-fix", RuleText: "verbatim sentence rule",
+			ExampleBefore: ptr("Same approach I used at Wasabi: isolate what converters do")},
 		{Category: "ai-slop", Severity: "must-fix", RuleText: "no em dash", ExampleBefore: ptr("—")},
+		// Rules with a curated detection_pattern route by category.
+		{Category: "ai-slop", Severity: "should-fix", RuleText: "copula tell",
+			DetectionPattern: ptr(`(?i)\bserves as a\b`), Notes: ptr("slop-family:copula-avoidance")},
+		{Category: "prohibition", Severity: "must-fix", RuleText: "kind-of-X tell",
+			DetectionPattern: ptr(`(?i)\bthe kind of \w+ that\b`)},
 	}
 
 	py := GenerateWritingGuardPy(rules)
@@ -210,26 +184,32 @@ func TestGenerateWritingGuardPyFiltersAndScopes(t *testing.T) {
 		}
 	}
 
-	// The distinctive correction survives; the garbage ones are filtered out.
-	if !strings.Contains(py, "The most useful thing I did last year") {
-		t.Error("distinctive auto-correction was dropped")
-	}
-	autoStart := strings.Index(py, "AUTO_CORRECTIONS = json.loads(")
-	autoEnd := strings.Index(py, "def get_extension")
-	if autoStart == -1 || autoEnd == -1 || autoEnd < autoStart {
-		t.Fatal("could not locate AUTO_CORRECTIONS blob in generated hook")
-	}
-	autoBlob := py[autoStart:autoEnd]
-	if strings.Contains(autoBlob, `["doing"`) || strings.Contains(autoBlob, `[" "`) {
-		t.Error("garbage auto-correction (\" \" or \"doing\") leaked into AUTO_CORRECTIONS")
-	}
-	// The letterless em-dash slop pattern must not appear as a slop pattern.
-	slopStart := strings.Index(py, "SLOP_PATTERNS = json.loads(")
-	slopEnd := strings.Index(py, "HEADING_PATTERNS = json.loads(")
-	if slopStart != -1 && slopEnd != -1 && slopEnd > slopStart {
-		if strings.Contains(py[slopStart:slopEnd], `"—"`) {
-			t.Error("letterless em-dash slop pattern leaked into SLOP_PATTERNS")
+	// Cluster scoring must be present.
+	for _, marker := range []string{"soft_by_family", ">= 2"} {
+		if !strings.Contains(py, marker) {
+			t.Errorf("generated hook missing %q — cluster scoring absent", marker)
 		}
+	}
+
+	// example_before content must not appear anywhere as executable data.
+	if strings.Contains(py, "Same approach I used at Wasabi") {
+		t.Error("example_before leaked into the generated hook as a pattern")
+	}
+
+	// detection_pattern rules route to the right buckets.
+	hardStart := strings.Index(py, "HARD_PATTERNS = json.loads(")
+	softStart := strings.Index(py, "SOFT_PATTERNS = json.loads(")
+	headingStart := strings.Index(py, "HEADING_PATTERNS = json.loads(")
+	if hardStart == -1 || softStart == -1 || headingStart == -1 {
+		t.Fatal("could not locate pattern blobs in generated hook")
+	}
+	hardBlob := py[hardStart:softStart]
+	softBlob := py[softStart:headingStart]
+	if !strings.Contains(hardBlob, "kind of") {
+		t.Error("prohibition detection_pattern missing from HARD_PATTERNS")
+	}
+	if !strings.Contains(softBlob, "serves as a") || !strings.Contains(softBlob, "copula-avoidance") {
+		t.Error("soft detection_pattern or family missing from SOFT_PATTERNS")
 	}
 }
 

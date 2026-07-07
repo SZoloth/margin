@@ -23,6 +23,10 @@ type WritingRule struct {
 	Notes         *string `json:"notes"`
 	CreatedAt     int64   `json:"createdAt"`
 	UpdatedAt     int64   `json:"updatedAt"`
+	// DetectionPattern is the ONLY way a rule contributes to the mechanical
+	// guard hook: a Python-re regex, validated at export. example_before is
+	// illustrative and never executable.
+	DetectionPattern *string `json:"detectionPattern"`
 }
 
 var (
@@ -71,14 +75,14 @@ func GetWritingRules(d *sql.DB, writingType *string) ([]WritingRule, error) {
 		rows, err = d.Query(
 			`SELECT id, writing_type, category, rule_text, when_to_apply,
 			        why, severity, example_before, example_after, source,
-			        signal_count, notes, created_at, updated_at
+			        signal_count, notes, created_at, updated_at, detection_pattern
 			 FROM writing_rules WHERE writing_type = ?
 			 ORDER BY signal_count DESC, created_at DESC`, *writingType)
 	} else {
 		rows, err = d.Query(
 			`SELECT id, writing_type, category, rule_text, when_to_apply,
 			        why, severity, example_before, example_after, source,
-			        signal_count, notes, created_at, updated_at
+			        signal_count, notes, created_at, updated_at, detection_pattern
 			 FROM writing_rules
 			 ORDER BY writing_type, signal_count DESC, created_at DESC`)
 	}
@@ -92,7 +96,7 @@ func GetWritingRules(d *sql.DB, writingType *string) ([]WritingRule, error) {
 		var r WritingRule
 		if err := rows.Scan(&r.ID, &r.WritingType, &r.Category, &r.RuleText,
 			&r.WhenToApply, &r.Why, &r.Severity, &r.ExampleBefore, &r.ExampleAfter,
-			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt, &r.DetectionPattern); err != nil {
 			return nil, err
 		}
 		rules = append(rules, r)
@@ -251,7 +255,11 @@ func UpdateWritingRule(d *sql.DB, p UpdateRuleParams) (*WritingRule, error) {
 	return &r, nil
 }
 
-func GetHighSignalRules(d *sql.DB, limit int) ([]WritingRule, error) {
+// GetHighSignalRules returns the strongest rules for coaching context.
+// writingType scopes results to that type plus general rules; pass "" for
+// no scoping. Prohibition rules are excluded — they render in their own
+// section of the coaching prompt.
+func GetHighSignalRules(d *sql.DB, limit int, writingType string) ([]WritingRule, error) {
 	if limit < 1 {
 		limit = 30
 	}
@@ -261,9 +269,42 @@ func GetHighSignalRules(d *sql.DB, limit int) ([]WritingRule, error) {
 		        why, severity, example_before, example_after, source,
 		        signal_count, notes, created_at, updated_at
 		 FROM writing_rules
-		 WHERE signal_count >= 2 OR severity = 'must-fix'
+		 WHERE (signal_count >= 2 OR severity = 'must-fix')
+		   AND category != 'prohibition'
+		   AND (?1 = '' OR writing_type = 'general' OR writing_type = ?1)
 		 ORDER BY signal_count DESC
-		 LIMIT ?`, limit)
+		 LIMIT ?2`, writingType, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []WritingRule
+	for rows.Next() {
+		var r WritingRule
+		if err := rows.Scan(&r.ID, &r.WritingType, &r.Category, &r.RuleText,
+			&r.WhenToApply, &r.Why, &r.Severity, &r.ExampleBefore, &r.ExampleAfter,
+			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
+	if rules == nil {
+		rules = []WritingRule{}
+	}
+	return rules, nil
+}
+
+// GetProhibitionRules returns seeded prohibition rules (category='prohibition')
+// for the coaching prompt's <prohibitions> section, hardest first.
+func GetProhibitionRules(d *sql.DB) ([]WritingRule, error) {
+	rows, err := d.Query(
+		`SELECT id, writing_type, category, rule_text, when_to_apply,
+		        why, severity, example_before, example_after, source,
+		        signal_count, notes, created_at, updated_at
+		 FROM writing_rules
+		 WHERE category = 'prohibition'
+		 ORDER BY CASE severity WHEN 'must-fix' THEN 0 ELSE 1 END, created_at`)
 	if err != nil {
 		return nil, err
 	}

@@ -77,7 +77,12 @@ func parseNotesJSON(raw string) []string {
 	return result
 }
 
-func GetCorrectionsWithNotes(d *sql.DB, limit int) ([]CorrectionRecord, error) {
+// GetCorrectionsWithNotes returns recent corrections suitable for coaching
+// context. writingType scopes results to that type plus untyped/general
+// corrections; pass "" for no type scoping. Non-feedback notes (marked
+// "NOT FEEDBACK" during triage) and positive-polarity voice signals are
+// excluded — they must never render as "what to avoid" examples.
+func GetCorrectionsWithNotes(d *sql.DB, limit int, writingType string) ([]CorrectionRecord, error) {
 	if limit < 1 {
 		limit = 30
 	}
@@ -90,8 +95,12 @@ func GetCorrectionsWithNotes(d *sql.DB, limit int) ([]CorrectionRecord, error) {
 		 FROM corrections
 		 WHERE notes_json IS NOT NULL AND notes_json != '[]'
 		   AND session_id != '__backfilled__'
+		   AND UPPER(notes_json) NOT LIKE '%NOT FEEDBACK%'
+		   AND (category IS NULL OR category != 'non-feedback')
+		   AND (polarity IS NULL OR polarity != 'positive')
+		   AND (?1 = '' OR writing_type IS NULL OR writing_type = 'general' OR writing_type = ?1)
 		 ORDER BY created_at DESC
-		 LIMIT ?`, limit)
+		 LIMIT ?2`, writingType, limit)
 	if err != nil {
 		return nil, err
 	}
