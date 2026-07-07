@@ -26,7 +26,7 @@ func setupCoachingFileDB(t *testing.T) (string, *sql.DB) {
 			suffix_context TEXT, notes_json TEXT, document_title TEXT,
 			document_source TEXT, document_path TEXT, highlight_color TEXT,
 			created_at INTEGER, updated_at INTEGER, writing_type TEXT,
-			polarity TEXT, extended_context TEXT
+			polarity TEXT, extended_context TEXT, category TEXT
 		)`,
 		`CREATE TABLE writing_rules (
 			id TEXT PRIMARY KEY, writing_type TEXT, category TEXT,
