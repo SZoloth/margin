@@ -96,6 +96,7 @@ func GetCorrectionsWithNotes(d *sql.DB, limit int, writingType string) ([]Correc
 		 WHERE notes_json IS NOT NULL AND notes_json != '[]'
 		   AND session_id != '__backfilled__'
 		   AND UPPER(notes_json) NOT LIKE '%NOT FEEDBACK%'
+		   AND (category IS NULL OR category != 'non-feedback')
 		   AND (polarity IS NULL OR polarity != 'positive')
 		   AND (?1 = '' OR writing_type IS NULL OR writing_type = 'general' OR writing_type = ?1)
 		 ORDER BY created_at DESC
