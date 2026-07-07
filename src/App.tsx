@@ -16,13 +16,18 @@ import { useSearch } from "@/hooks/useSearch";
 import { useTabs } from "@/hooks/useTabs";
 import { useTableOfContents } from "@/hooks/useTableOfContents";
 import { useSettings } from "@/hooks/useSettings";
-import { SettingsPage } from "@/components/settings/SettingsPage";
+// Settings (incl. Style Memory + Dashboard) is rarely on the launch path —
+// lazy-splitting keeps its code out of the startup parse.
+const SettingsPage = lazy(() =>
+  import("@/components/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
 import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor } from "@/lib/text-anchoring";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
+import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
@@ -139,12 +144,16 @@ export default function App() {
     }
   }
 
-  // Snapshot function for useTabs — captures current active tab state
+  // Snapshot function for useTabs — captures current active tab state.
+  // Reads via a ref because snapshotFn is created before the editor exists.
+  const editorRefForSnapshot = useRef<import("@tiptap/core").Editor | null>(null);
   const snapshotFn = useCallback((): SnapshotData => {
     const scrollContainer = document.querySelector("[data-scroll-container]");
+    const ed = editorRefForSnapshot.current;
+    const fresh = ed && !ed.isDestroyed ? serializeEditorMarkdown(ed) : null;
     return {
       document: doc.currentDoc,
-      content: doc.content,
+      content: fresh ?? doc.content,
       filePath: doc.filePath,
       isDirty: doc.isDirty,
       highlights: annotations.highlights,
@@ -319,6 +328,18 @@ export default function App() {
   currentDocRef.current = doc.currentDoc;
   const editorRef = useRef(editor);
   editorRef.current = editor;
+  editorRefForSnapshot.current = editor;
+
+  // Save paths read content straight from the editor (fresh even while the
+  // Reader's debounced serialization is pending).
+  useEffect(() => {
+    doc.registerContentProvider(() => {
+      const ed = editorRef.current;
+      if (!ed || ed.isDestroyed) return null;
+      return serializeEditorMarkdown(ed);
+    });
+    return () => doc.registerContentProvider(null);
+  }, [doc.registerContentProvider]); // eslint-disable-line react-hooks/exhaustive-deps
   const highlightsRef = useRef(annotations.highlights);
   highlightsRef.current = annotations.highlights;
   const marginNotesRef = useRef(annotations.marginNotes);
@@ -1253,6 +1274,7 @@ export default function App() {
         <Reader
           content={diffReview.reviewContent ?? doc.content}
           onUpdate={handleEditorUpdate}
+          onDirtyEdit={doc.markDirty}
           isLoading={doc.isLoading}
           onEditorReady={handleEditorReady}
         />
@@ -1478,6 +1500,7 @@ export default function App() {
           className="fixed inset-0 z-50"
           style={{ backgroundColor: "var(--color-page)" }}
         >
+          <Suspense fallback={null}>
           <SettingsPage
             settings={settings}
             setSetting={setSetting}
@@ -1489,6 +1512,7 @@ export default function App() {
             initialSection={settingsSection}
             onAcceptEdit={handleAcceptEdit}
           />
+          </Suspense>
         </div>
       )}
 

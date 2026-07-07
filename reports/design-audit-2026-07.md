@@ -40,7 +40,7 @@ _Senior-product-designer pass, 2026-07-06, run against the repaired build (post 
 
 ## 4. L3 proposals (not executed — need product owner sign-off)
 
-1. **First-run/empty surface.** With no document open, the app is a blank cream void; onboarding exists as toasts only. Propose a single quiet start card (recent documents + "Open… ⌘O" + one line about the loop). This is the remaining discoverability cliff for the first external user.
+1. **~~First-run/empty surface~~ — CORRECTION (2026-07-06):** the empty state exists and is excellent (Poe epigraph + "Open a file with ⌘O" keycap) — every audit session had a restored tab, so it was never seen. Withdrawn as a gap; the smaller remaining idea is listing 2-3 recent documents on that card.
 2. **Retire or populate the "Violations" column** (Dashboard per-type table) — currently reads "none" in every row; a dead column costs scan attention on the app's best screen.
 3. **Register/channel field on writing rules** — schema change through Rust migrations, already specced in the rules-audit apply notes; resolves the voice-calibration vs. ai-slop precedence at the data-model level instead of via `when_to_apply` prose.
 4. **Find-bar state resurrects** after visiting Settings (reopens closed). Root cause likely in snapshot/restore of UI state; small but grating. Needs a short investigation, not folded into this pass blind.
@@ -57,7 +57,7 @@ _Senior-product-designer pass, 2026-07-06, run against the repaired build (post 
 | TOC dot rail | <1200px | Dot contrast ~0.4 opacity, near-invisible in dark | Low | **Fixed** (0.55) |
 | Find bar | all | State resurrects after Settings round-trip | Low | Open (L3 #4) |
 | Export popover | all | Stale "corrections saved" popover restored on relaunch | Low | Open (known P2 from repair report) |
-| Reader/empty | all | No first-run surface; blank app without a doc | Medium (new users only) | Proposed (L3 #1) |
+| Reader/empty | all | ~~No first-run surface~~ — exists and is good (Poe epigraph + ⌘O keycap); withdrawn | — | Corrected (L3 #1) |
 | Reader narrow | 815px | Overflow/clipping/horizontal scroll | — | None found |
 | Dark mode | all | Contrast regressions | — | None found beyond dot rail |
 | Popovers | narrow | Edge clipping | — | None found |

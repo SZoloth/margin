@@ -1,5 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
+import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import StarterKit from "@tiptap/starter-kit";
 import Strike from "@tiptap/extension-strike";
 import Typography from "@tiptap/extension-typography";
@@ -45,11 +46,18 @@ interface ReaderProps {
   onUpdate: (content: string) => void;
   isLoading: boolean;
   onEditorReady?: (editor: Editor) => void;
+  /** Called synchronously on every edit, before the debounced serialization. */
+  onDirtyEdit?: () => void;
 }
 
-export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderProps) {
+export function Reader({ content, onUpdate, isLoading, onEditorReady, onDirtyEdit }: ReaderProps) {
   const isExternalUpdate = useRef(false);
   const lastEmittedMarkdownRef = useRef<string | null>(null);
+  const emitTimerRef = useRef<number | null>(null);
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const onDirtyEditRef = useRef(onDirtyEdit);
+  onDirtyEditRef.current = onDirtyEdit;
 
   const editor = useEditor({
     extensions: [
@@ -91,22 +99,20 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady }: ReaderPr
     },
     onUpdate: ({ editor: ed }) => {
       if (isExternalUpdate.current) return;
-      // Defense-in-depth: never serialize content that contains diff marks.
-      // If diff marks leak into markdown, deleted text persists as plain text
-      // (or ~~text~~ if Strike somehow claims <del> tags).
-      let hasDiffMarks = false;
-      ed.state.doc.descendants((node) => {
-        if (hasDiffMarks) return false;
-        if (node.marks.some((m) => m.type.name === "diffMark")) {
-          hasDiffMarks = true;
-          return false;
-        }
-      });
-      if (hasDiffMarks) return;
-
-      const md = ed.storage.markdown.getMarkdown();
-      lastEmittedMarkdownRef.current = md as string;
-      onUpdate(md as string);
+      // Dirty flag is cheap and must be immediate (save/unsaved-dialog key
+      // off it). Serialization walks and re-emits the whole document, so it
+      // runs on a trailing debounce instead of every keystroke — on long
+      // documents per-keystroke getMarkdown() dominated typing latency.
+      onDirtyEditRef.current?.();
+      if (emitTimerRef.current !== null) window.clearTimeout(emitTimerRef.current);
+      emitTimerRef.current = window.setTimeout(() => {
+        emitTimerRef.current = null;
+        if (ed.isDestroyed) return;
+        const md = serializeEditorMarkdown(ed);
+        if (md === null) return;
+        lastEmittedMarkdownRef.current = md;
+        onUpdateRef.current(md);
+      }, 250);
     },
   });
 
