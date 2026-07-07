@@ -39,6 +39,8 @@ export interface UseDocumentReturn {
   refreshRecentDocs: () => void;
   renameDocFile: (doc: Document, newName: string) => Promise<void>;
   setContent: (newContent: string) => void;
+  markDirty: () => void;
+  registerContentProvider: (fn: (() => string | null) | null) => void;
   setContentExternal: (newContent: string) => void;
   restoreFromCache: (doc: Document | null, content: string, filePath: string | null, isDirty: boolean) => void;
 }
@@ -105,6 +107,17 @@ export function useDocument(): UseDocumentReturn {
   const setContent = useCallback((newContent: string) => {
     setContentState(newContent);
     setIsDirty(true);
+  }, []);
+
+  // Cheap immediate dirty signal — the editor emits serialized content on a
+  // debounce, but save paths key off isDirty and must see edits instantly.
+  const markDirty = useCallback(() => setIsDirty(true), []);
+
+  // Save paths pull content straight from the editor when available, so a
+  // pending debounce can never make Cmd+S (or quit-save) write stale text.
+  const contentProviderRef = useRef<(() => string | null) | null>(null);
+  const registerContentProvider = useCallback((fn: (() => string | null) | null) => {
+    contentProviderRef.current = fn;
   }, []);
 
   // External update (file watcher) — does NOT mark dirty
@@ -275,8 +288,13 @@ export function useDocument(): UseDocumentReturn {
     }
 
     try {
+      const fresh = contentProviderRef.current?.() ?? null;
+      const body = fresh ?? content;
+      if (fresh !== null && fresh !== content) {
+        setContentState(fresh);
+      }
       // Strip any <mark> tags that TipTap's serializer may leak into markdown
-      const clean = content.replace(/<\/?mark[^>]*>/g, "");
+      const clean = body.replace(/<\/?mark[^>]*>/g, "");
       // Mark this path as self-saved for 1s so the file watcher skips the reload
       selfSaveRef.current = { path: filePath, until: Date.now() + 1000 };
       await saveFileCommand(filePath, clean);
@@ -341,6 +359,8 @@ export function useDocument(): UseDocumentReturn {
     renameDocFile,
     setContent,
     setContentExternal,
+    markDirty,
+    registerContentProvider,
     restoreFromCache,
   };
 }
