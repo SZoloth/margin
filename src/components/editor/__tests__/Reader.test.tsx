@@ -49,8 +49,8 @@ describe("Reader — cursor stability", () => {
       editor.commands.insertContent("world");
     });
 
-    // onUpdate should have been called with new markdown
-    expect(onUpdate).toHaveBeenCalled();
+    // onUpdate emission is debounced (~250ms) — wait for it
+    await waitFor(() => { expect(onUpdate).toHaveBeenCalled(); }, { timeout: 3000 });
     const lastCall = onUpdate.mock.calls[onUpdate.mock.calls.length - 1];
     const updatedContent = lastCall![0];
 
@@ -134,7 +134,8 @@ describe("Reader — cursor stability", () => {
     await act(async () => {
       editor.commands.insertContent(" world");
     });
-    expect(onUpdate).toHaveBeenCalled();
+    // onUpdate emission is debounced (~250ms) — wait for it
+    await waitFor(() => { expect(onUpdate).toHaveBeenCalled(); }, { timeout: 3000 });
 
     // Now simulate an external update arriving before the parent "typing" content
     // round-trip is applied. We still want the editor to take the external content.
