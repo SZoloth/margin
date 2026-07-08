@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"regexp"
+	"strings"
 
 	"github.com/nicholasgasior/margin/cli/db"
 	"github.com/nicholasgasior/margin/cli/output"
@@ -195,9 +198,153 @@ var rulesDeleteCmd = &cobra.Command{
 	},
 }
 
+var rulesAddCandidatesCmd = &cobra.Command{
+	Use:   "add-candidates <json-file>",
+	Short: "Insert synthesized candidate rules (review-gated) from a JSON file",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		dbPath := resolveDBPath()
+		raw, err := os.ReadFile(args[0])
+		if err != nil {
+			output.ErrorE(err)
+		}
+		parsed, err := profile.ParseCandidateRules(string(raw))
+		if err != nil {
+			output.ErrorE(err)
+		}
+
+		var candidates []db.CandidateRuleInput
+		var dropped []string
+		for _, c := range parsed {
+			// A detection_pattern is kept only if it (a) compiles and (b) is
+			// specific enough to not misfire on every document. A letterless
+			// or ultra-short pattern (e.g. a bare "—") is the exact regression
+			// guard v2 removed — drop it but keep the rule as a judgment rule.
+			var pattern *string
+			if c.DetectionPattern != "" {
+				if _, rerr := regexp.Compile(c.DetectionPattern); rerr == nil && patternIsSpecific(c.DetectionPattern) {
+					p := c.DetectionPattern
+					pattern = &p
+				} else {
+					dropped = append(dropped, c.RuleText)
+				}
+			}
+			candidates = append(candidates, db.CandidateRuleInput{
+				Category:         c.Category,
+				RuleText:         c.RuleText,
+				WritingType:      c.WritingType,
+				Severity:         c.Severity,
+				DetectionPattern: pattern,
+				ExampleBefore:    strPtrOrNil(c.ExampleBefore),
+				ExampleAfter:     strPtrOrNil(c.ExampleAfter),
+				SignalCount:      c.SignalCount,
+				SourceHighlights: c.SourceHighlights,
+			})
+		}
+
+		d, err := db.OpenWrite(dbPath)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		defer d.Close()
+
+		inserted, err := db.InsertCandidateRules(d, candidates)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		output.JSON(map[string]any{
+			"inserted":         inserted,
+			"submitted":        len(candidates),
+			"patterns_dropped": len(dropped),
+		}, pretty)
+	},
+}
+
+var rulesCandidatesCmd = &cobra.Command{
+	Use:   "candidates",
+	Short: "List synthesis candidate rules awaiting review",
+	Run: func(cmd *cobra.Command, args []string) {
+		dbPath := resolveDBPath()
+		includeReviewed, _ := cmd.Flags().GetBool("all")
+		d, err := db.OpenRead(dbPath)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		defer d.Close()
+		rules, err := db.GetCandidateRules(d, includeReviewed)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		output.JSON(rules, pretty)
+	},
+}
+
+var rulesAcceptCmd = &cobra.Command{
+	Use:   "accept <id>",
+	Short: "Accept a synthesis candidate into the active corpus",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		dbPath := resolveDBPath()
+		d, err := db.OpenWrite(dbPath)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		defer d.Close()
+		if err := db.AcceptCandidateRule(d, args[0]); err != nil {
+			output.ErrorE(err)
+		}
+		output.JSON(map[string]bool{"success": true}, pretty)
+		profile.ExportProfile(dbPath, "")
+	},
+}
+
+var rulesRejectCmd = &cobra.Command{
+	Use:   "reject <id>",
+	Short: "Reject (delete) an unreviewed synthesis candidate",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		dbPath := resolveDBPath()
+		d, err := db.OpenWrite(dbPath)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		defer d.Close()
+		if err := db.RejectCandidateRule(d, args[0]); err != nil {
+			output.ErrorE(err)
+		}
+		output.JSON(map[string]bool{"success": true}, pretty)
+	},
+}
+
+func strPtrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// patternIsSpecific rejects detection patterns that would misfire broadly:
+// they must contain at least one letter and, once regex metacharacters are
+// stripped, at least 3 literal characters. A bare "—" or "." fails both.
+func patternIsSpecific(p string) bool {
+	hasLetter := false
+	for _, r := range p {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			hasLetter = true
+			break
+		}
+	}
+	if !hasLetter {
+		return false
+	}
+	literal := regexp.MustCompile(`[\\^$.*+?()\[\]{}|—–]`).ReplaceAllString(p, "")
+	return len(strings.TrimSpace(literal)) >= 3
+}
+
 func init() {
 	rulesListCmd.Flags().String("type", "", "filter by writing type")
 	rulesMarkdownCmd.Flags().String("type", "", "filter by writing type")
+	rulesCandidatesCmd.Flags().Bool("all", false, "include already-reviewed candidates")
 
 	rulesCreateCmd.Flags().String("text", "", "rule text")
 	rulesCreateCmd.Flags().String("type", "", "writing type")
@@ -224,6 +371,7 @@ func init() {
 	rulesUpdateCmd.Flags().String("notes", "", "notes")
 	rulesUpdateCmd.Flags().Int("signal-count", 0, "signal count")
 
-	rulesCmd.AddCommand(rulesListCmd, rulesMarkdownCmd, rulesCreateCmd, rulesUpdateCmd, rulesDeleteCmd)
+	rulesCmd.AddCommand(rulesListCmd, rulesMarkdownCmd, rulesCreateCmd, rulesUpdateCmd, rulesDeleteCmd,
+		rulesAddCandidatesCmd, rulesCandidatesCmd, rulesAcceptCmd, rulesRejectCmd)
 	rootCmd.AddCommand(rulesCmd)
 }

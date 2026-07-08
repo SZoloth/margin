@@ -26,14 +26,15 @@ func setupCoachingFileDB(t *testing.T) (string, *sql.DB) {
 			suffix_context TEXT, notes_json TEXT, document_title TEXT,
 			document_source TEXT, document_path TEXT, highlight_color TEXT,
 			created_at INTEGER, updated_at INTEGER, writing_type TEXT,
-			polarity TEXT, extended_context TEXT, category TEXT
+			polarity TEXT, extended_context TEXT, category TEXT,
+			suggested_edit TEXT, synthesized_at INTEGER
 		)`,
 		`CREATE TABLE writing_rules (
 			id TEXT PRIMARY KEY, writing_type TEXT, category TEXT,
 			rule_text TEXT, when_to_apply TEXT, why TEXT, severity TEXT,
 			example_before TEXT, example_after TEXT, source TEXT,
 			signal_count INTEGER DEFAULT 1, notes TEXT,
-			created_at INTEGER, updated_at INTEGER
+			created_at INTEGER, updated_at INTEGER, reviewed_at INTEGER, detection_pattern TEXT
 		)`,
 	}
 	for _, s := range stmts {

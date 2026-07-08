@@ -240,6 +240,10 @@ func GenerateWritingGuardPy(rules []db.WritingRule) string {
 	var headingPatterns [][2]string
 
 	for _, r := range rules {
+		// Unreviewed synthesis candidates never reach the mechanical guard.
+		if r.IsUnreviewedCandidate() {
+			continue
+		}
 		if r.Severity == "must-fix" && r.Category == "kill-words" {
 			killWords = append(killWords, r.RuleText)
 		}
@@ -455,9 +459,19 @@ func ExportProfile(dbPath string, target string) error {
 	}
 	defer d.Close()
 
-	rules, err := db.GetWritingRules(d, nil)
+	allRules, err := db.GetWritingRules(d, nil)
 	if err != nil {
 		return err
+	}
+
+	// Unreviewed synthesis candidates are excluded from every export artifact
+	// (profile markdown + guard) until Sam accepts them.
+	rules := make([]db.WritingRule, 0, len(allRules))
+	for _, r := range allRules {
+		if r.IsUnreviewedCandidate() {
+			continue
+		}
+		rules = append(rules, r)
 	}
 
 	corrections, err := db.GetAllCorrectionsForProfile(d)
