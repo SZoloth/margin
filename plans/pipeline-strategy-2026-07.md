@@ -42,6 +42,14 @@ Four research passes (humanizer by blader, Spiral, Proof/proofeditor.ai, iA Writ
 
 **From the designer trio:** Singer's reductive density + borrowed-discipline systems set Margin's posture (already right: cream, Newsreader, 65ch). Puckett's rules for motion-as-tuned-system and effects-never-break-text-selection govern implementation. Taylor's shared-element continuity (popovers originate from their trigger, nothing teleports) and delight-in-rare-corners apply to the dashboard and milestone moments, not the reading surface. Anti-patterns to enforce: library-default transitions, centered modals detached from the highlight, uniform delight, tab-per-stat dashboards.
 
+### Addendum (2026-07-06, second research pass — Sam's own saved sources)
+
+Mined Moss (on disk), X bookmarks + GitHub stars (via beacon, 1,251 items), and two repos Sam had bookmarked. New pipeline inputs:
+
+- **Lago voice skill (`getlago/inside-lago-voice-skill`) — "the gap between the draft and the send is your voice."** Its self-declared most important section is *Drafted vs Sent calibration examples*: paste what was drafted, what you actually sent, and the one-line lesson. **Margin's schema already models this**: `original_text` = drafted, `suggested_edit` = sent, `notes` = lesson. But **zero of 257 corrections have `suggested_edit` populated** — the correction gesture never captured the "what it should be" side. This is Margin's single richest latent voice signal, structurally supported and completely uncollected. Directives: (1) the correction UX must capture the sent/fixed version, not just flag + note; (2) the coaching prompt should render draft→sent→lesson calibration blocks once data exists; (3) organize the synthesis output into Lago's buckets — core rules, anti-filler checklist, register adaptation, calibration deltas.
+- **`impeccable` (pbakaus) — rules→detection→enforcement with no LLM, CI-ready JSON.** `npx impeccable detect` scans for 25 anti-patterns and emits structured JSON. This is exactly Margin's guard architecture, validated in a sibling domain (design QA), and its `detection_pattern`-per-rule + machine-readable-output shape is the model for making Margin's guard emit a structured compliance report, not just a hook decision.
+- **Moss bundles `@anthropic-ai/claude-agent-sdk`** — a shipping example of Claude-in-a-writing-app with a clean two-role subagent split (researcher/writer), session-scoped memory (state in a per-note `meta.json`, not chat), and a hard `canUseTool` permission gate. Reference architecture if/when Margin gives Claude document access. Full design read in `reports/design-reference-2026-07.md`.
+
 ## Part 3 — Target architecture
 
 ```

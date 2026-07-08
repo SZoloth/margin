@@ -85,6 +85,33 @@ var exportCoachingCmd = &cobra.Command{
 	},
 }
 
+var exportSynthesisCmd = &cobra.Command{
+	Use:   "synthesis-prompt",
+	Short: "Generate the prompt to synthesize queued corrections into candidate rules",
+	Run: func(cmd *cobra.Command, args []string) {
+		dbPath := resolveDBPath()
+		writingType, _ := cmd.Flags().GetString("type")
+		limit, _ := cmd.Flags().GetInt("limit")
+
+		statsOnly, _ := cmd.Flags().GetBool("stats")
+		if statsOnly {
+			stats, err := profile.SynthesisStats(dbPath)
+			if err != nil {
+				output.ErrorE(err)
+			}
+			pretty, _ := cmd.Flags().GetBool("pretty")
+			output.JSON(stats, pretty)
+			return
+		}
+
+		result, err := profile.GenerateSynthesisPrompt(dbPath, writingType, limit)
+		if err != nil {
+			output.ErrorE(err)
+		}
+		fmt.Print(result)
+	},
+}
+
 func init() {
 	exportWaitCmd.Flags().Int("timeout", 300, "timeout in seconds (max 600)")
 	exportProfileCmd.Flags().String("target", "", "agent target: omit for Claude Code (default), or 'codex'")
@@ -92,6 +119,11 @@ func init() {
 	exportCoachingCmd.Flags().String("type", "", "writing type (email, blog, cover-letter, etc.)")
 	exportCoachingCmd.Flags().String("register", "", "register override (casual, professional, etc.)")
 
-	exportCmd.AddCommand(exportWaitCmd, exportProfileCmd, exportCodexCmd, exportCoachingCmd)
+	exportSynthesisCmd.Flags().String("type", "", "writing type to scope synthesis to (default: all)")
+	exportSynthesisCmd.Flags().Int("limit", 0, "max corrections to include (default: 500)")
+	exportSynthesisCmd.Flags().Bool("stats", false, "print queue counts by writing type instead of the prompt")
+	exportSynthesisCmd.Flags().Bool("pretty", false, "pretty-print JSON (with --stats)")
+
+	exportCmd.AddCommand(exportWaitCmd, exportProfileCmd, exportCodexCmd, exportCoachingCmd, exportSynthesisCmd)
 	rootCmd.AddCommand(exportCmd)
 }
