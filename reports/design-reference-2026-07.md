@@ -65,6 +65,22 @@ Design-engineering skill packs Sam starred (taste-as-enforceable-rules — same 
 - **Style Memory dashboard (least-visited → most polish):** the one place to spend delight budget. One dense legible visual object (Singer/Weathergraph), not tab-per-stat.
 - **Chrome (menus, window):** brand focus ring; delayed-show-on-ready; quiet transitions; native menus already fixed in the July design pass.
 
+## 4b. Sam's actual taste corpus (mymind #inspo — the correction that matters)
+
+_Added after Sam flagged a warm-cream/serif/gold review artifact as "generic AI slop." The cream-editorial read of Margin's product tokens is real for the reading surface, but Sam's own curated `#inspo` (20 items in mymind, pulled via `mymind search 'tag:inspo'`) points somewhere else for tools and chrome. The dominant cluster is **precise, technical, dark-first startup craft**, not editorial warmth._
+
+The corpus (verbatim titles): Column, Poolside, Antimetal, Hidden (seed fund), Coreviz, Alexander Vilinskyy, Devouring Details, Frank Chimero, Butterick's Practical Typography, ui.wiki, Emily Campbell, Benjamin T.F. Zweig (OpenAI), John Phamous (pixel-dog interactive), "Perspective" (CSS 3D hover), Portfolio Micro-Interactions.
+
+Read directly (screenshots via `mymind objects blob screenshot`):
+- **Column** (fintech): monospace `curl`/JSON snippets as hero *material*; tiny tracked-uppercase micro-labels ("TRUSTED AT SCALE", "RESPONSE"); **green = live metric** (`$2T+`, `99.999%`); real data-viz (candlesticks, dotted world map); developer-first precision on a near-white ground with navy + one green.
+- **Butterick's Practical Typography**: pure typographic hierarchy — heavy black horizontal rules top/bottom, bold-sans headings over serif body, dense two-column index, generous whitespace, **zero decoration, zero cards**. Craft = type + rules + space, nothing else.
+- **Poolside** (frontier AI lab): dark technical-sublime — near-black cool ground, faint hairline scientific diagrams, sparse bright accent, monospace, huge negative space. Restraint as confidence.
+- **Vilinskyy / Devouring Details**: interaction-craft and motion as the point.
+
+**The synthesized direction for Margin's tools/chrome (distinct from the reading surface):** a *technical instrument*, not a magazine. Monospace as structural material; tracked-caps micro-labels; green-as-live-signal (not decorative); real diffs and data-viz; dark-first with a light "printed report" theme; typographic rigor over ornament; one bold moment (a phosphor-green glow on live elements) against an otherwise precise grid. This is conceptually honest for Margin specifically: **the writing guard is a linter for prose, the coaching pipeline is a compiler for voice** — so its surfaces should read like build/diagnostic tools, and corrections should render as diffs. First applied in the synthesis review artifact (`synth-compile-report`).
+
+**Anti-slop rule going forward:** cream + serif-display + terracotta/gold + accent-stripe cards is the #1 AI-design cluster; do not reach for it for Margin's *tool* surfaces even though the *reading* surface earns warm cream. Reference Sam's `#inspo` (mymind), Puckett, and Singer concretely before designing, not generic defaults.
+
 ## 5. What NOT to do (anti-patterns that would break the illusion)
 
 Library-default transitions applied uniformly; centered modals detached from their trigger; uniform delight (confetti everywhere); tab-per-stat dashboards; any effect that breaks text selection/copy on the reading surface; bespoke per-feature colors instead of the one disciplined palette; loud illustrated onboarding on a serious reading tool.
