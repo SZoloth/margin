@@ -29,7 +29,7 @@ func setupCoachingDB(t *testing.T) *sql.DB {
 			rule_text TEXT, when_to_apply TEXT, why TEXT, severity TEXT,
 			example_before TEXT, example_after TEXT, source TEXT,
 			signal_count INTEGER DEFAULT 1, notes TEXT,
-			created_at INTEGER, updated_at INTEGER
+			created_at INTEGER, updated_at INTEGER, reviewed_at INTEGER, detection_pattern TEXT
 		)`,
 	}
 	for _, s := range stmts {
@@ -94,7 +94,7 @@ func testCoachingPromptFromDB(t *testing.T, d *sql.DB, writingType, register str
 			rule_text TEXT, when_to_apply TEXT, why TEXT, severity TEXT,
 			example_before TEXT, example_after TEXT, source TEXT,
 			signal_count INTEGER DEFAULT 1, notes TEXT,
-			created_at INTEGER, updated_at INTEGER
+			created_at INTEGER, updated_at INTEGER, reviewed_at INTEGER, detection_pattern TEXT
 		)`,
 	}
 	for _, s := range stmts {
