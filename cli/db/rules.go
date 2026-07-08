@@ -458,16 +458,46 @@ func GetCandidateRules(d *sql.DB, includeReviewed bool) ([]WritingRule, error) {
 }
 
 // AcceptCandidateRule promotes a candidate into the active corpus: sets
-// reviewed_at and re-sources it to 'synthesis' so it's a first-class rule.
+// reviewed_at, re-sources it to 'synthesis', and marks the source
+// corrections (from the "synthesized-from:<ids>" note) as synthesized so
+// they leave the synthesis queue. Rejected-candidate corrections stay
+// queued for a future pass.
 func AcceptCandidateRule(d *sql.DB, ruleID string) error {
+	now := NowMillis()
+
+	// Read the rule's source-highlight provenance before promoting it.
+	var notes sql.NullString
+	err := d.QueryRow(
+		`SELECT notes FROM writing_rules WHERE id = ? AND source = 'synthesis-candidate'`, ruleID).Scan(&notes)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("candidate rule not found: %s", ruleID)
+	}
+	if err != nil {
+		return err
+	}
+
 	res, err := d.Exec(
 		`UPDATE writing_rules SET reviewed_at = ?, source = 'synthesis', updated_at = ?
-		 WHERE id = ? AND source = 'synthesis-candidate'`, NowMillis(), NowMillis(), ruleID)
+		 WHERE id = ? AND source = 'synthesis-candidate'`, now, now, ruleID)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return fmt.Errorf("candidate rule not found: %s", ruleID)
+	}
+
+	// Mark the source corrections synthesized so they leave the queue.
+	if notes.Valid && strings.HasPrefix(notes.String, "synthesized-from:") {
+		ids := strings.Split(strings.TrimPrefix(notes.String, "synthesized-from:"), ",")
+		for _, id := range ids {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+			_, _ = d.Exec(
+				`UPDATE corrections SET synthesized_at = ? WHERE highlight_id = ? AND synthesized_at IS NULL`,
+				now, id)
+		}
 	}
 	return nil
 }
