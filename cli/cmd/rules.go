@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/nicholasgasior/margin/cli/db"
 	"github.com/nicholasgasior/margin/cli/output"
@@ -215,11 +216,13 @@ var rulesAddCandidatesCmd = &cobra.Command{
 		var candidates []db.CandidateRuleInput
 		var dropped []string
 		for _, c := range parsed {
-			// A detection_pattern that isn't a valid regex is dropped (the rule
-			// still lands, just without a mechanical pattern).
+			// A detection_pattern is kept only if it (a) compiles and (b) is
+			// specific enough to not misfire on every document. A letterless
+			// or ultra-short pattern (e.g. a bare "—") is the exact regression
+			// guard v2 removed — drop it but keep the rule as a judgment rule.
 			var pattern *string
 			if c.DetectionPattern != "" {
-				if _, rerr := regexp.Compile(c.DetectionPattern); rerr == nil {
+				if _, rerr := regexp.Compile(c.DetectionPattern); rerr == nil && patternIsSpecific(c.DetectionPattern) {
 					p := c.DetectionPattern
 					pattern = &p
 				} else {
@@ -318,6 +321,24 @@ func strPtrOrNil(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// patternIsSpecific rejects detection patterns that would misfire broadly:
+// they must contain at least one letter and, once regex metacharacters are
+// stripped, at least 3 literal characters. A bare "—" or "." fails both.
+func patternIsSpecific(p string) bool {
+	hasLetter := false
+	for _, r := range p {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			hasLetter = true
+			break
+		}
+	}
+	if !hasLetter {
+		return false
+	}
+	literal := regexp.MustCompile(`[\\^$.*+?()\[\]{}|—–]`).ReplaceAllString(p, "")
+	return len(strings.TrimSpace(literal)) >= 3
 }
 
 func init() {
