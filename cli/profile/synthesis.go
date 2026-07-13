@@ -69,6 +69,7 @@ Return ONLY a JSON array of candidate rules. Each rule:
 - Only propose a detection_pattern when a machine could catch it without judgment. Most voice rules cannot — leave the field out.
 - Preserve the writer's actual preferences, including "incorrect" ones. If they always drop the Oxford comma, that is a rule, not an error to fix.
 - If a correction is genuinely idiosyncratic (one-off, no generalizable pattern), skip it rather than manufacture a rule.
+- THE RULEBOOK MUST PASS ITS OWN LINTER. Every example_after must comply with EVERY other rule you emit and the writer's standing prohibitions. Concretely: no em or en dashes in example_after (restructure the sentence instead of swapping in a comma), no negative parallelism ("isn't X — it's Y", "not just X, I Y"), no filler intensifiers (exactly, genuinely, actually), no "kind of X that". Before returning, re-read each example_after as if linting it against your own rule list; rewrite any that fail.
 
 ## The corrections
 

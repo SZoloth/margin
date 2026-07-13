@@ -252,10 +252,36 @@ var rulesAddCandidatesCmd = &cobra.Command{
 		if err != nil {
 			output.ErrorE(err)
 		}
+
+		// Self-consistency lint: an example_after that violates another rule's
+		// detection pattern (or contains an em/en dash) undermines the corpus.
+		// Report, don't block — the reviewer decides.
+		var exampleViolations []string
+		for _, c := range candidates {
+			if c.ExampleAfter == nil {
+				continue
+			}
+			after := *c.ExampleAfter
+			if strings.ContainsAny(after, "—–") {
+				exampleViolations = append(exampleViolations, c.RuleText[:min(60, len(c.RuleText))]+" (example contains em/en dash)")
+				continue
+			}
+			for _, other := range candidates {
+				if other.DetectionPattern == nil || other.RuleText == c.RuleText {
+					continue
+				}
+				if re, err := regexp.Compile(*other.DetectionPattern); err == nil && re.MatchString(after) {
+					exampleViolations = append(exampleViolations,
+						c.RuleText[:min(60, len(c.RuleText))]+" (example violates: "+other.RuleText[:min(50, len(other.RuleText))]+")")
+				}
+			}
+		}
+
 		output.JSON(map[string]any{
-			"inserted":         inserted,
-			"submitted":        len(candidates),
-			"patterns_dropped": len(dropped),
+			"inserted":           inserted,
+			"submitted":          len(candidates),
+			"patterns_dropped":   len(dropped),
+			"example_violations": exampleViolations,
 		}, pretty)
 	},
 }
