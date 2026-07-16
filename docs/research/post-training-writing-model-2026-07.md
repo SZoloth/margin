@@ -310,3 +310,11 @@ Acceptance criteria are explicit.
 - `scripts/verify standard` passes.
 
 After this unit passes, collect real complete examples. The first model code should live in the same isolated experiment directory and begin with C versus D. E and F wait for the preference-pair floor.
+
+## Implementation Checkpoint
+
+The first unit was implemented on July 16 under `experiments/post-training/`. It includes both JSON Schemas, capture eligibility checks, document-grouped chronological splitting, exact and near-duplicate leakage checks, deterministic n-gram and factual-constraint metrics, frozen evaluation manifests, an immutable SQLite auditor, and a no-spend Fireworks model probe.
+
+The live auditor reproduced 258 corrections, 284 rules, and zero populated `suggested_edit`, `rationale`, `accepted_at`, and `feedback_type` fields. Database SHA-256 remained `aeaf190786d50def088f00f28104132afb23af1421eef8973c0c568a09eefcdc`. The Fireworks key was absent from the worktree environment, so the live probe stopped before making a request. Synthetic tests cover the required failure cases, including non-empty WAL rejection.
+
+No production code, schema, existing autoresearch file, or private corpus data changed. Data collection is next. The evaluation prototype begins after 20 complete cover-letter assignments have prompts, source packets, model metadata, and Sam-approved finals.

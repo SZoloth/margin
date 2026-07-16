@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "example_id": "example-eligible",
+  "document_group_id": "cover-letter-acme",
+  "created_at": "2026-07-01T12:00:00.000Z",
+  "writing_type": "cover-letter",
+  "register": "professional",
+  "prompt": "Write a short cover letter for the Acme product role.",
+  "source_material": [
+    "Sam built a writing-quality system called Margin."
+  ],
+  "factual_constraints": [
+    "Margin",
+    "product role"
+  ],
+  "lineage": {
+    "source_kind": "complete_document",
+    "source_polarity": "positive"
+  },
+  "draft": {
+    "candidate_id": "candidate-1",
+    "text": "I built Margin and would like to join Acme.",
+    "model_id": "Qwen/Qwen3-4B-Instruct-2507@fixture",
+    "generation_config": {
+      "temperature": 0.7
+    },
+    "rules_snapshot_hash": "rules-fixture-hash"
+  },
+  "final": {
+    "text": "I built Margin, a writing-quality system, and would like to bring that product work to Acme.",
+    "author_provenance": "sam_edited_model_draft",
+    "finalized_at": "2026-07-01T12:30:00.000Z"
+  },
+  "preference": {
+    "chosen_candidate_id": "candidate-1",
+    "rejected_candidate_ids": [],
+    "rationale": "The final explains Margin on first mention.",
+    "rule_ids": [
+      "reader-context-rule"
+    ]
+  },
+  "training_eligible": true,
+  "content_hash": "fixture-content-hash"
+}

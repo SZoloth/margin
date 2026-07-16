@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://margin.local/schemas/post-training/capture-example-v1.json",
+  "title": "Margin post-training capture example",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "example_id",
+    "document_group_id",
+    "created_at",
+    "writing_type",
+    "register",
+    "prompt",
+    "source_material",
+    "factual_constraints",
+    "lineage",
+    "draft",
+    "final",
+    "training_eligible",
+    "content_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "example_id": { "$ref": "#/$defs/nonEmptyString" },
+    "document_group_id": { "$ref": "#/$defs/nonEmptyString" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "writing_type": { "$ref": "#/$defs/nonEmptyString" },
+    "register": { "$ref": "#/$defs/nonEmptyString" },
+    "prompt": { "$ref": "#/$defs/nonEmptyString" },
+    "source_material": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "factual_constraints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_kind", "source_polarity"],
+      "properties": {
+        "source_kind": {
+          "enum": ["complete_document", "candidate_choice", "correction_span"]
+        },
+        "source_polarity": { "enum": ["positive", "corrective", "unset"] }
+      }
+    },
+    "draft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "text",
+        "model_id",
+        "generation_config",
+        "rules_snapshot_hash"
+      ],
+      "properties": {
+        "candidate_id": { "$ref": "#/$defs/nonEmptyString" },
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "model_id": { "$ref": "#/$defs/nonEmptyString" },
+        "generation_config": { "type": "object" },
+        "rules_snapshot_hash": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "final": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "author_provenance", "finalized_at"],
+      "properties": {
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "author_provenance": {
+          "enum": [
+            "sam_authored",
+            "sam_edited_model_draft",
+            "sam_selected_candidate",
+            "imported_correction_span"
+          ]
+        },
+        "finalized_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "preference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chosen_candidate_id", "rejected_candidate_ids", "rule_ids"],
+      "properties": {
+        "chosen_candidate_id": { "$ref": "#/$defs/nonEmptyString" },
+        "rejected_candidate_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "rationale": { "type": "string" },
+        "rule_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "training_eligible": { "type": "boolean" },
+    "content_hash": { "$ref": "#/$defs/nonEmptyString" }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 }
+  }
+}

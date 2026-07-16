@@ -102,6 +102,8 @@ Horizon 1 items are independent and executable now under existing authority (L1/
 
 Margin should test per-register writing adapters while keeping rules as the interpretable memory, evaluation, and control layer. The live database has enough correction and rule signal for a rules-plus-retrieval baseline, but it has no accepted draft-to-final pairs and only seven positive corrections. Training should wait while capture and evaluation begin now.
 
-The first implementation unit is a collision-free, read-only dataset and evaluation contract under `experiments/post-training/`. It will store private generated artifacts outside Git, enforce document-level chronological splits, and add factuality, blinded preference, rule, distribution, repetition, and diversity metrics. Production schema and UI changes follow only after the contract proves what needs to be captured.
+The first implementation unit now lives under `experiments/post-training/`. It stores private generated artifacts outside Git, enforces document-level chronological splits, blocks duplicate leakage and corrective-span exports, computes deterministic metrics, freezes evaluation manifests, audits SQLite without writes, and probes Fireworks model capabilities without starting jobs. The existing autoresearch lane remains separate and can consume these manifests later.
+
+Adapter work remains gated on data collection. The next threshold is 20 complete cover-letter assignments with source packets and Sam-approved finals for the evaluation prototype. Production capture changes should target those fields and preserve rejected candidates for later preference training.
 
 The full source reconstruction, live data audit, equations, six-condition experiment, promotion gates, collision assessment, and acceptance criteria live in [Post-Training Writing Model Checkpoint](../docs/research/post-training-writing-model-2026-07.md).
