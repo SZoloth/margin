@@ -97,3 +97,11 @@ Horizon 1 items are independent and executable now under existing authority (L1/
 - A new correction reaches enforceable status (reviewed rule, scoped, measured) in one sitting, not never.
 - **Blind-lineup metric (Spiral parity):** an LLM judge tries to spot Margin-coached output in a lineup with Sam's real prose; track the indistinguishability rate on the dashboard as the headline number. Spiral publishes 87%; Margin gets a defensible equivalent the moment positive exemplars exist.
 - **Voice engine = both halves:** rules encode what to avoid (Margin's moat: auditable, one-correction bootstrap, model-portable); exemplars encode what to sound like (stylometry's lesson: rhythm and function words, not word lists). Neither substitutes for the other.
+
+## Part 6 — Post-training research checkpoint (2026-07-16)
+
+Margin should test per-register writing adapters while keeping rules as the interpretable memory, evaluation, and control layer. The live database has enough correction and rule signal for a rules-plus-retrieval baseline, but it has no accepted draft-to-final pairs and only seven positive corrections. Training should wait while capture and evaluation begin now.
+
+The first implementation unit is a collision-free, read-only dataset and evaluation contract under `experiments/post-training/`. It will store private generated artifacts outside Git, enforce document-level chronological splits, and add factuality, blinded preference, rule, distribution, repetition, and diversity metrics. Production schema and UI changes follow only after the contract proves what needs to be captured.
+
+The full source reconstruction, live data audit, equations, six-condition experiment, promotion gates, collision assessment, and acceptance criteria live in [Post-Training Writing Model Checkpoint](../docs/research/post-training-writing-model-2026-07.md).

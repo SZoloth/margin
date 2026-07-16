@@ -7,57 +7,54 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Execute `plans/repair-spec-2026-07.md` on branch `fix/loop-repair-2026-07`.
+Research and specify Margin's post-training writing-model lane on branch `feat/distribution-finetuning-research`.
 
 ### Outcome
 
-The July repair P0s are implemented with failing-test-first evidence, verified locally, and reported in `plans/repair-report-2026-07.md`. Commit/push is blocked in this sandbox because `.git` is read-only.
+Margin has a source-backed decision packet covering live data readiness, a six-condition experiment, loss definitions, compute, evaluation, promotion gates, and a collision-free first implementation unit.
 
 ### Constraints
 
-- Work only on `fix/loop-repair-2026-07`.
-- Implement P0 fixes first; P1 only after all P0s are verified.
-- Write a failing test before each fix.
-- Stop and write `plans/repair-bounceback.md` if a spec bounce-back trigger or discard condition is hit.
-- Do not touch anything under `mcp/scripts/`.
-- Run all four required quality gates before committing:
-  - `cargo check --manifest-path src-tauri/Cargo.toml`
-  - `cargo test --manifest-path src-tauri/Cargo.toml`
-  - `pnpm tsc --noEmit`
-  - `pnpm test`
-- Stage only files changed for this repair.
+- Keep this checkpoint documentation-only.
+- Read the live database through SQLite read-only mode.
+- Do not copy, edit, stage, or interpret Claude's uncommitted files in the main checkout.
+- Mark every proposed Rosmine mechanism as an inference.
+- Keep `plans/pipeline-strategy-2026-07.md` as the strategy source of truth and link its research packet.
+- Run `scripts/verify standard`, stage only this lane's files, commit, and push.
 
 ### Steps
 
-1. P0-1: add note intent taxonomy, schema migration, export filtering, prompt sidecar, summary counts, and tests.
-2. P0-2: fix note-button selection capture, reject whitespace highlights, reject empty correction text, surface failures, and tests.
-3. P0-3: resolve `margin` CLI robustly for GUI PATH, surface auto-export failures, log failures, and tests.
-4. Run the required quality gates.
-5. Write the repair report with exact outputs.
-6. Commit and push the branch.
+1. Verify the supplied public sources and separate facts, inferences, and proprietary unknowns.
+2. Audit the live database and existing evaluation harness.
+3. Define capture requirements, six experimental conditions, loss computation, compute, evaluation, and promotion gates.
+4. Record the boundary around concurrent main-checkout work.
+5. Save the research packet and strategy decision.
+6. Run verification, commit, and push.
 
 ### Decisions
 
-- The three note intents are fixed by spec: `correction`, `note`, and `prompt`.
-- Only `correction` notes become correction rows.
-- `prompt` notes are skipped from corrections and written to a prompt sidecar.
-- Silent pipeline failures should become visible app errors and log entries.
+- Pursue capture and evaluation now. Adapter training waits for complete, provenance-safe examples.
+- Use cover letters as the first register because 122 of 258 corrections carry that writing type.
+- Use Qwen3-4B-Instruct-2507 for the first experiment.
+- Margin rules remain the production memory and control layer through the experiment.
+- The first implementation unit is an offline, read-only dataset and evaluation contract under `experiments/post-training/`.
+- Use Sam's funded Fireworks account for hosted generation and standard SFT/DPO after a no-spend capability probe. Keep D/F on self-managed CUDA because the documented custom callback lacks full-vocabulary logits.
 
 ### Surprises
 
-- The working tree started with many untracked files, including `mcp/scripts/`; those are treated as pre-existing and must not be staged.
-- Several open branches touch high-collision files. Keep high-collision edits narrow and bounce if an actual hunk conflict appears.
+- The live database still has 258 corrections and now has 284 rules.
+- All 258 corrections have empty `suggested_edit`, `rationale`, `accepted_at`, and `feedback_type` fields.
+- Polarity is more complete than the March audit: 134 corrective, 7 positive, and 117 unset.
+- The main checkout contains overlapping uncommitted evaluation work under `mcp/scripts/`; this lane did not inspect or change those files.
+- The required `.claude/napkin.md` file is absent in this worktree.
+- Fireworks supports managed LoRA SFT and DPO for Qwen3 models. Its custom Training API is in private preview and currently returns target-token log probabilities to custom losses, which cannot express D or F as specified.
 
 ### Verification
 
-- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
-- `cargo test --manifest-path src-tauri/Cargo.toml` passed: 228 Rust tests, 0 failed; doc-tests passed.
-- `pnpm tsc --noEmit` passed with no output.
-- `pnpm test` passed: 42 files, 289 tests.
-- Targeted failing-test-first evidence and passing reruns are recorded in `plans/repair-report-2026-07.md`.
+- `MCP_NODE_BIN=/opt/homebrew/Cellar/node@22/22.22.2_2/bin/node scripts/verify standard` passes.
+- The gate covered TypeScript, 292 frontend tests, the production build, 184 MCP tests, MCP TypeScript compilation, and the harness gap audit.
+- A fresh-worktree setup required `pnpm install --frozen-lockfile` and rebuilding the workspace-local `better-sqlite3` native binding before the unchanged MCP suite could run.
 
 ### Handoff
 
-P0 repair completed and verified. P1 was not attempted in this pass to keep the medium-risk data-path diff reviewable after all four P0 gates passed.
-
-Commit/push blocker: `git add ...` failed with `fatal: Unable to create '/Users/samzoloth/Projects/margin/.git/index.lock': Operation not permitted`. No files are staged.
+Research packet is in `docs/research/post-training-writing-model-2026-07.md`. The strategy decision is recorded in `plans/pipeline-strategy-2026-07.md`. No production code or private corpus data changed.
