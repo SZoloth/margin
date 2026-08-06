@@ -21,3 +21,4 @@ cli/cli
 __pycache__/
 *.pyc
 .venv/
+.worktrees
