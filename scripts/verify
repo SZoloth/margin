@@ -48,14 +48,14 @@ require_cmd() {
 
 run_mcp_command() {
   local mcp_dir="$REPO_ROOT/mcp"
-  local node_bin="${MCP_NODE_BIN:-/opt/homebrew/Cellar/node@22/22.22.0_1/bin/node}"
-  local vitest_entry="$REPO_ROOT/node_modules/.pnpm/vitest@3.2.4_@types+node@22.19.13_jiti@2.6.1_jsdom@28.1.0_lightningcss@1.31.1/node_modules/vitest/vitest.mjs"
-  local tsc_entry="$REPO_ROOT/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/bin/tsc"
+  local node_bin="${MCP_NODE_BIN:-$(command -v node)}"
+  local vitest_entry="$mcp_dir/node_modules/vitest/vitest.mjs"
+  local tsc_entry="$mcp_dir/node_modules/typescript/bin/tsc"
   local subcommand="$1"
 
   if [[ ! -x "$node_bin" ]]; then
     echo "error: MCP Node runtime not found at $node_bin" >&2
-    echo "Set MCP_NODE_BIN to a Node 22 binary that matches better-sqlite3." >&2
+    echo "Set MCP_NODE_BIN to the Node runtime used to install better-sqlite3." >&2
     exit 1
   fi
 

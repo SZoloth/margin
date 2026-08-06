@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Document } from "@/types/document";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
+import { sanitizeSearchSnippet } from "@/lib/sanitize-snippet";
 
 interface FileResult {
   path: string;
@@ -517,7 +518,7 @@ export function CommandPalette({
                           whiteSpace: "nowrap",
                           maxWidth: "100%",
                         }}
-                        dangerouslySetInnerHTML={{ __html: result.snippet }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeSearchSnippet(result.snippet) }}
                       />
                     </button>
                   );

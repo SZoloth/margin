@@ -29,6 +29,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Verify release candidate
+        run: scripts/verify data-layer
+
+      - name: Audit production dependencies
+        run: |
+          pnpm audit --prod --audit-level moderate
+          cargo install cargo-audit --locked
+          cargo audit --file src-tauri/Cargo.lock
+
       - name: Import signing certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}

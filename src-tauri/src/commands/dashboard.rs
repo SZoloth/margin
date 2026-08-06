@@ -99,7 +99,7 @@ pub fn get_dashboard_summary_inner(
         .map_err(|e| e.to_string())?;
 
     let recent_runs: Vec<TestRunSummary> = stmt
-        .query_map([limit], |row| row_to_run_summary(row))
+        .query_map([limit], row_to_run_summary)
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.map_err(|e| eprintln!("dashboard row parse error: {e}")).ok())
         .collect();
@@ -127,7 +127,7 @@ pub fn get_test_run_detail_inner(
              FROM test_runs
              WHERE id = ?1",
             [run_id],
-            |row| row_to_run_summary(row),
+            row_to_run_summary,
         )
         .map_err(|e| e.to_string())?;
 
@@ -281,7 +281,7 @@ pub async fn start_test_run(
     let run_id_clone = run_id.clone();
     drop(conn);
 
-    let tmp_file = std::env::temp_dir().join(format!("margin-test-run-{}.json", &run_id_clone));
+    let tmp_file = std::env::temp_dir().join(format!("margin-test-run-{}.json", run_id_clone));
     let tmp_path = tmp_file.to_string_lossy().to_string();
 
     // In dev builds, resolve relative to Cargo manifest. In production, resolve
@@ -631,21 +631,19 @@ fn process_test_results(
     let dimension_averages_json = {
         let mut sums: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         let mut count = 0_f64;
-        for json_opt in &dim_jsons {
-            if let Some(json_str) = json_opt {
-                if let Ok(obj) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json_str) {
-                    for (k, v) in &obj {
-                        if let Some(val) = v.as_f64() {
-                            let entry = sums
-                                .entry(k.clone())
-                                .or_insert(serde_json::Value::from(0.0));
-                            if let Some(cur) = entry.as_f64() {
-                                *entry = serde_json::Value::from(cur + val);
-                            }
+        for json_str in dim_jsons.iter().flatten() {
+            if let Ok(obj) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(json_str) {
+                for (k, v) in &obj {
+                    if let Some(val) = v.as_f64() {
+                        let entry = sums
+                            .entry(k.clone())
+                            .or_insert(serde_json::Value::from(0.0));
+                        if let Some(cur) = entry.as_f64() {
+                            *entry = serde_json::Value::from(cur + val);
                         }
                     }
-                    count += 1.0;
                 }
+                count += 1.0;
             }
         }
         if count > 0.0 {

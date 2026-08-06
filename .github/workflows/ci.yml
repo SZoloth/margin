@@ -25,6 +25,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Production dependency audit
+        run: pnpm audit --prod --audit-level moderate
+
       - name: TypeScript check
         run: pnpm tsc --noEmit
 
@@ -63,6 +66,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      - name: Install Rust dependency auditor
+        run: cargo install cargo-audit --locked
+
+      - name: Rust dependency audit
+        run: cargo audit --file src-tauri/Cargo.lock
 
       - name: Rust check
         run: cargo check --manifest-path src-tauri/Cargo.toml

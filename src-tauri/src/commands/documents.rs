@@ -1,5 +1,6 @@
 use crate::db::migrations::DbPool;
 use crate::db::models::Document;
+use crate::commands::files::authorize_document_path;
 use rusqlite::Connection;
 use std::path::Path;
 use uuid::Uuid;
@@ -104,7 +105,18 @@ pub async fn get_recent_documents(state: tauri::State<'_, DbPool>, limit: Option
 }
 
 #[tauri::command]
-pub async fn upsert_document(state: tauri::State<'_, DbPool>, doc: Document) -> Result<Document, String> {
+pub async fn upsert_document(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DbPool>,
+    doc: Document,
+) -> Result<Document, String> {
+    if doc.source == "file" {
+        let path = doc
+            .file_path
+            .as_deref()
+            .ok_or("File-backed documents require a file path")?;
+        authorize_document_path(&app, Path::new(path))?;
+    }
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     upsert_document_inner(&conn, doc)
 }

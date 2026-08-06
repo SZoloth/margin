@@ -4,3 +4,13 @@ packages:
 onlyBuiltDependencies:
   - esbuild
   - better-sqlite3
+overrides:
+  fast-uri: 3.1.5
+  hono: 4.12.34
+  linkify-it: 6.1.0
+  markdown-it: 15.0.0
+minimumReleaseAgeExclude:
+  - fast-uri
+  - hono
+  - linkify-it
+  - markdown-it

@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use tauri_plugin_fs::FsExt;
 
 #[derive(Serialize)]
 pub struct FileEntry {
@@ -12,8 +13,28 @@ pub struct FileEntry {
     pub is_dir: bool,
 }
 
+pub fn is_supported_document_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "md" | "markdown" | "txt"))
+        .unwrap_or(false)
+}
+
+pub fn authorize_document_path(app: &tauri::AppHandle, path: &Path) -> Result<(), String> {
+    if !is_supported_document_path(path) {
+        return Err("Margin can only access Markdown or text documents".to_string());
+    }
+    if !app.fs_scope().is_allowed(path) {
+        return Err(format!(
+            "Access to '{}' was not granted by the user",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
-pub async fn open_file_dialog() -> Result<Option<String>, String> {
+pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let output = Command::new("osascript")
         .arg("-e")
         .arg(r#"POSIX path of (choose file of type {"md","markdown","txt"} with prompt "Open Markdown File")"#)
@@ -30,16 +51,26 @@ pub async fn open_file_dialog() -> Result<Option<String>, String> {
         return Ok(None);
     }
 
+    let selected = Path::new(&path);
+    if !is_supported_document_path(selected) {
+        return Err("Margin can only open Markdown or text documents".to_string());
+    }
+    app.fs_scope()
+        .allow_file(selected)
+        .map_err(|e| format!("Failed to grant file access: {e}"))?;
+
     Ok(Some(path))
 }
 
 #[tauri::command]
-pub async fn read_file(path: String) -> Result<String, String> {
+pub async fn read_file(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    authorize_document_path(&app, Path::new(&path))?;
     fs::read_to_string(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
 }
 
 #[tauri::command]
-pub async fn save_file(path: String, content: String) -> Result<(), String> {
+pub async fn save_file(app: tauri::AppHandle, path: String, content: String) -> Result<(), String> {
+    authorize_document_path(&app, Path::new(&path))?;
     fs::write(&path, &content).map_err(|e| format!("Failed to write file '{}': {}", path, e))
 }
 
@@ -130,9 +161,22 @@ fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: St
 }
 
 #[tauri::command]
-pub async fn rename_file(state: tauri::State<'_, DbPool>, old_path: String, new_name: String) -> Result<Document, String> {
+pub async fn rename_file(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DbPool>,
+    old_path: String,
+    new_name: String,
+) -> Result<Document, String> {
+    authorize_document_path(&app, Path::new(&old_path))?;
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    rename_file_inner(&conn, old_path, new_name)
+    let updated = rename_file_inner(&conn, old_path.clone(), new_name)?;
+    if let Some(ref new_path) = updated.file_path {
+        app.fs_scope()
+            .allow_file(new_path)
+            .map_err(|e| format!("File was renamed but the new path could not be authorized: {e}"))?;
+    }
+    let _ = app.fs_scope().forbid_file(old_path);
+    Ok(updated)
 }
 
 pub fn collect_markdown_entries(dir: &Path) -> Result<Vec<FileEntry>, String> {
@@ -214,6 +258,19 @@ mod tests {
     }
 
     // === collect_markdown_entries tests ===
+
+    #[test]
+    fn document_path_policy_accepts_supported_files() {
+        assert!(is_supported_document_path(Path::new("/tmp/draft.md")));
+        assert!(is_supported_document_path(Path::new("/tmp/draft.MARKDOWN")));
+        assert!(is_supported_document_path(Path::new("/tmp/notes.txt")));
+    }
+
+    #[test]
+    fn document_path_policy_rejects_other_file_types() {
+        assert!(!is_supported_document_path(Path::new("/tmp/archive.json")));
+        assert!(!is_supported_document_path(Path::new("/tmp/no-extension")));
+    }
 
     #[test]
     fn collects_md_and_markdown_files() {

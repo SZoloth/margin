@@ -2,6 +2,7 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
+use crate::commands::files::authorize_document_path;
 
 #[derive(Clone, serde::Serialize)]
 struct FileChangedPayload {
@@ -94,6 +95,7 @@ pub fn watch_file(
     state: tauri::State<'_, Mutex<FileWatcher>>,
     app_handle: AppHandle,
 ) -> Result<(), String> {
+    authorize_document_path(&app_handle, std::path::Path::new(&path))?;
     let mut watcher = state
         .lock()
         .map_err(|e| format!("Failed to lock watcher state: {e}"))?;

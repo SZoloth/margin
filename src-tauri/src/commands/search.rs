@@ -2,6 +2,7 @@ use crate::commands::now_millis;
 use crate::db::migrations::DbPool;
 use rusqlite::Connection;
 use std::process::Command;
+use tauri_plugin_fs::FsExt;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,21 +56,33 @@ pub fn extract_file_snippet(path: &str) -> Option<String> {
 /// Matches filename OR content. Runs on a blocking thread to avoid
 /// starving the async command pool while mdfind + file I/O execute.
 #[tauri::command]
-pub async fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<FileSearchResult>, String> {
+pub async fn search_files_on_disk(
+    app: tauri::AppHandle,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<FileSearchResult>, String> {
     let limit = limit.unwrap_or(20);
 
     if query.trim().is_empty() {
         return Ok(Vec::new());
     }
 
+    let scope = app.fs_scope();
     tauri::async_runtime::spawn_blocking(move || {
-        search_files_on_disk_inner(&query, limit)
+        search_files_on_disk_inner(&query, limit, |path| scope.is_allowed(path))
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
 }
 
-fn search_files_on_disk_inner(query: &str, limit: usize) -> Result<Vec<FileSearchResult>, String> {
+fn search_files_on_disk_inner<F>(
+    query: &str,
+    limit: usize,
+    is_allowed: F,
+) -> Result<Vec<FileSearchResult>, String>
+where
+    F: Fn(&str) -> bool,
+{
     // Strip characters that could alter Spotlight query semantics
     let safe_query: String = query
         .chars()
@@ -92,13 +105,33 @@ fn search_files_on_disk_inner(query: &str, limit: usize) -> Result<Vec<FileSearc
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let results: Vec<FileSearchResult> = stdout
-        .lines()
-        .filter(|line| !line.is_empty())
-        .filter(|line| !line.split('/').any(|seg| seg.starts_with('.') && seg.len() > 1))
+    Ok(build_file_search_results(
+        stdout.lines().filter(|line| {
+            !line.is_empty()
+                && !line
+                    .split('/')
+                    .any(|segment| segment.starts_with('.') && segment.len() > 1)
+        }),
+        limit,
+        is_allowed,
+    ))
+}
+
+fn build_file_search_results<'a, I, F>(
+    paths: I,
+    limit: usize,
+    is_allowed: F,
+) -> Vec<FileSearchResult>
+where
+    I: IntoIterator<Item = &'a str>,
+    F: Fn(&str) -> bool,
+{
+    paths
+        .into_iter()
+        .filter(|path| is_allowed(path))
         .take(limit)
-        .map(|line| {
-            let path = line.to_string();
+        .map(|path| {
+            let path = path.to_string();
             let filename = std::path::Path::new(&path)
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
@@ -106,9 +139,7 @@ fn search_files_on_disk_inner(query: &str, limit: usize) -> Result<Vec<FileSearc
             let snippet = extract_file_snippet(&path);
             FileSearchResult { path, filename, snippet }
         })
-        .collect();
-
-    Ok(results)
+        .collect()
 }
 
 fn ensure_fts_table(conn: &Connection) -> Result<(), String> {
@@ -459,6 +490,17 @@ pub fn index_all_documents(state: tauri::State<'_, DbPool>) -> Result<IndexAllRe
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn disk_search_filters_scope_before_applying_limit() {
+        let paths = ["/outside/first.md", "/allowed/result.md"];
+        let results = build_file_search_results(paths.into_iter(), 1, |path| {
+            path.starts_with("/allowed/")
+        });
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "/allowed/result.md");
+    }
 
     fn setup_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
