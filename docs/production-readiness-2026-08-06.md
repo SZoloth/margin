@@ -8,7 +8,7 @@ Margin is ready for a private pilot after this branch is reviewed and merged. A 
 
 - One `scripts/verify data-layer` run passed 294 frontend tests, 184 MCP tests, 232 Rust tests, both production builds, the harness gap audit, `cargo check`, and Clippy with warnings denied.
 - The production JavaScript dependency audit and RustSec audit report zero known vulnerabilities. RustSec still reports unmaintained transitive packages in the cross-platform graph, which remain a dependency-maintenance risk rather than a reported vulnerability.
-- Tauri was upgraded to 2.11.1, which includes the custom-command remote-origin security fix. Margin now sets a content security policy and limits filesystem access to user-selected documents, previously opened documents, and the Claude integration directory.
+- Tauri was upgraded to 2.11.5, which includes the custom-command remote-origin security fix. Margin now sets a content security policy and limits filesystem access to user-selected documents, previously opened documents, and the Claude integration directory.
 - Search snippets are escaped before rendering. Regression tests cover malicious markup and preserve the intended search highlight tags.
 - Startup now checks SQLite integrity, creates an online database backup before migrations, and retains the five newest backups.
 
