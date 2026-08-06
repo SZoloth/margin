@@ -113,7 +113,8 @@ export const SCHEMA_SQL = `
     synthesized_at INTEGER,
     feedback_type TEXT,
     suggested_edit TEXT,
-    accepted_at INTEGER
+    accepted_at INTEGER,
+    rationale TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
@@ -158,6 +159,7 @@ export const SCHEMA_SQL = `
     updated_at INTEGER NOT NULL,
     reviewed_at INTEGER,
     register TEXT,
+    polarity TEXT,
     UNIQUE(writing_type, category, rule_text)
   );
 

@@ -7,7 +7,10 @@ import (
 	"github.com/nicholasgasior/margin/cli/db"
 )
 
-const prohibitionBlocks = `<prohibition id="NEG_PARALLELISM" severity="BLOCK">
+// fallbackProhibitionBlocks renders when the DB has no prohibition rules
+// (pre-seed database). The seeded rows in writing_rules (category
+// 'prohibition', source 'seed-prohibitions-v1') are the source of truth.
+const fallbackProhibitionBlocks = `<prohibition id="NEG_PARALLELISM" severity="BLOCK">
 Never contrast what something "isn't" with what it "is."
 Match variants: "isn't X — it's Y", "isn't X. It's Y", "not about X — it's about Y", "wasn't X — was Y", "don't X — Y", "more X, not Y", "X works. It fails Y"
 Instead: state what it IS directly. Drop the contrast.
@@ -94,6 +97,61 @@ func formatCoachingRules(rules []db.WritingRule) string {
 	return strings.Join(lines, "\n")
 }
 
+// prohibitionID derives the <prohibition id="..."> attribute from a rule's
+// notes field ("prohibition-id:NEG_PARALLELISM") with a slug fallback.
+func prohibitionID(r db.WritingRule) string {
+	if r.Notes != nil {
+		for _, line := range strings.Split(*r.Notes, "\n") {
+			if strings.HasPrefix(line, "prohibition-id:") {
+				return strings.TrimSpace(strings.TrimPrefix(line, "prohibition-id:"))
+			}
+		}
+	}
+	words := strings.Fields(strings.ToUpper(r.RuleText))
+	if len(words) > 3 {
+		words = words[:3]
+	}
+	slug := strings.Join(words, "_")
+	return strings.Map(func(c rune) rune {
+		if (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+			return c
+		}
+		return -1
+	}, slug)
+}
+
+func formatProhibitions(rules []db.WritingRule) string {
+	if len(rules) == 0 {
+		return fallbackProhibitionBlocks
+	}
+
+	var blocks []string
+	for _, r := range rules {
+		sev := "ADVISORY"
+		if r.Severity == "must-fix" {
+			sev = "BLOCK"
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "<prohibition id=%q severity=%q>\n", prohibitionID(r), sev)
+		b.WriteString(r.RuleText)
+		if r.WhenToApply != nil && *r.WhenToApply != "" {
+			fmt.Fprintf(&b, "\n%s", *r.WhenToApply)
+		}
+		if r.Why != nil && *r.Why != "" {
+			fmt.Fprintf(&b, "\n%s", *r.Why)
+		}
+		if r.ExampleBefore != nil && *r.ExampleBefore != "" {
+			fmt.Fprintf(&b, "\nBad: %q", *r.ExampleBefore)
+		}
+		if r.ExampleAfter != nil && *r.ExampleAfter != "" {
+			fmt.Fprintf(&b, "\nGood: %q", *r.ExampleAfter)
+		}
+		b.WriteString("\n</prohibition>")
+		blocks = append(blocks, b.String())
+	}
+	return strings.Join(blocks, "\n\n")
+}
+
 func typeConstraint(writingType string) string {
 	switch writingType {
 	case "email", "outreach", "slack":
@@ -132,14 +190,19 @@ func GenerateCoachingPrompt(dbPath string, writingType string, register string) 
 	}
 	defer d.Close()
 
-	corrections, err := db.GetCorrectionsWithNotes(d, 30)
+	corrections, err := db.GetCorrectionsWithNotes(d, 30, writingType)
 	if err != nil {
 		return "", fmt.Errorf("loading corrections: %w", err)
 	}
 
-	rules, err := db.GetHighSignalRules(d, 30)
+	rules, err := db.GetHighSignalRules(d, 30, writingType)
 	if err != nil {
 		return "", fmt.Errorf("loading rules: %w", err)
+	}
+
+	prohibitions, err := db.GetProhibitionRules(d)
+	if err != nil {
+		return "", fmt.Errorf("loading prohibitions: %w", err)
 	}
 
 	var sections []string
@@ -150,7 +213,7 @@ func GenerateCoachingPrompt(dbPath string, writingType string, register string) 
 2. STRUCTURAL RULES — high-signal patterns that have been reinforced by multiple corrections. Follow these strictly.
 3. PROHIBITIONS — the patterns below must never appear in any form.`)
 
-	sections = append(sections, fmt.Sprintf("<prohibitions>\n%s\n</prohibitions>", prohibitionBlocks))
+	sections = append(sections, fmt.Sprintf("<prohibitions>\n%s\n</prohibitions>", formatProhibitions(prohibitions)))
 
 	if len(corrections) > 0 {
 		sections = append(sections, fmt.Sprintf("<corrections>\n%s\n</corrections>", formatCoachingCorrections(corrections)))

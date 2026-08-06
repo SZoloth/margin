@@ -23,6 +23,67 @@ type CorrectionRecord struct {
 	ExtendedContext *string  `json:"extendedContext"`
 }
 
+// SynthesisCorrection is a feedback correction awaiting rule synthesis.
+// Carries HighlightID so synthesized candidate rules can trace back to
+// their source corrections and the source can be marked synthesized.
+type SynthesisCorrection struct {
+	HighlightID     string   `json:"highlightId"`
+	OriginalText    string   `json:"originalText"`
+	Notes           []string `json:"notes"`
+	SuggestedEdit   *string  `json:"suggestedEdit"`
+	WritingType     *string  `json:"writingType"`
+	Polarity        *string  `json:"polarity"`
+	PrefixContext   *string  `json:"prefixContext"`
+	SuffixContext   *string  `json:"suffixContext"`
+	ExtendedContext *string  `json:"extendedContext"`
+	DocumentTitle   *string  `json:"documentTitle"`
+	CreatedAt       int64    `json:"createdAt"`
+}
+
+// GetUnsynthesizedFeedback returns feedback corrections that still need rule
+// synthesis: real writing feedback (not triaged 'non-feedback'), with notes,
+// not yet synthesized. writingType scopes to that type (pass "" for all).
+// Ordered oldest-first so synthesis processes signal in the order it arrived.
+func GetUnsynthesizedFeedback(d *sql.DB, writingType string, limit int) ([]SynthesisCorrection, error) {
+	if limit < 1 {
+		limit = 500
+	}
+	rows, err := d.Query(
+		`SELECT highlight_id, original_text, notes_json, suggested_edit,
+		        writing_type, polarity, prefix_context, suffix_context,
+		        extended_context, document_title, created_at
+		 FROM corrections
+		 WHERE synthesized_at IS NULL
+		   AND session_id != '__backfilled__'
+		   AND notes_json IS NOT NULL AND notes_json != '[]'
+		   AND (category IS NULL OR category != 'non-feedback')
+		   AND UPPER(notes_json) NOT LIKE '%NOT FEEDBACK%'
+		   AND (?1 = '' OR writing_type IS NULL OR writing_type = 'general' OR writing_type = ?1)
+		 ORDER BY created_at ASC
+		 LIMIT ?2`, writingType, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SynthesisCorrection
+	for rows.Next() {
+		var c SynthesisCorrection
+		var notesJSON string
+		if err := rows.Scan(&c.HighlightID, &c.OriginalText, &notesJSON,
+			&c.SuggestedEdit, &c.WritingType, &c.Polarity, &c.PrefixContext,
+			&c.SuffixContext, &c.ExtendedContext, &c.DocumentTitle, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		c.Notes = parseNotesJSON(notesJSON)
+		out = append(out, c)
+	}
+	if out == nil {
+		out = []SynthesisCorrection{}
+	}
+	return out, nil
+}
+
 type CorrectionsSummary struct {
 	Total         int                `json:"total"`
 	ByWritingType []WritingTypeCount `json:"byWritingType"`
@@ -77,7 +138,12 @@ func parseNotesJSON(raw string) []string {
 	return result
 }
 
-func GetCorrectionsWithNotes(d *sql.DB, limit int) ([]CorrectionRecord, error) {
+// GetCorrectionsWithNotes returns recent corrections suitable for coaching
+// context. writingType scopes results to that type plus untyped/general
+// corrections; pass "" for no type scoping. Non-feedback notes (marked
+// "NOT FEEDBACK" during triage) and positive-polarity voice signals are
+// excluded — they must never render as "what to avoid" examples.
+func GetCorrectionsWithNotes(d *sql.DB, limit int, writingType string) ([]CorrectionRecord, error) {
 	if limit < 1 {
 		limit = 30
 	}
@@ -90,8 +156,12 @@ func GetCorrectionsWithNotes(d *sql.DB, limit int) ([]CorrectionRecord, error) {
 		 FROM corrections
 		 WHERE notes_json IS NOT NULL AND notes_json != '[]'
 		   AND session_id != '__backfilled__'
+		   AND UPPER(notes_json) NOT LIKE '%NOT FEEDBACK%'
+		   AND (category IS NULL OR category != 'non-feedback')
+		   AND (polarity IS NULL OR polarity != 'positive')
+		   AND (?1 = '' OR writing_type IS NULL OR writing_type = 'general' OR writing_type = ?1)
 		 ORDER BY created_at DESC
-		 LIMIT ?`, limit)
+		 LIMIT ?2`, writingType, limit)
 	if err != nil {
 		return nil, err
 	}

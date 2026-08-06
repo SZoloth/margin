@@ -1,0 +1,162 @@
+[
+  {
+    "original_text": "I wanted to reach out to discuss the opportunity to leverage my experience.",
+    "user_feedback": "don't say 'leverage', say 'use'",
+    "writing_type": "outreach",
+    "expected_intent": "Replace 'leverage' with 'use' in all professional writing",
+    "expected_severity": "must-fix",
+    "expected_category": "kill-words"
+  },
+  {
+    "original_text": "I genuinely believe this role aligns with my career trajectory.",
+    "user_feedback": "drop 'genuinely' — it's AI slop",
+    "writing_type": "cover-letter",
+    "expected_intent": "Never use 'genuinely' as an intensifier",
+    "expected_severity": "must-fix",
+    "expected_category": "kill-words"
+  },
+  {
+    "original_text": "The challenge isn't technical — it's organizational.",
+    "user_feedback": "kill the negative parallelism, just say what it is",
+    "writing_type": "blog",
+    "expected_intent": "Never contrast what something isn't with what it is",
+    "expected_severity": "must-fix",
+    "expected_category": "kill-words"
+  },
+  {
+    "original_text": "I am writing to express my interest in the Senior PM position.",
+    "user_feedback": "never start with 'I am writing to'",
+    "writing_type": "cover-letter",
+    "expected_intent": "Never open a cover letter with 'I am writing to' or variants",
+    "expected_severity": "must-fix",
+    "expected_category": "kill-words"
+  },
+  {
+    "original_text": "Furthermore, my experience at DreamWorks demonstrates my ability to facilitate cross-functional alignment.",
+    "user_feedback": "don't say 'furthermore' and don't say 'facilitate'",
+    "writing_type": "cover-letter",
+    "expected_intent": "Never use 'furthermore' or 'facilitate' in prose",
+    "expected_severity": "must-fix",
+    "expected_category": "kill-words"
+  },
+  {
+    "original_text": "I believe my background makes me a strong fit for this position.",
+    "user_feedback": "say 'I think' not 'I believe' — 'believe' is too formal",
+    "writing_type": "email",
+    "expected_intent": "Use 'I think' instead of 'I believe' for hedging",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  },
+  {
+    "original_text": "This is a compelling opportunity to drive impact in the physical AI space.",
+    "user_feedback": "too corporate, sounds like a press release",
+    "writing_type": "outreach",
+    "expected_intent": "Avoid corporate-sounding phrases like 'drive impact' and 'compelling opportunity'",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  },
+  {
+    "original_text": "At DreamWorks, I spearheaded a product redesign initiative that culminated in a 15% improvement in user retention metrics.",
+    "user_feedback": "way too formal — say 'led' not 'spearheaded', 'resulted in' not 'culminated in'",
+    "writing_type": "resume",
+    "expected_intent": "Use plain verbs (led, built, shipped) over inflated ones (spearheaded, culminated, orchestrated)",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  },
+  {
+    "original_text": "I would love to explore how my skills could contribute to your team's mission.",
+    "user_feedback": "say 'I'd love to' not 'I would love to'",
+    "writing_type": "outreach",
+    "expected_intent": "Use contractions in professional register — 'I'd' not 'I would'",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  },
+  {
+    "original_text": "Having worked extensively in product management for over a decade, I have developed a keen understanding of the challenges inherent in scaling operations.",
+    "user_feedback": "that's one sentence and it's 30 words, split it",
+    "writing_type": "cover-letter",
+    "expected_intent": "Hard cap of 30 words per sentence — split longer ones",
+    "expected_severity": "should-fix",
+    "expected_category": "structure"
+  },
+  {
+    "original_text": "I built the search tool. I led the redesign. I shipped the new API. I fixed the onboarding flow. I wrote the PRD.",
+    "user_feedback": "five sentences in a row with the same structure, vary it",
+    "writing_type": "resume",
+    "expected_intent": "Never have 3+ consecutive sentences with similar structure or length",
+    "expected_severity": "should-fix",
+    "expected_category": "structure"
+  },
+  {
+    "original_text": "The product — which was built over six months — addressed three key challenges: onboarding friction — users couldn't find core features — latency — pages took 3s+ to load — and retention — 40% churned in week one.",
+    "user_feedback": "way too many em dashes, max 2 per document",
+    "writing_type": "prd",
+    "expected_intent": "Maximum 2 em dashes per document, use periods or commas instead",
+    "expected_severity": "must-fix",
+    "expected_category": "structure"
+  },
+  {
+    "original_text": "Physical AI. The next frontier. Operators need tools. Not dashboards. Real tools.",
+    "user_feedback": "no sentence fragments in prose — those aren't sentences",
+    "writing_type": "blog",
+    "expected_intent": "No sentence fragments in prose — every sentence needs a subject and verb",
+    "expected_severity": "should-fix",
+    "expected_category": "structure"
+  },
+  {
+    "original_text": "The most interesting thing about this space is that nobody is talking about the real problem, which I'll get into below.",
+    "user_feedback": "cut the forward reference, just say the thing",
+    "writing_type": "blog",
+    "expected_intent": "No forward references like 'which I'll get into below' — just say it",
+    "expected_severity": "should-fix",
+    "expected_category": "structure"
+  },
+  {
+    "original_text": "Hey team, just wanted to circle back on the doc review — would love to get everyone's eyes on it before EOD Friday if possible, no rush though!",
+    "user_feedback": "this is slack, be way shorter",
+    "writing_type": "slack",
+    "expected_intent": "Slack messages should be 1-2 sentences max — cut filler",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  },
+  {
+    "original_text": "Dear Hiring Manager, I am excited to submit my application for the Senior Product Manager position at your esteemed organization.",
+    "user_feedback": "way too formal for a cover letter, drop 'Dear Hiring Manager' and 'esteemed organization'",
+    "writing_type": "cover-letter",
+    "expected_intent": "Cover letters should use warm professional register, not formal — no 'Dear Hiring Manager' or 'esteemed'",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  },
+  {
+    "original_text": "I'm a product leader with deep expertise in AI-powered systems, and I'm passionate about building tools that empower operators to make data-driven decisions.",
+    "user_feedback": "never say 'passionate about' or 'empower' — those are AI tells",
+    "writing_type": "pitch",
+    "expected_intent": "Never use 'passionate about' or 'empower' — recognized AI writing tells",
+    "expected_severity": "must-fix",
+    "expected_category": "kill-words"
+  },
+  {
+    "original_text": "This role is the kind of challenge that excites me most.",
+    "user_feedback": "'the kind of X that' is AI slop — just say what excites you",
+    "writing_type": "cover-letter",
+    "expected_intent": "Never use 'the kind of X that' pattern — AI writing tell",
+    "expected_severity": "must-fix",
+    "expected_category": "kill-words"
+  },
+  {
+    "original_text": "In my previous role, I collaborated with cross-functional stakeholders to align on strategic priorities and execute against ambitious OKRs.",
+    "user_feedback": "this is buzzword soup — what did you actually DO",
+    "writing_type": "resume",
+    "expected_intent": "Use concrete outcomes over abstract process language — what shipped, what moved",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  },
+  {
+    "original_text": "I noticed your team is working on some really interesting problems in the logistics space.",
+    "user_feedback": "'really interesting' is vague — name the specific problem",
+    "writing_type": "outreach",
+    "expected_intent": "Be specific about what interests you — name the problem, not 'interesting'",
+    "expected_severity": "should-fix",
+    "expected_category": "voice-calibration"
+  }
+]

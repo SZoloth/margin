@@ -7,40 +7,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/nicholasgasior/margin/cli/db"
 )
-
-// isSafeAutoCorrection reports whether an auto-synthesized correction's
-// example_before is specific enough to be used as a substring trigger in the
-// writing guard. Substring matching on short or single-word strings produces
-// catastrophic false positives — e.g. " ", "doing", "landscape", or a bare
-// em dash match essentially every document. A real correction target is a
-// distinctive multi-word phrase. Require: 12–80 runes, contains whitespace
-// (multi-word), and contains at least one letter.
-// hasLetter reports whether s contains at least one Unicode letter.
-func hasLetter(s string) bool {
-	for _, r := range s {
-		if unicode.IsLetter(r) {
-			return true
-		}
-	}
-	return false
-}
-
-func isSafeAutoCorrection(s string) bool {
-	trimmed := strings.TrimSpace(s)
-	n := utf8.RuneCountInString(trimmed)
-	if n < 12 || n > 80 {
-		return false
-	}
-	if !strings.ContainsAny(trimmed, " \t\n") {
-		return false
-	}
-	return hasLetter(trimmed)
-}
 
 // truncateUnicode truncates to max code points (not bytes).
 func truncateUnicode(text string, max int) string {
@@ -235,40 +205,66 @@ func formatRulesSection(rules []db.WritingRule) []string {
 	return lines
 }
 
+// guardFamily extracts the soft-pattern family tag from a rule's notes
+// ("slop-family:copula-avoidance"), falling back to the rule's category.
+func guardFamily(r db.WritingRule) string {
+	if r.Notes != nil {
+		for _, line := range strings.Split(*r.Notes, "\n") {
+			if strings.HasPrefix(line, "slop-family:") {
+				return strings.TrimSpace(strings.TrimPrefix(line, "slop-family:"))
+			}
+		}
+	}
+	return r.Category
+}
+
 // GenerateWritingGuardPy generates the Python hook script.
 // This is the canonical generator — Rust and MCP delegate to the CLI.
+//
+// v2 contract: a rule contributes a mechanical pattern ONLY via its
+// detection_pattern column (a curated regex). example_before is
+// illustrative — the v1 behavior of executing it as a regex produced
+// verbatim past sentences as "patterns" that never matched future prose.
+//
+// Enforcement model:
+//   - HARD (single hit asks on published docs): kill words, prohibition
+//     rules with a detection_pattern, heading patterns, em-dash budget.
+//   - SOFT (cluster-scored): other detection_pattern rules, grouped into
+//     families; a published doc asks only when >= 2 distinct families
+//     co-occur. A single family is advisory. Isolated tells are normal
+//     in human prose — co-occurrence is the AI signal.
 func GenerateWritingGuardPy(rules []db.WritingRule) string {
 	var killWords []string
-	var slopPatterns [][2]string
+	var hardPatterns [][2]string
+	var softPatterns [][3]string
 	var headingPatterns [][2]string
-	var autoCorrections [][2]string
 
 	for _, r := range rules {
+		// Unreviewed synthesis candidates never reach the mechanical guard.
+		if r.IsUnreviewedCandidate() {
+			continue
+		}
 		if r.Severity == "must-fix" && r.Category == "kill-words" {
 			killWords = append(killWords, r.RuleText)
-		}
-		if r.Category == "ai-slop" && r.ExampleBefore != nil && hasLetter(*r.ExampleBefore) {
-			// A slop "pattern" with no letters (e.g. a bare "—") is a miscategorized
-			// rule that regex-matches every document — drop it. Real slop patterns
-			// are words or example sentences.
-			slopPatterns = append(slopPatterns, [2]string{*r.ExampleBefore, r.RuleText})
 		}
 		if r.Category == "heading-patterns" && r.Severity == "must-fix" && r.ExampleBefore != nil {
 			headingPatterns = append(headingPatterns, [2]string{*r.ExampleBefore, r.RuleText})
 		}
-		if r.Category == "auto-synthesized" && r.Severity == "must-fix" && r.ExampleBefore != nil {
-			if isSafeAutoCorrection(*r.ExampleBefore) {
-				autoCorrections = append(autoCorrections, [2]string{*r.ExampleBefore, r.RuleText})
+		if r.DetectionPattern != nil && *r.DetectionPattern != "" {
+			if r.Category == "prohibition" {
+				hardPatterns = append(hardPatterns, [2]string{*r.DetectionPattern, r.RuleText})
+			} else {
+				softPatterns = append(softPatterns, [3]string{*r.DetectionPattern, r.RuleText, guardFamily(r)})
 			}
 		}
 	}
 
 	killWordsJSON, _ := json.Marshal(killWords)
-	slopPatternsJSON, _ := json.Marshal(slopPatterns)
+	hardPatternsJSON, _ := json.Marshal(hardPatterns)
+	softPatternsJSON, _ := json.Marshal(softPatterns)
 	headingPatternsJSON, _ := json.Marshal(headingPatterns)
-	autoCorrectionsJSON, _ := json.Marshal(autoCorrections)
 
-	for _, blob := range [][]byte{killWordsJSON, slopPatternsJSON, headingPatternsJSON, autoCorrectionsJSON} {
+	for _, blob := range [][]byte{killWordsJSON, hardPatternsJSON, softPatternsJSON, headingPatternsJSON} {
 		if strings.Contains(string(blob), `"""`) {
 			return `#!/usr/bin/env python3
 # ERROR: A writing rule contains a triple-quote sequence that cannot be safely
@@ -310,14 +306,27 @@ def is_published(path):
 # Kill words — loaded from JSON for codegen safety.
 KILL_WORDS = json.loads(r"""%s""")
 
-# AI-slop sentence patterns — [pattern, explanation]
-SLOP_PATTERNS = json.loads(r"""%s""")
+# Hard patterns — [regex, explanation]. A single hit is a violation
+# (prohibition-backed rules with curated detection patterns).
+HARD_PATTERNS = json.loads(r"""%s""")
+
+# Soft patterns — [regex, explanation, family]. Cluster-scored: a published
+# doc is flagged only when >= 2 distinct families co-occur. Isolated tells
+# are normal in human prose; co-occurrence is the AI signal.
+SOFT_PATTERNS = json.loads(r"""%s""")
 
 # Heading patterns — [regex, explanation] applied per heading line
 HEADING_PATTERNS = json.loads(r"""%s""")
 
-# Auto-synthesized corrections — [original_text, explanation] substring match
-AUTO_CORRECTIONS = json.loads(r"""%s""")
+def compiled(patterns):
+    """Compile pattern rows, skipping any invalid regex (fail-open per pattern)."""
+    out = []
+    for row in patterns:
+        try:
+            out.append((re.compile(row[0]), *row[1:]))
+        except re.error:
+            continue
+    return out
 
 def get_extension(path):
     if not path:
@@ -344,37 +353,42 @@ def main():
         if not text or get_extension(path) not in PROSE_EXTENSIONS:
             sys.exit(0)
 
-        violations = []
+        hard = []            # single hit = violation
+        soft_by_family = {}  # family -> [explanations]; blocks only on co-occurrence
 
-        # Check kill words
+        # Kill words — hard
         lower = text.lower()
         for word in KILL_WORDS:
             if word in lower:
-                violations.append(f'Kill word: "{word}"')
+                hard.append(f'Kill word: "{word}"')
 
-        # Check slop patterns
-        for pattern, explanation in SLOP_PATTERNS:
-            if re.search(pattern, text):
-                violations.append(explanation)
+        # Prohibition-backed patterns — hard
+        for rx, explanation in compiled(HARD_PATTERNS):
+            if rx.search(text):
+                hard.append(explanation)
 
-        # Check heading patterns
+        # Heading patterns — hard. Section headings only (## and deeper):
+        # the H1 is the document's title, which these rules don't govern.
         if HEADING_PATTERNS:
+            compiled_headings = compiled(HEADING_PATTERNS)
             for line in text.splitlines():
                 stripped = line.strip()
-                if not stripped.startswith('#'):
+                if not stripped.startswith('##'):
                     continue
                 heading_text = stripped.lstrip('#').strip()
                 if not heading_text:
                     continue
-                for pattern, explanation in HEADING_PATTERNS:
-                    if re.search(pattern, heading_text):
-                        violations.append(f'{explanation}: "{stripped}"')
+                for rx, explanation in compiled_headings:
+                    if rx.search(heading_text):
+                        hard.append(f'{explanation}: "{stripped}"')
                         break
 
-        # Check auto-synthesized corrections (substring match)
-        for original_text, explanation in AUTO_CORRECTIONS:
-            if original_text.lower() in lower:
-                violations.append(f'Auto-correction: "{original_text}" — {explanation}')
+        # Soft patterns — cluster-scored by family
+        for rx, explanation, family in compiled(SOFT_PATTERNS):
+            m = rx.search(text)
+            if m:
+                soft_by_family.setdefault(family, []).append(
+                    f'{explanation} (matched: "{m.group(0)[:60]}")')
 
         published = is_published(path)
 
@@ -382,22 +396,32 @@ def main():
         if published:
             em = text.count("—")
             if em > 2:
-                violations.append(f'Em dash overuse: {em} em dashes; limit to 1-2 per published document.')
+                hard.append(f'Em dash overuse: {em} em dashes; limit to 1-2 per published document.')
 
-        if violations:
-            if not published:
-                # Internal doc: advisory only, never block the write.
-                note = "WRITING GUARD (advisory — internal doc, not blocking):\n"
-                for v in violations[:8]:
+        soft_families = sorted(soft_by_family)
+        cluster = len(soft_families) >= 2
+        blocking = hard + ([v for f in soft_families for v in soft_by_family[f]] if cluster else [])
+        advisory_only = [] if cluster else [v for f in soft_families for v in soft_by_family[f]]
+
+        if blocking or advisory_only:
+            if not published or not blocking:
+                # Internal doc, or a single soft family on a published doc:
+                # advisory only, never block the write.
+                note = "WRITING GUARD (advisory — not blocking):\n"
+                shown = (blocking + advisory_only)[:8]
+                for v in shown:
                     note += f"  - {v}\n"
-                if len(violations) > 8:
-                    note += f"  ... and {len(violations) - 8} more\n"
+                remaining = len(blocking) + len(advisory_only) - len(shown)
+                if remaining > 0:
+                    note += f"  ... and {remaining} more\n"
                 print(note, file=sys.stderr)
                 sys.exit(0)
 
             msg = "WRITING GUARD: Writing rule violations detected:\n"
-            for v in violations:
+            for v in blocking:
                 msg += f"  - {v}\n"
+            if cluster:
+                msg += f"AI-tell cluster: {len(soft_families)} pattern families co-occur ({', '.join(soft_families)}).\n"
             msg += "Fix violations. See ~/.margin/writing-rules.md for rules."
 
             print(json.dumps({
@@ -416,7 +440,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-`, string(killWordsJSON), string(slopPatternsJSON), string(headingPatternsJSON), string(autoCorrectionsJSON))
+`, string(killWordsJSON), string(hardPatternsJSON), string(softPatternsJSON), string(headingPatternsJSON))
 }
 
 // ExportProfile writes the unified writing profile and agent-specific artifacts.
@@ -435,9 +459,19 @@ func ExportProfile(dbPath string, target string) error {
 	}
 	defer d.Close()
 
-	rules, err := db.GetWritingRules(d, nil)
+	allRules, err := db.GetWritingRules(d, nil)
 	if err != nil {
 		return err
+	}
+
+	// Unreviewed synthesis candidates are excluded from every export artifact
+	// (profile markdown + guard) until Sam accepts them.
+	rules := make([]db.WritingRule, 0, len(allRules))
+	for _, r := range allRules {
+		if r.IsUnreviewedCandidate() {
+			continue
+		}
+		rules = append(rules, r)
 	}
 
 	corrections, err := db.GetAllCorrectionsForProfile(d)

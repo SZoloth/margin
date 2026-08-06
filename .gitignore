@@ -21,3 +21,10 @@ cli/cli
 __pycache__/
 *.pyc
 .venv/
+.worktrees
+
+# Generated evaluation artifacts can contain private source prose.
+mcp/scripts/autoresearch/autoresearch-results.tsv
+mcp/scripts/autoresearch/skill-results.tsv
+mcp/scripts/dspy/optimized_prompts/*.json
+mcp/scripts/regression/*-20*.json

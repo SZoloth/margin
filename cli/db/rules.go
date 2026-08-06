@@ -23,7 +23,26 @@ type WritingRule struct {
 	Notes         *string `json:"notes"`
 	CreatedAt     int64   `json:"createdAt"`
 	UpdatedAt     int64   `json:"updatedAt"`
+	// DetectionPattern is the ONLY way a rule contributes to the mechanical
+	// guard hook: a Python-re regex, validated at export. example_before is
+	// illustrative and never executable.
+	DetectionPattern *string `json:"detectionPattern"`
+	// ReviewedAt gates synthesis candidates: a rule with
+	// source='synthesis-candidate' and reviewed_at IS NULL is unreviewed and
+	// must be excluded from every export path (coaching + guard) until Sam
+	// accepts it.
+	ReviewedAt *int64 `json:"reviewedAt"`
 }
+
+// IsUnreviewedCandidate reports whether this rule is a synthesis candidate
+// awaiting Sam's review — such rules never flow into coaching or the guard.
+func (r WritingRule) IsUnreviewedCandidate() bool {
+	return r.Source == "synthesis-candidate" && r.ReviewedAt == nil
+}
+
+// unreviewedCandidateFilter is the SQL predicate excluding unreviewed
+// synthesis candidates from export selections.
+const unreviewedCandidateFilter = `NOT (source = 'synthesis-candidate' AND reviewed_at IS NULL)`
 
 var (
 	ValidSeverities  = []string{"must-fix", "should-fix", "nice-to-fix"}
@@ -71,14 +90,14 @@ func GetWritingRules(d *sql.DB, writingType *string) ([]WritingRule, error) {
 		rows, err = d.Query(
 			`SELECT id, writing_type, category, rule_text, when_to_apply,
 			        why, severity, example_before, example_after, source,
-			        signal_count, notes, created_at, updated_at
+			        signal_count, notes, created_at, updated_at, detection_pattern, reviewed_at
 			 FROM writing_rules WHERE writing_type = ?
 			 ORDER BY signal_count DESC, created_at DESC`, *writingType)
 	} else {
 		rows, err = d.Query(
 			`SELECT id, writing_type, category, rule_text, when_to_apply,
 			        why, severity, example_before, example_after, source,
-			        signal_count, notes, created_at, updated_at
+			        signal_count, notes, created_at, updated_at, detection_pattern, reviewed_at
 			 FROM writing_rules
 			 ORDER BY writing_type, signal_count DESC, created_at DESC`)
 	}
@@ -92,7 +111,7 @@ func GetWritingRules(d *sql.DB, writingType *string) ([]WritingRule, error) {
 		var r WritingRule
 		if err := rows.Scan(&r.ID, &r.WritingType, &r.Category, &r.RuleText,
 			&r.WhenToApply, &r.Why, &r.Severity, &r.ExampleBefore, &r.ExampleAfter,
-			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt, &r.DetectionPattern, &r.ReviewedAt); err != nil {
 			return nil, err
 		}
 		rules = append(rules, r)
@@ -251,7 +270,11 @@ func UpdateWritingRule(d *sql.DB, p UpdateRuleParams) (*WritingRule, error) {
 	return &r, nil
 }
 
-func GetHighSignalRules(d *sql.DB, limit int) ([]WritingRule, error) {
+// GetHighSignalRules returns the strongest rules for coaching context.
+// writingType scopes results to that type plus general rules; pass "" for
+// no scoping. Prohibition rules are excluded — they render in their own
+// section of the coaching prompt.
+func GetHighSignalRules(d *sql.DB, limit int, writingType string) ([]WritingRule, error) {
 	if limit < 1 {
 		limit = 30
 	}
@@ -261,9 +284,44 @@ func GetHighSignalRules(d *sql.DB, limit int) ([]WritingRule, error) {
 		        why, severity, example_before, example_after, source,
 		        signal_count, notes, created_at, updated_at
 		 FROM writing_rules
-		 WHERE signal_count >= 2 OR severity = 'must-fix'
+		 WHERE (signal_count >= 2 OR severity = 'must-fix')
+		   AND category != 'prohibition'
+		   AND ` + unreviewedCandidateFilter + `
+		   AND (?1 = '' OR writing_type = 'general' OR writing_type = ?1)
 		 ORDER BY signal_count DESC
-		 LIMIT ?`, limit)
+		 LIMIT ?2`, writingType, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []WritingRule
+	for rows.Next() {
+		var r WritingRule
+		if err := rows.Scan(&r.ID, &r.WritingType, &r.Category, &r.RuleText,
+			&r.WhenToApply, &r.Why, &r.Severity, &r.ExampleBefore, &r.ExampleAfter,
+			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
+	if rules == nil {
+		rules = []WritingRule{}
+	}
+	return rules, nil
+}
+
+// GetProhibitionRules returns seeded prohibition rules (category='prohibition')
+// for the coaching prompt's <prohibitions> section, hardest first.
+func GetProhibitionRules(d *sql.DB) ([]WritingRule, error) {
+	rows, err := d.Query(
+		`SELECT id, writing_type, category, rule_text, when_to_apply,
+		        why, severity, example_before, example_after, source,
+		        signal_count, notes, created_at, updated_at
+		 FROM writing_rules
+		 WHERE category = 'prohibition'
+		   AND ` + unreviewedCandidateFilter + `
+		 ORDER BY CASE severity WHEN 'must-fix' THEN 0 ELSE 1 END, created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +351,166 @@ func DeleteWritingRule(d *sql.DB, ruleID string) error {
 	n, _ := result.RowsAffected()
 	if n == 0 {
 		return fmt.Errorf("Writing rule not found: %s", ruleID)
+	}
+	return nil
+}
+
+// CandidateRuleInput is one synthesized rule awaiting review. It maps the
+// synthesis JSON contract onto the writing_rules columns.
+type CandidateRuleInput struct {
+	Category         string
+	RuleText         string
+	WritingType      string
+	Severity         string
+	DetectionPattern *string
+	ExampleBefore    *string
+	ExampleAfter     *string
+	SignalCount      int
+	SourceHighlights []string // stored in notes as "synthesized-from:<ids>"
+}
+
+// InsertCandidateRules writes synthesized rules as REVIEW-GATED candidates:
+// source='synthesis-candidate', reviewed_at=NULL. They are excluded from
+// every export path until AcceptCandidateRule sets reviewed_at. Detection
+// patterns are validated by the caller; an invalid one should be dropped
+// before calling. Returns the count inserted. Idempotent-ish via the
+// UNIQUE(writing_type, category, rule_text) constraint: dupes are skipped.
+func InsertCandidateRules(d *sql.DB, candidates []CandidateRuleInput) (int, error) {
+	tx, err := d.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	now := NowMillis()
+	inserted := 0
+	for _, c := range candidates {
+		if !isValidSeverity(c.Severity) {
+			c.Severity = "should-fix"
+		}
+		if !isValidWritingType(c.WritingType) {
+			c.WritingType = "general"
+		}
+		sc := c.SignalCount
+		if sc < 1 {
+			sc = 1
+		}
+		var notes *string
+		if len(c.SourceHighlights) > 0 {
+			n := "synthesized-from:" + strings.Join(c.SourceHighlights, ",")
+			notes = &n
+		}
+		res, err := tx.Exec(
+			`INSERT OR IGNORE INTO writing_rules
+			   (id, writing_type, category, rule_text, severity, detection_pattern,
+			    example_before, example_after, notes, source, signal_count,
+			    created_at, updated_at, reviewed_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'synthesis-candidate', ?, ?, ?, NULL)`,
+			uuid.New().String(), c.WritingType, c.Category, c.RuleText, c.Severity,
+			c.DetectionPattern, c.ExampleBefore, c.ExampleAfter, notes, sc, now, now)
+		if err != nil {
+			return inserted, err
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			inserted++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return inserted, err
+	}
+	return inserted, nil
+}
+
+// GetCandidateRules returns synthesis candidates awaiting review (or all
+// candidates if includeReviewed), newest first.
+func GetCandidateRules(d *sql.DB, includeReviewed bool) ([]WritingRule, error) {
+	q := `SELECT id, writing_type, category, rule_text, when_to_apply,
+	             why, severity, example_before, example_after, source,
+	             signal_count, notes, created_at, updated_at, detection_pattern, reviewed_at
+	      FROM writing_rules
+	      WHERE source = 'synthesis-candidate'`
+	if !includeReviewed {
+		q += ` AND reviewed_at IS NULL`
+	}
+	q += ` ORDER BY signal_count DESC, created_at DESC`
+
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []WritingRule
+	for rows.Next() {
+		var r WritingRule
+		if err := rows.Scan(&r.ID, &r.WritingType, &r.Category, &r.RuleText,
+			&r.WhenToApply, &r.Why, &r.Severity, &r.ExampleBefore, &r.ExampleAfter,
+			&r.Source, &r.SignalCount, &r.Notes, &r.CreatedAt, &r.UpdatedAt,
+			&r.DetectionPattern, &r.ReviewedAt); err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
+	if rules == nil {
+		rules = []WritingRule{}
+	}
+	return rules, nil
+}
+
+// AcceptCandidateRule promotes a candidate into the active corpus: sets
+// reviewed_at, re-sources it to 'synthesis', and marks the source
+// corrections (from the "synthesized-from:<ids>" note) as synthesized so
+// they leave the synthesis queue. Rejected-candidate corrections stay
+// queued for a future pass.
+func AcceptCandidateRule(d *sql.DB, ruleID string) error {
+	now := NowMillis()
+
+	// Read the rule's source-highlight provenance before promoting it.
+	var notes sql.NullString
+	err := d.QueryRow(
+		`SELECT notes FROM writing_rules WHERE id = ? AND source = 'synthesis-candidate'`, ruleID).Scan(&notes)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("candidate rule not found: %s", ruleID)
+	}
+	if err != nil {
+		return err
+	}
+
+	res, err := d.Exec(
+		`UPDATE writing_rules SET reviewed_at = ?, source = 'synthesis', updated_at = ?
+		 WHERE id = ? AND source = 'synthesis-candidate'`, now, now, ruleID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("candidate rule not found: %s", ruleID)
+	}
+
+	// Mark the source corrections synthesized so they leave the queue.
+	if notes.Valid && strings.HasPrefix(notes.String, "synthesized-from:") {
+		ids := strings.Split(strings.TrimPrefix(notes.String, "synthesized-from:"), ",")
+		for _, id := range ids {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+			_, _ = d.Exec(
+				`UPDATE corrections SET synthesized_at = ? WHERE highlight_id = ? AND synthesized_at IS NULL`,
+				now, id)
+		}
+	}
+	return nil
+}
+
+// RejectCandidateRule deletes a candidate outright.
+func RejectCandidateRule(d *sql.DB, ruleID string) error {
+	res, err := d.Exec(
+		`DELETE FROM writing_rules WHERE id = ? AND source = 'synthesis-candidate' AND reviewed_at IS NULL`, ruleID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("unreviewed candidate rule not found: %s", ruleID)
 	}
 	return nil
 }
