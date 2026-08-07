@@ -3,6 +3,7 @@ use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn db_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let home = dirs::home_dir().ok_or("Could not determine home directory")?;
@@ -29,11 +30,70 @@ fn apply_pragmas(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn verify_database_integrity(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let result: String = conn.query_row("PRAGMA quick_check(1)", [], |row| row.get(0))?;
+    if result == "ok" {
+        Ok(())
+    } else {
+        Err(format!("SQLite integrity check failed: {result}").into())
+    }
+}
+
+fn create_startup_backup(
+    source: &Connection,
+    backup_dir: &std::path::Path,
+    timestamp_ms: u128,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fs::create_dir_all(backup_dir)?;
+    let destination = backup_dir.join(format!("margin-{timestamp_ms}.db"));
+    let temporary = backup_dir.join(format!(".margin-{timestamp_ms}.tmp"));
+    if temporary.exists() {
+        fs::remove_file(&temporary)?;
+    }
+
+    let mut target = Connection::open(&temporary)?;
+    {
+        let backup = rusqlite::backup::Backup::new(source, &mut target)?;
+        backup.run_to_completion(128, Duration::from_millis(10), None)?;
+    }
+    drop(target);
+    fs::rename(&temporary, &destination)?;
+
+    let mut backups: Vec<PathBuf> = fs::read_dir(backup_dir)?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with("margin-") && name.ends_with(".db"))
+                .unwrap_or(false)
+        })
+        .collect();
+    backups.sort();
+    let remove_count = backups.len().saturating_sub(5);
+    for old_backup in backups.into_iter().take(remove_count) {
+        let _ = fs::remove_file(old_backup);
+    }
+
+    Ok(destination)
+}
+
 pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     let path = db_path()?;
+    let had_existing_data = path.metadata().map(|metadata| metadata.len() > 0).unwrap_or(false);
     let conn = Connection::open(&path)?;
 
     apply_pragmas(&conn)?;
+    verify_database_integrity(&conn)?;
+
+    if had_existing_data {
+        let timestamp_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+        let backup_dir = path
+            .parent()
+            .ok_or("Could not determine Margin database directory")?
+            .join("backups");
+        create_startup_backup(&conn, &backup_dir, timestamp_ms)?;
+    }
 
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS documents (
@@ -404,6 +464,31 @@ mod tests {
             let count: i64 = c.query_row("SELECT COUNT(*) FROM test", [], |r| r.get(0)).unwrap();
             assert_eq!(count, 1);
         }
+    }
+
+    #[test]
+    fn startup_backup_is_a_readable_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let source_path = dir.path().join("margin.db");
+        let backup_dir = dir.path().join("backups");
+        let source = Connection::open(&source_path).unwrap();
+        source
+            .execute_batch("CREATE TABLE proof (value TEXT); INSERT INTO proof VALUES ('kept');")
+            .unwrap();
+
+        let backup_path = create_startup_backup(&source, &backup_dir, 1234).unwrap();
+        let backup = Connection::open(backup_path).unwrap();
+        let value: String = backup
+            .query_row("SELECT value FROM proof", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(value, "kept");
+    }
+
+    #[test]
+    fn quick_check_accepts_healthy_database() {
+        let conn = Connection::open_in_memory().unwrap();
+        assert!(verify_database_integrity(&conn).is_ok());
     }
 
     // === Frecency migration tests ===
@@ -1220,7 +1305,8 @@ pub fn seed_voice_and_editorial_rules(conn: &Connection) -> Result<(), Box<dyn s
         .unwrap_or(0);
 
     // Each tuple: (writing_type, category, rule_text, severity, when_to_apply, why, signal_count)
-    let rules: Vec<(&str, &str, &str, &str, Option<&str>, Option<&str>, i64)> = vec![
+    type SeedRule<'a> = (&'a str, &'a str, &'a str, &'a str, Option<&'a str>, Option<&'a str>, i64);
+    let rules: Vec<SeedRule<'_>> = vec![
         // === Voice calibration (from voice-profile.md) ===
 
         // Punctuation invariants
@@ -1371,7 +1457,8 @@ pub fn seed_prohibition_rules(conn: &Connection) -> Result<(), Box<dyn std::erro
         .unwrap_or(0);
 
     // Each tuple: (id_tag, rule_text, severity, when_to_apply, why, example_before, example_after)
-    let prohibitions: Vec<(&str, &str, &str, Option<&str>, Option<&str>, Option<&str>, Option<&str>)> = vec![
+    type ProhibitionSeed<'a> = (&'a str, &'a str, &'a str, Option<&'a str>, Option<&'a str>, Option<&'a str>, Option<&'a str>);
+    let prohibitions: Vec<ProhibitionSeed<'_>> = vec![
         ("NEG_PARALLELISM",
          "Never contrast what something \"isn't\" with what it \"is.\"",
          "must-fix",

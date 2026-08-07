@@ -14,10 +14,7 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$HOME/**" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$DESKTOP/**" },
-        { "path": "$DOWNLOAD/**" }
+        { "path": "$HOME/Library/Application Support/Claude/**" }
       ]
     },
     "clipboard-manager:default",

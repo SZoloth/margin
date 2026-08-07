@@ -5,20 +5,7 @@ import type { Document } from "@/types/document";
 import type { Tab } from "@/types/tab";
 import type { SearchResult, FileResult } from "@/hooks/useSearch";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
-
-/** Sanitize FTS snippet HTML — only allow <mark> and </mark> tags, escape everything else. */
-function sanitizeSnippet(html: string): string {
-  // Replace <mark> and </mark> with placeholders, escape the rest, then restore
-  return html
-    .replace(/<mark>/g, "\x00MARK_OPEN\x00")
-    .replace(/<\/mark>/g, "\x00MARK_CLOSE\x00")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/\x00MARK_OPEN\x00/g, "<mark>")
-    .replace(/\x00MARK_CLOSE\x00/g, "</mark>");
-}
+import { sanitizeSearchSnippet } from "@/lib/sanitize-snippet";
 
 interface SidebarProps {
   onOpenFile: () => void;
@@ -326,7 +313,7 @@ export function Sidebar({
                     <div
                       className="text-[length:var(--text-xs)] mt-0.5 truncate"
                       style={{ color: "var(--color-text-secondary)", opacity: 0.7 }}
-                      dangerouslySetInnerHTML={{ __html: sanitizeSnippet(result.snippet) }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeSearchSnippet(result.snippet) }}
                     />
                   )}
                 </button>

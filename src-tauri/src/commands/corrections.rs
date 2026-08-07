@@ -6,6 +6,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
+use tauri_plugin_fs::FsExt;
 use uuid::Uuid;
 
 #[derive(serde::Serialize)]
@@ -165,6 +166,7 @@ pub async fn persist_corrections(
     Ok(outcome.session_id)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn persist_corrections_inner(
     conn: &Connection,
     corrections: &[CorrectionInput],
@@ -179,7 +181,7 @@ fn persist_corrections_inner(
     let now = now_millis();
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
-    let safe_export_date = sanitize_filename_component(&export_date);
+    let safe_export_date = sanitize_filename_component(export_date);
     fs::create_dir_all(corrections_dir)
         .map_err(|e| format!("Failed to create corrections directory: {e}"))?;
     let mut jsonl_file = fs::OpenOptions::new()
@@ -651,7 +653,7 @@ pub async fn get_corrections_flat(
     limit: Option<i64>,
 ) -> Result<Vec<CorrectionDetail>, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let limit = limit.unwrap_or(500).max(1).min(2000);
+    let limit = limit.unwrap_or(500).clamp(1, 2000);
     fetch_corrections_flat(&conn, limit).map_err(|e| e.to_string())
 }
 
@@ -887,11 +889,22 @@ fn mark_synthesized(
 }
 
 #[tauri::command]
-pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Option<String>) -> Result<ExportResult, String> {
+pub async fn export_corrections_json(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DbPool>,
+    path: Option<String>,
+) -> Result<ExportResult, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
 
     let export_path = if let Some(p) = path {
-        std::path::PathBuf::from(p)
+        let requested = std::path::PathBuf::from(p);
+        if requested.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            return Err("Correction exports must use a .json filename".to_string());
+        }
+        if !app.fs_scope().is_allowed(&requested) {
+            return Err("Access to the selected export path was not granted".to_string());
+        }
+        requested
     } else {
         dirs::home_dir()
             .ok_or("Could not determine home directory")?

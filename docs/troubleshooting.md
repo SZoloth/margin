@@ -82,14 +82,29 @@ The outer shell is using a different Node runtime than the package-local runtime
 
 ### Fix
 
-Run MCP commands with the matching Node 22 runtime:
-
-- `MCP_NODE_BIN=/opt/homebrew/Cellar/node@22/22.22.0_1/bin/node bash scripts/verify standard`
-- or invoke the `mcp` test/build entrypoints directly with that Node binary
+Run `bash scripts/verify standard`. The verifier resolves the active Node runtime and the workspace-local MCP test and TypeScript entrypoints.
 
 If needed, confirm the local runtime with:
 
 - `pnpm --dir mcp exec node -p "process.version + ' modules=' + process.versions.modules"`
+
+## Database Integrity Failure
+
+### Symptom
+
+Margin refuses to start and reports a SQLite integrity check failure.
+
+### Likely Cause
+
+The primary database at `~/.margin/margin.db` is damaged. Margin checks the database before migrations and creates an online backup on each successful startup. It retains the five newest copies under `~/.margin/backups/`.
+
+### Fix
+
+1. Quit Margin and preserve `~/.margin/margin.db`, plus its `-wal` and `-shm` files when present.
+2. Run `sqlite3 ~/.margin/backups/<backup-file>.db 'PRAGMA quick_check;'` on the newest backup. Use a backup only when the result is `ok`.
+3. Move the damaged database files into a dated recovery folder outside `~/.margin/`.
+4. Copy the verified backup to `~/.margin/margin.db` and restart Margin.
+5. Keep the recovery folder until documents, annotations, corrections, and writing rules have been checked in the app.
 
 ## Gap Audit Fails
 

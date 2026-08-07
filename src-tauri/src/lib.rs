@@ -5,6 +5,7 @@ pub mod watcher;
 use std::sync::Mutex;
 use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
+use tauri_plugin_fs::FsExt;
 
 use commands::keep_local::HttpClient;
 
@@ -38,7 +39,6 @@ pub fn run() {
             commands::files::open_file_dialog,
             commands::files::read_file,
             commands::files::save_file,
-            commands::files::list_markdown_files,
             commands::files::rename_file,
             commands::documents::get_recent_documents,
             commands::documents::upsert_document,
@@ -104,6 +104,20 @@ pub fn run() {
         ])
         .setup(|app| {
             let pool = db::migrations::init_db()?;
+            {
+                let conn = pool.0.lock().unwrap_or_else(|e| e.into_inner());
+                let mut stmt = conn.prepare(
+                    "SELECT file_path FROM documents WHERE source = 'file' AND file_path IS NOT NULL",
+                )?;
+                let paths = stmt
+                    .query_map([], |row| row.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
+                for path in paths {
+                    if commands::files::is_supported_document_path(std::path::Path::new(&path)) {
+                        let _ = app.fs_scope().allow_file(path);
+                    }
+                }
+            }
             app.manage(pool);
 
             // Clear native window title in debug builds (title is rendered in ChromeBar)
@@ -190,6 +204,13 @@ pub fn run() {
                 if let Ok(path) = url.to_file_path() {
                     if let Some(path_str) = path.to_str() {
                         let path_string = path_str.to_string();
+
+                        if !commands::files::is_supported_document_path(&path) {
+                            continue;
+                        }
+                        if app_handle.fs_scope().allow_file(&path).is_err() {
+                            continue;
+                        }
 
                         // Try emitting to the frontend (works if webview is ready)
                         let emitted = app_handle.emit("open-file", &path_string).is_ok();

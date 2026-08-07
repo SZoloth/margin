@@ -601,6 +601,7 @@ pub struct ExportResult {
     pub rule_count: usize,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_rule(
     conn: &Connection,
     id: &str,
@@ -678,6 +679,7 @@ fn delete_rule(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn update_writing_rule(
     state: tauri::State<'_, DbPool>,
     id: String,
