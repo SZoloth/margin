@@ -71,7 +71,7 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByText("Writing"));
 
     // Writing section content should now be visible
-    expect(screen.getByText("Remember corrections")).toBeInTheDocument();
+    expect(screen.getByText("Learn from feedback")).toBeInTheDocument();
   });
 
   it("escape key closes settings", () => {

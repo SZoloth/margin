@@ -1,12 +1,12 @@
 # Product Vision — Margin
 
-**Last updated:** 2026-03-04
+**Last updated:** 2026-08-12
 
 ---
 
 ## One-liner
 
-AI writing is generic because LLMs have no memory of your taste. Margin fixes this — it captures editorial judgment from your reading and turns it into enforceable writing rules that make Claude write like you.
+Margin is a local-first Markdown reader and writer that learns from every editorial correction and applies the resulting rules to future work.
 
 ---
 
@@ -27,13 +27,23 @@ Nobody is building the feedback loop: **capture what you hate in AI writing → 
 
 ---
 
-## What Margin Actually Is
+## Two product pillars
 
-Margin is a writing quality system disguised as a reading app.
+Margin has two peer product pillars. Product decisions must strengthen at least one pillar without weakening the other.
 
-The surface is a desktop app where you open markdown files, highlight text, and write margin notes. That's the input mechanism. The actual product is underneath:
+### 1. Best-in-class Markdown reading and writing
 
-### 1. Structured capture of editorial judgment
+Margin should be the place a demanding writer wants to spend hours. Markdown files stay portable while the app supplies a calm reading canvas, fast editing, complete keyboard workflows, dependable formatting, strong typography, accurate round-tripping, search, navigation, and annotations that stay attached to the text.
+
+This experience is part of the product's value. Every correction begins with close reading or writing, so friction in the editor reduces both daily usefulness and the quality of the feedback Margin can learn from.
+
+### 2. Continuous learning from feedback
+
+Margin captures editorial judgment as it is saved. Local learning is on by default and can be disabled in Writing settings. Export distributes or shares feedback; it is no longer the step that turns feedback into learning data. The system keeps the current unsynthesized signal editable, preserves learned events after synthesis, and shows the user what it inferred before those rules govern future writing.
+
+The learning system has four parts:
+
+#### Structured capture of editorial judgment
 
 Every annotation carries metadata that generic highlighting tools don't capture:
 
@@ -44,7 +54,7 @@ Every annotation carries metadata that generic highlighting tools don't capture:
 
 When you highlight "leveraging cross-functional synergies" and write "corporate jargon — say what you mean," that isn't a bookmark. It's a training signal.
 
-### 2. Rule synthesis from accumulated corrections
+#### Rule synthesis from accumulated corrections
 
 Corrections synthesize into writing rules via Claude:
 
@@ -59,7 +69,7 @@ Source: synthesis
 
 Rules have categories (kill-words, ai-slop, voice-calibration, tone, structure), severities (must-fix, should-fix, nice-to-fix), and registers (casual, professional, universal). The collection of rules *is* the voice profile — a machine-readable specification of how you write.
 
-### 3. Enforcement on AI writing
+#### Enforcement on AI writing
 
 The voice profile generates two artifacts:
 
@@ -67,7 +77,7 @@ The voice profile generates two artifacts:
 
 - **`~/.claude/hooks/writing_guard.py`** — a pre-tool hook that intercepts Claude's Write and Edit operations on prose files. Kill-words and ai-slop patterns trigger automatic rejection. Claude literally cannot write "delve" into a markdown file if your rules say so.
 
-### 4. Verification that the loop works
+#### Verification that the loop works
 
 Adversarial testing infrastructure generates 27 prose samples (9 writing types x 3) using prompts designed to tempt AI tells. A two-layer compliance checker scores the output:
 
@@ -78,7 +88,7 @@ The regression suite diffs against baselines over time. If the compliance score 
 
 ### The loop
 
-**Read → Annotate → Correct → Synthesize rules → Enforce on AI writing → Read AI output → Annotate again.**
+**Read or write → Give feedback → Capture immediately → Synthesize rules → Review → Apply → Measure → Repeat.**
 
 Each iteration makes the system more precisely yours. The adversarial baseline proves it.
 
@@ -94,23 +104,31 @@ The common thread: they already use AI for writing, they already notice the tell
 
 ## Design Principles
 
-### 1. The writing output is the product, not the reading experience
+### 1. Treat both pillars as product quality
 
-Every feature is evaluated against: "Does this make AI write better prose?" A beautiful reading app that doesn't improve writing output is a failure. An ugly one that measurably reduces AI tells is a success.
+The Markdown experience earns daily use. The learning system compounds the value of that use. Evaluate each pillar independently and verify the full loop between them.
 
-### 2. Enforce, don't suggest
+### 2. Capture feedback at the moment of judgment
+
+A saved correction, positive signal, or rationale enters SQLite immediately. Editing the feedback updates the current unsynthesized signal. Feedback added after synthesis becomes a new event so repeated judgment remains countable.
+
+### 3. Keep learning legible and reversible
+
+Users can inspect the corrections behind a rule, edit or reject the rule, and understand where it applies. Automatic capture does not authorize opaque or irreversible changes to the voice profile.
+
+### 4. Enforce approved rules
 
 Grammarly suggests. Writing guides advise. Margin enforces. The writing guard is a binary gate: Claude cannot write kill-words into prose files. This is stronger than any prompt instruction because it operates at the tool level, not the prompt level. The AI doesn't choose to comply — it's mechanically prevented from violating.
 
-### 3. Verify the loop, not just the plumbing
+### 5. Verify outcomes across the full loop
 
 It's not enough that annotations flow into rules that flow into profiles. The product hypothesis — that accumulated editorial judgment makes AI write measurably better prose — must be tested adversarially. Compliance scoring and regression baselines are product features.
 
-### 4. Database is the source of truth
+### 6. Database is the source of truth
 
 Rules live in SQLite, not in markdown files or prompt templates. The generated artifacts (`writing-rules.md`, `writing_guard.py`) are derived from the database. This means rules are queryable, countable, versioned, and accessible from multiple surfaces (desktop app, MCP tools, CLI).
 
-### 5. Local-first because editorial judgment is private
+### 7. Local-first because editorial judgment is private
 
 Your writing rules are a fingerprint. What you flag, what you fix, what you admire — this is the most personal data an AI tool could hold. It lives on your machine in SQLite. No cloud account. No sync service. No sending your editorial taste to a server.
 
@@ -164,6 +182,14 @@ Tools that don't compete with Margin but share adjacent design instincts worth s
 ---
 
 ## What Success Looks Like
+
+### Reading and writing feels complete
+
+Opening a Markdown file, navigating it, editing prose, applying common formatting, saving, and returning to the same place should be fast and dependable. Round-trip tests must preserve Markdown meaning, and primary actions must work from the keyboard.
+
+### Feedback becomes learning data immediately
+
+Saving or editing correction feedback updates the current unsynthesized signal in SQLite without an export step. Style Memory shows the new signal and keeps its path into a reviewed rule inspectable.
 
 ### The adversarial score improves over time
 

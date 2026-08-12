@@ -26,7 +26,7 @@ function mockMatchMedia(matches: boolean) {
 
 const DEFAULTS = {
   theme: "system",
-  persistCorrections: false,
+  persistCorrections: true,
   fontFamily: "serif",
   fontSize: "default",
   lineSpacing: "default",

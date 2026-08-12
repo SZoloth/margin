@@ -85,6 +85,14 @@ export async function getCorrectionsByDocument(limit?: number): Promise<Document
   );
 }
 
+export async function syncFeedbackSignal(
+  highlightId: string,
+  polarity: "positive" | "corrective" | null,
+  rationale: string | null,
+): Promise<boolean> {
+  return invoke<boolean>("sync_feedback_signal", { highlightId, polarity, rationale });
+}
+
 export async function updateCorrectionWritingType(highlightId: string, writingType: WritingType): Promise<void> {
   return invoke<void>("update_correction_writing_type", { highlightId, writingType });
 }

@@ -67,6 +67,7 @@ pub fn run() {
             commands::corrections::persist_corrections,
             commands::corrections::get_all_corrections,
             commands::corrections::get_corrections_count,
+            commands::feedback::sync_feedback_signal,
             commands::corrections::get_corrections_by_document,
             commands::corrections::update_correction_writing_type,
             commands::corrections::delete_correction,

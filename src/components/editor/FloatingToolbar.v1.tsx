@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Comment01Icon } from "@hugeicons/core-free-icons";
@@ -13,6 +13,21 @@ interface FloatingToolbarProps {
   defaultColor?: string;
 }
 
+type InlineFormat = "bold" | "italic" | "strike" | "code";
+
+const INLINE_FORMATS: Array<{
+  format: InlineFormat;
+  label: string;
+  shortcut?: string;
+  glyph: string;
+  style?: CSSProperties;
+}> = [
+  { format: "bold", label: "Bold", shortcut: "⌘B", glyph: "B", style: { fontWeight: 700 } },
+  { format: "italic", label: "Italic", shortcut: "⌘I", glyph: "I", style: { fontStyle: "italic" } },
+  { format: "strike", label: "Strikethrough", glyph: "S", style: { textDecoration: "line-through" } },
+  { format: "code", label: "Inline code", glyph: "<>" },
+];
+
 export function FloatingToolbar({
   editor,
   onHighlight,
@@ -25,6 +40,25 @@ export function FloatingToolbar({
   const [isFlipped, setIsFlipped] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const noteSelectionRef = useRef<{ from: number; to: number } | null>(null);
+
+  const applyInlineFormat = useCallback((format: InlineFormat) => {
+    if (!editor) return;
+    const chain = editor.chain().focus();
+    switch (format) {
+      case "bold":
+        chain.toggleBold().run();
+        break;
+      case "italic":
+        chain.toggleItalic().run();
+        break;
+      case "strike":
+        chain.toggleStrike().run();
+        break;
+      case "code":
+        chain.toggleCode().run();
+        break;
+    }
+  }, [editor]);
 
   const currentSelectionRange = useCallback(() => {
     if (!editor) return null;
@@ -133,7 +167,7 @@ export function FloatingToolbar({
     <div
       ref={toolbarRef}
       role="toolbar"
-      aria-label="Text formatting"
+      aria-label="Formatting and feedback"
       className="fixed z-50 flex items-center gap-1 border px-2 py-1.5 shadow-md"
       style={{
         top: position.top,
@@ -153,6 +187,45 @@ export function FloatingToolbar({
         e.preventDefault();
       }}
     >
+      {INLINE_FORMATS.map(({ format, label, shortcut, glyph, style }) => {
+        const isActive = editor.isActive(format);
+        return (
+          <button
+            key={format}
+            type="button"
+            onClick={() => applyInlineFormat(format)}
+            className={`toolbar-btn${isActive ? " toolbar-btn--active" : ""}`}
+            aria-label={`${label}${shortcut ? ` (${shortcut})` : ""}`}
+            aria-pressed={isActive}
+            title={`${label}${shortcut ? ` ${shortcut}` : ""}`}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                minWidth: 18,
+                fontFamily: format === "code" ? "var(--font-mono, ui-monospace, monospace)" : "var(--font-sans, system-ui, sans-serif)",
+                fontSize: format === "code" ? 12 : 15,
+                lineHeight: 1,
+                ...style,
+              }}
+            >
+              {glyph}
+            </span>
+          </button>
+        );
+      })}
+
+      <div
+        aria-hidden="true"
+        style={{
+          width: 1,
+          height: 18,
+          backgroundColor: "var(--color-border)",
+          margin: "0 2px",
+          flexShrink: 0,
+        }}
+      />
+
       {/* Color picker circles — default color first */}
       {[...HIGHLIGHT_COLORS].sort((a, b) =>
         a.name === defaultColor ? -1 : b.name === defaultColor ? 1 : 0

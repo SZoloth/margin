@@ -1,4 +1,5 @@
 use crate::commands::now_millis;
+use crate::commands::feedback::sync_continuous_feedback;
 use crate::db::migrations::DbPool;
 use crate::db::models::{Highlight, MarginNote};
 use rusqlite::Connection;
@@ -275,8 +276,10 @@ pub async fn create_margin_note(
     highlight_id: String,
     content: String,
     intent: Option<String>,
+    capture_feedback: Option<bool>,
 ) -> Result<MarginNote, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let id = Uuid::new_v4().to_string();
     let now = now_millis();
     let intent = intent.unwrap_or_else(|| "correction".to_string());
@@ -286,10 +289,14 @@ pub async fn create_margin_note(
         ));
     }
 
-    insert_margin_note_with_intent(&conn, &id, &highlight_id, &content, &intent, now)?;
+    insert_margin_note_with_intent(&tx, &id, &highlight_id, &content, &intent, now)?;
 
-    let doc_id = document_id_for_highlight(&conn, &highlight_id)?;
-    touch_document(&conn, &doc_id)?;
+    let doc_id = document_id_for_highlight(&tx, &highlight_id)?;
+    if intent == "correction" && capture_feedback.unwrap_or(false) {
+        sync_continuous_feedback(&tx, &highlight_id, None, None, now)?;
+    }
+    touch_document(&tx, &doc_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(MarginNote {
         id,
@@ -308,24 +315,54 @@ pub async fn get_margin_notes(state: tauri::State<'_, DbPool>, document_id: Stri
 }
 
 #[tauri::command]
-pub async fn update_margin_note(state: tauri::State<'_, DbPool>, id: String, content: String) -> Result<(), String> {
+pub async fn update_margin_note(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    content: String,
+    capture_feedback: Option<bool>,
+) -> Result<(), String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let now = now_millis();
 
-    let doc_id = document_id_for_margin_note(&conn, &id)?;
-    set_margin_note_content(&conn, &id, &content, now)?;
-    touch_document(&conn, &doc_id)?;
+    let highlight_id: String = tx.query_row(
+        "SELECT highlight_id FROM margin_notes WHERE id = ?1",
+        [&id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    let doc_id = document_id_for_margin_note(&tx, &id)?;
+    set_margin_note_content(&tx, &id, &content, now)?;
+    if capture_feedback.unwrap_or(false) {
+        sync_continuous_feedback(&tx, &highlight_id, None, None, now)?;
+    }
+    touch_document(&tx, &doc_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
 #[tauri::command]
-pub async fn delete_margin_note(state: tauri::State<'_, DbPool>, id: String) -> Result<(), String> {
+pub async fn delete_margin_note(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    capture_feedback: Option<bool>,
+) -> Result<(), String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let now = now_millis();
 
-    let doc_id = document_id_for_margin_note(&conn, &id)?;
-    remove_margin_note(&conn, &id)?;
-    touch_document(&conn, &doc_id)?;
+    let highlight_id: String = tx.query_row(
+        "SELECT highlight_id FROM margin_notes WHERE id = ?1",
+        [&id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    let doc_id = document_id_for_margin_note(&tx, &id)?;
+    remove_margin_note(&tx, &id)?;
+    if capture_feedback.unwrap_or(false) {
+        sync_continuous_feedback(&tx, &highlight_id, None, None, now)?;
+    }
+    touch_document(&tx, &doc_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(())
 }

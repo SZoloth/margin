@@ -19,8 +19,8 @@ export function WritingSection({
         <SectionHeader title="Writing" />
 
         <SettingRow
-          label="Remember corrections"
-          description="Store highlights and notes in local database when exporting"
+          label="Learn from feedback"
+          description="Save correction feedback to Margin's local learning system as you write"
         >
           <ToggleSwitch
             checked={settings.persistCorrections}

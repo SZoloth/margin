@@ -55,6 +55,12 @@ Default is `full`.
 
 When relevant, also verify:
 
+- Markdown formatting controls preserve selection, expose pressed state, and serialize to the expected Markdown
+- reading and writing changes preserve cursor stability, save freshness, and supported Markdown round-trips
+- saved feedback appears in SQLite before any export action
+- disabling local learning prevents new correction rows without deleting prior learning data
+- editing feedback updates the current unsynthesized signal without duplicating it
+- feedback added after synthesis creates a new event
 - text anchoring behavior after edits
 - correction to rule to artifact chain integrity
 - parity between Rust-backed and MCP-backed generated artifacts
@@ -69,3 +75,4 @@ Changes are ready to hand off when:
 - any tier-specific behavioral risks were checked explicitly
 - new constraints or failure modes were documented in `docs/invariants.md` or `docs/troubleshooting.md`
 - production escapes, if any, are captured in `.harness/gaps.jsonl`
+- both product pillars were checked explicitly when a change touches their shared editor and feedback flow

@@ -84,7 +84,7 @@ The outer shell is using a different Node runtime than the package-local runtime
 
 Run MCP commands with the matching Node 22 runtime:
 
-- `MCP_NODE_BIN=/opt/homebrew/Cellar/node@22/22.22.0_1/bin/node bash scripts/verify standard`
+- `MCP_NODE_BIN=/opt/homebrew/opt/node@22/bin/node bash scripts/verify standard`
 - or invoke the `mcp` test/build entrypoints directly with that Node binary
 
 If needed, confirm the local runtime with:
