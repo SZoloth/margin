@@ -159,4 +159,22 @@ describe("useAnnotations", () => {
       expect(result.current.marginNotes[0]?.highlight_id).toBe("h2");
     });
   });
+
+  describe("continuous feedback preference", () => {
+    it("passes the enabled preference when saving correction feedback", async () => {
+      mockInvoke.mockResolvedValueOnce(fakeNote("n1", "h1"));
+      const { result } = renderHook(() => useAnnotations(undefined, true));
+
+      await act(async () => {
+        await result.current.createMarginNoteWithIntent("h1", "Use evidence.", "correction");
+      });
+
+      expect(mockInvoke).toHaveBeenCalledWith("create_margin_note", {
+        highlightId: "h1",
+        content: "Use evidence.",
+        intent: "correction",
+        captureFeedback: true,
+      });
+    });
+  });
 });

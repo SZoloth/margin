@@ -2,7 +2,7 @@
 
 ## System Purpose
 
-Margin is a local-first writing quality system. It captures editorial judgment from reading, stores that signal in SQLite, synthesizes it into writing rules, and exports enforceable artifacts that keep Claude from repeating patterns the user has flagged.
+Margin is a local-first Markdown reader and writer with a continuous feedback-learning system. The editor provides the daily reading and writing workspace. Saved editorial judgment enters SQLite immediately, synthesizes into reviewable writing rules, and exports as enforceable artifacts for future writing.
 
 Related docs:
 
@@ -25,13 +25,22 @@ Related docs:
 
 ## Critical Flows
 
+### Markdown Document Loop
+
+1. User opens a portable Markdown file or local article.
+2. TipTap renders it as a focused reading and writing surface.
+3. Formatting and edits serialize back to Markdown without losing supported structure.
+4. Saving writes the updated Markdown to its original local source.
+5. File watching and snapshots protect the editor from silent external-change loss.
+
 ### Annotation To Rule
 
-1. User annotates content in the Tauri app.
-2. Annotation data persists as corrections in SQLite.
-3. Corrections synthesize into writing rules.
-4. Rules export to `~/.margin/writing-rules.md` and `~/.claude/hooks/writing_guard.py`.
-5. Future AI writing is guided by the profile and constrained by the guard.
+1. User annotates content or records positive or corrective feedback.
+2. Saving feedback creates or updates the current unsynthesized correction in SQLite.
+3. Editing or deleting feedback updates that same pending signal.
+4. Synthesis turns correction events into reviewable writing rules.
+5. Approved rules export to `~/.margin/writing-rules.md` and `~/.claude/hooks/writing_guard.py`.
+6. Future writing uses the profile and guard, and the resulting prose returns to Margin for another review cycle.
 
 ### Agent Access
 

@@ -7,57 +7,42 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Execute `plans/repair-spec-2026-07.md` on branch `fix/loop-repair-2026-07`.
+Make Margin's two product pillars explicit and ship the first missing behavior for each pillar on branch `feat/two-pillar-product`.
 
 ### Outcome
 
-The July repair P0s are implemented with failing-test-first evidence, verified locally, and reported in `plans/repair-report-2026-07.md`. Commit/push is blocked in this sandbox because `.git` is read-only.
+Margin treats the Markdown reading and writing experience as a core product, and feedback saved in the margin becomes local learning data without requiring an export step.
 
 ### Constraints
 
-- Work only on `fix/loop-repair-2026-07`.
-- Implement P0 fixes first; P1 only after all P0s are verified.
-- Write a failing test before each fix.
-- Stop and write `plans/repair-bounceback.md` if a spec bounce-back trigger or discard condition is hit.
-- Do not touch anything under `mcp/scripts/`.
-- Run all four required quality gates before committing:
-  - `cargo check --manifest-path src-tauri/Cargo.toml`
-  - `cargo test --manifest-path src-tauri/Cargo.toml`
-  - `pnpm tsc --noEmit`
-  - `pnpm test`
-- Stage only files changed for this repair.
+- Keep Markdown files portable and preserve round-trip behavior.
+- Keep SQLite authoritative for feedback and rules.
+- Keep automatic learning inspectable and reversible; synthesis remains reviewable.
+- Preserve correction-event history after synthesis while updating the current unsynthesized signal in place.
+- Write failing tests before each behavior change.
+- Run `scripts/verify full`, stage only this task's files, commit, and push.
 
 ### Steps
 
-1. P0-1: add note intent taxonomy, schema migration, export filtering, prompt sidecar, summary counts, and tests.
-2. P0-2: fix note-button selection capture, reject whitespace highlights, reject empty correction text, surface failures, and tests.
-3. P0-3: resolve `margin` CLI robustly for GUI PATH, surface auto-export failures, log failures, and tests.
-4. Run the required quality gates.
-5. Write the repair report with exact outputs.
-6. Commit and push the branch.
+1. Add failing tests for first-class formatting controls in the selection toolbar.
+2. Add failing Rust tests for continuous feedback capture and unsynthesized-signal updates.
+3. Implement both behaviors and wire visible error handling into the app.
+4. Rewrite the product contract, architecture, invariants, and evals around the two pillars.
+5. Run the full verification gate, commit, and push.
 
 ### Decisions
 
-- The three note intents are fixed by spec: `correction`, `note`, and `prompt`.
-- Only `correction` notes become correction rows.
-- `prompt` notes are skipped from corrections and written to a prompt sidecar.
-- Silent pipeline failures should become visible app errors and log entries.
-
-### Surprises
-
-- The working tree started with many untracked files, including `mcp/scripts/`; those are treated as pre-existing and must not be staged.
-- Several open branches touch high-collision files. Keep high-collision edits narrow and bounce if an actual hunk conflict appears.
+- The two pillars are peers. Reading and writing quality is not a disposable input surface for the learning system.
+- A saved correction note becomes a correction row immediately. Later edits update the current unsynthesized row; feedback after synthesis creates a new event.
+- Formatting controls share the selection toolbar with annotation controls so writing and feedback stay in one flow.
 
 ### Verification
 
-- `cargo check --manifest-path src-tauri/Cargo.toml` passed.
-- `cargo test --manifest-path src-tauri/Cargo.toml` passed: 228 Rust tests, 0 failed; doc-tests passed.
-- `pnpm tsc --noEmit` passed with no output.
-- `pnpm test` passed: 42 files, 289 tests.
-- Targeted failing-test-first evidence and passing reruns are recorded in `plans/repair-report-2026-07.md`.
+- Failing-test-first evidence recorded for the formatting toolbar, continuous feedback capture, default learning preference, and export de-duplication.
+- `scripts/verify full` passed with the matching Node 22 runtime: 294 frontend tests, production build, 184 MCP tests, MCP TypeScript, gap audit, cargo check, and 231 Rust tests.
+- `scripts/verify standard` passed without an environment override after replacing the stale versioned Node path with Homebrew's stable `node@22` path.
+- An additional `cargo clippy -- -D warnings` check remains blocked by 11 existing warnings in unchanged code. None point to the new feedback module or toolbar.
 
 ### Handoff
 
-P0 repair completed and verified. P1 was not attempted in this pass to keep the medium-risk data-path diff reviewable after all four P0 gates passed.
-
-Commit/push blocker: `git add ...` failed with `fatal: Unable to create '/Users/samzoloth/Projects/margin/.git/index.lock': Operation not permitted`. No files are staged.
+The two-pillar product contract, formatting controls, local learning default, continuous feedback capture, export de-duplication, and stable verification path are ready on `feat/two-pillar-product`.

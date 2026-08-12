@@ -12,7 +12,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
-  persistCorrections: false,
+  persistCorrections: true,
   fontFamily: "serif",
   fontSize: "default",
   lineSpacing: "default",

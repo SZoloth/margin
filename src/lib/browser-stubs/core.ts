@@ -167,6 +167,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   persist_corrections: () => "mock-export-id",
   get_all_corrections: () => [],
   get_corrections_count: () => 0,
+  sync_feedback_signal: () => true,
   get_corrections_by_document: () => [],
   get_corrections_flat: () => [],
   update_correction_writing_type: () => undefined,

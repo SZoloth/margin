@@ -16,6 +16,12 @@ import { FloatingToolbar } from "../FloatingToolbar";
 // Minimal Editor mock with the events and state the toolbar needs
 function createMockEditor(hasSelection: boolean) {
   const listeners: Record<string, Array<() => void>> = {};
+  const run = vi.fn();
+  const toggleBold = vi.fn(() => ({ run }));
+  const toggleItalic = vi.fn(() => ({ run }));
+  const toggleStrike = vi.fn(() => ({ run }));
+  const toggleCode = vi.fn(() => ({ run }));
+  const focus = vi.fn(() => ({ toggleBold, toggleItalic, toggleStrike, toggleCode }));
   return {
     state: {
       selection: { empty: !hasSelection, from: 0, to: hasSelection ? 10 : 0 },
@@ -24,6 +30,8 @@ function createMockEditor(hasSelection: boolean) {
     view: {
       coordsAtPos: () => ({ top: 100, bottom: 120, left: 50, right: 150 }),
     },
+    chain: () => ({ focus }),
+    isActive: vi.fn(() => false),
     on: (event: string, fn: () => void) => {
       (listeners[event] ??= []).push(fn);
     },
@@ -37,6 +45,7 @@ function createMockEditor(hasSelection: boolean) {
     _trigger: (event: string) => {
       for (const fn of listeners[event] ?? []) fn();
     },
+    _formatting: { focus, toggleBold, toggleItalic, toggleStrike, toggleCode, run },
   } as unknown as import("@tiptap/core").Editor & { _trigger: (e: string) => void };
 }
 
@@ -61,7 +70,7 @@ describe("FloatingToolbar", () => {
 
       const toolbar = document.body.querySelector("[role='toolbar']");
       expect(toolbar).toBeTruthy();
-      expect(toolbar?.getAttribute("aria-label")).toBe("Text formatting");
+      expect(toolbar?.getAttribute("aria-label")).toBe("Formatting and feedback");
     } finally {
       vi.useRealTimers();
     }
@@ -209,6 +218,51 @@ describe("FloatingToolbar", () => {
       fireEvent.click(noteButton);
 
       expect(onNote).toHaveBeenCalledWith({ from: 3, to: 8 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("offers Markdown formatting without leaving the selection", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor(true) as unknown as import("@tiptap/core").Editor & {
+        _trigger: (event: string) => void;
+        _formatting: {
+          focus: ReturnType<typeof vi.fn>;
+          toggleBold: ReturnType<typeof vi.fn>;
+          run: ReturnType<typeof vi.fn>;
+        };
+      };
+
+      render(
+        <FloatingToolbar
+          editor={editor}
+          onHighlight={vi.fn()}
+          onNote={vi.fn()}
+        />,
+      );
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.runAllTimers();
+      });
+
+      const bold = document.body.querySelector("[aria-label='Bold (⌘B)']") as HTMLButtonElement;
+      const italic = document.body.querySelector("[aria-label='Italic (⌘I)']");
+      const strike = document.body.querySelector("[aria-label='Strikethrough']");
+      const code = document.body.querySelector("[aria-label='Inline code']");
+
+      expect(bold).toBeTruthy();
+      expect(italic).toBeTruthy();
+      expect(strike).toBeTruthy();
+      expect(code).toBeTruthy();
+
+      fireEvent.click(bold);
+
+      expect(editor._formatting.focus).toHaveBeenCalledOnce();
+      expect(editor._formatting.toggleBold).toHaveBeenCalledOnce();
+      expect(editor._formatting.run).toHaveBeenCalledOnce();
     } finally {
       vi.useRealTimers();
     }

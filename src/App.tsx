@@ -29,7 +29,7 @@ import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
-import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, syncFeedbackSignal } from "@/lib/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -108,7 +108,7 @@ const showUIFork = import.meta.env.MODE !== "production";
 export default function App() {
   const { settings, setSetting } = useSettings();
   const doc = useDocument();
-  const annotations = useAnnotations(doc.refreshRecentDocs);
+  const annotations = useAnnotations(doc.refreshRecentDocs, settings.persistCorrections);
   const keepLocal = useKeepLocal();
   const search = useSearch();
   const onboarding = useOnboarding();
@@ -1320,9 +1320,33 @@ export default function App() {
             notes={notes}
             polarity={polarityMap.get(highlight.id) ?? null}
             rationale={rationaleMap.get(highlight.id) ?? null}
-            onAddNote={annotations.createMarginNoteWithIntent}
-            onUpdateNote={annotations.updateMarginNote}
-            onDeleteNote={annotations.deleteMarginNote}
+            onAddNote={(highlightId, content, intent) => {
+              void annotations.createMarginNoteWithIntent(highlightId, content, intent).catch((err: unknown) => {
+                console.error("Failed to save feedback note:", err);
+                setErrorToast({
+                  message: `Could not save feedback: ${err instanceof Error ? err.message : String(err)}`,
+                  id: ++errorIdRef.current,
+                });
+              });
+            }}
+            onUpdateNote={(noteId, content) => {
+              void annotations.updateMarginNote(noteId, content).catch((err: unknown) => {
+                console.error("Failed to update feedback note:", err);
+                setErrorToast({
+                  message: `Could not update feedback: ${err instanceof Error ? err.message : String(err)}`,
+                  id: ++errorIdRef.current,
+                });
+              });
+            }}
+            onDeleteNote={(noteId) => {
+              void annotations.deleteMarginNote(noteId).catch((err: unknown) => {
+                console.error("Failed to delete feedback note:", err);
+                setErrorToast({
+                  message: `Could not delete feedback: ${err instanceof Error ? err.message : String(err)}`,
+                  id: ++errorIdRef.current,
+                });
+              });
+            }}
             onDeleteHighlight={handleDeleteHighlight}
             onSetPolarity={(highlightId, polarity) => {
               setPolarityMap((prev) => {
@@ -1334,6 +1358,18 @@ export default function App() {
                 }
                 return next;
               });
+              if (!settings.persistCorrections) return;
+              void syncFeedbackSignal(
+                highlightId,
+                polarity,
+                rationaleMap.get(highlightId) ?? null,
+              ).catch((err: unknown) => {
+                console.error("Failed to capture feedback polarity:", err);
+                setErrorToast({
+                  message: `Could not save feedback: ${err instanceof Error ? err.message : String(err)}`,
+                  id: ++errorIdRef.current,
+                });
+              });
             }}
             onUpdateRationale={(highlightId, rationale) => {
               setRationaleMap((prev) => {
@@ -1344,6 +1380,18 @@ export default function App() {
                   next.set(highlightId, rationale);
                 }
                 return next;
+              });
+              if (!settings.persistCorrections) return;
+              void syncFeedbackSignal(
+                highlightId,
+                polarityMap.get(highlightId) ?? null,
+                rationale,
+              ).catch((err: unknown) => {
+                console.error("Failed to capture feedback rationale:", err);
+                setErrorToast({
+                  message: `Could not save feedback: ${err instanceof Error ? err.message : String(err)}`,
+                  id: ++errorIdRef.current,
+                });
               });
             }}
             onClose={() => {

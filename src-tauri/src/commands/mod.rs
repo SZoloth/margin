@@ -3,6 +3,7 @@ pub mod corrections;
 pub mod dashboard;
 pub mod documents;
 pub mod files;
+pub mod feedback;
 pub mod keep_local;
 pub mod search;
 pub mod seed_rules;

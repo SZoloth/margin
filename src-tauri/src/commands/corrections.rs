@@ -1,7 +1,7 @@
 use crate::commands::now_millis;
 use crate::db::migrations::DbPool;
 use crate::db::models::CorrectionInput;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -240,42 +240,53 @@ fn persist_corrections_inner(
             }
         }
 
-        let id = Uuid::new_v4().to_string();
         let notes_json = serde_json::to_string(&input.notes).map_err(|e| e.to_string())?;
+        let existing_id = tx.query_row(
+            "SELECT id FROM corrections
+             WHERE highlight_id = ?1 AND synthesized_at IS NULL
+             ORDER BY created_at DESC LIMIT 1",
+            [&input.highlight_id],
+            |row| row.get::<_, String>(0),
+        ).optional().map_err(|e| e.to_string())?;
 
-        tx.execute(
-            "INSERT INTO corrections
-                (id, highlight_id, document_id, session_id, original_text,
-                 prefix_context, suffix_context, extended_context, notes_json,
-                 document_title, document_source, document_path, category,
-                 highlight_color, created_at, updated_at, writing_type, polarity, feedback_type,
-                 suggested_edit, rationale)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
-            rusqlite::params![
-                id,
-                input.highlight_id,
-                document_id,
-                session_id,
-                input.original_text,
-                input.prefix_context,
-                input.suffix_context,
-                input.extended_context,
-                notes_json,
-                document_title,
-                document_source,
-                document_path,
-                Option::<String>::None, // category
-                input.highlight_color,
-                now,
-                now,
-                input.writing_type,
-                input.polarity,
-                input.feedback_type,
-                input.suggested_edit,
-                input.rationale,
-            ],
-        )
-        .map_err(|e| e.to_string())?;
+        if let Some(existing_id) = existing_id {
+            tx.execute(
+                "UPDATE corrections
+                 SET document_id = ?1, session_id = ?2, original_text = ?3,
+                     prefix_context = ?4, suffix_context = ?5, extended_context = ?6,
+                     notes_json = ?7, document_title = ?8, document_source = ?9,
+                     document_path = ?10, highlight_color = ?11, updated_at = ?12,
+                     writing_type = ?13, polarity = ?14, feedback_type = ?15,
+                     suggested_edit = ?16, rationale = ?17
+                 WHERE id = ?18",
+                rusqlite::params![
+                    document_id, session_id, input.original_text, input.prefix_context,
+                    input.suffix_context, input.extended_context, notes_json,
+                    document_title, document_source, document_path, input.highlight_color,
+                    now, input.writing_type, input.polarity, input.feedback_type,
+                    input.suggested_edit, input.rationale, existing_id,
+                ],
+            ).map_err(|e| e.to_string())?;
+        } else {
+            tx.execute(
+                "INSERT INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text,
+                     prefix_context, suffix_context, extended_context, notes_json,
+                     document_title, document_source, document_path, category,
+                     highlight_color, created_at, updated_at, writing_type, polarity, feedback_type,
+                     suggested_edit, rationale)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                rusqlite::params![
+                    Uuid::new_v4().to_string(), input.highlight_id, document_id,
+                    session_id, input.original_text, input.prefix_context,
+                    input.suffix_context, input.extended_context, notes_json,
+                    document_title, document_source, document_path,
+                    Option::<String>::None, input.highlight_color, now, now,
+                    input.writing_type, input.polarity, input.feedback_type,
+                    input.suggested_edit, input.rationale,
+                ],
+            ).map_err(|e| e.to_string())?;
+        }
         correction_count += 1;
 
         // Append JSONL record
@@ -1168,6 +1179,43 @@ mod tests {
         let sidecar = fs::read_to_string(prompt_sidecar).unwrap();
         assert!(sidecar.contains("Turn this into a prompt"));
         assert!(!sidecar.contains("Save this thought"));
+    }
+
+    #[test]
+    fn export_enriches_an_unsynthesized_signal_without_duplication() {
+        let conn = setup_full_db();
+        let out_dir = tempfile::tempdir().unwrap();
+        insert_correction(&conn, "h1", "weak sentence", r#"["Use evidence."]"#);
+        let inputs = vec![CorrectionInput {
+            highlight_id: "h1".to_string(),
+            original_text: "weak sentence".to_string(),
+            prefix_context: None,
+            suffix_context: None,
+            extended_context: Some("Wider context".to_string()),
+            notes: vec!["Use evidence.".to_string()],
+            highlight_color: "yellow".to_string(),
+            writing_type: Some("blog".to_string()),
+            polarity: Some("corrective".to_string()),
+            feedback_type: None,
+            intent: "correction".to_string(),
+            suggested_edit: None,
+            rationale: Some("Readers need proof.".to_string()),
+        }];
+
+        persist_corrections_inner(
+            &conn, &inputs, "doc1", Some("Test"), "file", None,
+            "2026-08-12", out_dir.path(),
+        ).unwrap();
+
+        let captured: (i64, Option<String>, Option<String>) = conn.query_row(
+            "SELECT COUNT(*), MAX(writing_type), MAX(rationale)
+             FROM corrections WHERE highlight_id = 'h1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).unwrap();
+        assert_eq!(captured.0, 1);
+        assert_eq!(captured.1.as_deref(), Some("blog"));
+        assert_eq!(captured.2.as_deref(), Some("Readers need proof."));
     }
 
     #[test]

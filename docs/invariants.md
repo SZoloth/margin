@@ -2,9 +2,11 @@
 
 ## Product Invariants
 
-- Margin exists to improve AI writing quality, not just to provide a pleasant reading UI.
-- The writing loop must remain intact: read, annotate, correct, synthesize rules, export artifacts, enforce on future writing.
-- High-friction or low-signal features are secondary to reliability of the writing-quality pipeline.
+- Margin has two peer pillars: a best-in-class Markdown reading and writing experience, and a system that continuously learns from feedback.
+- A change may strengthen one pillar, but it must not demote or silently damage the other.
+- The full loop must remain intact: read or write, give feedback, capture immediately, synthesize rules, review, apply, and measure.
+- Export is a distribution action. When local learning is enabled, saved correction feedback must already exist in SQLite before export.
+- Automatic capture must remain inspectable and reversible through Style Memory.
 
 ## Data Invariants
 
@@ -12,12 +14,14 @@
 - Schema truth originates in Rust migrations under `src-tauri/`; other surfaces must derive from that schema.
 - Generated artifacts such as `~/.margin/writing-rules.md` and `~/.claude/hooks/writing_guard.py` are derived outputs and must not become the primary source of truth.
 - Rule metadata such as `writing_type`, `register`, and `signal_count` must survive round-trips across app, MCP, and exports.
+- One unsynthesized correction row represents the current editable signal for a highlight. Feedback after synthesis creates a new event.
 
 ## Behavioral Invariants
 
 - Text anchoring must either preserve highlight position or surface a degraded state explicitly. Silent loss is not acceptable.
 - Pipeline failures should fail visible, not silent.
 - The writing guard should enforce hard constraints at the tool layer while remaining robust against malformed generated content.
+- Supported Markdown formatting must round-trip without cursor jumps or structural loss.
 
 ## Operational Invariants
 

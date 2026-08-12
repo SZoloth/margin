@@ -48,7 +48,7 @@ require_cmd() {
 
 run_mcp_command() {
   local mcp_dir="$REPO_ROOT/mcp"
-  local node_bin="${MCP_NODE_BIN:-/opt/homebrew/Cellar/node@22/22.22.0_1/bin/node}"
+  local node_bin="${MCP_NODE_BIN:-/opt/homebrew/opt/node@22/bin/node}"
   local vitest_entry="$REPO_ROOT/node_modules/.pnpm/vitest@3.2.4_@types+node@22.19.13_jiti@2.6.1_jsdom@28.1.0_lightningcss@1.31.1/node_modules/vitest/vitest.mjs"
   local tsc_entry="$REPO_ROOT/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/bin/tsc"
   local subcommand="$1"

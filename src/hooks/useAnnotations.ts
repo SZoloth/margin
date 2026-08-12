@@ -37,7 +37,10 @@ export interface UseAnnotationsReturn {
   restoreFromCache: (documentId: string, highlights: Highlight[], marginNotes: MarginNote[]) => void;
 }
 
-export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
+export function useAnnotations(
+  onMutate?: () => void,
+  captureFeedback = false,
+): UseAnnotationsReturn {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [marginNotes, setMarginNotes] = useState<MarginNote[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -115,12 +118,13 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
         highlightId,
         content,
         intent,
+        captureFeedback,
       });
       setMarginNotes((prev) => [...prev, note]);
       onMutate?.();
       return note;
     },
-    [onMutate],
+    [onMutate, captureFeedback],
   );
 
   const createMarginNote = useCallback(
@@ -131,7 +135,7 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
 
   const updateMarginNote = useCallback(
     async (id: string, content: string) => {
-      await invoke("update_margin_note", { id, content });
+      await invoke("update_margin_note", { id, content, captureFeedback });
       setMarginNotes((prev) =>
         prev.map((n) =>
           n.id === id ? { ...n, content, updated_at: Date.now() } : n,
@@ -139,14 +143,14 @@ export function useAnnotations(onMutate?: () => void): UseAnnotationsReturn {
       );
       onMutate?.();
     },
-    [onMutate],
+    [onMutate, captureFeedback],
   );
 
   const deleteMarginNote = useCallback(async (id: string) => {
-    await invoke("delete_margin_note", { id });
+    await invoke("delete_margin_note", { id, captureFeedback });
     setMarginNotes((prev) => prev.filter((n) => n.id !== id));
     onMutate?.();
-  }, [onMutate]);
+  }, [onMutate, captureFeedback]);
 
   const clearAnnotations = useCallback(async (documentId: string) => {
     await invoke("delete_all_highlights_for_document", { documentId });
