@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "hedging-pileup",
+      "writingType": "general",
+      "category": "ai-slop",
+      "ruleText": "Avoid stacked hedges.",
+      "severity": "should-fix",
+      "detectionPattern": "(?i)\\b(could potentially|may possibly)\\b",
+      "source": "synthetic-fixture",
+      "reviewedAt": 1
+    },
+    {
+      "id": "filler-phrases",
+      "writingType": "general",
+      "category": "ai-slop",
+      "ruleText": "Remove filler phrases.",
+      "severity": "should-fix",
+      "detectionPattern": "(?i)\\b(in order to|it should be noted)\\b",
+      "source": "synthetic-fixture",
+      "reviewedAt": 1
+    },
+    {
+      "id": "cover-letter-cliche",
+      "writingType": "cover-letter",
+      "category": "prohibition",
+      "ruleText": "Replace generic role-interest language with specific evidence.",
+      "severity": "must-fix",
+      "detectionPattern": "(?i)\\bis the kind of\\b",
+      "source": "synthetic-fixture",
+      "reviewedAt": 1
+    },
+    {
+      "id": "pending-candidate",
+      "writingType": "general",
+      "category": "ai-slop",
+      "ruleText": "Pending rules do not execute.",
+      "severity": "must-fix",
+      "detectionPattern": "pending phrase",
+      "source": "synthesis-candidate",
+      "reviewedAt": null
+    }
+  ],
+  "cases": [
+    {
+      "name": "body prose",
+      "writingType": "general",
+      "path": "body.md",
+      "input": "We could potentially finish the draft tomorrow.",
+      "expectedRuleIds": ["hedging-pileup"]
+    },
+    {
+      "name": "fenced code",
+      "writingType": "general",
+      "path": "code-fence.md",
+      "input": "```text\\nWe could potentially finish the draft tomorrow.\\n```",
+      "expectedRuleIds": []
+    },
+    {
+      "name": "inline code",
+      "writingType": "general",
+      "path": "inline-code.md",
+      "input": "The fixture uses `could potentially` as its test token.",
+      "expectedRuleIds": []
+    },
+    {
+      "name": "list prose",
+      "writingType": "general",
+      "path": "list.md",
+      "input": "- It should be noted that the list needs work.",
+      "expectedRuleIds": ["filler-phrases"]
+    },
+    {
+      "name": "writing type scope",
+      "writingType": "cover-letter",
+      "path": "letter.md",
+      "input": "This is the kind of problem I want to solve.",
+      "expectedRuleIds": ["cover-letter-cliche"]
+    },
+    {
+      "name": "general excludes type-specific rules",
+      "writingType": "general",
+      "path": "note.md",
+      "input": "This is the kind of problem I want to solve.",
+      "expectedRuleIds": []
+    }
+  ]
+}

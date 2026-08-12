@@ -318,3 +318,11 @@ The first unit was implemented on July 16 under `experiments/post-training/`. It
 The live auditor reproduced 258 corrections, 284 rules, and zero populated `suggested_edit`, `rationale`, `accepted_at`, and `feedback_type` fields. Database SHA-256 remained `aeaf190786d50def088f00f28104132afb23af1421eef8973c0c568a09eefcdc`. The Fireworks key was absent from the worktree environment, so the live probe stopped before making a request. Synthetic tests cover the required failure cases, including non-empty WAL rejection.
 
 No production code, schema, existing autoresearch file, or private corpus data changed. Data collection is next. The evaluation prototype begins after 20 complete cover-letter assignments have prompts, source packets, model metadata, and Sam-approved finals.
+
+## Vale Adapter Spike
+
+An isolated adapter under `experiments/vale-adapter/` tested Vale as the mechanical rule evaluator for post-training outputs. The August 12 run compiled all 16 live reviewed rules that had detection patterns against Vale revision `8fe98044d4bc90e5291372a183b4c7021490aa09`. The read-only database hash remained unchanged.
+
+On six labeled Markdown fixtures, the current raw-regex behavior produced three true positives and two false positives. Both false positives came from rule text inside fenced or inline code. Vale produced the same three true positives with zero false positives and zero false negatives because its parser excluded those scopes.
+
+Use Vale as an optional derived evaluator after a 30-document private-corpus validation. Keep rule IDs, provenance, writing type, signal count, and review state in Margin. Autoresearch may consume Vale's per-rule diagnostics as one objective, while blinded preference and factual preservation remain promotion gates. The small fixture result does not justify replacing the guard or shipping Vale with Margin yet.

@@ -79,8 +79,10 @@ run_standard() {
 
   run ./node_modules/.bin/tsc --noEmit
   run ./node_modules/.bin/tsc -p experiments/post-training/tsconfig.json
+  run ./node_modules/.bin/tsc -p experiments/vale-adapter/tsconfig.json
   run pnpm test:frontend
   run pnpm test:post-training
+  run pnpm test:vale-adapter
   run pnpm build
   run_mcp_command test
   run_mcp_command build

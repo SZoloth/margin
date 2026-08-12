@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-12T17:36:25Z",
+  "database": {
+    "accessMode": "mode=ro&immutable=1",
+    "sha256Before": "e71e26e771432babbd96978d4d77d9b399143988df5bd83048019feb910248d3",
+    "sha256After": "e71e26e771432babbd96978d4d77d9b399143988df5bd83048019feb910248d3",
+    "unchanged": true
+  },
+  "source": {
+    "executableRules": 16,
+    "writingTypes": ["cover-letter", "general"]
+  },
+  "vale": {
+    "version": "vale version master",
+    "sourceRevision": "8fe98044d4bc90e5291372a183b4c7021490aa09",
+    "compatibleRules": 16,
+    "compatibilityElapsedMs": 143.76
+  },
+  "fixtures": {
+    "cases": 6,
+    "rawRegex": {
+      "truePositives": 3,
+      "falsePositives": 2,
+      "falseNegatives": 0
+    },
+    "vale": {
+      "truePositives": 3,
+      "falsePositives": 0,
+      "falseNegatives": 0
+    },
+    "valeElapsedMs": 103.28
+  },
+  "decision": {
+    "passed": true,
+    "recommendation": "continue with an optional derived Vale evaluator"
+  }
+}
