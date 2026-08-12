@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-12T17:58:19.890Z",
+  "database": {
+    "accessMode": "mode=ro&immutable=1",
+    "sha256Before": "e71e26e771432babbd96978d4d77d9b399143988df5bd83048019feb910248d3",
+    "sha256After": "e71e26e771432babbd96978d4d77d9b399143988df5bd83048019feb910248d3",
+    "unchanged": true
+  },
+  "corpus": {
+    "documents": 30,
+    "documentsWithCorrectionHistory": 6,
+    "humanLabeledDocuments": 0,
+    "rawAlerts": 25,
+    "valeAlerts": 25,
+    "sharedAlerts": 25,
+    "rawOnlyAlerts": 0,
+    "valeOnlyAlerts": 0,
+    "adjudicationRequired": 25
+  },
+  "vale": {
+    "version": "vale version master",
+    "sourceRevision": "8fe98044d4bc90e5291372a183b4c7021490aa09",
+    "elapsedMs": 1833.73
+  },
+  "repeatability": {
+    "reviewPacketSha256Run1": "599c0ff67deb45824a3c975172c89354cf68c20157b0df8ff722fd675a950ed9",
+    "reviewPacketSha256Run2": "599c0ff67deb45824a3c975172c89354cf68c20157b0df8ff722fd675a950ed9"
+  },
+  "decision": {
+    "promotionGate": "pending-human-labels",
+    "requiredLabels": 25,
+    "recommendation": "Keep Vale as an optional evaluator experiment. Do not add a production dependency until the private alerts are adjudicated and a labeled corpus shows a measurable precision gain without recall loss."
+  }
+}

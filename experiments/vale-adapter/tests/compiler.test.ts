@@ -24,4 +24,28 @@ describe("compileValeProject", () => {
       "cover-letter-cliche",
     );
   });
+
+  it("does not enable an empty writing-type style", () => {
+    const project = compileValeProject(fixture.rules, "blog");
+
+    expect(project.files[".vale.ini"]).toContain("BasedOnStyles = MarginGeneral");
+    expect(project.files[".vale.ini"]).not.toContain("MarginBlog");
+  });
+
+  it("uses raw scope when a rule targets Markdown syntax", () => {
+    const project = compileValeProject([
+      {
+        id: "inline-header",
+        writingType: "general",
+        category: "structure",
+        ruleText: "Avoid inline-header bullets.",
+        severity: "should-fix",
+        detectionPattern: String.raw`(?m)^[-*] \*\*[^*\n]+:\*\*`,
+        source: "manual",
+        reviewedAt: 1,
+      },
+    ]);
+
+    expect(project.files["styles/MarginGeneral/InlineHeader.yml"]).toContain("scope: raw");
+  });
 });

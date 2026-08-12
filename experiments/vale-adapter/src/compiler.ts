@@ -37,12 +37,17 @@ function yamlString(value: string): string {
   return JSON.stringify(value);
 }
 
+function detectionScope(rule: MarginRule): "raw" | "text" {
+  const pattern = rule.detectionPattern ?? "";
+  return pattern.includes(String.raw`\*\*`) ? "raw" : "text";
+}
+
 function renderRule(rule: MarginRule): string {
   return [
     "extends: existence",
     `message: ${yamlString(rule.ruleText)}`,
     `level: ${level(rule.severity)}`,
-    "scope: text",
+    `scope: ${detectionScope(rule)}`,
     "nonword: true",
     "raw:",
     `  - ${yamlString(rule.detectionPattern ?? "")}`,
@@ -50,9 +55,13 @@ function renderRule(rule: MarginRule): string {
   ].join("\n");
 }
 
-function enabledStyles(writingType: string): string[] {
-  const styles = [styleName("general")];
-  if (writingType !== "general") styles.push(styleName(writingType));
+function enabledStyles(rules: readonly MarginRule[], writingType: string): string[] {
+  const available = new Set(
+    rules.filter((rule) => isExecutableRule(rule)).map((rule) => rule.writingType),
+  );
+  const styles: string[] = [];
+  if (available.has("general")) styles.push(styleName("general"));
+  if (writingType !== "general" && available.has(writingType)) styles.push(styleName(writingType));
   return styles;
 }
 
@@ -66,7 +75,7 @@ export function compileValeProject(
       "MinAlertLevel = suggestion",
       "",
       "[*.md]",
-      `BasedOnStyles = ${enabledStyles(writingType).join(", ")}`,
+      `BasedOnStyles = ${enabledStyles(rules, writingType).join(", ")}`,
       "",
     ].join("\n"),
   };

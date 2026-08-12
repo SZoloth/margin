@@ -21,6 +21,7 @@
     "post-training:validate": "node --experimental-strip-types experiments/post-training/src/cli.ts validate",
     "post-training:fireworks": "node --experimental-strip-types experiments/post-training/src/cli.ts fireworks",
     "vale-adapter:spike": "node --experimental-strip-types experiments/vale-adapter/src/cli.ts",
+    "vale-adapter:real": "node --experimental-strip-types experiments/vale-adapter/src/real-cli.ts",
     "verify": "bash scripts/verify",
     "verify:standard": "bash scripts/verify standard",
     "verify:data-layer": "bash scripts/verify data-layer",

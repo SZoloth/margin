@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadExecutableRules } from "../src/database.ts";
+import { loadCatalogDocuments, loadExecutableRules } from "../src/database.ts";
 
 const tempPaths: string[] = [];
 
@@ -29,6 +29,19 @@ function fixtureDatabase(): string {
       ('ready', 'general', 'ai-slop', 'Ready', 'should-fix', 'ready', NULL, NULL, NULL, 'manual', 1),
       ('pending', 'general', 'ai-slop', 'Pending', 'must-fix', 'pending', NULL, NULL, NULL, 'synthesis-candidate', NULL),
       ('judgment', 'general', 'voice', 'Judgment', 'should-fix', NULL, NULL, NULL, NULL, 'manual', 1);
+    CREATE TABLE documents (
+      id TEXT PRIMARY KEY,
+      file_path TEXT,
+      word_count INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE corrections (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      writing_type TEXT
+    );
+    INSERT INTO documents VALUES ('doc', '/private/doc.md', 250, 10);
+    INSERT INTO corrections VALUES ('correction', 'doc', 'blog');
   `;
   const result = spawnSync("sqlite3", [databasePath, sql], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr);
@@ -46,6 +59,23 @@ describe("loadExecutableRules", () => {
     expect(result.rules.map((rule) => rule.id)).toEqual(["ready"]);
     expect(result.database.unchanged).toBe(true);
     expect(result.database.sha256After).toBe(result.database.sha256Before);
+  });
+
+  it("loads document metadata and correction counts without document text", () => {
+    const result = loadCatalogDocuments(fixtureDatabase());
+
+    expect(result.documents).toEqual([
+      {
+        id: "doc",
+        filePath: "/private/doc.md",
+        wordCount: 250,
+        createdAt: 10,
+        correctionCount: 1,
+        writingType: "blog",
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toContain("original_text");
+    expect(result.database.unchanged).toBe(true);
   });
 
   it("rejects an immutable read while a non-empty WAL is present", () => {
