@@ -10,6 +10,9 @@ pub struct SearchResult {
     pub title: String,
     pub snippet: String,
     pub rank: f64,
+    /// On-disk path from the joined documents row — lets the frontend open
+    /// indexed documents that aren't in recentDocs. NULL for keep-local docs.
+    pub file_path: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -220,7 +223,8 @@ pub fn search_documents_inner(conn: &Connection, query: &str, limit: i32) -> Res
         .prepare(
             "SELECT f.document_id, f.title,
                     snippet(documents_fts, 1, '<mark>', '</mark>', '\u{2026}', 32) as snippet,
-                    bm25(documents_fts, 10.0, 1.0) as bm25_rank
+                    bm25(documents_fts, 10.0, 1.0) as bm25_rank,
+                    d.file_path
              FROM documents_fts f
              LEFT JOIN documents d ON d.id = f.document_id
              WHERE documents_fts MATCH ?1
@@ -239,6 +243,7 @@ pub fn search_documents_inner(conn: &Connection, query: &str, limit: i32) -> Res
                 title: row.get(1)?,
                 snippet: row.get(2)?,
                 rank: row.get::<_, f64>(3)?,
+                file_path: row.get(4)?,
             })
         })
         .map_err(|e| format!("Search query failed: {e}"))?
@@ -500,6 +505,31 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].document_id, "d1");
         assert_eq!(results[0].title, "Rust Programming");
+    }
+
+    #[test]
+    fn search_returns_file_path_for_file_documents() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO documents (id, source, file_path, title, last_opened_at, created_at)
+             VALUES ('d1', 'file', '/tmp/note.md', 'Note', 0, 0)",
+            [],
+        ).unwrap();
+        index_document_inner(&conn, "d1", "Note", "content about rust").unwrap();
+
+        let results = search_documents_inner(&conn, "rust", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].file_path.as_deref(), Some("/tmp/note.md"));
+    }
+
+    #[test]
+    fn search_file_path_is_none_without_documents_row() {
+        let conn = setup_db();
+        index_document_inner(&conn, "d1", "Note", "content about rust").unwrap();
+
+        let results = search_documents_inner(&conn, "rust", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].file_path.is_none());
     }
 
     #[test]

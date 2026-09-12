@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Document } from "@/types/document";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
+import { reportError } from "@/lib/error-bus";
 
 interface FileResult {
   path: string;
@@ -14,6 +15,8 @@ interface FtsResult {
   title: string;
   snippet: string;
   rank: number;
+  /** On-disk path for file-sourced documents; null for keep-local docs. */
+  filePath?: string | null;
 }
 
 interface Action {
@@ -197,12 +200,19 @@ export function CommandPalette({
     if (item.type === "recent") {
       onSelectRecentDoc(item.doc, asNewTab);
     } else if (item.type === "fts") {
-      // FTS results have a documentId — find matching recent doc or open by ID
+      // FTS results have a documentId — prefer the matching recent doc…
       const matchingDoc = recentDocs.find((d) => d.id === item.result.documentId);
       if (matchingDoc) {
         onSelectRecentDoc(matchingDoc, asNewTab);
+      } else if (item.result.filePath) {
+        // …otherwise open the indexed file directly — it's on disk even if it
+        // isn't in recentDocs.
+        onOpenFilePath(item.result.filePath, asNewTab);
+      } else {
+        // Indexed document with no file path (e.g. keep-local) — fail visible
+        // instead of a dead click.
+        reportError(`Couldn't open "${item.result.title}" — no file on disk`);
       }
-      // If not in recentDocs, the doc was indexed but not recently opened — no file path available
     } else {
       onOpenFilePath(item.file.path, asNewTab);
     }
@@ -530,7 +540,7 @@ export function CommandPalette({
               <div>
                 <div style={sectionLabel}>Files</div>
                 {fileResults.map((file, i) => {
-                  const absIdx = filteredRecent.length + i;
+                  const absIdx = filteredRecent.length + ftsResults.length + i;
                   const isSelected = selectedColumn === "files" && selectedFileIndex === absIdx;
                   return (
                     <button

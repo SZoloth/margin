@@ -8,6 +8,8 @@ export interface SearchResult {
   title: string;
   snippet: string;
   rank: number;
+  /** On-disk path for file-sourced documents; null for keep-local docs. */
+  filePath?: string | null;
 }
 
 export interface FileResult {
