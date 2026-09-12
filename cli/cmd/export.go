@@ -50,9 +50,10 @@ Skips writing_guard.py — Codex uses prompt-level rules instead of a hook.`,
 
 var exportCodexCmd = &cobra.Command{
 	Use:   "codex",
-	Short: "Regenerate ~/.codex/AGENTS.md with writing rules for OpenAI Codex",
-	Long: `Writes writing rules from Margin into ~/.codex/AGENTS.md so OpenAI Codex CLI
-loads them as global instructions. Safe to run repeatedly — only the managed
+	Short: "Export the writing profile and compact Codex instructions",
+	Long: `Writes the full profile to ~/.margin/writing-rules.md and a compact router to
+~/.codex/AGENTS.md. Codex loads the router globally and reads the full profile
+for writing tasks. Safe to run repeatedly — only the managed
 section is replaced; any existing user content in AGENTS.md is preserved.
 
 Note: requires ~/.codex directory to exist (i.e. Codex CLI installed).`,

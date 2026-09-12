@@ -17,7 +17,7 @@ func TestFormatCodexAgentsMD_EmptyRules(t *testing.T) {
 	}
 }
 
-func TestFormatCodexAgentsMD_KillWords(t *testing.T) {
+func TestProfileForCodex_KillWords(t *testing.T) {
 	rules := []db.WritingRule{
 		{
 			ID: "1", WritingType: "general", Category: "kill-words",
@@ -31,21 +31,20 @@ func TestFormatCodexAgentsMD_KillWords(t *testing.T) {
 		},
 	}
 
-	md := FormatCodexAgentsMD(rules, nil)
+	md := FormatProfileMarkdown(rules, nil)
 
 	checks := []string{
-		"Do not use the word",
 		"leverage",
 		"utilize",
 	}
 	for _, check := range checks {
 		if !strings.Contains(md, check) {
-			t.Errorf("FormatCodexAgentsMD kill words: missing %q\n\nFull output:\n%s", check, md)
+			t.Errorf("FormatProfileMarkdown kill words: missing %q\n\nFull output:\n%s", check, md)
 		}
 	}
 }
 
-func TestFormatCodexAgentsMD_EditorialRules(t *testing.T) {
+func TestProfileForCodex_EditorialRules(t *testing.T) {
 	rules := []db.WritingRule{
 		{
 			ID: "1", WritingType: "general", Category: "editorial",
@@ -60,7 +59,7 @@ func TestFormatCodexAgentsMD_EditorialRules(t *testing.T) {
 		},
 	}
 
-	md := FormatCodexAgentsMD(rules, nil)
+	md := FormatProfileMarkdown(rules, nil)
 
 	checks := []string{
 		"Keep sentences short",
@@ -70,12 +69,12 @@ func TestFormatCodexAgentsMD_EditorialRules(t *testing.T) {
 	}
 	for _, check := range checks {
 		if !strings.Contains(md, check) {
-			t.Errorf("FormatCodexAgentsMD editorial: missing %q\n\nFull output:\n%s", check, md)
+			t.Errorf("FormatProfileMarkdown editorial: missing %q\n\nFull output:\n%s", check, md)
 		}
 	}
 }
 
-func TestFormatCodexAgentsMD_VoiceCalibration(t *testing.T) {
+func TestProfileForCodex_VoiceCalibration(t *testing.T) {
 	rules := []db.WritingRule{
 		{
 			ID: "1", WritingType: "general", Category: "voice-calibration",
@@ -84,14 +83,14 @@ func TestFormatCodexAgentsMD_VoiceCalibration(t *testing.T) {
 		},
 	}
 
-	md := FormatCodexAgentsMD(rules, nil)
+	md := FormatProfileMarkdown(rules, nil)
 
 	if !strings.Contains(md, "Prefer fragments over full sentences in casual writing") {
-		t.Errorf("FormatCodexAgentsMD: voice calibration rule missing\n\nFull output:\n%s", md)
+		t.Errorf("FormatProfileMarkdown: voice calibration rule missing\n\nFull output:\n%s", md)
 	}
 }
 
-func TestFormatCodexAgentsMD_CorrectiveExamples(t *testing.T) {
+func TestProfileForCodex_CorrectiveExamples(t *testing.T) {
 	corrPolarity := "corrective"
 	corrections := []db.CorrectionRecord{
 		{
@@ -101,17 +100,17 @@ func TestFormatCodexAgentsMD_CorrectiveExamples(t *testing.T) {
 		},
 	}
 
-	md := FormatCodexAgentsMD(nil, corrections)
+	md := FormatProfileMarkdown(nil, corrections)
 
 	if !strings.Contains(md, "In today's fast-paced world") {
-		t.Errorf("FormatCodexAgentsMD: corrective example missing\n\nFull output:\n%s", md)
+		t.Errorf("FormatProfileMarkdown: corrective example missing\n\nFull output:\n%s", md)
 	}
 	if !strings.Contains(md, "AI slop opener") {
-		t.Errorf("FormatCodexAgentsMD: correction note missing\n\nFull output:\n%s", md)
+		t.Errorf("FormatProfileMarkdown: correction note missing\n\nFull output:\n%s", md)
 	}
 }
 
-func TestFormatCodexAgentsMD_PositiveExamplesExcluded(t *testing.T) {
+func TestProfileForCodex_PositiveExamplesExcluded(t *testing.T) {
 	posPolarity := "positive"
 	corrections := []db.CorrectionRecord{
 		{
@@ -121,16 +120,16 @@ func TestFormatCodexAgentsMD_PositiveExamplesExcluded(t *testing.T) {
 		},
 	}
 
-	md := FormatCodexAgentsMD(nil, corrections)
+	md := FormatProfileMarkdown(nil, corrections)
 
 	// Positive examples are writing samples — excluded from prohibition list
 	// They can appear in a separate section but should not appear in "Do not write" context
 	if strings.Contains(md, "Do not write") && strings.Contains(md, "This is a great example to emulate") {
-		t.Error("FormatCodexAgentsMD: positive correction appearing in prohibition context")
+		t.Error("FormatProfileMarkdown: positive correction appearing in prohibition context")
 	}
 }
 
-func TestFormatCodexAgentsMD_AISlopPatterns(t *testing.T) {
+func TestProfileForCodex_AISlopPatterns(t *testing.T) {
 	rules := []db.WritingRule{
 		{
 			ID: "1", WritingType: "general", Category: "ai-slop",
@@ -140,10 +139,10 @@ func TestFormatCodexAgentsMD_AISlopPatterns(t *testing.T) {
 		},
 	}
 
-	md := FormatCodexAgentsMD(rules, nil)
+	md := FormatProfileMarkdown(rules, nil)
 
 	if !strings.Contains(md, "Don't start with") {
-		t.Errorf("FormatCodexAgentsMD: ai-slop rule missing\n\nFull output:\n%s", md)
+		t.Errorf("FormatProfileMarkdown: ai-slop rule missing\n\nFull output:\n%s", md)
 	}
 }
 
