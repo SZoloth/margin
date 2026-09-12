@@ -8,6 +8,11 @@ Not yet started. Run `npx tsx mcp/scripts/autoresearch/loop.ts` to begin.
 
 ## History
 
+### Run 032 — 2026-09-12T22:14
+- Hypothesis: Moving the "no repetitive sentence structure" prohibition into the Structural Prohibitions block (where Claude actually processes violations) with explicit before/after examples will eliminate the 4 repetitive-structure violations. Expected improvement: +5-7pp pass rate (pushing past the 0.63 baseline toward 0.70+), -4 mechanical issues.
+- Pass rate: 0.556 | Dim: 44.6 | Mech: 21
+- Result: REVERTED
+
 ### Run 031 — 2026-09-12T22:11
 - Hypothesis: Run 30's improvement from 0.37 to 0.556 came from adding the prohibition block for "the real X is" pattern but NOT from reordering — the prohibitions still sit after the register guidance. The worst violations remain long sentences (×7) and repetitive structure (×4), which the "Sentence Craft Protocol" isn't stopping because it's too abstract. The fix: replace the abstract Sentence Craft section with an explicit sentence-length constraint placed in the Structural Prohibitions block (where Claude actually reads it), and add a direct prohibition against repetitive sentence structure. This targets the actual failure patterns rather than prescribing a writing technique.
 - Pass rate: 0.63 | Dim: 45.1 | Mech: 17
