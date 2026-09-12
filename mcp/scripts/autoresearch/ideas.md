@@ -26,3 +26,8 @@ Deferred hypotheses for future iterations. Ranked by estimated impact.
 ## Tried and discarded
 
 (none yet — first run)
+
+- Test progressive disclosure: load fewer rules upfront, introduce advanced rules only after meeting baseline constraints
+- Try a "voice scorecard" format where each rule has a compliance marker (✓/✗) that the model simulates before writing
+- Experiment with consequence framing: "Violating these rules will require Sam to edit your output — prevent that" instead of positive instruction
+- Test whether removing all generic rules and keeping ONLY the top-15 most-frequently-corrected patterns improves over full rule dump
