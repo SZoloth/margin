@@ -155,6 +155,9 @@ export function HighlightThread({
   const [newNoteIntent, setNewNoteIntent] = useState<NoteIntent>("correction");
   const [rationaleValue, setRationaleValue] = useState(rationale ?? "");
   const [rationaleSaving, setRationaleSaving] = useState(false);
+  // Live anchor rect — the prop is a snapshot; scrolling makes it stale, so
+  // re-measure the highlight's DOM rect on scroll/resize (rAF-throttled).
+  const [liveRect, setLiveRect] = useState<DOMRect | null>(anchorRect);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
@@ -163,6 +166,34 @@ export function HighlightThread({
   useEffect(() => {
     setRationaleValue(rationale ?? "");
   }, [rationale]);
+
+  // Keep the anchor rect in sync with the prop and with layout changes.
+  useEffect(() => {
+    setLiveRect(anchorRect);
+  }, [anchorRect]);
+
+  useEffect(() => {
+    let rafId = 0;
+    const remeasure = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        const mark = document.querySelector(
+          `mark[data-highlight-id="${CSS.escape(highlight.id)}"]`,
+        );
+        if (mark) setLiveRect(mark.getBoundingClientRect());
+      });
+    };
+    // Scroll events don't bubble — capture phase catches the reader's
+    // scroll container as well as any nested scrollers.
+    window.addEventListener("scroll", remeasure, { capture: true, passive: true });
+    window.addEventListener("resize", remeasure);
+    return () => {
+      window.removeEventListener("scroll", remeasure, { capture: true });
+      window.removeEventListener("resize", remeasure);
+      cancelAnimationFrame(rafId);
+    };
+  }, [highlight.id]);
 
   // Save previous focus on mount
   useEffect(() => {
@@ -261,15 +292,15 @@ export function HighlightThread({
   };
 
   // Position calculation
-  if (!anchorRect) return null;
+  if (!liveRect) return null;
 
   const isMobile = window.innerWidth < 768;
 
   // Desktop: position to the right of the highlight
   const popoverWidth = 300;
   const gap = 12;
-  const left = Math.min(anchorRect.right + gap, window.innerWidth - popoverWidth - 8);
-  const top = Math.max(8, Math.min(anchorRect.top, window.innerHeight - 400));
+  const left = Math.min(liveRect.right + gap, window.innerWidth - popoverWidth - 8);
+  const top = Math.max(8, Math.min(liveRect.top, window.innerHeight - 400));
 
   return createPortal(
     <div

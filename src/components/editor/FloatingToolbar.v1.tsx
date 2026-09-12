@@ -161,6 +161,28 @@ export function FloatingToolbar({
     };
   }, [editor, updatePosition]);
 
+  // Reposition on scroll and resize. Scroll events don't bubble, so listen in
+  // the capture phase to catch scrolling inside the reader's scroll container.
+  // rAF-throttled so rapid scroll stays cheap.
+  useEffect(() => {
+    if (!editor) return;
+    let rafId = 0;
+    const schedule = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        updatePosition();
+      });
+    };
+    window.addEventListener("scroll", schedule, { capture: true, passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.removeEventListener("scroll", schedule, { capture: true });
+      window.removeEventListener("resize", schedule);
+      cancelAnimationFrame(rafId);
+    };
+  }, [editor, updatePosition]);
+
   if (!isMounted || !editor) return null;
 
   return createPortal(
