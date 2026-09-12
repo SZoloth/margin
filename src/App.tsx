@@ -29,7 +29,7 @@ import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
-import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, syncFeedbackSignal } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, syncFeedbackSignal, getWritingRules } from "@/lib/tauri-commands";
 import { subscribeErrors, reportError } from "@/lib/error-bus";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
@@ -973,6 +973,31 @@ export default function App() {
       setOnboardingToast(null);
     }
   }, [doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cold-start nudge: after first-run onboarding, if the user has no personal
+  // rules yet (only seeds), point them at the style-guide import once.
+  useEffect(() => {
+    if (onboarding.step !== "complete" || !onboarding.isFirstRun) return;
+    if (localStorage.getItem("margin-bootstrap-hinted")) return;
+    let cancelled = false;
+    getWritingRules()
+      .then((rules) => {
+        if (cancelled) return;
+        localStorage.setItem("margin-bootstrap-hinted", String(Date.now()));
+        const personal = rules.some(
+          (r) => !r.source.startsWith("seed") && r.source !== "kill-words-seed"
+        );
+        if (!personal) {
+          setOnboardingToast(
+            "Teach Margin your style — Settings → Writing rules → Import from style guide"
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [onboarding.step, onboarding.isFirstRun]);
 
   // Export annotations: Cmd+Shift+E
   useEffect(() => {

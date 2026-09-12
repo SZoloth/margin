@@ -362,7 +362,7 @@ describe("useSearch", () => {
     });
     await act(() => vi.runAllTimersAsync());
     expect(reported).toHaveBeenCalledTimes(1);
-    expect(reported.mock.calls[0][0]).toMatch(/search/i);
+    expect(String(reported.mock.calls[0]?.[0])).toMatch(/search/i);
 
     unsubscribe();
   });
