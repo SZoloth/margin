@@ -124,14 +124,6 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     }
   },
 
-  update_highlight_color: (a) => {
-    const row = highlights.find((h) => h.id === a.id);
-    if (row) {
-      row.color = a.color as string;
-      row.updated_at = Date.now();
-    }
-  },
-
   delete_highlight: (a) => {
     highlights = highlights.filter((h) => h.id !== a.id);
   },
