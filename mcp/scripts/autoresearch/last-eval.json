@@ -1,0 +1,59 @@
+{
+  "pass_rate": 0.37,
+  "mean_dimension": 45.4,
+  "total_mechanical": 24,
+  "worst_violations": [
+    "voice:long-sentence (×10)",
+    "structural:Negative parallelism (isn't X — it's Y) (×4)",
+    "structural:Negative parallelism (isn't X. It's Y) (×4)",
+    "voice:repetitive-structure (×4)",
+    "kill-word:highlighting (×1)"
+  ],
+  "per_type": {
+    "general": {
+      "passed": 0,
+      "total": 3,
+      "mean_dimension": 42
+    },
+    "email": {
+      "passed": 1,
+      "total": 3,
+      "mean_dimension": 44.666666666666664
+    },
+    "cover-letter": {
+      "passed": 0,
+      "total": 3,
+      "mean_dimension": 44.333333333333336
+    },
+    "outreach": {
+      "passed": 0,
+      "total": 3,
+      "mean_dimension": 46.666666666666664
+    },
+    "prd": {
+      "passed": 1,
+      "total": 3,
+      "mean_dimension": 44.333333333333336
+    },
+    "blog": {
+      "passed": 1,
+      "total": 3,
+      "mean_dimension": 48
+    },
+    "resume": {
+      "passed": 3,
+      "total": 3,
+      "mean_dimension": 47
+    },
+    "slack": {
+      "passed": 3,
+      "total": 3,
+      "mean_dimension": 48.333333333333336
+    },
+    "pitch": {
+      "passed": 1,
+      "total": 3,
+      "mean_dimension": 43
+    }
+  }
+}
