@@ -109,6 +109,48 @@ describe("getCorrections", () => {
     const results = getCorrections(db);
     expect(results).toHaveLength(1);
   });
+
+  it("returns all corrections by default regardless of synthesized_at", () => {
+    insertCorrection("h1", "pending", '["note"]');
+    insertCorrection("h2", "consumed", '["note"]');
+    db.prepare("UPDATE corrections SET synthesized_at = 999 WHERE highlight_id = 'h2'").run();
+
+    const results = getCorrections(db);
+    expect(results).toHaveLength(2);
+  });
+
+  it("filters to unsynthesized corrections with synthesized=false", () => {
+    insertCorrection("h1", "pending", '["note"]');
+    insertCorrection("h2", "consumed", '["note"]');
+    db.prepare("UPDATE corrections SET synthesized_at = 999 WHERE highlight_id = 'h2'").run();
+
+    const results = getCorrections(db, undefined, 200, false);
+    expect(results).toHaveLength(1);
+    expect(results[0].originalText).toBe("pending");
+    expect(results[0].synthesizedAt).toBeNull();
+  });
+
+  it("filters to synthesized corrections with synthesized=true", () => {
+    insertCorrection("h1", "pending", '["note"]');
+    insertCorrection("h2", "consumed", '["note"]');
+    db.prepare("UPDATE corrections SET synthesized_at = 999 WHERE highlight_id = 'h2'").run();
+
+    const results = getCorrections(db, undefined, 200, true);
+    expect(results).toHaveLength(1);
+    expect(results[0].originalText).toBe("consumed");
+    expect(results[0].synthesizedAt).toBe(999);
+  });
+
+  it("combines synthesized filter with document filter", () => {
+    insertCorrection("h1", "pending", '["note"]', { docId: "doc1" });
+    insertCorrection("h2", "consumed", '["note"]', { docId: "doc1" });
+    insertCorrection("h3", "pending-other-doc", '["note"]', { docId: "doc2" });
+    db.prepare("UPDATE corrections SET synthesized_at = 999 WHERE highlight_id = 'h2'").run();
+
+    const results = getCorrections(db, "doc1", 200, false);
+    expect(results).toHaveLength(1);
+    expect(results[0].originalText).toBe("pending");
+  });
 });
 
 describe("getCorrectionsSummary", () => {

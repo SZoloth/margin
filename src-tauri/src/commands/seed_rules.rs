@@ -1,10 +1,14 @@
 use crate::commands::now_millis;
+use crate::commands::writing_rules::export_artifacts;
 use crate::db::migrations::DbPool;
 use rusqlite::Connection;
 use std::io::Write;
 use std::process::{Command, Stdio};
 use uuid::Uuid;
 
+/// Canonical writing types — union of the Go CLI's ValidWritingTypes
+/// (cli/db/rules.go) and the MCP server's VALID_WRITING_TYPES
+/// (mcp/src/tools/writing-rules.ts). Keep all three lists in sync.
 const VALID_WRITING_TYPES: &[&str] = &[
     "general",
     "email",
@@ -15,6 +19,7 @@ const VALID_WRITING_TYPES: &[&str] = &[
     "slack",
     "pitch",
     "outreach",
+    "text",
     "case-study",
     "email-hiring",
     "email-friend",
@@ -242,8 +247,14 @@ pub async fn seed_rules_from_guide(
         });
     }
 
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let result = insert_seed_rules(&conn, &rules, wt, guide_name.as_deref());
+    let result = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        insert_seed_rules(&conn, &rules, wt, guide_name.as_deref())
+    };
+
+    if result.created > 0 || result.deduplicated > 0 {
+        export_artifacts();
+    }
 
     Ok(result)
 }

@@ -27,13 +27,15 @@ function insertRule(
     signalCount?: number;
     notes?: string;
     register?: string | null;
+    source?: string;
+    reviewedAt?: number | null;
   } = {},
 ) {
   db.prepare(
     `INSERT INTO writing_rules
        (id, writing_type, category, rule_text, when_to_apply, why, severity,
-        example_before, example_after, source, signal_count, notes, created_at, updated_at, register)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, 1000, 1000, ?)`,
+        example_before, example_after, source, signal_count, notes, created_at, updated_at, register, reviewed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1000, 1000, ?, ?)`,
   ).run(
     id,
     writingType,
@@ -44,9 +46,11 @@ function insertRule(
     severity,
     opts.exampleBefore ?? null,
     opts.exampleAfter ?? null,
+    opts.source ?? "manual",
     opts.signalCount ?? 1,
     opts.notes ?? null,
     opts.register ?? null,
+    opts.reviewedAt ?? null,
   );
 }
 
@@ -106,6 +110,63 @@ describe("getWritingRules", () => {
     const rules = getWritingRules(db);
     expect(rules).toHaveLength(1);
     expect(rules[0].register).toBe("casual");
+  });
+
+  it("excludes unreviewed synthesis candidates (review gate)", () => {
+    insertRule("r1", "general", "tone", "Active rule", "must-fix");
+    insertRule("cand1", "general", "tone", "Unvetted candidate", "must-fix", {
+      source: "synthesis-candidate",
+      reviewedAt: null,
+      notes: "synthesized-from:h1",
+    });
+
+    const rules = getWritingRules(db);
+    expect(rules).toHaveLength(1);
+    expect(rules[0].id).toBe("r1");
+  });
+
+  it("keeps reviewed candidates and other sources visible", () => {
+    insertRule("accepted", "general", "tone", "Accepted candidate", "must-fix", {
+      source: "synthesis-candidate",
+      reviewedAt: 2000,
+    });
+    insertRule("synth", "general", "tone", "Plain synthesis rule", "should-fix", {
+      source: "synthesis",
+      reviewedAt: null,
+    });
+    insertRule("manual", "general", "tone", "Manual rule", "should-fix");
+
+    const rules = getWritingRules(db);
+    expect(rules.map((r) => r.id).sort()).toEqual(["accepted", "manual", "synth"]);
+  });
+
+  it("applies the review gate when filtering by writing type", () => {
+    insertRule("cand1", "email", "tone", "Candidate", "must-fix", {
+      source: "synthesis-candidate",
+      reviewedAt: null,
+    });
+    insertRule("r1", "email", "tone", "Active", "must-fix");
+
+    const rules = getWritingRules(db, "email");
+    expect(rules).toHaveLength(1);
+    expect(rules[0].id).toBe("r1");
+  });
+
+  it("keeps candidates out of markdown and profile output", () => {
+    insertRule("cand1", "general", "kill-words", "unvetted-word", "must-fix", {
+      source: "synthesis-candidate",
+      reviewedAt: null,
+    });
+    insertRule("r1", "general", "kill-words", "leverage", "must-fix");
+
+    const rules = getWritingRules(db);
+    const md = getWritingRulesMarkdown(rules);
+    expect(md).toContain("leverage");
+    expect(md).not.toContain("unvetted-word");
+
+    const py = getWritingGuardPy(rules);
+    expect(py).toContain("leverage");
+    expect(py).not.toContain("unvetted-word");
   });
 });
 

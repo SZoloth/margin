@@ -143,7 +143,7 @@ export const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS writing_rules (
     id TEXT PRIMARY KEY,
     writing_type TEXT NOT NULL DEFAULT 'general'
-      CHECK(writing_type IN ('general','email','prd','blog','cover-letter','resume','slack','pitch','outreach')),
+      CHECK(writing_type IN ('general','email','prd','blog','cover-letter','resume','slack','pitch','outreach','text','case-study','email-hiring','email-friend','social-post','text-friend')),
     category TEXT NOT NULL,
     rule_text TEXT NOT NULL,
     when_to_apply TEXT,

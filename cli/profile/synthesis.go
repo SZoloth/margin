@@ -53,7 +53,7 @@ Return ONLY a JSON array of candidate rules. Each rule:
 {
   "category": one of ["kill-words","ai-slop","prohibition","voice-calibration","structure","editorial","argument-rigor","tone","concision","sentence-rhythm"],
   "rule_text": the generalized rule, stated as an imperative ("Never...", "Prefer...", "Cut..."). Specific and actionable — "Cut any sentence that announces the insight before stating it", not "write clearly".
-  "writing_type": one of ["general","email","prd","blog","cover-letter","resume","slack","pitch","outreach","text"] — use "general" unless the corrections are clearly type-specific,
+  "writing_type": one of ["general","email","prd","blog","cover-letter","resume","slack","pitch","outreach","text","case-study","email-hiring","email-friend","social-post","text-friend"] — use "general" unless the corrections are clearly type-specific,
   "severity": one of ["must-fix","should-fix","nice-to-fix"],
   "detection_pattern": OPTIONAL Python-re regex that mechanically detects this pattern, ONLY when it is reliably detectable (a word list, a fixed construction). Omit for judgment-based rules. A regex that would misfire on normal prose is worse than none.
   "example_before": a short concrete example of the violation (from the corrections if possible),

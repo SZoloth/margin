@@ -50,6 +50,13 @@ var registerDefaults = map[string]string{
 	"pitch":        "professional",
 	"outreach":     "professional",
 	"text":         "casual",
+	// MCP-side types — kept aligned with REGISTER_MAP in
+	// mcp/scripts/shared.ts.
+	"case-study":   "professional",
+	"email-hiring": "professional",
+	"email-friend": "casual",
+	"social-post":  "casual",
+	"text-friend":  "casual",
 }
 
 func formatCoachingCorrections(corrections []db.CorrectionRecord) string {

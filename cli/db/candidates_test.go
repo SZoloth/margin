@@ -120,3 +120,59 @@ func TestAcceptedCandidateCannotBeRejected(t *testing.T) {
 		t.Error("expected reject of an accepted rule to fail")
 	}
 }
+
+// Unknown writing types must error visibly — the old code silently coerced
+// them to 'general', filing candidates under the wrong corpus.
+func TestInsertCandidateRulesRejectsInvalidWritingType(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	_, err := InsertCandidateRules(d, []CandidateRuleInput{
+		{Category: "tone", RuleText: "Be direct", WritingType: "tweet", Severity: "should-fix", SignalCount: 1},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid writing_type, got silent success")
+	}
+
+	// The whole batch must roll back — a bad type can't leave partial rows.
+	cands, _ := GetCandidateRules(d, false)
+	if len(cands) != 0 {
+		t.Errorf("invalid candidate persisted (%d rows)", len(cands))
+	}
+}
+
+func TestInsertCandidateRulesBatchIsAtomicOnInvalidType(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	_, err := InsertCandidateRules(d, []CandidateRuleInput{
+		{Category: "tone", RuleText: "Valid rule", WritingType: "email", Severity: "should-fix", SignalCount: 1},
+		{Category: "tone", RuleText: "Bad type rule", WritingType: "bogus", Severity: "should-fix", SignalCount: 1},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid writing_type")
+	}
+	cands, _ := GetCandidateRules(d, false)
+	if len(cands) != 0 {
+		t.Errorf("partial batch leaked: %d rows", len(cands))
+	}
+}
+
+// The canonical type set is the union of the Go and MCP lists — every type
+// the MCP server can write must round-trip here too.
+func TestInsertCandidateRulesAcceptsCanonicalTypes(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	for _, wt := range ValidWritingTypes {
+		n, err := InsertCandidateRules(d, []CandidateRuleInput{
+			{Category: "tone", RuleText: "rule-" + wt, WritingType: wt, Severity: "should-fix", SignalCount: 1},
+		})
+		if err != nil {
+			t.Fatalf("canonical type %q rejected: %v", wt, err)
+		}
+		if n != 1 {
+			t.Fatalf("canonical type %q: inserted %d, want 1", wt, n)
+		}
+	}
+}
