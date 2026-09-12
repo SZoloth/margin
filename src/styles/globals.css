@@ -34,12 +34,14 @@
   --active-bg: rgba(0, 0, 0, 0.07);
 
   /* Semantic colors — warmed to match palette */
-  --color-success: #5a9a3e;
+  /* 5.48:1 on --color-page — WCAG AA for status/rule text */
+  --color-success: #42752c;
   --color-danger: #c44b3f;
   --color-danger-text: #a13a30;
   --color-warning: #c49a2a;
   --color-accent: #8a6e1a;
-  --color-text-tertiary: #7a756f;
+  /* 5.35:1 on --color-page, 4.80:1 on --color-sidebar — WCAG AA */
+  --color-text-tertiary: #6e6a64;
   --color-green: #5a9a3e;
   --color-red: #c44b3f;
   --color-amber: #c49a2a;
@@ -120,7 +122,8 @@
   --color-danger-text: #d4786c;
   --color-warning: #c9a84c;
   --color-accent: #c9a84c;
-  --color-text-tertiary: #8a857e;
+  /* 5.30:1 on --color-page, 4.82:1 on --color-sidebar — WCAG AA */
+  --color-text-tertiary: #948f87;
   --color-green: #8aad7a;
   --color-red: #d4786c;
   --color-amber: #c9a84c;
