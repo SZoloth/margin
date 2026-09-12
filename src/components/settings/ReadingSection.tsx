@@ -17,25 +17,27 @@ const THEME_OPTIONS = [
   { value: "system" as const, label: "System" },
 ];
 
-const FONT_SIZE_OPTIONS = [
+// Exported for reuse by the in-reader Aa controls (ReaderControls) — one
+// vocabulary for both surfaces.
+export const FONT_SIZE_OPTIONS = [
   { value: "small" as const, label: "Small" },
   { value: "default" as const, label: "Default" },
   { value: "large" as const, label: "Large" },
   { value: "xl" as const, label: "X-Large" },
 ];
 
-const LINE_SPACING_OPTIONS = [
+export const LINE_SPACING_OPTIONS = [
   { value: "compact" as const, label: "Compact" },
   { value: "default" as const, label: "Default" },
   { value: "relaxed" as const, label: "Relaxed" },
 ];
 
-const FONT_FAMILY_OPTIONS = [
+export const FONT_FAMILY_OPTIONS = [
   { value: "serif" as const, label: "Serif" },
   { value: "sans" as const, label: "Sans" },
 ];
 
-const READER_WIDTH_OPTIONS = [
+export const READER_WIDTH_OPTIONS = [
   { value: "narrow" as const, label: "Narrow" },
   { value: "default" as const, label: "Default" },
   { value: "wide" as const, label: "Wide" },

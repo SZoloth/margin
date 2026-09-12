@@ -6,6 +6,7 @@ import { UIFork } from "uifork";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
+import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
@@ -1363,6 +1364,9 @@ export default function App() {
             onScrollToHeading={toc.scrollToHeading}
           />
         ) : undefined
+      }
+      readerControls={
+        <ReaderControls settings={settings} setSetting={setSetting} />
       }
       marginIndicators={
         editor && annotations.isLoaded ? (
