@@ -108,7 +108,9 @@ function gitCommit(message: string): void {
     const paths = [COACHING_PROMPT_PATH, RESULTS_PATH, SESSION_PATH, IDEAS_PATH, LAST_EVAL_PATH, KEPT_EVAL_PATH]
       .map((p) => `"${p}"`)
       .join(" ");
-    execSync(`git commit -o -F - -- ${paths}`, {
+    // add first so untracked files (e.g. first kept-eval.json) become
+    // committable; -o/--only still scopes the commit to these paths alone.
+    execSync(`git add -- ${paths} && git commit -o -F - -- ${paths}`, {
       input: message,
       cwd: repoRoot,
       encoding: "utf-8",
@@ -288,7 +290,9 @@ ${ideas || "(empty)"}
 
 ---
 
-Based on the above, propose your next modification to coaching-prompt.md. Remember: one hypothesis, output between <prompt> tags, hypothesis in <hypothesis> tags, optional <ideas> for deferred hypotheses.`;
+Based on the above, propose your next modification to coaching-prompt.md. Remember: one hypothesis, output between <prompt> tags, hypothesis in <hypothesis> tags, optional <ideas> for deferred hypotheses.
+
+HARD CONSTRAINT: the prompt is a template — it MUST keep the placeholders {{RULES}}, {{TYPE}}, {{REGISTER}}, and {{PROMPT}} verbatim, exactly as they appear in the current prompt. A proposal that drops or renames them is rejected without evaluation.`;
 
   const result = execSync(evalCmd(), {
     input: agentPrompt,
@@ -372,15 +376,16 @@ function main(): void {
     }
   }
 
-  // Main loop
+  // Main loop — an iteration is a real experiment; agent-call failures retry
+  // without consuming budget, but 3 consecutive failures abort the session.
   let iteration = 0;
+  let consecutiveAgentFailures = 0;
   while (iteration < maxIterations) {
     const state = parseResults();
     const currentRun = state.nextRun;
-    iteration++;
 
     console.log(`\n${"=".repeat(60)}`);
-    console.log(`Run ${String(currentRun).padStart(3, "0")} (iteration ${iteration})`);
+    console.log(`Run ${String(currentRun).padStart(3, "0")} (iteration ${iteration + 1})`);
     console.log("=".repeat(60));
 
     const currentPrompt = readFile(COACHING_PROMPT_PATH);
@@ -399,11 +404,18 @@ function main(): void {
     try {
       agentResult = callAgent(currentPrompt, state.lastN, lastWorstViolations, perType, ideas);
     } catch (err) {
+      consecutiveAgentFailures++;
       console.error("Agent call failed:", (err as Error).message);
+      if (consecutiveAgentFailures >= 3) {
+        console.error("3 consecutive agent failures — aborting session.");
+        break;
+      }
       console.log("Waiting 30s before retry...");
       execSync("sleep 30");
       continue;
     }
+    consecutiveAgentFailures = 0;
+    iteration++;
 
     console.log(`Hypothesis: ${agentResult.hypothesis}`);
 
