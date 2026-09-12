@@ -30,8 +30,9 @@ dataset dirtier than production's. All landed:
 - ✅ **Production correction filters** in all eval generators (NOT FEEDBACK
   junk, non-feedback, backfill, and positive-polarity rows no longer render
   as "avoid" examples)
-- ✅ **Suspect-rule exclusion** — auto-synthesized (inverted fields per
-  rules-quality-audit) + unreviewed candidates out of eval rule loads
+- ✅ **Suspect-rule exclusion** — auto-synthesized + unreviewed
+  candidates out of eval rule loads (the category is already absent from
+  the live DB; the audit's poisoned rows were dropped since July)
 - ✅ **Register parity** — eval REGISTER_MAP now matches production
   registerDefaults (was divergent on 5 types)
 - ✅ **`per_type` in EvalResult** — unblocks skill-loop.ts and makes
@@ -43,9 +44,10 @@ dataset dirtier than production's. All landed:
 
 Remaining P0:
 
-1. **Repair the 43 inverted auto-synthesized rules in the DB.** Eval now
-   excludes the category, but production loads may still surface them —
-   repair or drop the rows themselves.
+1. ~~Repair the 43 inverted auto-synthesized rules~~ — **already gone from
+   the DB** (verified 2026-09-12: zero rows with category
+   `auto-synthesized` or source `auto-synthesis`/`gepa-variant`; the audit's
+   flagged IDs absent). The eval-side exclusion stays as defense-in-depth.
 2. **Human open-coding gate (Nurijanian finding).** Three autoresearch runs
    elsewhere optimized machine judges against "a fantasy" until a human
    open-coded ~100 outputs and hand-validated each judge on 15–20 items.
