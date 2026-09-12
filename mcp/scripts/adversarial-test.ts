@@ -1,7 +1,6 @@
 #!/usr/bin/env npx tsx
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { execSync } from "child_process";
 import { join, resolve } from "path";
 import { fileURLToPath } from "url";
 import {
@@ -14,7 +13,7 @@ import {
   REGISTER_MAP,
   loadWritingRulesForType,
   stripMetaCommentary,
-  cleanEnv,
+  evalGenerate,
 } from "./shared.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -121,14 +120,7 @@ function generateSample(
   }
 
   try {
-    const result = execSync(`claude --print --model sonnet`, {
-      input: fullPrompt,
-      encoding: "utf-8",
-      timeout: 90_000,
-      maxBuffer: 1024 * 1024,
-      env: cleanEnv(),
-    });
-    return stripMetaCommentary(result.trim());
+    return stripMetaCommentary(evalGenerate(fullPrompt));
   } catch (err) {
     console.error(
       `${RED}Generation failed for ${type}:${RESET}`,
@@ -143,14 +135,7 @@ function generateUncoached(type: string, prompt: string): string {
   const fullPrompt = `Writing type: ${type}\nRegister: ${register}\n\nOutput ONLY the prose — no commentary, critique, word counts, or meta-discussion.\n\n${prompt}`;
 
   try {
-    const result = execSync(`claude --print --model sonnet`, {
-      input: fullPrompt,
-      encoding: "utf-8",
-      timeout: 90_000,
-      maxBuffer: 1024 * 1024,
-      env: cleanEnv(),
-    });
-    return stripMetaCommentary(result.trim());
+    return stripMetaCommentary(evalGenerate(fullPrompt));
   } catch (err) {
     console.error(
       `${RED}Uncoached generation failed for ${type}:${RESET}`,

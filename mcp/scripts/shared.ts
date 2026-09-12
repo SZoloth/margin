@@ -4,6 +4,7 @@
  */
 
 import { readFileSync, existsSync } from "fs";
+import { execSync } from "child_process";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -125,6 +126,23 @@ export function cleanEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.CLAUDECODE;
   return env;
+}
+
+/**
+ * LLM generator for eval runs. The command receives the prompt on stdin and
+ * must print the prose to stdout. Defaults to Claude Code; override with
+ * MARGIN_EVAL_CMD — e.g. `poolside` (free local model) when the Claude CLI
+ * is unavailable.
+ */
+export function evalGenerate(prompt: string): string {
+  const cmd = process.env.MARGIN_EVAL_CMD ?? "claude --print --model sonnet";
+  return execSync(cmd, {
+    input: prompt,
+    encoding: "utf-8",
+    timeout: 120_000,
+    maxBuffer: 1024 * 1024,
+    env: cleanEnv(),
+  }).trim();
 }
 
 export function stripMetaCommentary(text: string): string {

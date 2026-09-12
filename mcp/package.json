@@ -8,7 +8,10 @@
     "build": "pnpm exec tsc",
     "dev": "tsc --watch",
     "test": "pnpm exec vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval:check": "tsx scripts/compliance-check.ts",
+    "eval:adversarial": "tsx scripts/adversarial-test.ts",
+    "eval:comparison": "tsx scripts/adversarial-test.ts --mode comparison --save"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
@@ -18,6 +21,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.0.0",
+    "tsx": "4.23.13",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   }

@@ -1,10 +1,10 @@
 #!/usr/bin/env npx tsx
 
 import { readFileSync, existsSync } from "fs";
-import { execSync } from "child_process";
 import { homedir } from "os";
 import { join, resolve } from "path";
 import { fileURLToPath } from "url";
+import { evalGenerate } from "./shared.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -117,8 +117,11 @@ export function parseKillWords(): Map<string, string> {
     // Skip header rows
     if (phrase === "Phrase" || phrase === "Pattern" || phrase === "Verb" || phrase === "AI Version" || phrase.startsWith("---")) continue;
 
-    // Clean up: remove markdown formatting, parentheticals like "(into)"
-    const cleaned = phrase.replace(/[*_`]/g, "").trim();
+    // Clean up: remove markdown formatting and parentheticals like "(into)"
+    const cleaned = phrase
+      .replace(/\([^)]*\)/g, "")
+      .replace(/[*_`]/g, "")
+      .trim();
     if (cleaned.length > 0) {
       words.set(cleaned.toLowerCase(), currentSeverity);
     }
@@ -132,9 +135,19 @@ export function scanKillWords(text: string, killWords: Map<string, string>): Kil
   const hits: KillWordHit[] = [];
 
   for (const [phrase, severity] of killWords) {
-    // Word-boundary-aware search
+    // Word-boundary-aware search; single words allow common inflections
+    // (leverages, delves, synergies) since AI rarely uses the lemma.
     const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`\\b${escaped}\\b`, "gi");
+    const single = !/[\s-]/.test(phrase);
+    let pattern: string;
+    if (single && /e$/.test(phrase)) {
+      pattern = `${escaped.slice(0, -1)}(?:e|es|ed|ing|d)`;
+    } else if (single && /[^aeiou]y$/.test(phrase)) {
+      pattern = `${escaped.slice(0, -1)}(?:y|ies)`;
+    } else {
+      pattern = `${escaped}${single ? "(?:es|s|ed|ing)?" : ""}`;
+    }
+    const regex = new RegExp(`\\b${pattern}\\b`, "gi");
     const matches = text.match(regex);
     if (matches && matches.length > 0) {
       hits.push({ word: phrase, severity, count: matches.length });
@@ -597,13 +610,7 @@ For each rule category, indicate pass/fail with specific violations. Output ONLY
 { "score": 0-100, "violations": [{"rule": "rule name", "text": "violating excerpt", "severity": "high|medium|low"}] }`;
 
   try {
-    const result = execSync(`claude --print --model sonnet`, {
-      input: prompt,
-      encoding: "utf-8",
-      timeout: 60_000,
-      maxBuffer: 1024 * 1024,
-      env: (() => { const e = { ...process.env }; delete e.CLAUDECODE; return e; })(),
-    });
+    const result = evalGenerate(prompt);
 
     // Extract JSON from response (handle potential markdown fences)
     const jsonMatch = result.match(/\{[\s\S]*\}/);
@@ -741,6 +748,8 @@ function printReport(result: ComplianceResult): void {
 
 function main(): void {
   const args = process.argv.slice(2);
+  const typeIdx = args.indexOf("--type");
+  const writingType = typeIdx !== -1 ? args.splice(typeIdx, 2)[1] : undefined;
   const useLlm = args.includes("--llm");
   const useJson = args.includes("--json");
   const fileArgs = args.filter((a) => !a.startsWith("--"));
@@ -758,10 +767,11 @@ function main(): void {
     text = readFileSync("/dev/stdin", "utf-8");
   } else {
     console.error(
-      `Usage: npx tsx mcp/scripts/compliance-check.ts [--llm] [--json] <file-or-stdin>`
+      `Usage: npx tsx mcp/scripts/compliance-check.ts [--llm] [--json] [--type <writing-type>] <file-or-stdin>`
     );
     console.error(`  --llm     Enable LLM audit layer (slower, costs API tokens)`);
     console.error(`  --json    Output raw JSON instead of formatted report`);
+    console.error(`  --type    Writing type filter for rules (general, prd, email, blog, ...)`);
     console.error(`  <file>    Path to prose file to check (or reads from stdin if no file arg)`);
     process.exit(1);
   }
@@ -769,7 +779,7 @@ function main(): void {
   // Layer 1: Mechanical checks
   const killWords = parseKillWords();
   const killWordHits = scanKillWords(text, killWords);
-  const slopPatterns = loadSlopPatterns();
+  const slopPatterns = loadSlopPatterns(writingType);
   const slopHits = scanSlopPatterns(text, slopPatterns);
   const voiceViolations = checkVoice(text, writingType);
   const structuralTells = scanStructuralTells(text);
