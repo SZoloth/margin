@@ -64,3 +64,7 @@ autoresearch.ideas.md is merged in.)
 - **Top-10 rules in arch-a** — tested as arch-a-top10 (70.4% vs full-dump
   57.5%). Top-10 alone beat volume; "corrections + top-10" remains untested
   (see Scenario B above).
+
+- Register-specific prohibition tuning — email and slack have different norms; a blanket "no colons" or "no negative parallelism" rule may need register exceptions to avoid regressing casual types that currently pass (slack 3/3, email 1/3).
+- Post-generation compliance check — a lightweight mechanical check that flags violations and triggers one regenerate could catch what the prompt misses.
+- Self-critique pass (humanizer pattern) — arch-c variant where pass 2 critiques "what makes this obviously AI?" then revises against the rule list.
