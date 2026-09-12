@@ -157,6 +157,58 @@ fn extract_json_array(text: &str) -> Option<&str> {
     }
 }
 
+/// LLM command for in-app generation. Override with MARGIN_LLM_CMD —
+/// any `stdin → stdout` generator works (same contract as the eval
+/// harness's MARGIN_EVAL_CMD). Default keeps the Claude Code path.
+const DEFAULT_LLM_CMD: &str = "claude --print --model sonnet";
+
+fn parse_llm_command(spec: &str) -> Result<(String, Vec<String>), String> {
+    let parts = shlex::split(spec)
+        .ok_or_else(|| format!("Invalid MARGIN_LLM_CMD: {}", spec))?;
+    let (prog, args) = parts
+        .split_first()
+        .ok_or_else(|| "MARGIN_LLM_CMD cannot be empty".to_string())?;
+    Ok((prog.clone(), args.to_vec()))
+}
+
+fn llm_command() -> Result<(String, Vec<String>), String> {
+    let spec = std::env::var("MARGIN_LLM_CMD")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DEFAULT_LLM_CMD.to_string());
+    parse_llm_command(&spec)
+}
+
+fn llm_generate(prompt: &str) -> Result<String, String> {
+    let (prog, args) = llm_command()?;
+    let mut child = Command::new(&prog)
+        .args(&args)
+        .env_remove("CLAUDECODE")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to start LLM command '{}': {}", prog, e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(prompt.as_bytes())
+            .map_err(|e| format!("Failed to write to LLM stdin: {}", e))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to read LLM output: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("LLM command '{}' failed: {}", prog, stderr.trim()));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
 #[tauri::command]
 pub async fn seed_rules_from_guide(
     state: tauri::State<'_, DbPool>,
@@ -175,32 +227,7 @@ pub async fn seed_rules_from_guide(
     }
 
     let prompt = format!("{}{}", EXTRACTION_PROMPT, guide_text);
-
-    let mut child = Command::new("claude")
-        .args(["--print", "--model", "sonnet"])
-        .env_remove("CLAUDECODE")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to start claude CLI: {}", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(prompt.as_bytes())
-            .map_err(|e| format!("Failed to write to claude stdin: {}", e))?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Failed to read claude output: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Claude CLI failed: {}", stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = llm_generate(&prompt)?;
     let json_str = extract_json_array(&stdout)
         .ok_or_else(|| format!("No JSON array found in LLM response. Raw output: {}", &stdout[..stdout.len().min(500)]))?;
 
@@ -453,5 +480,25 @@ mod tests {
     #[test]
     fn extract_json_array_returns_none_for_no_array() {
         assert_eq!(extract_json_array("no json here"), None);
+    }
+
+    #[test]
+    fn parse_llm_command_splits_program_and_args() {
+        let (prog, args) = parse_llm_command("claude --print --model sonnet").unwrap();
+        assert_eq!(prog, "claude");
+        assert_eq!(args, vec!["--print", "--model", "sonnet"]);
+    }
+
+    #[test]
+    fn parse_llm_command_handles_quoted_args() {
+        let (prog, args) = parse_llm_command("poolside --system 'be brief'").unwrap();
+        assert_eq!(prog, "poolside");
+        assert_eq!(args, vec!["--system", "be brief"]);
+    }
+
+    #[test]
+    fn parse_llm_command_rejects_empty() {
+        assert!(parse_llm_command("").is_err());
+        assert!(parse_llm_command("unmatched 'quote").is_err());
     }
 }
