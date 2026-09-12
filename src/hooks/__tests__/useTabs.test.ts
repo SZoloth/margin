@@ -388,6 +388,37 @@ describe("useTabs", () => {
       expect(result.current.tabs).toHaveLength(0);
       expect(result.current.activeTabId).toBeNull();
     });
+
+    it("fires onLastTabClosed when the final tab closes", async () => {
+      const onLastTabClosed = vi.fn();
+      const { result } = renderHook(() =>
+        useTabs({ snapshotFn: makeSnapshotFn(), onLastTabClosed }),
+      );
+      await flushMount();
+
+      const doc = makeDoc("a");
+      act(() => result.current.openTab(doc, "a", null));
+
+      act(() => result.current.closeTab(result.current.tabs[0]!.id));
+
+      expect(onLastTabClosed).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not fire onLastTabClosed while other tabs remain", async () => {
+      const onLastTabClosed = vi.fn();
+      const { result } = renderHook(() =>
+        useTabs({ snapshotFn: makeSnapshotFn(), onLastTabClosed }),
+      );
+      await flushMount();
+
+      act(() => result.current.openTab(makeDoc("a"), "a", null));
+      act(() => result.current.openTab(makeDoc("b"), "b", null));
+
+      act(() => result.current.closeTab(result.current.tabs[0]!.id));
+
+      expect(result.current.tabs).toHaveLength(1);
+      expect(onLastTabClosed).not.toHaveBeenCalled();
+    });
   });
 
   describe("cancelCloseTab", () => {

@@ -1,9 +1,11 @@
+import type { Node as PMNode } from "@tiptap/pm/model";
+
 export interface TextAnchor {
   text: string;
   prefix: string; // ~30 chars before
   suffix: string; // ~30 chars after
-  from: number; // original TipTap position
-  to: number; // original TipTap position
+  from: number; // original offset in the flattened doc text
+  to: number; // original offset in the flattened doc text
 }
 
 export interface AnchorResult {
@@ -13,7 +15,90 @@ export interface AnchorResult {
 }
 
 /**
- * Extract anchoring context from the current document for a selection.
+ * A document's text flattened with the same "\n" block separators that
+ * `doc.textBetween(0, doc.content.size, "\n")` produces, plus the segments
+ * needed to translate between flat offsets and ProseMirror positions.
+ *
+ * Highlight rows store ProseMirror positions in `from_pos`/`to_pos` but
+ * prefix/suffix context and stored text are in flat-text space — both sides
+ * of an anchor must use this map or context past the first block is corrupt.
+ */
+export interface DocTextMap {
+  flat: string;
+  /** Text-node segments in document order. */
+  segments: Array<{ flatStart: number; pos: number; length: number }>;
+}
+
+/**
+ * Flatten a ProseMirror doc exactly like `textBetween` with a block
+ * separator: one separator is emitted when entering each textblock (and each
+ * leaf block that contributes leaf text), except the first.
+ */
+export function buildDocTextMap(doc: PMNode, blockSeparator = "\n"): DocTextMap {
+  let flat = "";
+  let first = true;
+  const segments: DocTextMap["segments"] = [];
+  doc.nodesBetween(0, doc.content.size, (node, pos) => {
+    const nodeText = node.isText
+      ? (node.text ?? "")
+      : node.isLeaf && node.type.spec.leafText
+        ? (node.type.spec.leafText as (n: PMNode) => string)(node)
+        : "";
+    if (node.isBlock && ((node.isLeaf && nodeText) || node.isTextblock)) {
+      if (first) first = false;
+      else flat += blockSeparator;
+    }
+    if (node.isText && nodeText.length > 0) {
+      segments.push({ flatStart: flat.length, pos, length: nodeText.length });
+    }
+    flat += nodeText;
+    return true;
+  });
+  return { flat, segments };
+}
+
+/**
+ * Map a ProseMirror position to an offset in `map.flat`. Positions that land
+ * in a block boundary gap map to the following text segment; positions past
+ * the end map to `flat.length`.
+ */
+export function docPosToFlat(map: DocTextMap, pos: number): number {
+  for (const seg of map.segments) {
+    if (pos < seg.pos) return seg.flatStart;
+    if (pos <= seg.pos + seg.length) return seg.flatStart + (pos - seg.pos);
+  }
+  return map.flat.length;
+}
+
+/**
+ * Map a flat-text offset back to a ProseMirror position. Offsets inside a
+ * separator gap have no exact position: `prefer: "next"` (for range starts)
+ * resolves to the following segment's start, `prefer: "prev"` (for range
+ * ends) to the previous segment's end.
+ */
+export function flatToDocPos(
+  map: DocTextMap,
+  offset: number,
+  prefer: "next" | "prev" = "next",
+): number {
+  const segs = map.segments;
+  if (segs.length === 0) return 0;
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i]!;
+    const segEnd = seg.flatStart + seg.length;
+    if (offset < seg.flatStart) {
+      return prefer === "next" ? seg.pos : segs[i - 1]!.pos + segs[i - 1]!.length;
+    }
+    if (offset <= segEnd) return seg.pos + (offset - seg.flatStart);
+  }
+  const last = segs[segs.length - 1]!;
+  return last.pos + last.length;
+}
+
+/**
+ * Extract anchoring context from the flattened document text for a range.
+ * `from`/`to` are flat-text offsets (see {@link docPosToFlat}), not
+ * ProseMirror positions.
  */
 export function createAnchor(
   fullText: string,

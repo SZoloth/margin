@@ -70,7 +70,9 @@ export const MultiColorHighlight = Highlight.extend({
                 }),
               );
             }
-            return true;
+            // Don't consume the click — returning true here prevented
+            // ProseMirror from placing the caret inside the highlight.
+            return false;
           },
         },
       }),

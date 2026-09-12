@@ -37,9 +37,11 @@ export interface UseTabsReturn {
 export interface UseTabsOptions {
   snapshotFn: () => SnapshotData;
   onFileMissing?: (names: string[]) => void;
+  /** Fired when a close leaves zero tabs — the app should clear the editor surface. */
+  onLastTabClosed?: () => void;
 }
 
-export function useTabs({ snapshotFn, onFileMissing }: UseTabsOptions): UseTabsReturn {
+export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsOptions): UseTabsReturn {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -49,6 +51,8 @@ export function useTabs({ snapshotFn, onFileMissing }: UseTabsOptions): UseTabsR
   snapshotFnRef.current = snapshotFn;
   const activeTabIdRef = useRef(activeTabId);
   activeTabIdRef.current = activeTabId;
+  const onLastTabClosedRef = useRef(onLastTabClosed);
+  onLastTabClosedRef.current = onLastTabClosed;
 
   // Persist tabs to SQLite (debounced)
   const persistTabs = useCallback((currentTabs: Tab[], currentActiveId: string | null) => {
@@ -323,6 +327,12 @@ export function useTabs({ snapshotFn, onFileMissing }: UseTabsOptions): UseTabsR
         persistTabs(next, newActive?.id ?? null);
       } else {
         persistTabs(next, activeTabId);
+      }
+
+      if (next.length === 0) {
+        // No tabs remain — nothing will repopulate the editor, so the caller
+        // must clear the document surface or the closed doc renders as a zombie.
+        onLastTabClosedRef.current?.();
       }
 
       return next;

@@ -81,6 +81,31 @@ fn fetch_highlights(conn: &Connection, document_id: &str) -> Result<Vec<Highligh
     results
 }
 
+#[allow(clippy::too_many_arguments)]
+fn update_highlight_fields(
+    conn: &Connection,
+    id: &str,
+    color: &str,
+    text_content: &str,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<&str>,
+    suffix_context: Option<&str>,
+    now: i64,
+) -> Result<(), String> {
+    if text_content.trim().is_empty() {
+        return Err("empty highlight text is not allowed".to_string());
+    }
+    conn.execute(
+        "UPDATE highlights SET color = ?1, text_content = ?2, from_pos = ?3, to_pos = ?4,
+             prefix_context = ?5, suffix_context = ?6, updated_at = ?7
+         WHERE id = ?8",
+        rusqlite::params![color, text_content, from_pos, to_pos, prefix_context, suffix_context, now, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn set_highlight_color(conn: &Connection, id: &str, color: &str, now: i64) -> Result<(), String> {
     conn.execute(
         "UPDATE highlights SET color = ?1, updated_at = ?2 WHERE id = ?3",
@@ -244,6 +269,40 @@ pub async fn create_highlight(
 pub async fn get_highlights(state: tauri::State<'_, DbPool>, document_id: String) -> Result<Vec<Highlight>, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
     fetch_highlights(&conn, &document_id)
+}
+
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn update_highlight(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    color: String,
+    text_content: String,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<String>,
+    suffix_context: Option<String>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let now = now_millis();
+
+    // Verify the row exists before reporting success — a recolor against a
+    // stale id must fail loudly rather than silently updating zero rows.
+    let doc_id = document_id_for_highlight(&conn, &id)?;
+    update_highlight_fields(
+        &conn,
+        &id,
+        &color,
+        &text_content,
+        from_pos,
+        to_pos,
+        prefix_context.as_deref(),
+        suffix_context.as_deref(),
+        now,
+    )?;
+    touch_document(&conn, &doc_id)?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -519,6 +578,36 @@ mod tests {
 
         assert!(err.contains("empty highlight text"));
         assert_eq!(highlight_count(&conn), 0);
+    }
+
+    #[test]
+    fn update_highlight_fields_updates_all_anchor_fields() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "old text", 0, 8, Some("op"), Some("os"), 1000).unwrap();
+
+        update_highlight_fields(&conn, "h1", "green", "new text", 5, 13, Some("np"), Some("ns"), 2000).unwrap();
+
+        let h = fetch_highlights(&conn, "doc1").unwrap()[0].clone();
+        assert_eq!(h.color, "green");
+        assert_eq!(h.text_content, "new text");
+        assert_eq!(h.from_pos, 5);
+        assert_eq!(h.to_pos, 13);
+        assert_eq!(h.prefix_context.as_deref(), Some("np"));
+        assert_eq!(h.suffix_context.as_deref(), Some("ns"));
+        assert_eq!(h.created_at, 1000);
+        assert_eq!(h.updated_at, 2000);
+    }
+
+    #[test]
+    fn update_highlight_fields_rejects_empty_text() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+
+        let err = update_highlight_fields(&conn, "h1", "green", "  ", 0, 4, None, None, 2000)
+            .expect_err("empty text should be rejected");
+        assert!(err.contains("empty highlight text"));
     }
 
     #[test]
