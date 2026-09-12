@@ -689,19 +689,24 @@ pub async fn update_writing_rule(
     example_after: Option<String>,
     notes: Option<String>,
 ) -> Result<(), String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    update_rule(
-        &conn,
-        &id,
-        rule_text.as_deref(),
-        severity.as_deref(),
-        when_to_apply.as_deref(),
-        why.as_deref(),
-        example_before.as_deref(),
-        example_after.as_deref(),
-        notes.as_deref(),
-    )
-    .map_err(|e| e.to_string())
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        update_rule(
+            &conn,
+            &id,
+            rule_text.as_deref(),
+            severity.as_deref(),
+            when_to_apply.as_deref(),
+            why.as_deref(),
+            example_before.as_deref(),
+            example_after.as_deref(),
+            notes.as_deref(),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    // Mutation committed — regenerate artifacts (single-writer via CLI).
+    export_artifacts();
+    Ok(())
 }
 
 #[tauri::command]
@@ -709,8 +714,12 @@ pub async fn delete_writing_rule(
     state: tauri::State<'_, DbPool>,
     id: String,
 ) -> Result<(), String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    delete_rule(&conn, &id).map_err(|e| e.to_string())
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        delete_rule(&conn, &id).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
 }
 
 #[tauri::command]
@@ -888,6 +897,12 @@ pub struct VoiceProfileExportResult {
     pub rule_count: usize,
 }
 
+/// Marks rules reviewed, mirroring `AcceptCandidateRule` in
+/// cli/db/rules.go: for `synthesis-candidate` rows this also promotes the
+/// source to 'synthesis' and stamps `synthesized_at` on the provenance
+/// corrections listed in the `synthesized-from:<highlight-ids>` notes line
+/// (only rows still NULL are stamped). Non-candidate rules just get the
+/// review timestamp.
 fn mark_reviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64> {
     if rule_ids.is_empty() {
         return Ok(0);
@@ -895,45 +910,189 @@ fn mark_reviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64
     let now = now_millis();
     let tx = conn.unchecked_transaction()?;
     let mut total = 0u64;
+    let mut source_highlight_ids: Vec<String> = Vec::new();
     for chunk in rule_ids.chunks(900) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let id_list = placeholders.join(",");
+
+        // Read candidate provenance before promotion — AcceptCandidateRule
+        // reads notes ahead of the UPDATE for the same reason.
+        let select_sql = format!(
+            "SELECT notes FROM writing_rules WHERE id IN ({id_list}) AND source = 'synthesis-candidate'"
+        );
+        {
+            let mut stmt = tx.prepare(&select_sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            let rows =
+                stmt.query_map(params.as_slice(), |row| row.get::<_, Option<String>>(0))?;
+            for row in rows {
+                if let Some(notes) = row? {
+                    if let Some(rest) = notes.strip_prefix("synthesized-from:") {
+                        for hid in rest.split(',').map(str::trim).filter(|h| !h.is_empty()) {
+                            source_highlight_ids.push(hid.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        let update_sql = format!(
+            "UPDATE writing_rules
+             SET reviewed_at = ?{now_idx}, updated_at = ?{now_idx},
+                 source = CASE WHEN source = 'synthesis-candidate' THEN 'synthesis' ELSE source END
+             WHERE id IN ({id_list})",
+            now_idx = chunk.len() + 1,
+        );
+        {
+            let mut stmt = tx.prepare(&update_sql)?;
+            let mut params: Vec<&dyn rusqlite::types::ToSql> =
+                Vec::with_capacity(chunk.len() + 1);
+            for id in chunk {
+                params.push(id as &dyn rusqlite::types::ToSql);
+            }
+            params.push(&now as &dyn rusqlite::types::ToSql);
+            total += stmt.execute(params.as_slice())? as u64;
+        }
+    }
+    // Mark provenance corrections synthesized — mirrors the
+    // `UPDATE corrections ... AND synthesized_at IS NULL` in
+    // AcceptCandidateRule.
+    for chunk in source_highlight_ids.chunks(899) {
         let placeholders: Vec<String> = (2..=chunk.len() + 1).map(|i| format!("?{i}")).collect();
         let sql = format!(
-            "UPDATE writing_rules SET reviewed_at = ?1 WHERE id IN ({})",
+            "UPDATE corrections SET synthesized_at = ?1
+             WHERE highlight_id IN ({}) AND synthesized_at IS NULL",
             placeholders.join(",")
         );
         let mut stmt = tx.prepare(&sql)?;
         let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 1);
         params.push(&now as &dyn rusqlite::types::ToSql);
-        for id in chunk {
-            params.push(id as &dyn rusqlite::types::ToSql);
+        for hid in chunk {
+            params.push(hid as &dyn rusqlite::types::ToSql);
         }
-        total += stmt.execute(params.as_slice())? as u64;
+        stmt.execute(params.as_slice())?;
     }
     tx.commit()?;
     Ok(total)
 }
 
+/// Parses `synthesized-from:<highlight-id>,...` provenance notes into ids.
+fn parse_synthesized_from(notes: &str) -> impl Iterator<Item = &str> {
+    notes
+        .strip_prefix("synthesized-from:")
+        .into_iter()
+        .flat_map(|rest| rest.split(','))
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+}
+
+/// Clears the review stamp. Rules promoted from candidates are demoted back
+/// to 'synthesis-candidate' so the review gate (cli/db/rules.go
+/// `unreviewedCandidateFilter`) excludes them from exports until re-reviewed.
+/// Provenance corrections that are no longer claimed by any accepted
+/// 'synthesis' rule are un-stamped (`synthesized_at = NULL`) so they re-enter
+/// the synthesis queue instead of being orphaned by a demoted-then-rejected
+/// candidate.
 fn mark_unreviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64> {
     if rule_ids.is_empty() {
         return Ok(0);
     }
     let tx = conn.unchecked_transaction()?;
     let mut total = 0u64;
+    let mut provenance_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for chunk in rule_ids.chunks(900) {
         let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
-        let sql = format!(
-            "UPDATE writing_rules SET reviewed_at = NULL WHERE id IN ({})",
-            placeholders.join(",")
+        let id_list = placeholders.join(",");
+
+        // Capture provenance from rules about to be demoted.
+        let select_sql = format!(
+            "SELECT notes FROM writing_rules WHERE id IN ({id_list}) AND source = 'synthesis'"
         );
-        let mut stmt = tx.prepare(&sql)?;
-        let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+        {
+            let mut stmt = tx.prepare(&select_sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            let rows =
+                stmt.query_map(params.as_slice(), |row| row.get::<_, Option<String>>(0))?;
+            for row in rows {
+                if let Some(notes) = row? {
+                    for hid in parse_synthesized_from(&notes) {
+                        provenance_ids.insert(hid.to_string());
+                    }
+                }
+            }
+        }
+
+        let sql = format!(
+            "UPDATE writing_rules
+             SET reviewed_at = NULL,
+                 source = CASE WHEN source = 'synthesis' THEN 'synthesis-candidate' ELSE source END
+             WHERE id IN ({id_list})"
+        );
+        {
+            let mut stmt = tx.prepare(&sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            total += stmt.execute(params.as_slice())? as u64;
+        }
+    }
+
+    // Un-stamp provenance corrections no longer claimed by a still-accepted
+    // synthesis rule — mirrors the `synthesized_at IS NULL` queue semantics.
+    if !provenance_ids.is_empty() {
+        let mut still_claimed: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        {
+            let mut stmt =
+                tx.prepare("SELECT notes FROM writing_rules WHERE source = 'synthesis'")?;
+            let rows =
+                stmt.query_map([], |row| row.get::<_, Option<String>>(0))?;
+            for row in rows {
+                if let Some(notes) = row? {
+                    for hid in parse_synthesized_from(&notes) {
+                        still_claimed.insert(hid.to_string());
+                    }
+                }
+            }
+        }
+        let to_clear: Vec<String> = provenance_ids
             .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .filter(|id| !still_claimed.contains(*id))
+            .cloned()
             .collect();
-        total += stmt.execute(params.as_slice())? as u64;
+        for chunk in to_clear.chunks(899) {
+            let placeholders: Vec<String> =
+                (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+            let sql = format!(
+                "UPDATE corrections SET synthesized_at = NULL
+                 WHERE highlight_id IN ({}) AND synthesized_at IS NOT NULL",
+                placeholders.join(",")
+            );
+            let mut stmt = tx.prepare(&sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            stmt.execute(params.as_slice())?;
+        }
     }
     tx.commit()?;
     Ok(total)
+}
+
+/// Best-effort artifact regeneration after a pipeline mutation. Mirrors the
+/// Go CLI where every mutating command calls profile.ExportProfile
+/// (cli/cmd/*.go). Failures are logged inside run_cli_export and never
+/// propagate — the mutation itself already succeeded.
+pub(crate) fn export_artifacts() {
+    let _ = run_cli_export();
 }
 
 #[tauri::command]
@@ -941,8 +1100,16 @@ pub async fn mark_rules_reviewed(
     state: tauri::State<'_, DbPool>,
     rule_ids: Vec<String>,
 ) -> Result<u64, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    mark_reviewed(&conn, &rule_ids).map_err(|e| e.to_string())
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_reviewed(&conn, &rule_ids).map_err(|e| e.to_string())?
+    };
+    // Accepted rules must reach the generated artifacts — mirrors
+    // cli/cmd/rules.go accept → profile.ExportProfile.
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
 }
 
 #[tauri::command]
@@ -950,8 +1117,14 @@ pub async fn mark_rules_unreviewed(
     state: tauri::State<'_, DbPool>,
     rule_ids: Vec<String>,
 ) -> Result<u64, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    mark_unreviewed(&conn, &rule_ids).map_err(|e| e.to_string())
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_unreviewed(&conn, &rule_ids).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
 }
 
 /// Alias for export_writing_rules — voice profile is now merged into writing-rules.md.
@@ -1030,7 +1203,8 @@ mod tests {
                 created_at INTEGER NOT NULL,
                 writing_type TEXT,
                 polarity TEXT,
-                feedback_type TEXT
+                feedback_type TEXT,
+                synthesized_at INTEGER
             );",
         )
         .unwrap();
@@ -1558,6 +1732,168 @@ mod tests {
             .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(cleared, None);
+    }
+
+    #[test]
+    fn mark_reviewed_promotes_candidate_and_marks_source_corrections() {
+        // Mirrors cli/db/rules.go AcceptCandidateRule: candidate rows flip
+        // source to 'synthesis' and their synthesized-from corrections get
+        // synthesized_at stamped.
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, created_at, updated_at)
+             VALUES ('cand1', 'general', 'kill-words', 'leverage', 'must-fix', 'synthesis-candidate', 2, 'synthesized-from:h1, h2', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text one', '[]', 'yellow', 1),
+                    ('c2', 'h2', 'd1', 's1', 'text two', '[]', 'yellow', 2),
+                    ('c3', 'h3', 'd1', 's1', 'text three', '[]', 'yellow', 3)",
+            [],
+        ).unwrap();
+
+        let updated = mark_reviewed(&conn, &["cand1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        let (source, reviewed): (String, Option<i64>) = conn
+            .query_row(
+                "SELECT source, reviewed_at FROM writing_rules WHERE id = 'cand1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(source, "synthesis");
+        assert!(reviewed.is_some());
+
+        let synth: Vec<(String, Option<i64>)> = conn
+            .prepare("SELECT highlight_id, synthesized_at FROM corrections ORDER BY highlight_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert!(synth[0].1.is_some(), "h1 should be marked synthesized");
+        assert!(synth[1].1.is_some(), "h2 should be marked synthesized");
+        assert!(synth[2].1.is_none(), "h3 is unrelated and must stay NULL");
+    }
+
+    #[test]
+    fn mark_reviewed_does_not_overwrite_existing_synthesized_at() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, created_at, updated_at)
+             VALUES ('cand1', 'general', 'kill-words', 'leverage', 'must-fix', 'synthesis-candidate', 1, 'synthesized-from:h1', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at, synthesized_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text', '[]', 'yellow', 1, 555)",
+            [],
+        ).unwrap();
+
+        mark_reviewed(&conn, &["cand1".to_string()]).unwrap();
+
+        let synth: i64 = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth, 555, "existing synthesized_at must be preserved");
+    }
+
+    #[test]
+    fn mark_reviewed_leaves_non_candidate_source_unchanged() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+
+        let source: String = conn
+            .query_row("SELECT source FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(source, "manual");
+    }
+
+    #[test]
+    fn mark_unreviewed_demotes_promoted_rule_back_to_candidate() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, created_at, updated_at)
+             VALUES ('cand1', 'general', 'kill-words', 'leverage', 'must-fix', 'synthesis-candidate', 1, 'synthesized-from:h1', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text', '[]', 'yellow', 1)",
+            [],
+        ).unwrap();
+
+        mark_reviewed(&conn, &["cand1".to_string()]).unwrap();
+        let stamped: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(stamped.is_some(), "accept should stamp provenance corrections");
+
+        mark_unreviewed(&conn, &["cand1".to_string()]).unwrap();
+
+        let (source, reviewed): (String, Option<i64>) = conn
+            .query_row(
+                "SELECT source, reviewed_at FROM writing_rules WHERE id = 'cand1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        // Demoted rules are gated again: unreviewed synthesis-candidate rows
+        // are excluded by unreviewedCandidateFilter.
+        assert_eq!(source, "synthesis-candidate");
+        assert_eq!(reviewed, None);
+        // The provenance correction re-enters the synthesis queue — otherwise
+        // a demoted-then-rejected candidate would orphan it forever.
+        let synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth, None);
+    }
+
+    #[test]
+    fn mark_unreviewed_keeps_stamp_when_another_rule_claims_correction() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        // Two accepted rules share the same provenance correction.
+        for id in ["r1", "r2"] {
+            conn.execute(
+                "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, reviewed_at, created_at, updated_at)
+                 VALUES (?1, 'general', 'kill-words', ?1, 'must-fix', 'synthesis', 1, 'synthesized-from:h1', 1234, 1000, 1000)",
+                [id],
+            ).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at, synthesized_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text', '[]', 'yellow', 1, 999)",
+            [],
+        ).unwrap();
+
+        mark_unreviewed(&conn, &["r1".to_string()]).unwrap();
+
+        let synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth, Some(999), "still claimed by accepted rule r2");
+    }
+
+    #[test]
+    fn mark_unreviewed_keeps_manual_source() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+        mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+        mark_unreviewed(&conn, &["r1".to_string()]).unwrap();
+
+        let source: String = conn
+            .query_row("SELECT source FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(source, "manual");
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use crate::commands::now_millis;
+use super::writing_rules::export_artifacts;
 use crate::db::migrations::DbPool;
 use crate::db::models::CorrectionInput;
 use rusqlite::{Connection, OptionalExtension};
@@ -150,18 +151,27 @@ pub async fn persist_corrections(
         .ok_or("Could not determine home directory")?
         .join(".margin")
         .join("corrections");
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let outcome = persist_corrections_inner(
-        &conn,
-        &corrections,
-        &document_id,
-        document_title.as_deref(),
-        &document_source,
-        document_path.as_deref(),
-        &export_date,
-        &corrections_dir,
-    )?;
-    let _ = (outcome.correction_count, outcome.prompt_count);
+    let outcome = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        persist_corrections_inner(
+            &conn,
+            &corrections,
+            &document_id,
+            document_title.as_deref(),
+            &document_source,
+            document_path.as_deref(),
+            &export_date,
+            &corrections_dir,
+        )?
+    };
+    // Corrections feed the generated profile — keep artifacts fresh when
+    // the batch actually wrote correction rows (prompt/note-only batches
+    // don't affect the profile). The frontend also calls exportWritingRules
+    // after persist; the export is idempotent.
+    if outcome.correction_count > 0 {
+        export_artifacts();
+    }
+    let _ = outcome.prompt_count;
     Ok(outcome.session_id)
 }
 
@@ -624,14 +634,22 @@ pub async fn update_correction_writing_type(
     highlight_id: String,
     writing_type: String,
 ) -> Result<(), String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    update_writing_type(&conn, &highlight_id, &writing_type).map_err(|e| e.to_string())
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        update_writing_type(&conn, &highlight_id, &writing_type).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn delete_correction(state: tauri::State<'_, DbPool>, highlight_id: String) -> Result<(), String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    delete_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        delete_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
 }
 
 fn accept_correction_by_highlight(conn: &Connection, highlight_id: &str) -> rusqlite::Result<Option<String>> {
@@ -652,8 +670,14 @@ fn accept_correction_by_highlight(conn: &Connection, highlight_id: &str) -> rusq
 
 #[tauri::command]
 pub async fn accept_correction(state: tauri::State<'_, DbPool>, highlight_id: String) -> Result<Option<String>, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    accept_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())
+    let result = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        accept_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())?
+    };
+    if result.is_some() {
+        export_artifacts();
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -671,8 +695,14 @@ pub async fn bulk_delete_corrections(
     state: tauri::State<'_, DbPool>,
     highlight_ids: Vec<String>,
 ) -> Result<u64, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    bulk_delete(&conn, &highlight_ids).map_err(|e| e.to_string())
+    let deleted = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        bulk_delete(&conn, &highlight_ids).map_err(|e| e.to_string())?
+    };
+    if deleted > 0 {
+        export_artifacts();
+    }
+    Ok(deleted)
 }
 
 #[tauri::command]
@@ -681,8 +711,14 @@ pub async fn bulk_tag_corrections(
     highlight_ids: Vec<String>,
     writing_type: String,
 ) -> Result<u64, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    bulk_tag(&conn, &highlight_ids, &writing_type).map_err(|e| e.to_string())
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        bulk_tag(&conn, &highlight_ids, &writing_type).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
 }
 
 fn bulk_set_polarity(
@@ -724,8 +760,14 @@ pub async fn bulk_set_polarity_corrections(
     if polarity != "positive" && polarity != "corrective" {
         return Err(format!("invalid polarity: {polarity:?} (expected \"positive\" or \"corrective\")"));
     }
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    bulk_set_polarity(&conn, &highlight_ids, &polarity).map_err(|e| e.to_string())
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        bulk_set_polarity(&conn, &highlight_ids, &polarity).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
 }
 
 fn update_rationale(
@@ -749,8 +791,12 @@ pub async fn update_correction_rationale(
     highlight_id: String,
     rationale: Option<String>,
 ) -> Result<(), String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    update_rationale(&conn, &highlight_id, rationale.as_deref()).map_err(|e| e.to_string())
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        update_rationale(&conn, &highlight_id, rationale.as_deref()).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
 }
 
 fn mark_unsynthesized(
@@ -784,8 +830,14 @@ pub async fn mark_corrections_unsynthesized(
     state: tauri::State<'_, DbPool>,
     highlight_ids: Vec<String>,
 ) -> Result<u64, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    mark_unsynthesized(&conn, &highlight_ids).map_err(|e| e.to_string())
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_unsynthesized(&conn, &highlight_ids).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
 }
 
 #[tauri::command]
@@ -918,8 +970,14 @@ pub async fn mark_corrections_synthesized(
     state: tauri::State<'_, DbPool>,
     highlight_ids: Vec<String>,
 ) -> Result<u64, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    mark_synthesized(&conn, &highlight_ids).map_err(|e| e.to_string())
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_synthesized(&conn, &highlight_ids).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
 }
 
 #[cfg(test)]

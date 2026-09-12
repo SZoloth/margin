@@ -1,4 +1,5 @@
 use crate::commands::now_millis;
+use crate::commands::writing_rules::export_artifacts;
 use crate::db::migrations::DbPool;
 use rusqlite::{Connection, OptionalExtension};
 use uuid::Uuid;
@@ -194,14 +195,21 @@ pub async fn sync_feedback_signal(
     polarity: Option<String>,
     rationale: Option<String>,
 ) -> Result<bool, String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    sync_continuous_feedback(
-        &conn,
-        &highlight_id,
-        Some(polarity.as_deref()),
-        Some(rationale.as_deref()),
-        now_millis(),
-    )
+    let changed = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        sync_continuous_feedback(
+            &conn,
+            &highlight_id,
+            Some(polarity.as_deref()),
+            Some(rationale.as_deref()),
+            now_millis(),
+        )?
+    };
+    if changed {
+        // The signal lives in corrections → feeds the generated profile.
+        export_artifacts();
+    }
+    Ok(changed)
 }
 
 #[cfg(test)]
