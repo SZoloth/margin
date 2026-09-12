@@ -291,6 +291,18 @@ export function CommandPalette({
 
   if (!presence.isMounted) return null;
 
+  // aria-activedescendant target for the combobox input — points at the
+  // selected option in whichever column is active so screen readers announce
+  // keyboard navigation.
+  const activeDescendantId =
+    selectedColumn === "files"
+      ? fileItems.length > 0
+        ? `cp-file-${selectedFileIndex}`
+        : undefined
+      : filteredActions.length > 0
+        ? `cp-action-${selectedActionIndex}`
+        : undefined;
+
   const sectionLabel: React.CSSProperties = {
     padding: "8px 14px 4px",
     fontSize: 10,
@@ -356,6 +368,11 @@ export function CommandPalette({
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
+            aria-controls={selectedColumn === "files" ? "cp-files-listbox" : "cp-actions-listbox"}
+            aria-activedescendant={activeDescendantId}
             placeholder={(openForNewTab || isNewTabMode) ? "Select a file to open in new tab…" : "Search files and actions…"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -390,6 +407,9 @@ export function CommandPalette({
         <div style={{ display: "flex", minHeight: 280, maxHeight: 420 }}>
           {/* Left column — files */}
           <div
+            id="cp-files-listbox"
+            role="listbox"
+            aria-label="Files"
             style={{
               flex: "0 0 55%",
               borderRight: "1px solid var(--color-border)",
@@ -419,7 +439,7 @@ export function CommandPalette({
 
             {/* Recent section */}
             {filteredRecent.length > 0 && (
-              <div>
+              <div role="group" aria-label="Recent">
                 <div style={sectionLabel}>Recent</div>
                 {filteredRecent.map((doc, i) => {
                   const isSelected = selectedColumn === "files" && selectedFileIndex === i;
@@ -427,6 +447,9 @@ export function CommandPalette({
                     <button
                       key={doc.id}
                       type="button"
+                      id={`cp-file-${i}`}
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={() => activateFileItem(i)}
                       onMouseEnter={() => { setSelectedColumn("files"); setSelectedFileIndex(i); }}
                       style={{
@@ -479,7 +502,7 @@ export function CommandPalette({
 
             {/* FTS results section — instant results from indexed documents */}
             {ftsResults.length > 0 && (
-              <div>
+              <div role="group" aria-label="Matches">
                 <div style={sectionLabel}>Matches</div>
                 {ftsResults.map((result, i) => {
                   const absIdx = filteredRecent.length + i;
@@ -488,6 +511,9 @@ export function CommandPalette({
                     <button
                       key={result.documentId}
                       type="button"
+                      id={`cp-file-${absIdx}`}
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={() => activateFileItem(absIdx)}
                       onMouseEnter={() => { setSelectedColumn("files"); setSelectedFileIndex(absIdx); }}
                       style={{
@@ -537,7 +563,7 @@ export function CommandPalette({
 
             {/* File search results section */}
             {fileResults.length > 0 && (
-              <div>
+              <div role="group" aria-label="Files on disk">
                 <div style={sectionLabel}>Files</div>
                 {fileResults.map((file, i) => {
                   const absIdx = filteredRecent.length + ftsResults.length + i;
@@ -546,6 +572,9 @@ export function CommandPalette({
                     <button
                       key={file.path}
                       type="button"
+                      id={`cp-file-${absIdx}`}
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={() => activateFileItem(absIdx)}
                       onMouseEnter={() => { setSelectedColumn("files"); setSelectedFileIndex(absIdx); }}
                       style={{
@@ -613,6 +642,9 @@ export function CommandPalette({
 
           {/* Right column — actions */}
           <div
+            id="cp-actions-listbox"
+            role="listbox"
+            aria-label="Actions"
             style={{
               flex: "0 0 45%",
               overflowY: "auto",
@@ -621,7 +653,7 @@ export function CommandPalette({
             }}
           >
             {filteredActions.length > 0 ? (
-              <>
+              <div role="group" aria-label="Actions">
                 <div style={sectionLabel}>Actions</div>
                 {filteredActions.map((action, i) => {
                   const isSelected = selectedColumn === "actions" && selectedActionIndex === i;
@@ -629,6 +661,9 @@ export function CommandPalette({
                     <button
                       key={action.id}
                       type="button"
+                      id={`cp-action-${i}`}
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={() => activateActionItem(i)}
                       onMouseEnter={() => { setSelectedColumn("actions"); setSelectedActionIndex(i); }}
                       style={{
@@ -658,7 +693,7 @@ export function CommandPalette({
                     </button>
                   );
                 })}
-              </>
+              </div>
             ) : (
               <div
                 style={{

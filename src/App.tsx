@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react"
 import type { Editor } from "@tiptap/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
+import { UnsavedChangesDialog } from "@/components/layout/UnsavedChangesDialog";
 import { UIFork } from "uifork";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
@@ -1677,115 +1678,16 @@ export default function App() {
         const tab = tabsHook.tabs.find((t) => t.id === tabsHook.pendingCloseTabId);
         if (!tab) return null;
         return (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
+          <UnsavedChangesDialog
+            title={tab.title}
+            isVisible={unsavedDialog.isVisible}
+            onCancel={tabsHook.cancelCloseTab}
+            onCloseWithoutSaving={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
+            onSaveAndClose={async () => {
+              await doc.saveCurrentFile();
+              tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!);
             }}
-          >
-            <div
-              onClick={tabsHook.cancelCloseTab}
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.3)",
-                opacity: unsavedDialog.isVisible ? 1 : 0,
-                transition: `opacity ${unsavedDialog.isVisible ? "200ms var(--ease-entrance)" : "150ms var(--ease-exit)"}`,
-              }}
-            />
-            <div
-              role="dialog"
-              aria-label="Unsaved changes"
-              style={{
-                position: "relative",
-                backgroundColor: "var(--color-page)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius-lg)",
-                padding: "20px 24px",
-                minWidth: "min(340px, calc(100vw - 32px))",
-                maxWidth: "min(400px, calc(100vw - 32px))",
-                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-                opacity: unsavedDialog.isVisible ? 1 : 0,
-                transform: unsavedDialog.isVisible ? "scale(1) translateY(0)" : "scale(0.97) translateY(4px)",
-                transition: unsavedDialog.isVisible
-                  ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
-                  : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
-              }}
-            >
-              <button
-                onClick={tabsHook.cancelCloseTab}
-                aria-label="Close"
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  right: 12,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--color-text-secondary)",
-                  fontSize: "var(--text-lg)",
-                  lineHeight: 1,
-                  padding: "2px 6px",
-                  borderRadius: "var(--radius-sm)",
-                }}
-              >
-                ×
-              </button>
-              <div style={{ marginBottom: 16 }}>
-                <div
-                  style={{
-                    fontSize: "var(--text-base)",
-                    fontWeight: 600,
-                    color: "var(--color-text-primary)",
-                    marginBottom: 6,
-                  }}
-                >
-                  Unsaved changes
-                </div>
-                <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                  "{tab.title}" has unsaved changes.
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: "var(--text-sm)",
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--color-border)",
-                    background: "none",
-                    color: "var(--color-text-secondary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Close without saving
-                </button>
-                <button
-                  onClick={async () => {
-                    await doc.saveCurrentFile();
-                    tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!);
-                  }}
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: "var(--text-sm)",
-                    borderRadius: "var(--radius-md)",
-                    border: "none",
-                    backgroundColor: "var(--color-accent)",
-                    color: "white",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                >
-                  Save and close
-                </button>
-              </div>
-            </div>
-          </div>
+          />
         );
       })()}
 

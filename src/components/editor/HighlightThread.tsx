@@ -306,7 +306,6 @@ export function HighlightThread({
     <div
       ref={popoverRef}
       role="dialog"
-      aria-modal="true"
       aria-label="Highlight notes"
       className={`thread-popover ${isMobile ? "thread-popover--mobile" : ""}`}
       style={isMobile ? {
