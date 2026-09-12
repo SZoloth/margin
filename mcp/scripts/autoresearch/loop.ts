@@ -49,10 +49,15 @@ function parseResults(n: number = 10): ResultsState {
     nextRun = (isNaN(lastRun) ? 0 : lastRun) + 1;
   }
 
-  // Best kept result
+  // Best kept result — scoped to the current provider. Scores aren't
+  // comparable across generators; a poolside run must never be judged
+  // against a claude-era best. Rows predating the provider column are claude.
+  const provider = evalCmd();
   let best = { passRate: 0, meanDimension: 0 };
   for (const line of dataLines) {
     const cols = line.split("\t");
+    const rowProvider = cols[8] ?? "claude --print --model sonnet";
+    if (rowProvider !== provider) continue;
     if (cols[5] === "true") {
       const passRate = parseFloat(cols[1]);
       const meanDim = parseFloat(cols[2]);
@@ -118,7 +123,7 @@ function initResultsTsv(): void {
   if (!existsSync(RESULTS_PATH)) {
     writeFileSync(
       RESULTS_PATH,
-      "run\tpass_rate\tmean_dimension\ttotal_mechanical\thypothesis\tkept\tnotes\ttimestamp\n"
+      "run\tpass_rate\tmean_dimension\ttotal_mechanical\thypothesis\tkept\tnotes\ttimestamp\tprovider\n"
     );
   }
 }
@@ -139,6 +144,7 @@ function appendResult(
     kept,
     notes.replace(/\t/g, " ").replace(/\n/g, " "),
     new Date().toISOString(),
+    evalCmd(),
   ].join("\t");
   appendFileSync(RESULTS_PATH, row + "\n");
 }
