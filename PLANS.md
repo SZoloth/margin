@@ -7,31 +7,39 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Commercialization roadmap executed in Linear: 4 milestones (Proof →
-Consumer loop → Distribution → Case study), existing issues attached, gaps
-filed as SAM-1134..1139.
+Autoresearch optimization: 4-agent research fan-out synthesized into
+`docs/research/autoresearch-synthesis-2026-09-12.md`; eval-fidelity fixes
+landed; re-baselining on the repaired harness.
 
 ### Done this session
 
-- Eval harness runs end-to-end: `MARGIN_EVAL_CMD` provider abstraction,
-  compliance-check arg/inflection fixes, tsx devDep + eval:* scripts.
-- First real evidence committed: `baseline-poolside-2026-09-12.json` —
-  coached +5.8 dim pts/sample, -0.6 mech issues; slack regresses -4
-  (per-register rule loading needed → SAM-161).
-- SAM-1133 done: persistent FTS failure toast + batch orphan-recovery toast.
-- SAM-1132 done: orphaned Sep-4 Codex export work landed on main.
-- In-app LLM pluggable: `MARGIN_LLM_CMD` for seed_rules (SAM-1136 step 1).
-- codex CLI config fixed fleet-wide: `context_management = true` (flat key).
+- Research synthesis committed — ranked P0-P3 backlog combining vault,
+  GitHub stars (503), X bookmarks, Deft/Every/DSPy literature, and a repo
+  audit that found the eval was scoring ~4%-recall proxy on dirty data.
+- Eval fidelity landed (8b83e3e): restored 6 lost Tier-2a checks, slop
+  scoring via detection_pattern, prod-parity correction/rule filters in
+  all generators, REGISTER_MAP aligned to production, per_type in
+  EvalResult.
+- Loop fixes (eead928, 7dac0e7): provider-scoped best (poolside runs were
+  auto-reverted vs claude-era 0.889) + last-eval.json feedback channel
+  (violations + per-type scores now reach the mutating agent).
+- First poolside loop run completed: run 24 KEPT as the provider baseline
+  (0.37); earlier runs 22-23 correctly reverted.
+- a84ad78: typeConstraint length bounds ported to all generators;
+  `--arch skill` wired into eval.ts (production path now scorable);
+  ideas.md consolidated as the single backlog.
 
 ### Next (mission order)
 
-1. SAM-1134: second-provider comparison run (needs claude/codex auth or a
-   codex CLI upgrade for gpt-6-astra) → then mark Proof gate.
-2. SAM-1135 cold-start: app already seeds voice/prohibition rules + has a
-   style-guide import; gap is onboarding surfacing, not zero rules.
-3. SAM-135 conversational feedback — biggest consumer feature.
-4. SAM-1137 auto-updater — plugin already in Cargo.toml, needs wiring +
-   release manifest.
+1. Re-baseline archs on repaired harness (null + a running; then c/e/d
+   confirm under new checker) — experiment-log rankings are suspect.
+2. SAM-1134: second-provider comparison (needs claude/codex auth or codex
+   CLI upgrade for gpt-6-astra) → then mark Proof gate.
+3. DB repair: 43 auto-synthesized rules have inverted example_before —
+   excluded from eval, still in production loads.
+4. Scenario B (corrections + top-10 rules) — the synthesis's #1 untested
+   architecture.
+5. SAM-135 conversational feedback — biggest consumer feature.
 
 ## 2026-09-04 Codex prompt cleanup
 
