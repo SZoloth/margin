@@ -19,6 +19,7 @@ const COACHING_PROMPT_PATH = join(DIR, "coaching-prompt.md");
 const RESULTS_PATH = join(DIR, "results.tsv");
 const IDEAS_PATH = join(DIR, "ideas.md");
 const SESSION_PATH = join(DIR, "session.md");
+const LAST_EVAL_PATH = join(DIR, "last-eval.json");
 const PROGRAM_PATH = join(DIR, "program.md");
 const EVAL_SCRIPT = join(DIR, "eval.ts");
 
@@ -93,7 +94,7 @@ function runEval(): EvalResult {
 
 function gitCommit(message: string): void {
   try {
-    execSync(`git add ${COACHING_PROMPT_PATH} ${RESULTS_PATH} ${SESSION_PATH} ${IDEAS_PATH}`, {
+    execSync(`git add ${COACHING_PROMPT_PATH} ${RESULTS_PATH} ${SESSION_PATH} ${IDEAS_PATH} ${LAST_EVAL_PATH}`, {
       cwd: join(DIR, "../../.."),
       encoding: "utf-8",
     });
@@ -167,12 +168,54 @@ function appendIdeas(newIdeas: string): void {
   appendFileSync(IDEAS_PATH, "\n" + newIdeas.trim() + "\n");
 }
 
+// ── Eval feedback channel ──────────────────────────────────────────────
+// Persist per-run detail so the next mutation sees *why* the last prompt
+// failed (violation labels + per-type scores), not just the scalar result.
+
+interface LastEvalSummary {
+  pass_rate: number;
+  mean_dimension: number;
+  total_mechanical: number;
+  worst_violations: string[];
+  per_type: Record<string, { passed: number; total: number; mean_dimension: number }>;
+}
+
+function writeLastEval(evalResult: EvalResult): void {
+  const perType: LastEvalSummary["per_type"] = {};
+  for (const s of evalResult.samples ?? []) {
+    const t = (perType[s.type] ??= { passed: 0, total: 0, mean_dimension: 0 });
+    t.total++;
+    if (s.pass) t.passed++;
+    t.mean_dimension += s.compliance.summary.dimensionScore ?? 0;
+  }
+  for (const t of Object.values(perType)) {
+    t.mean_dimension = t.total > 0 ? t.mean_dimension / t.total : 0;
+  }
+  const summary: LastEvalSummary = {
+    pass_rate: evalResult.pass_rate,
+    mean_dimension: evalResult.mean_dimension,
+    total_mechanical: evalResult.total_mechanical,
+    worst_violations: evalResult.worst_violations ?? [],
+    per_type: perType,
+  };
+  writeFileSync(LAST_EVAL_PATH, JSON.stringify(summary, null, 2));
+}
+
+function readLastEval(): LastEvalSummary | null {
+  try {
+    return JSON.parse(readFileSync(LAST_EVAL_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
 // ── Agent call ─────────────────────────────────────────────────────────
 
 function callAgent(
   currentPrompt: string,
   lastResults: string,
   worstViolations: string[],
+  perType: LastEvalSummary["per_type"] | undefined,
   ideas: string
 ): { prompt: string; hypothesis: string; newIdeas: string } {
   const program = readFile(PROGRAM_PATH);
@@ -195,6 +238,10 @@ ${lastResults}
 
 ### Worst violations from last eval
 ${worstViolations.length > 0 ? worstViolations.map((v) => `- ${v}`).join("\n") : "(none — this is the baseline or previous run had no violations)"}
+
+### Per-type results from last eval
+${perType && Object.keys(perType).length > 0 ? Object.entries(perType).map(([t, r]) => `- ${t}: ${r.passed}/${r.total} passed, mean dim ${r.mean_dimension.toFixed(1)}`).join("\n") : "(none — no prior eval detail)"}
+Note: casual types (general, email, slack, outreach) and professional types (pitch, prd, cover-letter, resume, blog) may need different coaching. A prompt change that helps one register but regresses the other is a net loss — check the per-type table.
 
 ### Ideas backlog
 ${ideas || "(empty)"}
@@ -254,6 +301,7 @@ function main(): void {
   if (runNum === 1 || baselineOnly) {
     console.log("Running baseline evaluation...");
     const evalResult = runEval();
+    writeLastEval(evalResult);
     appendResult(1, evalResult, "baseline", true, "initial baseline");
     updateSession(1, evalResult, "baseline", true);
     gitCommit("autoresearch: baseline run 001");
@@ -280,23 +328,17 @@ function main(): void {
     const best = state.best;
     const ideas = readFile(IDEAS_PATH);
 
-    // Get last eval's worst violations from results
-    let lastWorstViolations: string[] = [];
-    try {
-      // Re-run would be expensive; parse from session if available
-      const session = readFile(SESSION_PATH);
-      // Simple approach: we'll pass empty if no previous violations cached
-      // The agent will work with results.tsv data instead
-      lastWorstViolations = [];
-    } catch {
-      // fine
-    }
+    // Last eval's failure detail — the "which rules fired" channel the
+    // mutating agent needs to aim hypotheses instead of guessing.
+    const lastEval = readLastEval();
+    const lastWorstViolations = lastEval?.worst_violations ?? [];
+    const perType = lastEval?.per_type;
 
     // Step 1: Ask agent for modification
     console.log("Asking agent for next modification...");
     let agentResult;
     try {
-      agentResult = callAgent(currentPrompt, state.lastN, lastWorstViolations, ideas);
+      agentResult = callAgent(currentPrompt, state.lastN, lastWorstViolations, perType, ideas);
     } catch (err) {
       console.error("Agent call failed:", (err as Error).message);
       console.log("Waiting 30s before retry...");
@@ -327,6 +369,7 @@ function main(): void {
       continue;
     }
 
+    writeLastEval(evalResult);
     console.log(`Result: pass_rate=${evalResult.pass_rate}, dim=${evalResult.mean_dimension}, mech=${evalResult.total_mechanical}`);
 
     // Step 5: Keep or revert
