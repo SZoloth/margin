@@ -186,3 +186,15 @@ fidelity fixes (commit 8b83e3e + a84ad78):
   dimensions — same shape as March, now trustworthy.
 - Scenario A/B decision still open; Scenario C (calibration) partially
   resolved — the expanded checker + human open-coding gate remain.
+
+### Scenario B resolved (2026-09-12, poolside, repaired harness)
+
+| e — hybrid (40 rules) | 44.4% | 42.6 | 39 |
+| e-top10 — corrections + top-10 rules | 44.4% | 44.9 | 35 |
+
+Top-10 rules match the 40-rule dump on pass rate with marginally better
+dims and fewer mechanical issues — concentrated signal ≥ volume, but
+neither approaches the two-pass editor (66.7%, 16 mech). The data-layer
+ranking now: **editor pass > production skill path > corrections-only >
+hybrids > rules-only > zero-shot on pass; inverse on raw dims.** Editing
+after drafting beats coaching before drafting.

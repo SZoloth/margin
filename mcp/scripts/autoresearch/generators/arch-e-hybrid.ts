@@ -75,7 +75,7 @@ function loadCorrections(type: string): CorrectionRow[] {
   }
 }
 
-function loadHighSignalRules(): RuleRow[] {
+function loadHighSignalRules(limit: number = 40): RuleRow[] {
   const dbPath = join(homedir(), ".margin/margin.db");
   if (!existsSync(dbPath)) return [];
 
@@ -89,7 +89,7 @@ function loadHighSignalRules(): RuleRow[] {
          WHERE ${RULE_FILTER}
            AND (signal_count >= 2 OR severity = 'must-fix')
          ORDER BY signal_count DESC, severity ASC
-         LIMIT 40`
+         LIMIT ${limit}`
       )
       .all() as RuleRow[];
     db.close();
@@ -132,9 +132,14 @@ function formatRules(rules: RuleRow[]): string {
   return lines.join("\n");
 }
 
-export function generate(type: string, prompt: string, register: string): string {
+export function generateWithRuleLimit(
+  type: string,
+  prompt: string,
+  register: string,
+  ruleLimit: number
+): string {
   const corrections = loadCorrections(type);
-  const rules = loadHighSignalRules();
+  const rules = loadHighSignalRules(ruleLimit);
 
   const correctionBlock =
     corrections.length > 0
@@ -182,4 +187,8 @@ ${prompt}`;
     console.error("Generation failed:", (err as Error).message);
     return "";
   }
+}
+
+export function generate(type: string, prompt: string, register: string): string {
+  return generateWithRuleLimit(type, prompt, register, 40);
 }
