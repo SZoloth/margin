@@ -8,6 +8,7 @@ import {
   getRecentDocuments,
   renameFile,
 } from "@/lib/tauri-commands";
+import { reportError } from "@/lib/error-bus";
 
 function basename(filePath: string): string {
   const segments = filePath.split(/[/\\]/);
@@ -100,7 +101,7 @@ export function useDocument(): UseDocumentReturn {
           }
         }
       })
-      .catch(console.error);
+      .catch((err) => reportError("Could not load recent documents", err));
   }, []);
 
   // User edit — marks dirty
@@ -126,7 +127,9 @@ export function useDocument(): UseDocumentReturn {
   }, []);
 
   const refreshRecentDocs = useCallback(() => {
-    getRecentDocuments(20).then(setRecentDocs).catch(console.error);
+    getRecentDocuments(20)
+      .then(setRecentDocs)
+      .catch((err) => reportError("Could not load recent documents", err));
   }, []);
 
   const openFile = useCallback(async () => {
@@ -163,7 +166,7 @@ export function useDocument(): UseDocumentReturn {
       setIsDirty(false);
       refreshRecentDocs();
     } catch (err) {
-      console.error("Failed to open file:", err);
+      reportError("Could not open file", err);
     } finally {
       setIsLoading(false);
     }
@@ -200,7 +203,7 @@ export function useDocument(): UseDocumentReturn {
       setIsDirty(false);
       refreshRecentDocs();
     } catch (err) {
-      console.error("Failed to open file path:", err);
+      reportError(`Could not open "${basename(path)}"`, err);
     } finally {
       setIsLoading(false);
     }
@@ -225,7 +228,7 @@ export function useDocument(): UseDocumentReturn {
         setIsDirty(false);
         refreshRecentDocs();
       } catch (err) {
-        console.error("Failed to open recent file:", err);
+        reportError(`Could not open "${recentDoc.title ?? basename(recentDoc.file_path)}"`, err);
       } finally {
         setIsLoading(false);
       }
@@ -257,7 +260,7 @@ export function useDocument(): UseDocumentReturn {
       setIsDirty(false);
       refreshRecentDocs();
     } catch (err) {
-      console.error("Failed to open keep-local article:", err);
+      reportError(`Could not open "${docRecord.title ?? "article"}"`, err);
     }
   }, [refreshRecentDocs]);
 
@@ -272,7 +275,7 @@ export function useDocument(): UseDocumentReturn {
       }
       refreshRecentDocs();
     } catch (err) {
-      console.error("Failed to rename file:", err);
+      reportError(`Could not rename "${targetDoc.title ?? "file"}"`, err);
       throw err;
     }
   }, [currentDoc, refreshRecentDocs]);
@@ -311,7 +314,7 @@ export function useDocument(): UseDocumentReturn {
         refreshRecentDocs();
       }
     } catch (err) {
-      console.error("Failed to save file:", err);
+      reportError(`Could not save "${basename(filePath)}"`, err);
     }
   }, [filePath, isDirty, content, currentDoc, refreshRecentDocs]);
 
