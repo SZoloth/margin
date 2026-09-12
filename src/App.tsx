@@ -24,7 +24,8 @@ const SettingsPage = lazy(() =>
 import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
-import { createAnchor } from "@/lib/text-anchoring";
+import { createAnchor, resolveAnchor, buildDocTextMap, docPosToFlat, flatToDocPos } from "@/lib/text-anchoring";
+import { allowedMarkRanges, planHighlightOverlap } from "@/lib/highlight-ranges";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
@@ -52,57 +53,6 @@ import { useOnboarding } from "@/hooks/useOnboarding";
 import { SAMPLE_DOCUMENT_CONTENT } from "@/lib/sample-document";
 import { WelcomeBar } from "@/components/onboarding/WelcomeBar";
 import { OnboardingToast } from "@/components/onboarding/OnboardingToast";
-
-/**
- * Walk a ProseMirror doc tree and find the TipTap positions for a text substring.
- * Unlike flat-string indexOf, this accounts for block node boundaries that add
- * positional offsets not present in the text content.
- */
-function findTextInDoc(
-  doc: import("@tiptap/pm/model").Node,
-  search: string,
-): { from: number; to: number } | null {
-  // Collect text segments with their TipTap start positions
-  const segments: Array<{ text: string; pos: number }> = [];
-  doc.descendants((node, pos) => {
-    if (node.isText && node.text) {
-      segments.push({ text: node.text, pos });
-    }
-  });
-
-  if (segments.length === 0) return null;
-
-  // Build a flat string and a mapping from flat offset → TipTap position
-  let flat = "";
-  const offsetToPos: Array<{ flatStart: number; tiptapStart: number; length: number }> = [];
-  for (const seg of segments) {
-    offsetToPos.push({ flatStart: flat.length, tiptapStart: seg.pos, length: seg.text.length });
-    flat += seg.text;
-  }
-
-  const idx = flat.indexOf(search);
-  if (idx === -1) return null;
-
-  const fromFlat = idx;
-  const toFlat = idx + search.length;
-
-  // Convert flat offsets to TipTap positions
-  let from = -1;
-  let to = -1;
-  for (const map of offsetToPos) {
-    const segEnd = map.flatStart + map.length;
-    if (from === -1 && fromFlat >= map.flatStart && fromFlat < segEnd) {
-      from = map.tiptapStart + (fromFlat - map.flatStart);
-    }
-    if (toFlat >= map.flatStart && toFlat <= segEnd) {
-      to = map.tiptapStart + (toFlat - map.flatStart);
-      break;
-    }
-  }
-
-  if (from === -1 || to === -1) return null;
-  return { from, to };
-}
 
 const showUIFork = import.meta.env.MODE !== "production";
 
@@ -171,6 +121,18 @@ export default function App() {
         ? `"${names[0]}" was deleted — tab removed`
         : `${names.length} deleted files — tabs removed`;
       setErrorToast({ message: label, id: ++errorIdRef.current });
+    },
+    onLastTabClosed: () => {
+      // Closing the final tab must clear the editor — otherwise the closed
+      // document keeps rendering as a zombie with no tab owning it.
+      prevDocIdRef.current = null;
+      prevActiveTabIdRef.current = null;
+      lastRestoredDocId.current = null;
+      doc.restoreFromCache(null, "", null, false);
+      annotations.reset();
+      setFocusHighlightId(null);
+      setAnchorRect(null);
+      setAutoFocusNew(false);
     },
   });
   const unsavedDialog = useAnimatedPresence(!!tabsHook.pendingCloseTabId, 200);
@@ -378,107 +340,50 @@ export default function App() {
     if (!editor || !annotations.isLoaded || !doc.currentDoc) return;
     if (lastRestoredDocId.current === doc.currentDoc.id) return;
     lastRestoredDocId.current = doc.currentDoc.id;
-
-    // If DB has no highlights but the editor DOM has <mark> tags (from HTML baked
-    // into the file), re-create DB records so clicks and notes work again.
-    if (annotations.highlights.length === 0) {
-      // Guard against re-entry on tab switch — only recover orphans once per doc
-      if (recoveredDocIds.current.has(doc.currentDoc.id)) return;
-      recoveredDocIds.current.add(doc.currentDoc.id);
-      // Wait for DOM to render before checking for orphan marks
-      requestAnimationFrame(() => {
-        const domMarks = editor.view.dom.querySelectorAll("mark[data-color]");
-        if (domMarks.length === 0) return;
-        const recoverOrphans = async () => {
-          const docId = doc.currentDoc!.id;
-          const { state: s } = editor;
-          const markT = s.schema.marks.highlight;
-          if (!markT) return;
-          const { tr: recoverTr } = s;
-          const fullText = s.doc.textBetween(0, s.doc.content.size, "\n");
-          let failed = 0;
-
-          for (const domMark of domMarks) {
-            const el = domMark as HTMLElement;
-            const text = el.textContent ?? "";
-            if (!text) continue;
-            const color = el.dataset.color ?? "yellow";
-
-            let from: number;
-            let to: number;
-            try {
-              from = editor.view.posAtDOM(el, 0);
-              to = from + text.length;
-            } catch {
-              failed++;
-              continue;
-            }
-
-            const prefix = fullText.substring(Math.max(0, from - 50), from);
-            const suffix = fullText.substring(to, Math.min(fullText.length, to + 50));
-
-            try {
-              const highlight = await annotations.createHighlight({
-                documentId: docId,
-                color,
-                textContent: text,
-                fromPos: from,
-                toPos: to,
-                prefixContext: prefix,
-                suffixContext: suffix,
-              });
-              // Stamp the mark with the new ID
-              recoverTr.addMark(from, to, markT.create({ color, highlightId: highlight.id }));
-            } catch (err) {
-              console.error("Failed to recover orphan highlight:", err);
-              failed++;
-            }
-          }
-
-          if (failed > 0) {
-            reportError(
-              `${failed} highlight${failed === 1 ? "" : "s"} could not be recovered in this document`
-            );
-          }
-
-          if (recoverTr.steps.length > 0) {
-            recoverTr.setMeta("addToHistory", false);
-            isRestoringMarksRef.current = true;
-            try {
-              editor.view.dispatch(recoverTr);
-            } finally {
-              isRestoringMarksRef.current = false;
-            }
-          }
-        };
-        void recoverOrphans();
-      });
-      return;
-    }
+    const docId = doc.currentDoc.id;
 
     const { state } = editor;
     const { tr } = state;
     const markType = state.schema.marks.highlight;
     if (!markType) return;
 
-    for (const h of annotations.highlights) {
-      try {
-        const textAtPos = state.doc.textBetween(h.from_pos, h.to_pos, "\n");
-        if (textAtPos === h.text_content) {
-          tr.addMark(h.from_pos, h.to_pos, markType.create({ color: h.color, highlightId: h.id }));
-          continue;
-        }
-      } catch {
-        // Positions out of range
-      }
+    // Re-anchor each stored highlight through the 4-tier resolver: stored
+    // position → text+context search → context-scored text search → orphan.
+    // Stored text/context and the search space share textBetween's "\n" block
+    // separators via buildDocTextMap, so multi-paragraph anchors resolve.
+    const textMap = buildDocTextMap(state.doc);
+    const knownIds = new Set(annotations.highlights.map((h) => h.id));
+    const positionUpdates: [string, number, number][] = [];
+    let orphaned = 0;
 
-      const found = findTextInDoc(state.doc, h.text_content);
-      if (found) {
-        try {
-          tr.addMark(found.from, found.to, markType.create({ color: h.color, highlightId: h.id }));
-        } catch {
-          // Position out of range
-        }
+    for (const h of annotations.highlights) {
+      const result = resolveAnchor(textMap.flat, {
+        text: h.text_content,
+        prefix: h.prefix_context ?? "",
+        suffix: h.suffix_context ?? "",
+        from: docPosToFlat(textMap, h.from_pos),
+        to: docPosToFlat(textMap, h.to_pos),
+      });
+      if (result.confidence === "orphaned") {
+        orphaned++;
+        continue;
+      }
+      const markFrom = flatToDocPos(textMap, result.from, "next");
+      const markTo = flatToDocPos(textMap, result.to, "prev");
+      // The resolved range may now sit inside a context where the mark is
+      // disallowed (e.g. the text was wrapped in a code block since the
+      // highlight was saved) — only mark the allowed portions.
+      const segs = allowedMarkRanges(state.doc, markType, markFrom, markTo);
+      if (segs.length === 0) {
+        orphaned++;
+        continue;
+      }
+      for (const seg of segs) {
+        tr.addMark(seg.from, seg.to, markType.create({ color: h.color, highlightId: h.id }));
+      }
+      const appliedTo = segs[segs.length - 1]!.to;
+      if (markFrom !== h.from_pos || appliedTo !== h.to_pos) {
+        positionUpdates.push([h.id, markFrom, appliedTo]);
       }
     }
 
@@ -490,8 +395,102 @@ export default function App() {
       } finally {
         isRestoringMarksRef.current = false;
       }
-
     }
+
+    // Persist where the marks actually landed so stored positions reflect the
+    // edited document instead of drifting further stale.
+    if (positionUpdates.length > 0) {
+      annotationsRef.current.updatePositions(positionUpdates).catch((err: unknown) => {
+        console.error("Failed to sync highlight positions:", err);
+      });
+    }
+
+    // Stored text not found anywhere — the annotation lost its anchor.
+    if (orphaned > 0) {
+      reportError(
+        `${orphaned} highlight${orphaned === 1 ? "" : "s"} could not be located — the text may have been edited or removed`
+      );
+    }
+
+    // If the editor DOM has <mark> tags without a backing row (from HTML baked
+    // into the file), re-create DB records so clicks and notes work again.
+    // Runs whether or not the doc has other highlights — partial orphans count.
+    if (recoveredDocIds.current.has(docId)) return;
+    recoveredDocIds.current.add(docId);
+    // Wait for the DOM to reflect the marks just dispatched
+    requestAnimationFrame(() => {
+      const unbackedMarks = [...editor.view.dom.querySelectorAll("mark[data-color]")].filter((m) => {
+        const id = (m as HTMLElement).dataset.highlightId;
+        return !id || !knownIds.has(id);
+      });
+      if (unbackedMarks.length === 0) return;
+      const recoverOrphans = async () => {
+        const { state: s } = editor;
+        const markT = s.schema.marks.highlight;
+        if (!markT) return;
+        const { tr: recoverTr } = s;
+        const map = buildDocTextMap(s.doc);
+        let failed = 0;
+
+        for (const domMark of unbackedMarks) {
+          const el = domMark as HTMLElement;
+          const text = el.textContent ?? "";
+          if (!text) continue;
+          const color = el.dataset.color ?? "yellow";
+
+          let from: number;
+          let to: number;
+          try {
+            from = editor.view.posAtDOM(el, 0);
+            to = from + text.length;
+          } catch {
+            failed++;
+            continue;
+          }
+
+          // Context lives in flat-text space — convert PM positions first.
+          const flatFrom = docPosToFlat(map, from);
+          const flatTo = docPosToFlat(map, to);
+          const prefix = map.flat.substring(Math.max(0, flatFrom - 50), flatFrom);
+          const suffix = map.flat.substring(flatTo, Math.min(map.flat.length, flatTo + 50));
+
+          try {
+            const highlight = await annotations.createHighlight({
+              documentId: docId,
+              color,
+              textContent: text,
+              fromPos: from,
+              toPos: to,
+              prefixContext: prefix,
+              suffixContext: suffix,
+            });
+            // Stamp the mark with the new ID
+            recoverTr.addMark(from, to, markT.create({ color, highlightId: highlight.id }));
+            knownIds.add(highlight.id);
+          } catch (err) {
+            console.error("Failed to recover orphan highlight:", err);
+            failed++;
+          }
+        }
+
+        if (failed > 0) {
+          reportError(
+            `${failed} highlight${failed === 1 ? "" : "s"} could not be recovered in this document`
+          );
+        }
+
+        if (recoverTr.steps.length > 0) {
+          recoverTr.setMeta("addToHistory", false);
+          isRestoringMarksRef.current = true;
+          try {
+            editor.view.dispatch(recoverTr);
+          } finally {
+            isRestoringMarksRef.current = false;
+          }
+        }
+      };
+      void recoverOrphans();
+    });
   }, [editor, annotations.isLoaded, annotations.highlights, doc.currentDoc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wrap onUpdate to suppress dirty state during mark restoration
@@ -845,6 +844,127 @@ export default function App() {
     setEditor(ed);
   }, []);
 
+  // Persist a highlight over [from, to): split into ranges the schema accepts
+  // (code blocks / inline code reject marks — addMark would silently drop them
+  // while a DB row still landed), reconcile rows for any existing marks the new
+  // range overwrites, then apply all marks in one transaction.
+  // Returns the ids of the rows that now own the ranges, in document order.
+  const persistHighlight = useCallback(
+    async (color: string, from: number, to: number): Promise<string[]> => {
+      if (!editor || !doc.currentDoc) return [];
+      const markType = editor.state.schema.marks.highlight;
+      if (!markType) return [];
+
+      const ranges = allowedMarkRanges(editor.state.doc, markType, from, to);
+      if (ranges.length === 0) {
+        reportError("Highlights can't be applied inside code");
+        return [];
+      }
+
+      const { state } = editor;
+      const docId = doc.currentDoc.id;
+      const textMap = buildDocTextMap(state.doc);
+      const knownIds = new Set(annotationsRef.current.highlights.map((h) => h.id));
+      const markOps: Array<{ from: number; to: number; color: string; id: string }> = [];
+      const ids: string[] = [];
+
+      // Anchors are built in the flattened "\n"-separated text space so stored
+      // context matches what the restore-time resolver searches for.
+      const anchorFor = (rFrom: number, rTo: number) =>
+        createAnchor(textMap.flat, docPosToFlat(textMap, rFrom), docPosToFlat(textMap, rTo));
+
+      try {
+        for (const range of ranges) {
+          const plan = planHighlightOverlap(state.doc, "highlight", range.from, range.to, knownIds);
+          const anchor = anchorFor(range.from, range.to);
+          const textContent = state.doc.textBetween(range.from, range.to, "\n");
+
+          let highlightId: string;
+          if (plan.reuse) {
+            // Recolor/extend: update the covered row in place so its margin
+            // notes survive and no ghost row is left behind.
+            await annotationsRef.current.updateHighlight({
+              id: plan.reuse.id,
+              color,
+              textContent,
+              fromPos: range.from,
+              toPos: range.to,
+              prefixContext: anchor.prefix,
+              suffixContext: anchor.suffix,
+            });
+            highlightId = plan.reuse.id;
+          } else {
+            const created = await annotationsRef.current.createHighlight({
+              documentId: docId,
+              color,
+              textContent,
+              fromPos: range.from,
+              toPos: range.to,
+              prefixContext: anchor.prefix,
+              suffixContext: anchor.suffix,
+            });
+            highlightId = created.id;
+            knownIds.add(created.id);
+          }
+          ids.push(highlightId);
+          markOps.push({ from: range.from, to: range.to, color, id: highlightId });
+
+          // Other fully-covered rows: their marks are overwritten — delete them.
+          for (const deadId of plan.deleteIds) {
+            await annotationsRef.current.deleteHighlight(deadId);
+            knownIds.delete(deadId);
+          }
+
+          // Partially covered rows shrink to their remaining piece; the marks
+          // outside the new range already carry the right id.
+          for (const s of plan.shrink) {
+            const sAnchor = anchorFor(s.from, s.to);
+            await annotationsRef.current.updateHighlight({
+              id: s.id,
+              color: s.color,
+              textContent: state.doc.textBetween(s.from, s.to, "\n"),
+              fromPos: s.from,
+              toPos: s.to,
+              prefixContext: sAnchor.prefix,
+              suffixContext: sAnchor.suffix,
+            });
+          }
+
+          // A row split on both sides leaves a second piece — sibling row +
+          // mark restamp so it keeps a backing row.
+          for (const c of plan.clone) {
+            const cAnchor = anchorFor(c.from, c.to);
+            const sibling = await annotationsRef.current.createHighlight({
+              documentId: docId,
+              color: c.color,
+              textContent: state.doc.textBetween(c.from, c.to, "\n"),
+              fromPos: c.from,
+              toPos: c.to,
+              prefixContext: cAnchor.prefix,
+              suffixContext: cAnchor.suffix,
+            });
+            knownIds.add(sibling.id);
+            markOps.push({ from: c.from, to: c.to, color: c.color, id: sibling.id });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to save highlight:", err, "documentId:", docId);
+        reportError(`Could not save highlight: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      if (markOps.length > 0) {
+        const tr = editor.state.tr;
+        for (const op of markOps) {
+          tr.addMark(op.from, op.to, markType.create({ color: op.color, highlightId: op.id }));
+        }
+        tr.setMeta("addToHistory", false);
+        editor.view.dispatch(tr);
+      }
+      return ids;
+    },
+    [editor, doc.currentDoc],
+  );
+
   const handleHighlight = useCallback(
     async (color?: string) => {
       const resolvedColor = color ?? settings.defaultHighlightColor;
@@ -870,36 +990,9 @@ export default function App() {
         return;
       }
 
-      const fullText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n");
-      const selectedText = editor.state.doc.textBetween(from, to, "\n");
-      const anchor = createAnchor(fullText, from, to);
-
-      try {
-        const highlight = await annotations.createHighlight({
-          documentId: doc.currentDoc.id,
-          color: resolvedColor,
-          textContent: selectedText,
-          fromPos: from,
-          toPos: to,
-          prefixContext: anchor.prefix,
-          suffixContext: anchor.suffix,
-        });
-
-        const markType = editor.state.schema.marks.highlight;
-        if (markType) {
-          const tr = editor.state.tr.addMark(
-            from, to,
-            markType.create({ color: resolvedColor, highlightId: highlight.id }),
-          );
-          tr.setMeta("addToHistory", false);
-          editor.view.dispatch(tr);
-        }
-      } catch (err) {
-        console.error("Failed to save highlight:", err, "documentId:", doc.currentDoc.id);
-        setErrorToast({ message: `Could not save highlight: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
-      }
+      await persistHighlight(resolvedColor, from, to);
     },
-    [editor, doc.currentDoc, annotations, settings.defaultHighlightColor, onboarding.step],
+    [editor, doc.currentDoc, persistHighlight, settings.defaultHighlightColor, onboarding.step],
   );
 
   const handleNote = useCallback(async (range?: { from: number; to: number }) => {
@@ -925,46 +1018,21 @@ export default function App() {
       return;
     }
 
-    const fullText = editor.state.doc.textBetween(0, editor.state.doc.content.size, "\n");
-    const selectedText = editor.state.doc.textBetween(from, to, "\n");
-    const anchor = createAnchor(fullText, from, to);
+    const ids = await persistHighlight(settings.defaultHighlightColor, from, to);
+    const highlightId = ids[0];
+    if (!highlightId) return;
 
-    try {
-      const highlight = await annotations.createHighlight({
-        documentId: doc.currentDoc.id,
-        color: settings.defaultHighlightColor,
-        textContent: selectedText,
-        fromPos: from,
-        toPos: to,
-        prefixContext: anchor.prefix,
-        suffixContext: anchor.suffix,
-      });
-
-      const markType = editor.state.schema.marks.highlight;
-      if (markType) {
-        const tr = editor.state.tr.addMark(
-          from, to,
-          markType.create({ color: settings.defaultHighlightColor, highlightId: highlight.id }),
-        );
-        tr.setMeta("addToHistory", false);
-        editor.view.dispatch(tr);
+    requestAnimationFrame(() => {
+      const mark = editor.view.dom.querySelector(
+        `mark[data-highlight-id="${highlightId}"]`,
+      );
+      if (mark) {
+        setAnchorRect(mark.getBoundingClientRect());
       }
-
-      requestAnimationFrame(() => {
-        const mark = editor.view.dom.querySelector(
-          `mark[data-highlight-id="${highlight.id}"]`,
-        );
-        if (mark) {
-          setAnchorRect(mark.getBoundingClientRect());
-        }
-        setFocusHighlightId(highlight.id);
-        setAutoFocusNew(true);
-      });
-    } catch (err) {
-      console.error("Failed to save highlight for note:", err);
-      setErrorToast({ message: `Could not save note highlight: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
-    }
-  }, [editor, doc.currentDoc, annotations, onboarding.step, settings.defaultHighlightColor]);
+      setFocusHighlightId(highlightId);
+      setAutoFocusNew(true);
+    });
+  }, [editor, doc.currentDoc, persistHighlight, onboarding.step, settings.defaultHighlightColor]);
 
   // Complete onboarding when a real file is opened
   useEffect(() => {
