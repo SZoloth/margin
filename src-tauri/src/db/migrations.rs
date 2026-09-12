@@ -175,6 +175,10 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // Migration: add detection_pattern column to writing_rules
     migrate_writing_rules_add_detection_pattern(&conn)?;
 
+    // Migration: widen writing_type CHECK on writing_rules to the canonical
+    // type set (runs last so the rebuild sees every column)
+    migrate_writing_rules_widen_type_check(&conn)?;
+
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
         "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
@@ -758,6 +762,108 @@ mod tests {
     }
 
     #[test]
+    fn migrate_widens_writing_rules_type_check_and_preserves_data() {
+        // Simulate a pre-migration database: narrow 9-type CHECK plus all
+        // columns added by later migrations (this migration runs after them).
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE writing_rules (
+                id TEXT PRIMARY KEY,
+                writing_type TEXT NOT NULL DEFAULT 'general'
+                    CHECK(writing_type IN ('general','email','prd','blog','cover-letter','resume','slack','pitch','outreach')),
+                category TEXT NOT NULL,
+                rule_text TEXT NOT NULL,
+                when_to_apply TEXT,
+                why TEXT,
+                severity TEXT NOT NULL DEFAULT 'should-fix'
+                    CHECK(severity IN ('must-fix','should-fix','nice-to-fix')),
+                example_before TEXT,
+                example_after TEXT,
+                source TEXT NOT NULL DEFAULT 'manual',
+                signal_count INTEGER NOT NULL DEFAULT 1,
+                notes TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                reviewed_at INTEGER,
+                register TEXT,
+                polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+                detection_pattern TEXT,
+                UNIQUE(writing_type, category, rule_text)
+            );
+            CREATE INDEX idx_writing_rules_type ON writing_rules(writing_type);
+            CREATE INDEX idx_writing_rules_polarity ON writing_rules(polarity);
+            INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES ('r1', 'email', 'tone', 'Be direct', 'must-fix', 'manual', 3, 1000, 1000, 1000);",
+        )
+        .unwrap();
+
+        // 'text' is rejected under the old CHECK
+        let rejected = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('pre', 'text', 'tone', 'x', 'should-fix', 'manual', 1, 1)",
+            [],
+        );
+        assert!(rejected.is_err());
+
+        migrate_writing_rules_widen_type_check(&conn).unwrap();
+
+        // Existing data survives
+        let (wt, reviewed): (String, Option<i64>) = conn
+            .query_row(
+                "SELECT writing_type, reviewed_at FROM writing_rules WHERE id = 'r1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(wt, "email");
+        assert_eq!(reviewed, Some(1000));
+
+        // The canonical set now accepts 'text' and the MCP-side types
+        for (i, new_type) in ["text", "case-study", "email-hiring", "email-friend", "social-post", "text-friend"].iter().enumerate() {
+            conn.execute(
+                "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+                 VALUES (?1, ?2, 'tone', ?3, 'should-fix', 'manual', 1, 1)",
+                rusqlite::params![format!("new{i}"), new_type, format!("rule-{new_type}")],
+            ).unwrap();
+        }
+
+        // Still rejects garbage
+        let still_bad = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('bad', 'definitely-not-a-type', 'tone', 'x', 'should-fix', 'manual', 1, 1)",
+            [],
+        );
+        assert!(still_bad.is_err());
+
+        // Indexes were recreated
+        let idx_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND tbl_name='writing_rules' AND name LIKE 'idx_writing_rules%'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(idx_count, 2);
+
+        // Idempotent
+        migrate_writing_rules_widen_type_check(&conn).unwrap();
+    }
+
+    #[test]
+    fn migrate_widen_type_check_noops_on_wide_schema() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        // Fresh schema already has the wide CHECK — must not rebuild or fail.
+        migrate_writing_rules_widen_type_check(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'text', 'tone', 'x', 'should-fix', 'manual', 1, 1)",
+            [],
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn migrate_adds_polarity_column() {
         // Start with a table WITHOUT polarity (but with writing_type)
         let conn = Connection::open_in_memory().unwrap();
@@ -1013,12 +1119,18 @@ fn migrate_corrections_add_writing_type(conn: &Connection) -> Result<(), Box<dyn
 }
 
 /// Creates the `writing_rules` table if it doesn't exist.
+/// Canonical writing types for `writing_rules` — the union of the Go CLI's
+/// `ValidWritingTypes` (cli/db/rules.go) and the MCP server's
+/// `VALID_WRITING_TYPES` (mcp/src/tools/writing-rules.ts). Keep all three
+/// lists in sync.
+const VALID_WRITING_TYPES_SQL: &str = "'general','email','prd','blog','cover-letter','resume','slack','pitch','outreach','text','case-study','email-hiring','email-friend','social-post','text-friend'";
+
 pub fn migrate_add_writing_rules_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS writing_rules (
+        &format!("CREATE TABLE IF NOT EXISTS writing_rules (
             id TEXT PRIMARY KEY,
             writing_type TEXT NOT NULL DEFAULT 'general'
-                CHECK(writing_type IN ('general','email','prd','blog','cover-letter','resume','slack','pitch','outreach')),
+                CHECK(writing_type IN ({VALID_WRITING_TYPES_SQL})),
             category TEXT NOT NULL,
             rule_text TEXT NOT NULL,
             when_to_apply TEXT,
@@ -1035,7 +1147,86 @@ pub fn migrate_add_writing_rules_table(conn: &Connection) -> Result<(), Box<dyn 
             UNIQUE(writing_type, category, rule_text)
         );
         CREATE INDEX IF NOT EXISTS idx_writing_rules_type ON writing_rules(writing_type);",
+        )
     )?;
+    Ok(())
+}
+
+/// Widens the `writing_type` CHECK on `writing_rules` to the canonical
+/// 15-type set shared with the Go CLI and MCP server. Older databases only
+/// allow 9 types and reject inserts for 'text' or the MCP-specific types
+/// ('case-study', 'email-hiring', 'email-friend', 'social-post',
+/// 'text-friend'). SQLite can't alter CHECK constraints, so the table is
+/// rebuilt — same pattern as `migrate_corrections_remove_highlight_unique`.
+/// Runs after all column-add migrations so the rebuilt table has every
+/// current column.
+fn migrate_writing_rules_widen_type_check(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let sql: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='writing_rules'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+
+    // Nothing to widen (no CHECK at all), or already on the canonical set.
+    if !sql.contains("CHECK(writing_type IN") || sql.contains("'case-study'") {
+        return Ok(());
+    }
+
+    conn.execute_batch("PRAGMA foreign_keys=OFF;")?;
+
+    conn.execute_batch(
+        &format!("BEGIN;
+
+         CREATE TABLE writing_rules_new (
+             id TEXT PRIMARY KEY,
+             writing_type TEXT NOT NULL DEFAULT 'general'
+                 CHECK(writing_type IN ({VALID_WRITING_TYPES_SQL})),
+             category TEXT NOT NULL,
+             rule_text TEXT NOT NULL,
+             when_to_apply TEXT,
+             why TEXT,
+             severity TEXT NOT NULL DEFAULT 'should-fix'
+                 CHECK(severity IN ('must-fix','should-fix','nice-to-fix')),
+             example_before TEXT,
+             example_after TEXT,
+             source TEXT NOT NULL DEFAULT 'manual',
+             signal_count INTEGER NOT NULL DEFAULT 1,
+             notes TEXT,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL,
+             reviewed_at INTEGER,
+             register TEXT,
+             polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+             detection_pattern TEXT,
+             UNIQUE(writing_type, category, rule_text)
+         );
+
+         INSERT INTO writing_rules_new
+             (id, writing_type, category, rule_text, when_to_apply, why,
+              severity, example_before, example_after, source, signal_count,
+              notes, created_at, updated_at, reviewed_at, register, polarity,
+              detection_pattern)
+         SELECT id, writing_type, category, rule_text, when_to_apply, why,
+                severity, example_before, example_after, source, signal_count,
+                notes, created_at, updated_at, reviewed_at, register, polarity,
+                detection_pattern
+         FROM writing_rules;
+
+         DROP TABLE writing_rules;
+
+         ALTER TABLE writing_rules_new RENAME TO writing_rules;
+
+         CREATE INDEX IF NOT EXISTS idx_writing_rules_type ON writing_rules(writing_type);
+         CREATE INDEX IF NOT EXISTS idx_writing_rules_polarity ON writing_rules(polarity);
+
+         COMMIT;",
+        )
+    )?;
+
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+
     Ok(())
 }
 

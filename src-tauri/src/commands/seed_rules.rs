@@ -15,6 +15,7 @@ const VALID_WRITING_TYPES: &[&str] = &[
     "slack",
     "pitch",
     "outreach",
+    "text",
     "case-study",
     "email-hiring",
     "email-friend",

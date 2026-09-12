@@ -46,9 +46,13 @@ const unreviewedCandidateFilter = `NOT (source = 'synthesis-candidate' AND revie
 
 var (
 	ValidSeverities  = []string{"must-fix", "should-fix", "nice-to-fix"}
+	// Canonical writing types — union of this list and the MCP server's
+	// VALID_WRITING_TYPES (mcp/src/tools/writing-rules.ts). Mirrored by the
+	// writing_type CHECK on writing_rules (src-tauri/src/db/migrations.rs).
 	ValidWritingTypes = []string{
 		"general", "email", "prd", "blog", "cover-letter",
 		"resume", "slack", "pitch", "outreach", "text",
+		"case-study", "email-hiring", "email-friend", "social-post", "text-friend",
 	}
 	TypeLabels = map[string]string{
 		"general":      "General",
@@ -61,6 +65,11 @@ var (
 		"pitch":        "Pitch",
 		"outreach":     "Outreach",
 		"text":         "Text message",
+		"case-study":   "Case study",
+		"email-hiring": "Email (hiring)",
+		"email-friend": "Email (friend)",
+		"social-post":  "Social post",
+		"text-friend":  "Text (friend)",
 	}
 )
 
@@ -388,8 +397,12 @@ func InsertCandidateRules(d *sql.DB, candidates []CandidateRuleInput) (int, erro
 		if !isValidSeverity(c.Severity) {
 			c.Severity = "should-fix"
 		}
+		// Unknown writing types must surface as errors — silently coercing
+		// to 'general' would file the candidate under the wrong corpus.
 		if !isValidWritingType(c.WritingType) {
-			c.WritingType = "general"
+			return inserted, fmt.Errorf(
+				"Invalid writing_type %q for candidate rule %q. Allowed: %s",
+				c.WritingType, c.RuleText, strings.Join(ValidWritingTypes, ", "))
 		}
 		sc := c.SignalCount
 		if sc < 1 {
