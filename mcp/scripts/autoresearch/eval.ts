@@ -49,6 +49,7 @@ const ARCH_LABELS: Record<string, string> = {
   e: "hybrid",
   f: "aegis",
   h: "dspy",
+  skill: "skill-production-path",
   null: "null-hypothesis",
 };
 
@@ -72,6 +73,8 @@ async function loadGenerator(arch: string): Promise<GenerateFn> {
       return (await import("./generators/arch-f-aegis.ts")).generate;
     case "h":
       return (await import("./generators/arch-h-dspy.ts")).generate;
+    case "skill":
+      return (await import("./generators/arch-skill.ts")).generate;
     case "null":
       return (await import("./generators/arch-null.ts")).generate;
     default:
@@ -87,8 +90,8 @@ function parseArch(): string {
   const archIdx = args.indexOf("--arch");
   if (archIdx === -1 || archIdx + 1 >= args.length) return "a";
   const value = args[archIdx + 1];
-  if (!value || !["a", "a-top10", "b", "c", "d", "d-chrono", "e", "f", "h", "null"].includes(value)) {
-    console.error(`Invalid --arch value: ${value}. Use a, a-top10, b, c, d, d-chrono, e, f, h, or null.`);
+  if (!value || !["a", "a-top10", "b", "c", "d", "d-chrono", "e", "f", "h", "skill", "null"].includes(value)) {
+    console.error(`Invalid --arch value: ${value}. Use a, a-top10, b, c, d, d-chrono, e, f, h, skill, or null.`);
     process.exit(1);
   }
   return value;

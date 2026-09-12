@@ -20,7 +20,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { RULE_FILTER, CORRECTION_FILTER,
+import { typeConstraint, RULE_FILTER, CORRECTION_FILTER,
   REGISTER_MAP,
   stripMetaCommentary,
   cleanEnv,
@@ -249,6 +249,7 @@ COMPLIANCE PROTOCOL:
 
 Writing type: ${type}
 Register: ${register}
+${typeConstraint(type)}
 
 Output ONLY the prose — no commentary, critique, word counts, or meta-discussion.
 

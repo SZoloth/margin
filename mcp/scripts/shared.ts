@@ -162,6 +162,28 @@ export function evalCmd(): string {
 }
 
 /**
+ * Type-length constraints, mirroring typeConstraint() in
+ * cli/profile/coaching.go. Without these, eval samples for terse types get
+ * prose-length output scored against prose-tuned rules.
+ */
+export function typeConstraint(writingType: string): string {
+  switch (writingType) {
+    case "email":
+      return "Keep it SHORT. Emails: 3-5 sentences max.";
+    case "outreach":
+      return "Keep it SHORT. Outreach: 2-3 sentences max.";
+    case "slack":
+      return "Keep it SHORT. Slack: 1-2 sentences.";
+    case "text":
+      return "Keep it SHORT. Texts: 1-3 sentences max.";
+    case "resume":
+      return "One bullet point only. Under 30 words.";
+    default:
+      return "";
+  }
+}
+
+/**
  * LLM generator for eval runs. The command receives the prompt on stdin and
  * must print the prose to stdout.
  */

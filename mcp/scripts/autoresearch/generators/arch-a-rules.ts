@@ -9,7 +9,7 @@
  */
 
 import { execSync } from "child_process";
-import { loadWritingRulesForType, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
+import { typeConstraint, loadWritingRulesForType, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 export function generate(type: string, prompt: string, register: string): string {
   const rules = loadWritingRulesForType(type);
@@ -21,6 +21,7 @@ ${rules}
 ---
 Writing type: ${type}
 Register: ${register}
+${typeConstraint(type)}
 
 Output ONLY the prose — no commentary, critique, word counts, or meta-discussion.
 

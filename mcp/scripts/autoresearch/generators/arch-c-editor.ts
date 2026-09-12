@@ -13,13 +13,14 @@
  */
 
 import { execSync } from "child_process";
-import { loadWritingRulesForType, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
+import { typeConstraint, loadWritingRulesForType, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 function generateUnconstrained(type: string, prompt: string, register: string): string {
   const fullPrompt = `Write the following. Be clear, direct, and specific.
 
 Writing type: ${type}
 Register: ${register}
+${typeConstraint(type)}
 
 Output ONLY the prose — no commentary, critique, word counts, or meta-discussion.
 

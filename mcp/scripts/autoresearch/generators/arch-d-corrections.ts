@@ -17,7 +17,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { CORRECTION_FILTER, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
+import { typeConstraint, CORRECTION_FILTER, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -106,6 +106,7 @@ ${correctionBlock}
 
 ${correctionBlock ? "---\n\n" : ""}Writing type: ${type}
 Register: ${register}
+${typeConstraint(type)}
 
 Output ONLY the prose — no commentary, critique, word counts, or meta-discussion.
 

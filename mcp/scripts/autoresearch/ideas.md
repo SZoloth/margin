@@ -1,33 +1,66 @@
 # Ideas backlog
 
 Deferred hypotheses for future iterations. Ranked by estimated impact.
+(Consolidated 2026-09-12 — this is now the single backlog; program.md's
+autoresearch.ideas.md is merged in.)
 
-## High priority
+## High priority — data layer (highest expected lift per research synthesis)
 
-- **Type-filtered corrections in arch-e**: arch-e already filters by writing_type (100% coverage), but also loads supplements from other types when <15 type-specific exist. Test: disable the cross-type supplement and see if focused signals improve or hurt pass rate. Hypothesis: cover-letter-specific coaching should dominate cover-letter eval samples.
-- **Tighter rule threshold**: arch-e uses signal_count >= 2 OR must-fix (247 of 272 rules). Test: raise to signal_count >= 3 to reduce noise and focus on strongly validated patterns. Expected: fewer but higher-confidence rules.
-- **Chronological correction accumulation (Lehmann method)**: arch-d loads most-recent-first. Test: load oldest-first (chronological accumulation) to see if showing the "learning arc" of corrections helps more than recency. Hypothesis: earlier corrections may encode more foundational patterns.
-- **Klaassen top-10 rules**: arch-a currently loads all rules for the type/register. Test: limit to `LIMIT 10 ORDER BY signal_count DESC` to test if concentrated signal beats volume. Hypothesis: 10 high-signal rules > 247 rules for compliance rate.
-- **Dedicated negative parallelism intervention**: negative parallelism persists across all architectures. Test: add an explicit, specific prohibition block at the top of arch-e's prompt (not just in hard prohibitions) with 5+ examples of the pattern and rewrites.
+- **Scenario B: corrections + top-10 rules** — experiment-log's own never-run
+  next step. arch-e variant with `LIMIT 10` on the rules block.
+- **arch-c confirmation under repaired harness** — the 88.9% was scored on
+  the ~4%-recall proxy; re-run before trusting. Variant: pass-2 edits
+  against corrections (arch-d's data layer) instead of the rule dump.
+- **Rule precedence line for register contradictions** — audit found direct
+  conflicts (hedges-as-voice vs hedge-as-tell; no-periods-slack vs prose
+  rules). Prompt-level precedence statement may fix the slack regression.
+- **Self-critique pass (humanizer pattern)** — arch-c variant where pass 2
+  critiques "what makes this obviously AI?" then revises, vs. editing
+  against the rule list.
+- **Register-specific prohibition tuning** — prohibition blocks are
+  register-agnostic; email and slack have different norms for colons,
+  em dashes, fragments. Add register exceptions.
+- **Correction ordering by signal strength** — order corrections by
+  recurrence of similar corrections, not recency.
 
 ## Medium priority
 
-- **Post-generation compliance check**: after arch-e generates, run a lightweight mechanical check and if it fails, regenerate once with the violation flagged. Adds latency but may push pass rate above 80%.
-- **Register-specific rule scoping**: arch-e loads all high-signal rules regardless of register. Test: filter to `WHERE register = ?` or `register IS NULL` to avoid loading casual rules in professional contexts.
-- **Bump eval to n=45**: current 27-sample eval has high variance (59-81% range). 5 samples/type would tighten confidence intervals and produce more reliable architecture comparisons.
-- **Correction context window**: arch-e uses 30 corrections. Test 15 and 50 to find the optimal window. More context = more signal but also more noise for types with few type-specific corrections.
+- **Post-generation compliance check** — lightweight mechanical check on
+  output; regenerate once with violation flagged. Adds latency.
+- **Register-specific rule scoping** — filter to `register = ? OR register
+  IS NULL` to keep casual rules out of professional contexts.
+- **Bump eval to n=45** — 5 samples/type tightens confidence intervals
+  (27-sample runs show 59-81% variance range).
+- **Prompt section ordering** — corrections-first vs rules-first vs
+  prohibitions-first.
+- **Correction context window** — test 15 and 50 vs current 30.
+- **Correction clustering** — group by similarity, load 2-3 per cluster.
 
 ## Low / speculative
 
-- **Eval calibration study**: compare proxy pass rate against Sam's actual correction rate on the same documents. This validates whether we're optimizing the right metric.
-- **Clustering corrections by violation type**: group corrections by semantic similarity before loading, then load 2-3 per cluster. May reduce redundancy in the correction block.
-- **Dynamic rule loading (Hallie method)**: test type-filtered rules vs full dump within arch-e by modifying `loadWritingRulesForType` to be more aggressive about type filtering.
+- **Eval calibration study** — compare proxy pass rate against Sam's actual
+  correction rate on the same documents. Requires Sam's time; highest
+  long-term value.
+- **Progressive disclosure** — load fewer rules upfront, introduce advanced
+  rules only after baseline constraints are met.
+- **Voice scorecard** — each rule gets a ✓/✗ marker the model simulates
+  before writing.
+- **Consequence framing** — "violating these rules will require Sam to edit
+  your output" instead of positive instruction.
+- **Top-15-only** — strip all generic rules, keep only the most-frequently-
+  corrected patterns.
+- **Dynamic rule loading (Hallie method)** — more aggressive type filtering
+  inside loadWritingRulesForType.
 
 ## Tried and discarded
 
-(none yet — first run)
-
-- Test progressive disclosure: load fewer rules upfront, introduce advanced rules only after meeting baseline constraints
-- Try a "voice scorecard" format where each rule has a compliance marker (✓/✗) that the model simulates before writing
-- Experiment with consequence framing: "Violating these rules will require Sam to edit your output — prevent that" instead of positive instruction
-- Test whether removing all generic rules and keeping ONLY the top-15 most-frequently-corrected patterns improves over full rule dump
+- **Elevate long-sentence constraint to top of prompt** — proposed twice
+  (runs 22-23, poolside), reverted both times: pass rate crashed to
+  0.37-0.41 with ~30 mechanical issues. Per program.md, this is a known
+  dead end at the prompt level — fix has to happen in data selection or
+  the checker.
+- **Chronological correction ordering (d-chrono)** — tested as arch-d-chrono,
+  59.3% vs arch-d's 72.2% recency ordering.
+- **Top-10 rules in arch-a** — tested as arch-a-top10 (70.4% vs full-dump
+  57.5%). Top-10 alone beat volume; "corrections + top-10" remains untested
+  (see Scenario B above).

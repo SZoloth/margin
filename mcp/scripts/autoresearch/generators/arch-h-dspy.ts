@@ -18,7 +18,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { RULE_FILTER, CORRECTION_FILTER, cleanEnv, stripMetaCommentary, evalCmd } from "../../shared.ts";
+import { typeConstraint, RULE_FILTER, CORRECTION_FILTER, cleanEnv, stripMetaCommentary, evalCmd } from "../../shared.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -254,6 +254,7 @@ ${demosBlock}
 
 Writing type: ${type}
 Register: ${register}
+${typeConstraint(type)}
 
 Output ONLY the prose — no commentary, critique, word counts, or meta-discussion.
 
