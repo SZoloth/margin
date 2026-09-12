@@ -108,7 +108,9 @@ function gitCommit(message: string): void {
     const paths = [COACHING_PROMPT_PATH, RESULTS_PATH, SESSION_PATH, IDEAS_PATH, LAST_EVAL_PATH, KEPT_EVAL_PATH]
       .map((p) => `"${p}"`)
       .join(" ");
-    execSync(`git commit -o -F - -- ${paths}`, {
+    // add first so untracked files (e.g. first kept-eval.json) become
+    // committable; -o/--only still scopes the commit to these paths alone.
+    execSync(`git add -- ${paths} && git commit -o -F - -- ${paths}`, {
       input: message,
       cwd: repoRoot,
       encoding: "utf-8",
