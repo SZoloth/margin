@@ -1,0 +1,25 @@
+/* Locally bundled fonts via @fontsource — replaces the Google Fonts CDN so
+ * the app renders correctly offline. Latin subsets only, matching the weights
+ * actually used in the stylesheet (400/500/600/700 + italics). */
+
+/* Newsreader — reader serif */
+@import "@fontsource/newsreader/latin-400.css";
+@import "@fontsource/newsreader/latin-400-italic.css";
+@import "@fontsource/newsreader/latin-500.css";
+@import "@fontsource/newsreader/latin-500-italic.css";
+@import "@fontsource/newsreader/latin-600.css";
+@import "@fontsource/newsreader/latin-600-italic.css";
+@import "@fontsource/newsreader/latin-700.css";
+@import "@fontsource/newsreader/latin-700-italic.css";
+
+/* Instrument Sans — UI sans */
+@import "@fontsource/instrument-sans/latin-400.css";
+@import "@fontsource/instrument-sans/latin-400-italic.css";
+@import "@fontsource/instrument-sans/latin-500.css";
+@import "@fontsource/instrument-sans/latin-500-italic.css";
+@import "@fontsource/instrument-sans/latin-600.css";
+@import "@fontsource/instrument-sans/latin-700.css";
+
+/* JetBrains Mono — code / UI monospace */
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-500.css";
