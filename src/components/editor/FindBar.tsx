@@ -20,9 +20,30 @@ export function FindBar({ editor, isOpen, onClose }: FindBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const presence = useAnimatedPresence(isOpen, 150);
 
-  const storage = editor?.storage.search as SearchStorage | undefined;
-  const resultCount = storage?.results.length ?? 0;
-  const activeIndex = storage?.activeIndex ?? -1;
+  // Editor storage is mutated, not reactive — reading it during render goes
+  // stale after next/prevMatch. Mirror it into state on every transaction.
+  const [searchState, setSearchState] = useState({ resultCount: 0, activeIndex: -1 });
+
+  useEffect(() => {
+    if (!editor) {
+      setSearchState({ resultCount: 0, activeIndex: -1 });
+      return;
+    }
+    const sync = () => {
+      const s = editor.storage.search as SearchStorage | undefined;
+      setSearchState({
+        resultCount: s?.results.length ?? 0,
+        activeIndex: s?.activeIndex ?? -1,
+      });
+    };
+    sync();
+    editor.on("transaction", sync);
+    return () => {
+      editor.off("transaction", sync);
+    };
+  }, [editor]);
+
+  const { resultCount, activeIndex } = searchState;
 
   // Focus and select input when opening
   useEffect(() => {
