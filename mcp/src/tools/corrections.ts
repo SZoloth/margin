@@ -18,6 +18,7 @@ export interface CorrectionRecord {
   suffixContext: string | null;
   extendedContext: string | null;
   rationale: string | null;
+  synthesizedAt: number | null;
 }
 
 export interface CorrectionsSummary {
@@ -26,29 +27,32 @@ export interface CorrectionsSummary {
   byDocument: { documentId: string; documentTitle: string | null; count: number }[];
 }
 
+/**
+ * @param synthesized - tri-state synthesis filter on `corrections.synthesized_at`:
+ *   `true` = only corrections already consumed by synthesis,
+ *   `false` = only corrections still queued for synthesis,
+ *   omitted = all corrections (matches `margin corrections list`).
+ */
 export function getCorrections(
   db: Database.Database,
   documentId?: string,
   limit: number = 200,
+  synthesized?: boolean,
 ): CorrectionRecord[] {
   const clampedLimit = Math.min(Math.max(limit, 1), 2000);
 
+  const conditions = ["session_id != '__backfilled__'"];
+  const params: (string | number)[] = [];
   if (documentId) {
-    const rows = db
-      .prepare(
-        `SELECT original_text as originalText, notes_json as notesJson, highlight_color as highlightColor,
-                document_title as documentTitle, document_id as documentId, created_at as createdAt,
-                writing_type as writingType, polarity, prefix_context as prefixContext,
-                suffix_context as suffixContext, extended_context as extendedContext,
-                rationale
-         FROM corrections
-         WHERE document_id = ? AND session_id != '__backfilled__'
-         ORDER BY created_at DESC
-         LIMIT ?`,
-      )
-      .all(documentId, clampedLimit) as RawCorrectionRow[];
-    return rows.map(parseRow);
+    conditions.push("document_id = ?");
+    params.push(documentId);
   }
+  if (synthesized === true) {
+    conditions.push("synthesized_at IS NOT NULL");
+  } else if (synthesized === false) {
+    conditions.push("synthesized_at IS NULL");
+  }
+  params.push(clampedLimit);
 
   const rows = db
     .prepare(
@@ -56,13 +60,13 @@ export function getCorrections(
               document_title as documentTitle, document_id as documentId, created_at as createdAt,
               writing_type as writingType, polarity, prefix_context as prefixContext,
               suffix_context as suffixContext, extended_context as extendedContext,
-              rationale
+              rationale, synthesized_at as synthesizedAt
        FROM corrections
-       WHERE session_id != '__backfilled__'
+       WHERE ${conditions.join(" AND ")}
        ORDER BY created_at DESC
        LIMIT ?`,
     )
-    .all(clampedLimit) as RawCorrectionRow[];
+    .all(...params) as RawCorrectionRow[];
   return rows.map(parseRow);
 }
 
@@ -76,7 +80,7 @@ export function getAllCorrectionsForProfile(
               document_title as documentTitle, document_id as documentId, created_at as createdAt,
               writing_type as writingType, polarity, prefix_context as prefixContext,
               suffix_context as suffixContext, extended_context as extendedContext,
-              rationale
+              rationale, synthesized_at as synthesizedAt
        FROM corrections
        WHERE session_id != '__backfilled__'
        ORDER BY created_at DESC`,
@@ -136,6 +140,7 @@ interface RawCorrectionRow {
   suffixContext: string | null;
   extendedContext: string | null;
   rationale: string | null;
+  synthesizedAt: number | null;
 }
 
 export interface CreateCorrectionResult {
@@ -376,5 +381,6 @@ function parseRow(row: RawCorrectionRow): CorrectionRecord {
     suffixContext: row.suffixContext,
     extendedContext: row.extendedContext,
     rationale: row.rationale ?? null,
+    synthesizedAt: row.synthesizedAt ?? null,
   };
 }

@@ -185,13 +185,16 @@ server.tool(
 
 server.tool(
   "margin_get_corrections",
-  "Get writing corrections with context. Optionally filter by document.",
+  "Get writing corrections with context. Optionally filter by document or synthesis state.",
   {
     document_id: z.string().optional().describe("Filter by document ID"),
     limit: z.number().optional().describe("Max results (default 200, max 2000)"),
+    synthesized: z.boolean().optional().describe(
+      "Filter by synthesis state: true = only corrections already synthesized into rules, false = only corrections still pending synthesis, omit = all",
+    ),
   },
-  async ({ document_id, limit }) => withDb(() => ({
-    content: [{ type: "text", text: JSON.stringify(getCorrections(getReadDb(), document_id, limit), null, 2) }],
+  async ({ document_id, limit, synthesized }) => withDb(() => ({
+    content: [{ type: "text", text: JSON.stringify(getCorrections(getReadDb(), document_id, limit, synthesized), null, 2) }],
   })),
 );
 
@@ -206,7 +209,7 @@ server.tool(
 
 server.tool(
   "margin_get_writing_rules",
-  "Get writing rules from the database. Optionally filter by writing type (general, email, prd, blog, cover-letter, resume, slack, pitch, outreach).",
+  "Get writing rules from the database. Unreviewed synthesis candidates are excluded until approved. Optionally filter by writing type (general, email, prd, blog, cover-letter, resume, slack, pitch, outreach, text, case-study, email-hiring, email-friend, social-post, text-friend).",
   { writing_type: z.string().optional().describe("Filter by writing type") },
   async ({ writing_type }) => withDb(() => ({
     content: [{ type: "text", text: JSON.stringify(getWritingRules(getReadDb(), writing_type), null, 2) }],

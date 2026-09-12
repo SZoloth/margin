@@ -21,6 +21,13 @@ export interface WritingRule {
   polarity: string | null;
 }
 
+/**
+ * Review gate — mirrors `unreviewedCandidateFilter` in cli/db/rules.go.
+ * Synthesis candidates are invisible to MCP consumers until reviewed
+ * (reviewed_at set by the UI or `margin rules accept`).
+ */
+const REVIEW_GATE = `NOT (source = 'synthesis-candidate' AND reviewed_at IS NULL)`;
+
 export function getWritingRules(
   db: Database.Database,
   writingType?: string,
@@ -32,7 +39,7 @@ export function getWritingRules(
                 why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
                 signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
                 register, polarity
-         FROM writing_rules WHERE writing_type = ?
+         FROM writing_rules WHERE writing_type = ? AND ${REVIEW_GATE}
          ORDER BY signal_count DESC, created_at DESC`,
       )
       .all(writingType) as WritingRule[];
@@ -45,15 +52,21 @@ export function getWritingRules(
               signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
               register, polarity
        FROM writing_rules
+       WHERE ${REVIEW_GATE}
        ORDER BY writing_type, signal_count DESC, created_at DESC`,
     )
     .all() as WritingRule[];
 }
 
 const VALID_SEVERITIES = ["must-fix", "should-fix", "nice-to-fix"] as const;
+/**
+ * Canonical writing types — union of this list and the Go CLI's
+ * ValidWritingTypes (cli/db/rules.go). Mirrored by the writing_type CHECK
+ * on writing_rules (src-tauri/src/db/migrations.rs).
+ */
 const VALID_WRITING_TYPES = [
   "general", "email", "prd", "blog", "cover-letter",
-  "resume", "slack", "pitch", "outreach",
+  "resume", "slack", "pitch", "outreach", "text",
   "case-study", "email-hiring", "email-friend", "social-post", "text-friend",
 ] as const;
 
@@ -228,6 +241,12 @@ const TYPE_LABELS: Record<string, string> = {
   slack: "Slack",
   pitch: "Pitch",
   outreach: "Outreach",
+  text: "Text message",
+  "case-study": "Case study",
+  "email-hiring": "Email (hiring)",
+  "email-friend": "Email (friend)",
+  "social-post": "Social post",
+  "text-friend": "Text (friend)",
 };
 
 /**
