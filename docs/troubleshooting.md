@@ -116,9 +116,10 @@ every sample; `eval:check` with `--llm` audit errors.
 
 The configured generator command (`MARGIN_EVAL_CMD`, default `claude --print
 --model sonnet`) is unauthenticated or broken. Observed on this machine:
-`claude` CLI rejected (org disabled subscription access + stale API key),
-`codex exec` failed on a `config.toml` feature-type parse error, `devin -p`
-needed `devin auth login` re-auth.
+`claude` CLI rejected (org disabled subscription access + stale API key) and
+`devin -p` needed `devin auth login` re-auth. `codex exec` works via
+`codex exec --profile poolside -`; the default `gpt-6-astra` model needs a
+newer codex CLI than 0.145.0.
 
 ### Fix
 
