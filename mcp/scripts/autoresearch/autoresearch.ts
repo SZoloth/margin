@@ -72,7 +72,7 @@ function createEnforcementCategory(): Category {
       if (evalResult.category !== "enforcement") return null;
       const worstViolations = evalResult.worst_violations?.slice(0, 10).join("\n") ?? "";
       const perTypeReport = Object.entries(evalResult.per_type ?? {})
-        .map(([type, s]: [string, any]) => `${type}: pass=${s.passRate}, mechAvg=${s.avgMechanical}`)
+        .map(([type, s]: [string, any]) => `${type}: passed=${s.passed}/${s.total}, dimAvg=${s.mean_dimension}`)
         .join("\n");
 
       const prompt = `You are improving a writing skill file (SKILL.md) for Claude Code.

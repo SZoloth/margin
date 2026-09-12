@@ -62,7 +62,7 @@ function proposeChange(
 ): string | null {
   const worstViolations = evalResult.worst_violations.slice(0, 10).join("\n");
   const perTypeReport = Object.entries(evalResult.per_type)
-    .map(([type, summary]) => `${type}: pass=${summary.passRate}, mechAvg=${summary.avgMechanical}, dimAvg=${summary.avgDimension}`)
+    .map(([type, summary]) => `${type}: passed=${summary.passed}/${summary.total}, dimAvg=${summary.mean_dimension}`)
     .join("\n");
 
   const prompt = `You are improving a writing skill file (SKILL.md) for Claude Code.

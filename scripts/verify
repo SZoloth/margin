@@ -80,6 +80,9 @@ run_mcp_command() {
       ;;
     build)
       run_from_dir "$mcp_dir" "$node_bin" "$tsc_entry" -p tsconfig.json
+      # scripts/ sits outside src/'s tsconfig — the eval harness lives there
+      # and has shipped type bugs that the gate never saw.
+      run_from_dir "$mcp_dir" "$node_bin" "$tsc_entry" -p tsconfig.scripts.json
       ;;
     *)
       echo "error: unknown MCP subcommand: $subcommand" >&2

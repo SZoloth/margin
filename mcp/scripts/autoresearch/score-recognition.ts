@@ -67,8 +67,12 @@ A correction is feedback about writing quality/voice/style that should be captur
       return { predicted: false, confidence: parseInt(notMatch[1], 10) };
     }
 
-    // Fallback: look for keywords
+    // Fallback: "not a correction"/"NOT_CORRECTION" both contain
+    // "correction" — check the negative first or recall inflates.
     const lower = result.toLowerCase();
+    if (/not[_ ]a?[_ ]?correction|no correction|isn'?t a correction/.test(lower)) {
+      return { predicted: false, confidence: 50 };
+    }
     if (lower.includes("correction")) return { predicted: true, confidence: 50 };
     return { predicted: false, confidence: 50 };
   } catch {

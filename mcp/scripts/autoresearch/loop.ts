@@ -20,6 +20,7 @@ const RESULTS_PATH = join(DIR, "results.tsv");
 const IDEAS_PATH = join(DIR, "ideas.md");
 const SESSION_PATH = join(DIR, "session.md");
 const LAST_EVAL_PATH = join(DIR, "last-eval.json");
+const KEPT_EVAL_PATH = join(DIR, "kept-eval.json");
 const PROGRAM_PATH = join(DIR, "program.md");
 const EVAL_SCRIPT = join(DIR, "eval.ts");
 
@@ -32,12 +33,15 @@ function readFile(path: string): string {
 interface ResultsState {
   nextRun: number;
   best: { passRate: number; meanDimension: number };
+  hasKept: boolean;
   lastN: string;
 }
 
+const LOOP_ARCH = "coached";
+
 function parseResults(n: number = 10): ResultsState {
   if (!existsSync(RESULTS_PATH)) {
-    return { nextRun: 1, best: { passRate: 0, meanDimension: 0 }, lastN: "(no results yet)" };
+    return { nextRun: 1, best: { passRate: 0, meanDimension: 0 }, hasKept: false, lastN: "(no results yet)" };
   }
   const lines = readFileSync(RESULTS_PATH, "utf-8").trim().split("\n");
   const header = lines[0];
@@ -50,16 +54,20 @@ function parseResults(n: number = 10): ResultsState {
     nextRun = (isNaN(lastRun) ? 0 : lastRun) + 1;
   }
 
-  // Best kept result — scoped to the current provider. Scores aren't
-  // comparable across generators; a poolside run must never be judged
-  // against a claude-era best. Rows predating the provider column are claude.
+  // Best kept result — scoped to current provider AND arch. Scores aren't
+  // comparable across generators or eval targets; a poolside run must never
+  // be judged against a claude-era best, nor a coached run against an
+  // arch-a noise number. Missing provider col → claude; missing arch col → "a".
   const provider = evalCmd();
   let best = { passRate: 0, meanDimension: 0 };
+  let hasKept = false;
   for (const line of dataLines) {
     const cols = line.split("\t");
     const rowProvider = cols[8] ?? "claude --print --model sonnet";
-    if (rowProvider !== provider) continue;
+    const rowArch = cols[9] ?? "a";
+    if (rowProvider !== provider || rowArch !== LOOP_ARCH) continue;
     if (cols[5] === "true") {
+      hasKept = true;
       const passRate = parseFloat(cols[1]);
       const meanDim = parseFloat(cols[2]);
       if (!isNaN(passRate) && passRate >= best.passRate) {
@@ -74,7 +82,7 @@ function parseResults(n: number = 10): ResultsState {
   const tail = dataLines.slice(-n);
   const lastN = [header, ...tail].join("\n");
 
-  return { nextRun, best, lastN };
+  return { nextRun, best, hasKept, lastN };
 }
 
 function runEval(): EvalResult {
@@ -94,12 +102,13 @@ function runEval(): EvalResult {
 
 function gitCommit(message: string): void {
   try {
-    execSync(`git add ${COACHING_PROMPT_PATH} ${RESULTS_PATH} ${SESSION_PATH} ${IDEAS_PATH} ${LAST_EVAL_PATH}`, {
-      cwd: join(DIR, "../../.."),
-      encoding: "utf-8",
-    });
     const repoRoot = join(DIR, "../../..");
-    execSync("git commit -F -", {
+    // -o/--only: commit only the named paths — never sweep other agents'
+    // staged work into an experiment commit.
+    const paths = [COACHING_PROMPT_PATH, RESULTS_PATH, SESSION_PATH, IDEAS_PATH, LAST_EVAL_PATH, KEPT_EVAL_PATH]
+      .map((p) => `"${p}"`)
+      .join(" ");
+    execSync(`git commit -o -F - -- ${paths}`, {
       input: message,
       cwd: repoRoot,
       encoding: "utf-8",
@@ -124,7 +133,7 @@ function initResultsTsv(): void {
   if (!existsSync(RESULTS_PATH)) {
     writeFileSync(
       RESULTS_PATH,
-      "run\tpass_rate\tmean_dimension\ttotal_mechanical\thypothesis\tkept\tnotes\ttimestamp\tprovider\n"
+      "run\tpass_rate\tmean_dimension\ttotal_mechanical\thypothesis\tkept\tnotes\ttimestamp\tprovider\tarch\n"
     );
   }
 }
@@ -146,6 +155,7 @@ function appendResult(
     notes.replace(/\t/g, " ").replace(/\n/g, " "),
     new Date().toISOString(),
     evalCmd(),
+    LOOP_ARCH,
   ].join("\t");
   appendFileSync(RESULTS_PATH, row + "\n");
 }
@@ -197,6 +207,46 @@ function readLastEval(): LastEvalSummary | null {
   } catch {
     return null;
   }
+}
+
+// kept-eval.json records the incumbent prompt's eval — floors compare a
+// candidate against what it would *revert to*, not the last attempt.
+function writeKeptEval(evalResult: EvalResult): void {
+  const summary: LastEvalSummary = {
+    pass_rate: evalResult.pass_rate,
+    mean_dimension: evalResult.mean_dimension,
+    total_mechanical: evalResult.total_mechanical,
+    worst_violations: evalResult.worst_violations ?? [],
+    per_type: evalResult.per_type ?? {},
+  };
+  writeFileSync(KEPT_EVAL_PATH, JSON.stringify(summary, null, 2));
+}
+
+function readKeptEval(): LastEvalSummary | null {
+  try {
+    return JSON.parse(readFileSync(KEPT_EVAL_PATH, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+// A candidate must not collapse any writing type: allow 1-sample wobble
+// (n=3 noise budget) but forbid dropping ≥2 samples or a type hitting 0
+// that wasn't already at 0. This is the slack-regression guard.
+function perTypeFloorsHold(
+  cur: LastEvalSummary["per_type"],
+  base: LastEvalSummary["per_type"] | undefined
+): { ok: boolean; regressions: string[] } {
+  if (!base) return { ok: true, regressions: [] };
+  const regressions: string[] = [];
+  for (const [t, b] of Object.entries(base)) {
+    const c = cur[t];
+    if (!c || b.passed === 0) continue;
+    if (c.passed < Math.max(b.passed - 1, 1)) {
+      regressions.push(`${t}: ${b.passed}/${b.total} → ${c.passed}/${c.total}`);
+    }
+  }
+  return { ok: regressions.length === 0, regressions };
 }
 
 // ── Agent call ─────────────────────────────────────────────────────────
@@ -285,16 +335,35 @@ function main(): void {
 
   initResultsTsv();
 
-  // Check if we need a baseline
-  const { nextRun: runNum } = parseResults();
+  // Experiments never run on main — repo policy is worktree/branch
+  // isolation, and the loop auto-commits. Auto-create a dated branch.
+  try {
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      cwd: join(DIR, "../../.."),
+      encoding: "utf-8",
+    }).trim();
+    if (branch === "main") {
+      const expBranch = `autoresearch/loop-${new Date().toISOString().slice(0, 10)}`;
+      execSync(`git checkout -b ${expBranch}`, { cwd: join(DIR, "../../.."), encoding: "utf-8" });
+      console.log(`On main — switched to ${expBranch} for experiment commits.`);
+    }
+  } catch (err) {
+    console.error("Branch check failed:", (err as Error).message);
+  }
 
-  if (runNum === 1 || baselineOnly) {
+  const initial = parseResults();
+
+  // Baseline: first run ever, explicit --baseline, or no kept row for this
+  // provider+arch (the auto-keep bug: an empty scoped history made the
+  // first mutation the "best" no matter how bad).
+  if (initial.nextRun === 1 || baselineOnly || !initial.hasKept) {
     console.log("Running baseline evaluation...");
     const evalResult = runEval();
     writeLastEval(evalResult);
-    appendResult(1, evalResult, "baseline", true, "initial baseline");
-    updateSession(1, evalResult, "baseline", true);
-    gitCommit("autoresearch: baseline run 001");
+    writeKeptEval(evalResult);
+    appendResult(initial.nextRun, evalResult, `baseline (${evalCmd()} / ${LOOP_ARCH})`, true, "provider+arch baseline");
+    updateSession(initial.nextRun, evalResult, "baseline", true);
+    gitCommit(`autoresearch: baseline run ${String(initial.nextRun).padStart(3, "0")}`);
     console.log(`Baseline: pass_rate=${evalResult.pass_rate}, dim=${evalResult.mean_dimension}, mech=${evalResult.total_mechanical}`);
 
     if (baselineOnly) {
@@ -354,28 +423,33 @@ function main(): void {
     } catch (err) {
       console.error("Eval failed:", (err as Error).message);
       writeFileSync(COACHING_PROMPT_PATH, backupPrompt);
-      appendResult(currentRun, { pass_rate: 0, mean_dimension: 0, total_mechanical: 99, worst_violations: [], total_samples: 0, duration_seconds: 0 }, agentResult.hypothesis, false, "eval failed");
-      updateSession(currentRun, { pass_rate: 0, mean_dimension: 0, total_mechanical: 99, worst_violations: [], total_samples: 0, duration_seconds: 0 }, agentResult.hypothesis, false);
+      const failedResult: EvalResult = { arch: LOOP_ARCH, pass_rate: 0, mean_dimension: 0, total_mechanical: 99, worst_violations: [], per_type: {}, total_samples: 0, duration_seconds: 0, samples: [] };
+      appendResult(currentRun, failedResult, agentResult.hypothesis, false, "eval failed");
+      updateSession(currentRun, failedResult, agentResult.hypothesis, false);
       continue;
     }
 
     writeLastEval(evalResult);
     console.log(`Result: pass_rate=${evalResult.pass_rate}, dim=${evalResult.mean_dimension}, mech=${evalResult.total_mechanical}`);
 
-    // Step 5: Keep or revert
+    // Step 5: Keep or revert — scalar gate AND per-type floors against the
+    // incumbent (kept-eval), so a net win can't hide a register collapse.
     const improved = evalResult.pass_rate > best.passRate;
     const equalButNotWorse = evalResult.pass_rate === best.passRate && evalResult.mean_dimension >= (best.meanDimension - 2);
-    const kept = improved || (equalButNotWorse && evalResult.pass_rate > 0);
+    const floors = perTypeFloorsHold(evalResult.per_type, readKeptEval()?.per_type);
+    const kept = (improved || (equalButNotWorse && evalResult.pass_rate > 0)) && floors.ok;
 
     if (kept) {
       console.log(`KEPT — pass_rate improved or held (${best.passRate} → ${evalResult.pass_rate})`);
+      writeKeptEval(evalResult);
       appendResult(currentRun, evalResult, agentResult.hypothesis, true, "");
       updateSession(currentRun, evalResult, agentResult.hypothesis, true);
       gitCommit(`autoresearch: run ${String(currentRun).padStart(3, "0")} — ${agentResult.hypothesis.slice(0, 60)}`);
     } else {
-      console.log(`REVERTED — pass_rate regressed (${best.passRate} → ${evalResult.pass_rate})`);
+      const reason = !floors.ok ? `type regressions: ${floors.regressions.join(", ")}` : "reverted";
+      console.log(`REVERTED — ${!floors.ok ? `per-type floor(s) broke (${floors.regressions.join("; ")})` : `pass_rate regressed (${best.passRate} → ${evalResult.pass_rate})`}`);
       writeFileSync(COACHING_PROMPT_PATH, backupPrompt);
-      appendResult(currentRun, evalResult, agentResult.hypothesis, false, "reverted");
+      appendResult(currentRun, evalResult, agentResult.hypothesis, false, reason);
       updateSession(currentRun, evalResult, agentResult.hypothesis, false);
     }
   }
