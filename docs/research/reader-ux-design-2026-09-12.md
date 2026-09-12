@@ -140,6 +140,34 @@ Margin dots are document-anchored. Dark theme is genuinely designed
 - Margin-rail spatial persistence is extrapolated from page-location memory.
 - Dark-mode tracking is practitioner consensus, not peer-reviewed.
 
+## Inspiration sources (Sam's collections)
+
+Mined via `~/mymind-cli` (mymind API, semantic search) + live GitHub stars.
+
+**mymind:**
+- Vercel Web Interface Guidelines — vercel.com/design/guidelines
+- Butterick's Practical Typography — practicaltypography.com
+- Refero Styles (design systems for AI agents) — styles.refero.design
+- DialKit (live interface tuning — the "Aa" control pattern) — dialkit.dev
+- The Shape of AI (AI UX patterns) — shapeof.ai
+- GUIdebook (GUI gallery) — guidebookgallery.org; ui.wiki patterns
+- Hold My Notes (edge-docked sticky notes — margin-rail inspo) — holdmynotes.app
+- Tastelint (lint for how UI looks — a design-check concept Margin could adopt)
+- Shift Nudge resources — shiftnudge.com/resources
+- Kindolphin GIF manga reader (reading-flow inspo) — ac-bu.info/kindolphin
+
+**GitHub stars (top picks):**
+- edwardtufte/tufte-css + et-book — canonical marginalia CSS/webfont
+- emilkowalski/skills, kylezantos/design-motion-principles (audit mode,
+  Kowalski/Krehel/Tompkins), jakubkrehel/make-interfaces-feel-better
+- ibelick/ui-skills, carmahhawwari/ui-design-brain, raphaelsalaja/
+  userinterface-wiki, VoltAgent/awesome-design-md
+- ehmo/platform-design-skills — 300+ HIG/Material/WCAG 2.2 rules
+- chenglou/pretext — DOM-free text measurement (fixes rail layout thrash)
+- raunofreiberg/motion, juliangarnier/anime — animation layer
+- readwiseio/readwise-skills — Daily Review/resurfacing patterns
+- brijr/iris — live-site screenshot engine for benchmarking
+
 ## Parent-agent TODOs
 
 - `pnpm add @fontsource-variable/newsreader @fontsource/instrument-sans
