@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { createAnchor, resolveAnchor } from "../text-anchoring";
+import { getSchema } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
+import { createAnchor, resolveAnchor, buildDocTextMap, docPosToFlat, flatToDocPos } from "../text-anchoring";
 import type { TextAnchor } from "../text-anchoring";
 
 describe("createAnchor", () => {
@@ -114,5 +116,97 @@ describe("resolveAnchor", () => {
       expect(result.from).toBe(10);
       expect(result.to).toBe(19);
     });
+  });
+});
+
+const schema = getSchema([StarterKit]);
+
+type JsonDoc = Parameters<typeof schema.nodeFromJSON>[0];
+function docFrom(content: JsonDoc[]) {
+  return schema.nodeFromJSON({ type: "doc", content });
+}
+const para = (text: string): JsonDoc => ({
+  type: "paragraph",
+  content: [{ type: "text", text }],
+});
+
+describe("buildDocTextMap", () => {
+  it("produces the same flat text as textBetween with a newline separator", () => {
+    const doc = docFrom([para("first paragraph"), para("second paragraph"), para("third")]);
+    const map = buildDocTextMap(doc);
+    const expected = doc.textBetween(0, doc.content.size, "\n");
+    expect(map.flat).toBe(expected);
+    expect(map.flat).toBe("first paragraph\nsecond paragraph\nthird");
+  });
+
+  it("handles nested blockquotes and lists like textBetween", () => {
+    const doc = docFrom([
+      para("intro"),
+      {
+        type: "blockquote",
+        content: [para("quoted a"), para("quoted b")],
+      },
+      { type: "bulletList", content: [{ type: "listItem", content: [para("item one")] }] },
+    ]);
+    const map = buildDocTextMap(doc);
+    expect(map.flat).toBe(doc.textBetween(0, doc.content.size, "\n"));
+    expect(map.flat).toBe("intro\nquoted a\nquoted b\nitem one");
+  });
+});
+
+describe("flat ↔ doc position mapping", () => {
+  it("round-trips every text-node boundary", () => {
+    const doc = docFrom([para("abc"), para("def")]);
+    const map = buildDocTextMap(doc);
+    // p1 text at pos 1-4, p2 text at pos 6-9
+    for (const seg of map.segments) {
+      for (const p of [seg.pos, seg.pos + seg.length]) {
+        const flat = docPosToFlat(map, p);
+        expect(flatToDocPos(map, flat, "prev")).toBe(p);
+      }
+    }
+  });
+
+  it("maps a multi-paragraph search hit back to doc positions", () => {
+    const doc = docFrom([para("abc"), para("def")]);
+    const map = buildDocTextMap(doc);
+    const idx = map.flat.indexOf("c\nd"); // crosses the paragraph separator
+    const from = flatToDocPos(map, idx, "next");
+    const to = flatToDocPos(map, idx + 3, "prev");
+    expect(doc.textBetween(from, to, "\n")).toBe("c\nd");
+  });
+
+  it("docPosToFlat maps block-boundary positions to the next segment", () => {
+    const doc = docFrom([para("abc"), para("def")]);
+    const map = buildDocTextMap(doc);
+    // pos 4 = end of p1's text, pos 5 = p1 close/p2 boundary, pos 6 = p2 text start
+    expect(docPosToFlat(map, 4)).toBe(3);
+    expect(docPosToFlat(map, 5)).toBe(4); // gap → next segment start ("d")
+    expect(docPosToFlat(map, 6)).toBe(4);
+  });
+});
+
+describe("multi-paragraph anchors (SAM-1142)", () => {
+  it("anchor created in flat space survives re-resolution across paragraph breaks", () => {
+    const doc = docFrom([para("alpha middle"), para("omega tail")]);
+    const map = buildDocTextMap(doc);
+    // Highlight spanning the paragraph boundary: "middle\nomega"
+    const from = docPosToFlat(map, 7); // "middle" starts at pos 7
+    const to = docPosToFlat(map, 20); // end of "omega" in p2's text (pos 15-25)
+    const anchor = createAnchor(map.flat, from, to);
+    expect(anchor.text).toBe("middle\nomega");
+    expect(anchor.prefix.endsWith("alpha ")).toBe(true);
+    expect(anchor.suffix.startsWith(" tail")).toBe(true);
+
+    // Resolve the stored text on a doc where the first paragraph grew
+    const edited = docFrom([para("alpha and more middle"), para("omega tail")]);
+    const editedMap = buildDocTextMap(edited);
+    const result = resolveAnchor(editedMap.flat, anchor);
+    expect(result.confidence).not.toBe("orphaned");
+    expect(editedMap.flat.slice(result.from, result.to)).toBe("middle\nomega");
+    // …and maps back to real doc positions covering both paragraphs
+    const docFrom2 = flatToDocPos(editedMap, result.from, "next");
+    const docTo = flatToDocPos(editedMap, result.to, "prev");
+    expect(edited.textBetween(docFrom2, docTo, "\n")).toBe("middle\nomega");
   });
 });
