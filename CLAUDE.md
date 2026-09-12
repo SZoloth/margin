@@ -86,7 +86,7 @@ After Rust changes, run `cargo check`. After TypeScript changes, run `pnpm tsc -
 
 ## Issue tracking
 
-This project uses `bd` (beads) for issue tracking. See AGENTS.md for the full workflow. Key commands: `bd ready`, `bd show <id>`, `bd close <id>`, `bd sync`.
+Issues live in **Linear** — team `SamOS` (key `SAM`), project `Margin` — via the `linear-server` MCP tools (`list_issues`, `get_issue`, `save_issue`, `save_comment`). `.beads/` is a frozen read-only archive from before the 2026-03-16 migration; do not run `bd` here.
 
 ## Branch Coordination
 

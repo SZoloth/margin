@@ -48,13 +48,28 @@ require_cmd() {
 
 run_mcp_command() {
   local mcp_dir="$REPO_ROOT/mcp"
-  local node_bin="${MCP_NODE_BIN:-/opt/homebrew/opt/node@22/bin/node}"
-  local vitest_entry="$REPO_ROOT/node_modules/.pnpm/vitest@3.2.4_@types+node@22.19.13_jiti@2.6.1_jsdom@28.1.0_lightningcss@1.31.1/node_modules/vitest/vitest.mjs"
-  local tsc_entry="$REPO_ROOT/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/bin/tsc"
+  # Resolve via package symlinks so pnpm version bumps don't break the paths.
+  local vitest_entry="$mcp_dir/node_modules/vitest/vitest.mjs"
+  local tsc_entry="$mcp_dir/node_modules/typescript/bin/tsc"
+
   local subcommand="$1"
 
-  if [[ ! -x "$node_bin" ]]; then
-    echo "error: MCP Node runtime not found at $node_bin" >&2
+  # better-sqlite3 is ABI-pinned to Node 22. Prefer an explicit override, then
+  # the version-stable Homebrew opt symlink (Cellar paths embed the version and
+  # break on every brew upgrade), then any Node 22 on PATH.
+  local node_bin="${MCP_NODE_BIN:-}"
+  if [[ -z "$node_bin" ]]; then
+    local candidate
+    for candidate in /opt/homebrew/opt/node@22/bin/node "$(command -v node 2>/dev/null || true)"; do
+      if [[ -x "$candidate" ]] && [[ "$("$candidate" -e 'console.log(process.versions.node.split(".")[0])' 2>/dev/null)" == "22" ]]; then
+        node_bin="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$node_bin" || ! -x "$node_bin" ]]; then
+    echo "error: no Node 22 runtime found for MCP checks" >&2
     echo "Set MCP_NODE_BIN to a Node 22 binary that matches better-sqlite3." >&2
     exit 1
   fi

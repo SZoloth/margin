@@ -81,17 +81,15 @@ If they fail because of another agent's uncommitted changes in your working tree
 
 ## Issue Tracking
 
-This project uses `bd` (beads) for issue tracking. Run `bd onboard` to get started.
+This project uses **Linear** for issue tracking — team `SamOS` (key `SAM`), project `Margin`. The `.beads/` directory is a frozen read-only archive (migrated 2026-03-16); do not run `bd` here or create new beads issues.
 
-### Quick Reference
+Use the `linear-server` MCP tools:
 
-```bash
-bd ready
-bd show <id>
-bd update <id> --status in_progress
-bd close <id>
-bd sync
-```
+- `list_issues` with `project: "Margin"` — the backlog
+- `get_issue` / `save_issue` — read, create, or update issues
+- `save_comment` — leave findings or handoff notes on an issue
+
+New findings that outlive the current task should become Linear issues in the Margin project, labeled appropriately.
 
 ## Landing The Plane
 
