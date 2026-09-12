@@ -10,6 +10,7 @@ import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
+import { useHighlightShortcut } from "@/hooks/useHighlightShortcut";
 import { useAnnotations } from "@/hooks/useAnnotations";
 import { useKeepLocal } from "@/hooks/useKeepLocal";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
@@ -26,7 +27,7 @@ import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor, resolveAnchor, buildDocTextMap, docPosToFlat, flatToDocPos } from "@/lib/text-anchoring";
-import { allowedMarkRanges, planHighlightOverlap } from "@/lib/highlight-ranges";
+import { allowedMarkRanges, planHighlightOverlap, collectMarkIdsInRange, rangeFullyMarked } from "@/lib/highlight-ranges";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
@@ -1034,6 +1035,125 @@ export default function App() {
       setAutoFocusNew(true);
     });
   }, [editor, doc.currentDoc, persistHighlight, onboarding.step, settings.defaultHighlightColor]);
+  // Remove every highlight whose mark intersects the selection. Rows are
+  // deleted whole (same semantics as the thread's Remove button); idless
+  // visual-only marks are cleared within the selection only. One undo toast
+  // covers the batch.
+  const handleRemoveHighlights = useCallback(async () => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty || from === to) return;
+
+    const markType = editor.state.schema.marks.highlight;
+    if (!markType) return;
+
+    const { ids, hasUnbacked } = collectMarkIdsInRange(editor.state.doc, "highlight", from, to);
+    if (ids.size === 0 && !hasUnbacked) return;
+
+    const removed = highlightsRef.current.filter((h) => ids.has(h.id));
+
+    try {
+      for (const id of ids) {
+        await annotationsRef.current.deleteHighlight(id);
+      }
+    } catch (err) {
+      console.error("Failed to remove highlight:", err);
+      setErrorToast({
+        message: `Could not remove highlight: ${err instanceof Error ? err.message : String(err)}`,
+        id: ++errorIdRef.current,
+      });
+      return;
+    }
+
+    if (focusHighlightId && ids.has(focusHighlightId)) {
+      setFocusHighlightId(null);
+      setAnchorRect(null);
+      setAutoFocusNew(false);
+    }
+
+    const { state } = editor;
+    const tr = state.tr;
+    state.doc.descendants((node, pos) => {
+      if (!node.isText) return;
+      const mark = node.marks.find((m) => m.type.name === "highlight");
+      if (!mark) return;
+      const id = mark.attrs.highlightId as string | null;
+      if (id && ids.has(id)) {
+        // Backed highlight — remove the whole mark, not just the in-range part
+        tr.removeMark(pos, pos + node.nodeSize, mark);
+      } else if (!id) {
+        // Visual-only mark — clear only where it intersects the selection
+        const s = Math.max(pos, from);
+        const e = Math.min(pos + node.nodeSize, to);
+        if (s < e) tr.removeMark(s, e, mark);
+      }
+    });
+    if (tr.steps.length > 0) {
+      editor.view.dispatch(tr);
+    }
+
+    if (removed.length === 0) return;
+
+    setUndoAction({
+      id: String(++undoIdRef.current),
+      message:
+        removed.length === 1
+          ? "Highlight deleted"
+          : `${removed.length} highlights deleted`,
+      onUndo: async () => {
+        const currentEditor = editorRef.current;
+        for (const h of removed) {
+          try {
+            const restored = await annotationsRef.current.createHighlight({
+              documentId: h.document_id,
+              color: h.color,
+              textContent: h.text_content,
+              fromPos: h.from_pos,
+              toPos: h.to_pos,
+              prefixContext: h.prefix_context,
+              suffixContext: h.suffix_context,
+            });
+            if (currentEditor && !currentEditor.isDestroyed) {
+              const mt = currentEditor.state.schema.marks.highlight;
+              if (mt) {
+                const restoreTr = currentEditor.state.tr;
+                restoreTr.addMark(
+                  h.from_pos,
+                  h.to_pos,
+                  mt.create({ color: h.color, highlightId: restored.id }),
+                );
+                currentEditor.view.dispatch(restoreTr);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to undo highlight delete:", err);
+            setErrorToast({
+              message: `Could not restore highlight: ${err instanceof Error ? err.message : String(err)}`,
+              id: ++errorIdRef.current,
+            });
+          }
+        }
+        setUndoAction(null);
+      },
+      onCommit: () => setUndoAction(null),
+    });
+  }, [editor, focusHighlightId]);
+
+  // Cmd+Shift+H — apply the default highlight color, or remove highlight when
+  // the selection is already fully highlighted (same toggle shape as Cmd+B).
+  const handleHighlightChord = useCallback(() => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty || from === to) return;
+    const markType = editor.state.schema.marks.highlight;
+    if (markType && rangeFullyMarked(editor.state.doc, markType, from, to)) {
+      void handleRemoveHighlights();
+    } else {
+      void handleHighlight();
+    }
+  }, [editor, handleHighlight, handleRemoveHighlights]);
+
+  useHighlightShortcut(handleHighlightChord);
 
   // Complete onboarding when a real file is opened
   useEffect(() => {
