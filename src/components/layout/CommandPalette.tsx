@@ -60,9 +60,9 @@ function ShortcutBadge({ keys }: { keys: string[] }) {
             fontSize: 11,
             padding: "1px 5px",
             borderRadius: 4,
-            border: "1px solid #DFDBD3",
-            backgroundColor: "#F5F2EA",
-            color: "#6B6560",
+            border: "1px solid var(--color-border)",
+            backgroundColor: "var(--color-surface-subtle)",
+            color: "var(--color-text-secondary)",
             lineHeight: 1.6,
           }}
         >
@@ -287,7 +287,7 @@ export function CommandPalette({
     fontWeight: 600,
     letterSpacing: "0.07em",
     textTransform: "uppercase",
-    color: "#B0A89E",
+    color: "var(--color-text-tertiary)",
     fontFamily: "'Instrument Sans', system-ui, sans-serif",
   };
 
@@ -301,7 +301,7 @@ export function CommandPalette({
         alignItems: "flex-start",
         justifyContent: "center",
         paddingTop: "13vh",
-        backgroundColor: presence.isVisible ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0)",
+        backgroundColor: presence.isVisible ? "var(--color-overlay)" : "rgba(0,0,0,0)",
         transition: presence.isVisible
           ? "background-color 150ms var(--ease-entrance)"
           : "background-color 120ms var(--ease-exit)",
@@ -317,10 +317,10 @@ export function CommandPalette({
         style={{
           width: 680,
           maxWidth: "calc(100vw - 32px)",
-          backgroundColor: "#FFFFF8",
+          backgroundColor: "var(--color-page)",
           borderRadius: 12,
-          border: "1px solid #DFDBD3",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)",
+          border: "1px solid var(--color-border)",
+          boxShadow: "var(--shadow-lg)",
           overflow: "hidden",
           opacity: presence.isVisible ? 1 : 0,
           transform: presence.isVisible ? "translateY(0) scale(1)" : "translateY(-8px) scale(0.97)",
@@ -336,12 +336,12 @@ export function CommandPalette({
             alignItems: "center",
             gap: 10,
             padding: "12px 16px",
-            borderBottom: "1px solid #DFDBD3",
+            borderBottom: "1px solid var(--color-border)",
           }}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="6.5" cy="6.5" r="4.5" stroke="#A39A8E" strokeWidth="1.5" />
-            <path d="M10 10L13.5 13.5" stroke="#A39A8E" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="6.5" cy="6.5" r="4.5" stroke="var(--color-text-secondary)" strokeWidth="1.5" />
+            <path d="M10 10L13.5 13.5" stroke="var(--color-text-secondary)" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           <input
             ref={inputRef}
@@ -355,7 +355,7 @@ export function CommandPalette({
               outline: "none",
               background: "transparent",
               fontSize: 15,
-              color: "#1A1714",
+              color: "var(--color-text-primary)",
               fontFamily: "'Instrument Sans', system-ui, sans-serif",
             }}
             autoComplete="off"
@@ -367,9 +367,9 @@ export function CommandPalette({
               fontSize: 11,
               padding: "1px 5px",
               borderRadius: 4,
-              border: "1px solid #DFDBD3",
-              backgroundColor: "#F5F2EA",
-              color: "#A39A8E",
+              border: "1px solid var(--color-border)",
+              backgroundColor: "var(--color-surface-subtle)",
+              color: "var(--color-text-secondary)",
             }}
           >
             esc
@@ -382,7 +382,7 @@ export function CommandPalette({
           <div
             style={{
               flex: "0 0 55%",
-              borderRight: "1px solid #DFDBD3",
+              borderRight: "1px solid var(--color-border)",
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
@@ -396,7 +396,7 @@ export function CommandPalette({
                   alignItems: "center",
                   justifyContent: "center",
                   padding: "32px 16px",
-                  color: "#B0A89E",
+                  color: "var(--color-text-tertiary)",
                   fontSize: 13,
                   fontFamily: "'Instrument Sans', system-ui, sans-serif",
                   textAlign: "center",
@@ -427,7 +427,7 @@ export function CommandPalette({
                         width: "100%",
                         padding: "7px 14px",
                         border: "none",
-                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        background: isSelected ? "var(--hover-bg)" : "transparent",
                         cursor: "pointer",
                         textAlign: "left",
                       }}
@@ -435,7 +435,7 @@ export function CommandPalette({
                       <span
                         style={{
                           fontSize: 13,
-                          color: "#1A1714",
+                          color: "var(--color-text-primary)",
                           fontFamily: "'Instrument Sans', system-ui, sans-serif",
                           fontWeight: 500,
                           overflow: "hidden",
@@ -450,7 +450,7 @@ export function CommandPalette({
                         <span
                           style={{
                             fontSize: 11,
-                            color: "#A39A8E",
+                            color: "var(--color-text-secondary)",
                             fontFamily: "ui-monospace, 'SF Mono', monospace",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -488,7 +488,7 @@ export function CommandPalette({
                         width: "100%",
                         padding: "7px 14px",
                         border: "none",
-                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        background: isSelected ? "var(--hover-bg)" : "transparent",
                         cursor: "pointer",
                         textAlign: "left",
                       }}
@@ -496,7 +496,7 @@ export function CommandPalette({
                       <span
                         style={{
                           fontSize: 13,
-                          color: "#1A1714",
+                          color: "var(--color-text-primary)",
                           fontFamily: "'Instrument Sans', system-ui, sans-serif",
                           fontWeight: 500,
                           overflow: "hidden",
@@ -510,7 +510,7 @@ export function CommandPalette({
                       <span
                         style={{
                           fontSize: 11,
-                          color: "#A39A8E",
+                          color: "var(--color-text-secondary)",
                           fontFamily: "'Instrument Sans', system-ui, sans-serif",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -546,7 +546,7 @@ export function CommandPalette({
                         width: "100%",
                         padding: "7px 14px",
                         border: "none",
-                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        background: isSelected ? "var(--hover-bg)" : "transparent",
                         cursor: "pointer",
                         textAlign: "left",
                       }}
@@ -554,7 +554,7 @@ export function CommandPalette({
                       <span
                         style={{
                           fontSize: 13,
-                          color: "#1A1714",
+                          color: "var(--color-text-primary)",
                           fontFamily: "'Instrument Sans', system-ui, sans-serif",
                           fontWeight: 500,
                           overflow: "hidden",
@@ -568,7 +568,7 @@ export function CommandPalette({
                       <span
                         style={{
                           fontSize: 11,
-                          color: "#A39A8E",
+                          color: "var(--color-text-secondary)",
                           fontFamily: "ui-monospace, 'SF Mono', monospace",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -582,7 +582,7 @@ export function CommandPalette({
                         <span
                           style={{
                             fontSize: 11,
-                            color: "#8A8078",
+                            color: "var(--color-text-secondary)",
                             fontFamily: "'Instrument Sans', system-ui, sans-serif",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -629,14 +629,14 @@ export function CommandPalette({
                         width: "100%",
                         padding: "8px 14px",
                         border: "none",
-                        background: isSelected ? "rgba(0,0,0,0.05)" : "transparent",
+                        background: isSelected ? "var(--hover-bg)" : "transparent",
                         cursor: "pointer",
                       }}
                     >
                       <span
                         style={{
                           fontSize: 13,
-                          color: "#1A1714",
+                          color: "var(--color-text-primary)",
                           fontFamily: "'Instrument Sans', system-ui, sans-serif",
                           fontWeight: 500,
                           textAlign: "left",
@@ -657,7 +657,7 @@ export function CommandPalette({
                   alignItems: "center",
                   justifyContent: "center",
                   padding: "32px 16px",
-                  color: "#B0A89E",
+                  color: "var(--color-text-tertiary)",
                   fontSize: 13,
                   fontFamily: "'Instrument Sans', system-ui, sans-serif",
                   textAlign: "center",
@@ -673,7 +673,7 @@ export function CommandPalette({
         <div
           style={{
             padding: "7px 14px",
-            borderTop: "1px solid #DFDBD3",
+            borderTop: "1px solid var(--color-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -682,7 +682,7 @@ export function CommandPalette({
           <span
             style={{
               fontSize: 11,
-              color: "#B0A89E",
+              color: "var(--color-text-tertiary)",
               fontFamily: "'Instrument Sans', system-ui, sans-serif",
             }}
           >
@@ -691,7 +691,7 @@ export function CommandPalette({
           <span
             style={{
               fontSize: 11,
-              color: "#B0A89E",
+              color: "var(--color-text-tertiary)",
               fontFamily: "'Instrument Sans', system-ui, sans-serif",
               display: "flex",
               gap: 10,
