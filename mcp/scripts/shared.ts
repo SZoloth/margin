@@ -33,21 +33,24 @@ export const ADVERSARIAL_PROMPTS: Record<string, string> = {
 
 export const SAMPLES_PER_TYPE = 3;
 
+// Aligned to registerDefaults in cli/profile/coaching.go — the eval must
+// coach against the same register assignments production uses.
 export const REGISTER_MAP: Record<string, string> = {
-  general: "casual",
-  email: "casual",
+  general: "professional",
+  email: "professional",
   slack: "casual",
-  outreach: "casual",
+  outreach: "professional",
   pitch: "professional",
-  prd: "professional",
+  prd: "explaining",
   "cover-letter": "professional",
   resume: "professional",
-  blog: "professional",
+  blog: "casual",
   "case-study": "professional",
   "email-hiring": "professional",
   "email-friend": "casual",
   "social-post": "casual",
   "text-friend": "casual",
+  text: "casual",
 };
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -86,7 +89,8 @@ export function loadWritingRulesForType(type: string): string {
       .prepare(
         `SELECT writing_type, category, rule_text, severity, example_before, example_after, register
          FROM writing_rules
-         WHERE (writing_type = ? OR writing_type = 'general' OR register = ?)
+         WHERE ${RULE_FILTER}
+           AND (writing_type = ? OR writing_type = 'general' OR register = ?)
          ORDER BY signal_count DESC, created_at DESC`
       )
       .all(type, register) as WritingRuleRow[];
@@ -121,6 +125,26 @@ export function loadWritingRulesForType(type: string): string {
     return loadWritingRules();
   }
 }
+
+/**
+ * Production correction predicates, mirroring GetCorrectionsWithNotes in
+ * cli/db/corrections.go. Triage-junk and positive-polarity rows must never
+ * render as "avoid this" examples in eval prompts.
+ */
+export const CORRECTION_FILTER = `notes_json IS NOT NULL AND notes_json != '[]'
+    AND session_id != '__backfilled__'
+    AND UPPER(notes_json) NOT LIKE '%NOT FEEDBACK%'
+    AND (category IS NULL OR category != 'non-feedback')
+    AND (polarity IS NULL OR polarity != 'positive')`;
+
+/**
+ * Production rule predicates: exclude unreviewed synthesis candidates and
+ * the auto-synthesized category (the rules-quality audit found its
+ * example_before/example_after fields inverted — corrected prose stored as
+ * the violation).
+ */
+export const RULE_FILTER = `category != 'auto-synthesized'
+    AND NOT (source = 'synthesis-candidate' AND reviewed_at IS NULL)`;
 
 export function cleanEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };

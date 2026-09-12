@@ -17,7 +17,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
+import { RULE_FILTER, CORRECTION_FILTER, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -50,7 +50,7 @@ function loadCorrections(type: string): CorrectionRow[] {
       .prepare(
         `SELECT original_text, notes_json, writing_type, prefix_context, suffix_context
          FROM corrections
-         WHERE writing_type = ? AND notes_json IS NOT NULL AND notes_json != '[]'
+         WHERE writing_type = ? AND ${CORRECTION_FILTER}
          ORDER BY created_at DESC LIMIT 30`
       )
       .all(type) as CorrectionRow[];
@@ -60,7 +60,7 @@ function loadCorrections(type: string): CorrectionRow[] {
         .prepare(
           `SELECT original_text, notes_json, writing_type, prefix_context, suffix_context
            FROM corrections
-           WHERE writing_type != ? AND notes_json IS NOT NULL AND notes_json != '[]'
+           WHERE writing_type != ? AND ${CORRECTION_FILTER}
            ORDER BY created_at DESC LIMIT ${30 - rows.length}`
         )
         .all(type) as CorrectionRow[];
@@ -86,7 +86,8 @@ function loadHighSignalRules(): RuleRow[] {
       .prepare(
         `SELECT rule_text, severity, example_before, example_after, category, signal_count
          FROM writing_rules
-         WHERE signal_count >= 2 OR severity = 'must-fix'
+         WHERE ${RULE_FILTER}
+           AND (signal_count >= 2 OR severity = 'must-fix')
          ORDER BY signal_count DESC, severity ASC
          LIMIT 40`
       )

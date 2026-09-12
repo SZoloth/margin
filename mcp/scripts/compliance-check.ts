@@ -162,34 +162,37 @@ export function scanKillWords(text: string, killWords: Map<string, string>): Kil
 
 // ── AI slop patterns from DB ───────────────────────────────────────────
 
-export function loadSlopPatterns(writingType?: string): { pattern: string; explanation: string }[] {
+export interface SlopPattern {
+  pattern: string;
+  isRegex: boolean;
+  explanation: string;
+}
+
+export function loadSlopPatterns(writingType?: string): SlopPattern[] {
   const dbPath = join(homedir(), ".margin/margin.db");
   if (!existsSync(dbPath)) return [];
 
   try {
     const Database = require("better-sqlite3");
     const db = new Database(dbPath, { readonly: true });
-    let rows: { example_before: string; rule_text: string }[];
-
-    if (writingType) {
-      rows = db
-        .prepare(
-          `SELECT example_before, rule_text FROM writing_rules WHERE category = 'ai-slop' AND (writing_type = ? OR writing_type = 'general') AND example_before IS NOT NULL`
-        )
-        .all(writingType) as { example_before: string; rule_text: string }[];
-    } else {
-      rows = db
-        .prepare(
-          `SELECT example_before, rule_text FROM writing_rules WHERE category = 'ai-slop' AND example_before IS NOT NULL`
-        )
-        .all() as { example_before: string; rule_text: string }[];
-    }
+    const select = `SELECT example_before, rule_text, detection_pattern FROM writing_rules WHERE category = 'ai-slop'`;
+    const rows = (
+      writingType
+        ? db.prepare(`${select} AND (writing_type = ? OR writing_type = 'general') AND (example_before IS NOT NULL OR detection_pattern IS NOT NULL)`).all(writingType)
+        : db.prepare(`${select} AND (example_before IS NOT NULL OR detection_pattern IS NOT NULL)`).all()
+    ) as { example_before: string | null; rule_text: string; detection_pattern: string | null }[];
     db.close();
 
-    return rows.map((r) => ({
-      pattern: r.example_before,
-      explanation: r.rule_text,
-    }));
+    // Prefer detection_pattern (a real regex authored for matching); fall back
+    // to example_before, which is matched word-boundary-literal — verbatim
+    // substring matching on long sentences was ~85% dead weight.
+    return rows
+      .map((r) => ({
+        pattern: r.detection_pattern ?? r.example_before ?? "",
+        isRegex: r.detection_pattern != null,
+        explanation: r.rule_text,
+      }))
+      .filter((p) => p.pattern.length > 0);
   } catch {
     return [];
   }
@@ -197,15 +200,15 @@ export function loadSlopPatterns(writingType?: string): { pattern: string; expla
 
 export function scanSlopPatterns(
   text: string,
-  patterns: { pattern: string; explanation: string }[]
+  patterns: SlopPattern[]
 ): SlopPatternHit[] {
   const hits: SlopPatternHit[] = [];
 
-  for (const { pattern, explanation } of patterns) {
-    // Treat example_before as a literal substring to search for
-    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const { pattern, isRegex, explanation } of patterns) {
     try {
-      const regex = new RegExp(escaped, "gi");
+      const regex = isRegex
+        ? new RegExp(pattern, "gi")
+        : new RegExp(`\\b${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
       const matches: string[] = [];
       let m: RegExpExecArray | null;
       while ((m = regex.exec(text)) !== null) {
@@ -280,6 +283,45 @@ export function checkVoice(text: string, writingType?: string): VoiceViolation[]
     }
   }
 
+  // ── Document-level tells (Tier 2a, calibration-study 2026-03-15) ──
+
+  // Em dash density — Sam flags em dashes the sentence-level checks pass
+  const emDashes = text.match(/—/g)?.length ?? 0;
+  if (emDashes > 2) {
+    violations.push({
+      type: "em-dash-density",
+      detail: `${emDashes} em dashes in document (limit 2)`,
+    });
+  }
+
+  // Mid-sentence colons — >1 per document
+  const proseColons = text.match(/(?<=[a-z,)]):\s+(?=[a-z])/gi)?.length ?? 0;
+  if (proseColons > 1) {
+    violations.push({
+      type: "prose-colon",
+      detail: `${proseColons} mid-sentence colons (limit 1)`,
+    });
+  }
+
+  // Missing terminal punctuation — exempt slack (no-period style is idiomatic
+  // there; the calibration study recorded it as a false positive)
+  if (writingType !== "slack") {
+    let missing = 0;
+    for (const para of text.split(/\n/)) {
+      const t = para.trim();
+      if (t.length < 15) continue; // fragments, signatures, salutations
+      if (/^[#>\-*•\d]/.test(t)) continue; // headers and list items
+      if (/^(subject|dear|hi|hey|best|thanks|regards|cheers|sincerely)\b/i.test(t)) continue;
+      if (!/[.!?…:;"'"”’)\]*`_~-]$/.test(t)) missing++;
+    }
+    if (missing > 0) {
+      violations.push({
+        type: "missing-terminal-punctuation",
+        detail: `${missing} line(s) end without punctuation`,
+      });
+    }
+  }
+
   return violations;
 }
 
@@ -320,6 +362,35 @@ const STRUCTURAL_PATTERNS: { label: string; regex: RegExp }[] = [
   {
     label: "Superficial analysis verb: leveraging",
     regex: /\bleveraging\b/gi,
+  },
+  // ── Tier 2a expansion (restored from calibration-study.md 2026-03-15) ──
+  {
+    label: "Negative parallelism (don't X — Y)",
+    regex: /\b(?:don|doesn|didn|won|can|shouldn|wouldn|couldn)(?:'t|'t|'t)\s+[^—–.!?\n]{3,50}?\s*[—–]\s+/gi,
+  },
+  {
+    label: "Negative parallelism (more X, not Y)",
+    regex: /\b(?:more|less)\s+\w+(?:\s+\w+)?,\s*not\s+\w+/gi,
+  },
+  {
+    label: "Negative parallelism (X works. It fails Y)",
+    regex: /\b\w+\s+works\b[^.!?\n]{0,40}\.\s*It\s+(?:fails|breaks|doesn(?:'t|'t)|won(?:'t|'t))\b/gi,
+  },
+  {
+    label: "\"is the kind of X that\" construction",
+    regex: /\b(?:is|was|'s)\s+the\s+kind\s+of\s+\w+\s+that\b/gi,
+  },
+  {
+    label: "Hyperbolic claim (the most X thing)",
+    regex: /\bthe\s+most\s+\w+\s+(?:thing|part|piece|aspect|takeaway|lesson)\b/gi,
+  },
+  {
+    label: "Hyperbolic claim (nobody mentions)",
+    regex: /\bnobody\s+(?:else\s+)?(?:mentions|talks about|tells you|notices|warns you about|wants to admit)\b/gi,
+  },
+  {
+    label: "Hyperbolic claim (the real X is)",
+    regex: /\bthe real\s+\w+\s+is\b/gi,
   },
 ];
 

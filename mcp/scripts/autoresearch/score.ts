@@ -32,6 +32,7 @@ export interface EvalResult {
   mean_dimension: number;
   total_mechanical: number;
   worst_violations: string[];
+  per_type: Record<string, { passed: number; total: number; mean_dimension: number }>;
   total_samples: number;
   duration_seconds: number;
   samples: SampleResult[];
@@ -123,12 +124,25 @@ export async function scoreSamples(
     .slice(0, 5)
     .map(([label, count]) => `${label} (×${count})`);
 
+  // Per-type breakdown — register regressions (e.g. slack) hide in aggregates
+  const per_type: EvalResult["per_type"] = {};
+  for (const r of results) {
+    const t = (per_type[r.type] ??= { passed: 0, total: 0, mean_dimension: 0 });
+    t.total++;
+    if (r.pass) t.passed++;
+    t.mean_dimension += r.compliance.summary.dimensionScore ?? 0;
+  }
+  for (const t of Object.values(per_type)) {
+    t.mean_dimension = Math.round((t.mean_dimension / Math.max(t.total, 1)) * 10) / 10;
+  }
+
   return {
     arch: archLabel,
     pass_rate: Math.round(pass_rate * 1000) / 1000,
     mean_dimension: Math.round(mean_dimension * 10) / 10,
     total_mechanical,
     worst_violations,
+    per_type,
     total_samples: results.length,
     duration_seconds: Math.round((Date.now() - startTime) / 100) / 10,
     samples: results,

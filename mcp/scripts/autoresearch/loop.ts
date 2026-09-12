@@ -181,22 +181,12 @@ interface LastEvalSummary {
 }
 
 function writeLastEval(evalResult: EvalResult): void {
-  const perType: LastEvalSummary["per_type"] = {};
-  for (const s of evalResult.samples ?? []) {
-    const t = (perType[s.type] ??= { passed: 0, total: 0, mean_dimension: 0 });
-    t.total++;
-    if (s.pass) t.passed++;
-    t.mean_dimension += s.compliance.summary.dimensionScore ?? 0;
-  }
-  for (const t of Object.values(perType)) {
-    t.mean_dimension = t.total > 0 ? t.mean_dimension / t.total : 0;
-  }
   const summary: LastEvalSummary = {
     pass_rate: evalResult.pass_rate,
     mean_dimension: evalResult.mean_dimension,
     total_mechanical: evalResult.total_mechanical,
     worst_violations: evalResult.worst_violations ?? [],
-    per_type: perType,
+    per_type: evalResult.per_type ?? {},
   };
   writeFileSync(LAST_EVAL_PATH, JSON.stringify(summary, null, 2));
 }

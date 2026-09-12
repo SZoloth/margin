@@ -14,7 +14,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { REGISTER_MAP, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
+import { RULE_FILTER, REGISTER_MAP, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -38,7 +38,8 @@ function loadTop10Rules(type: string): string {
       .prepare(
         `SELECT category, rule_text, severity, signal_count
          FROM writing_rules
-         WHERE (writing_type = ? OR writing_type = 'general' OR register = ?)
+         WHERE ${RULE_FILTER}
+           AND (writing_type = ? OR writing_type = 'general' OR register = ?)
          ORDER BY signal_count DESC, created_at DESC
          LIMIT 10`
       )

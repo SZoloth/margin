@@ -20,7 +20,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { createRequire } from "module";
-import {
+import { RULE_FILTER, CORRECTION_FILTER,
   REGISTER_MAP,
   stripMetaCommentary,
   cleanEnv,
@@ -56,7 +56,7 @@ function loadCorrections(): CorrectionRow[] {
       .prepare(
         `SELECT original_text, notes_json, prefix_context, suffix_context
          FROM corrections
-         WHERE notes_json IS NOT NULL AND notes_json != '[]'
+         WHERE ${CORRECTION_FILTER}
          ORDER BY created_at DESC LIMIT 30`
       )
       .all() as CorrectionRow[];
@@ -79,7 +79,8 @@ function loadHighSignalRules(): RuleRow[] {
       .prepare(
         `SELECT rule_text, severity, example_before, example_after, category, signal_count
          FROM writing_rules
-         WHERE signal_count >= 2 OR severity = 'must-fix'
+         WHERE ${RULE_FILTER}
+           AND (signal_count >= 2 OR severity = 'must-fix')
          ORDER BY signal_count DESC
          LIMIT 30`
       )

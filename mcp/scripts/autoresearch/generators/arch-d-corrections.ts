@@ -17,7 +17,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
+import { CORRECTION_FILTER, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -43,7 +43,7 @@ function loadCorrections(type: string): CorrectionRow[] {
       .prepare(
         `SELECT original_text, notes_json, writing_type, prefix_context, suffix_context, created_at
          FROM corrections
-         WHERE writing_type = ? AND notes_json IS NOT NULL AND notes_json != '[]'
+         WHERE writing_type = ? AND ${CORRECTION_FILTER}
          ORDER BY created_at DESC LIMIT 30`
       )
       .all(type) as CorrectionRow[];
@@ -54,7 +54,7 @@ function loadCorrections(type: string): CorrectionRow[] {
         .prepare(
           `SELECT original_text, notes_json, writing_type, prefix_context, suffix_context, created_at
            FROM corrections
-           WHERE writing_type != ? AND notes_json IS NOT NULL AND notes_json != '[]'
+           WHERE writing_type != ? AND ${CORRECTION_FILTER}
            ORDER BY created_at DESC LIMIT ${30 - rows.length}`
         )
         .all(type) as CorrectionRow[];
