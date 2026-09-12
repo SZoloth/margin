@@ -1,59 +1,59 @@
 {
-  "pass_rate": 0.556,
-  "mean_dimension": 45.3,
-  "total_mechanical": 21,
+  "pass_rate": 0.63,
+  "mean_dimension": 45.1,
+  "total_mechanical": 17,
   "worst_violations": [
-    "voice:long-sentence (×7)",
     "voice:repetitive-structure (×4)",
-    "structural:Negative parallelism (isn't X. It's Y) (×3)",
-    "voice:em-dash-density (×2)",
-    "voice:missing-terminal-punctuation (×2)"
+    "voice:long-sentence (×3)",
+    "structural:Negative parallelism (isn't X. It's Y) (×2)",
+    "structural:Hyperbolic claim (the real X is) (×2)",
+    "kill-word:dynamic (×1)"
   ],
   "per_type": {
     "general": {
-      "passed": 0,
-      "total": 3,
-      "mean_dimension": 46.7
-    },
-    "email": {
-      "passed": 1,
-      "total": 3,
-      "mean_dimension": 43
-    },
-    "cover-letter": {
-      "passed": 1,
-      "total": 3,
-      "mean_dimension": 42
-    },
-    "outreach": {
-      "passed": 3,
-      "total": 3,
-      "mean_dimension": 45.7
-    },
-    "prd": {
       "passed": 2,
       "total": 3,
-      "mean_dimension": 43
+      "mean_dimension": 43.7
+    },
+    "email": {
+      "passed": 2,
+      "total": 3,
+      "mean_dimension": 41.7
+    },
+    "cover-letter": {
+      "passed": 2,
+      "total": 3,
+      "mean_dimension": 44.7
+    },
+    "outreach": {
+      "passed": 2,
+      "total": 3,
+      "mean_dimension": 47.3
+    },
+    "prd": {
+      "passed": 1,
+      "total": 3,
+      "mean_dimension": 43.3
     },
     "blog": {
       "passed": 1,
       "total": 3,
-      "mean_dimension": 47
+      "mean_dimension": 48.7
     },
     "resume": {
-      "passed": 2,
+      "passed": 3,
       "total": 3,
       "mean_dimension": 47
     },
     "slack": {
       "passed": 3,
       "total": 3,
-      "mean_dimension": 47.3
+      "mean_dimension": 48
     },
     "pitch": {
-      "passed": 2,
+      "passed": 1,
       "total": 3,
-      "mean_dimension": 46.3
+      "mean_dimension": 41.7
     }
   }
 }

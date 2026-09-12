@@ -91,3 +91,7 @@ The current prompt puts prohibitions at the end. A/B test corrections-first vs r
 - Post-generation compliance check to catch violations the prompt misses
 - Register-specific prohibition tuning to avoid regressing slack/email
 - Self-critique pass as arch-c variant
+
+- The "isn't X — it's Y" prohibition is only partially working (3 violations of the "It's Y" variant remain) — likely because Claude generates the pattern without recognizing it. Consider adding a generative alternative: "state what it IS, directly" as the only accepted approach.
+- Repetitive structure violations (×4) suggest the register guidance isn't providing enough structural variety — the "In practice" and "For example" connectives are being used predictably.
+- Long sentences persist because the 25-word limit is a constraint, not a construction method — Claude needs a pre-generation heuristic, not just a post-hoc rule.

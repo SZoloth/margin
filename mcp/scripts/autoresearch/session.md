@@ -8,6 +8,11 @@ Not yet started. Run `npx tsx mcp/scripts/autoresearch/loop.ts` to begin.
 
 ## History
 
+### Run 031 — 2026-09-12T22:11
+- Hypothesis: Run 30's improvement from 0.37 to 0.556 came from adding the prohibition block for "the real X is" pattern but NOT from reordering — the prohibitions still sit after the register guidance. The worst violations remain long sentences (×7) and repetitive structure (×4), which the "Sentence Craft Protocol" isn't stopping because it's too abstract. The fix: replace the abstract Sentence Craft section with an explicit sentence-length constraint placed in the Structural Prohibitions block (where Claude actually reads it), and add a direct prohibition against repetitive sentence structure. This targets the actual failure patterns rather than prescribing a writing technique.
+- Pass rate: 0.63 | Dim: 45.1 | Mech: 17
+- Result: KEPT
+
 ### Run 030 — 2026-09-12T21:52
 - Hypothesis: The current coaching prompt regressed catastrophically in run 26 (0.185 pass rate, 49 mechanical issues) because the "Sentence Craft Protocol" section in run 24 was too abstract and diluted focus. The key insight from the audit is that **negative parallelism** (×10 violations across two variants) and **repetitive structure** (×7) are equally devastating but not explicitly addressed.
 
