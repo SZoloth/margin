@@ -1,0 +1,1863 @@
+{
+  "timestamp": "2026-09-12T18:40:02.538Z",
+  "mode": "comparison",
+  "results": [
+    {
+      "writingType": "general",
+      "samples": [
+        {
+          "prompt": "Write a 200-word blog intro about why product managers should learn to code",
+          "uncoached": {
+            "text": "In today's tech-driven world, product managers who understand code have a significant edge. Learning to code isn't about becoming a developer—it's about speaking the language of your team. When you grasp basic concepts like APIs, databases, and front-end frameworks, you can communicate more effectively with engineers, ask better questions, and identify potential roadblocks early. This technical fluency helps you make informed decisions about features, timelines, and trade-offs. You’ll also earn respect from your engineering team, fostering stronger collaboration. Plus, understanding how software is built makes it easier to spot innovative solutions and foresee implementation challenges. Whether it's evaluating MVPs or prioritizing backlogs, having even a little coding knowledge sharpens your product instincts. It doesn’t mean you need to write production-level code, but knowing what’s possible—and what’s not—empowers you to lead with clarity and confidence. In short, code literacy is a superpower in product management.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "foster",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "innovative",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "fostering",
+                    "severity": "high",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "4 consecutive sentences with similar length (~13 words): \"This technical fluency helps you make informed decisions abo...\" / \"You’ll also earn respect from your engineering team, fosteri...\" / \"Plus, understanding how software is built makes it easier to...\""
+                  }
+                ],
+                "structuralTells": [
+                  {
+                    "pattern": "Negative parallelism (isn't X — it's Y)",
+                    "matches": [
+                      "...e. Learning to code isn't about becoming a developer—it's about speaking the ..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 3,
+                "rhythm": 4,
+                "trust": 7,
+                "authenticity": 3,
+                "density": 10,
+                "total": 27
+              },
+              "summary": {
+                "mechanicalIssues": 5,
+                "dimensionScore": 27,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Product managers who can read code make better decisions than those who can't. Not because they'll start writing it themselves — most never will. But because they stop asking impossible questions and start asking the right ones.\n\nWhen you've stared at a Rails codebase for a few weeks, you learn that \"move fast and break things\" sounds great in a boardroom and terrible to an engineer at 2 a.m. You start noticing things: why migrations take longer than estimates suggest they should, how a single nil check can unravel an entire feature, why \"just add a filter\" means rewriting the query layer.\n\nThe PM who understands this speaks a different language in sprint planning. They catch edge cases before the spec leaves the room. They know when a six-week estimate is padding and when it's honest.\n\nThis isn't about gatekeeping. You don't need to build a compiler to ship great software. But the best PMs I've worked with all crossed the Rubicon at some point — they spent enough time in the weeds to stop treating engineering like a magic box.\n\nThe question isn't whether you have time to learn. It's whether you have time not to.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": [
+                  {
+                    "pattern": "Negative parallelism (isn't X. It's Y)",
+                    "matches": [
+                      "... box.  The question isn't whether you have time to learn. It's whether you have ti..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 7,
+                "authenticity": 7,
+                "density": 10,
+                "total": 44
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 44,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a 200-word blog intro about why product managers should learn to code",
+          "uncoached": {
+            "text": "Understanding how to code isn't just for developers anymore — it's become a secret weapon for product managers who want to truly own their craft. When you speak the language of your engineering team, conversations shift from vague requests to precise, actionable discussions. You start thinking in data structures instead of spreadsheets, and that mental model unlocks better decisions.\n\nLet's be honest: every product manager hits moments where they feel stuck waiting for engineering bandwidth. A little coding knowledge lets you spot quick wins, validate technical feasibility early, and maybe even roll out small experiments without tying up dev resources. More importantly, it builds trust. Engineers respect PMs who understand constraints, and stakeholders gain confidence when you can dive into the nitty-gritty of how features actually work.\n\nBeyond collaboration, coding sharpens your problem-solving skills. Breaking down user problems into logical steps mirrors writing code — both require clarity, patience, and iterative thinking. Whether it's querying a database, tweaking an A/B test script, or reading error logs, these skills help you make smarter, faster decisions.\n\nYou don't need to become a full-stack wizard overnight. Start small — learn enough to be dangerous — and watch how it transforms the way you approach product strategy. Your career might just thank you for it.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": [
+                  {
+                    "pattern": "Negative parallelism (isn't X — it's Y)",
+                    "matches": [
+                      "...tanding how to code isn't just for developers anymore — it's become a secret wea..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 7,
+                "authenticity": 7,
+                "density": 10,
+                "total": 42
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 42,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "I used to think learning to code was about writing better specs or speaking engineer-speak. Five years of building stuff myself — first a job-search pipeline, then Margin, a tool I'm editing this very letter with — and I realized it's not about communication at all.\n\nIt's about credibility.\n\nWhen you've shipped code that broke in production, debugged a memory leak at 2 AM, or watched a carefully architected feature crumble under edge cases you didn't anticipate, you stop asking \"how long will that take?\" and start asking the right question underneath it: \"what's actually hard here?\"\n\nEngineers trust you when you've felt the weight of a deploy. They stop filtering what they tell you. And when they do, they stop filtering what they tell you.\n\nI learned this the hard way. For years, I treated engineering as a black box — brilliant people doing wizardry I couldn't touch. Then I built my first LLM-powered scraper and my second real React app, and suddenly I was a different PM. Not because I became a coder, but because I became a collaborator.\n\nThe shift wasn't gradual. It happened the moment my first pull request merged without being rewritten.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "59 words: \"When you've shipped code that broke in production, debugged a memory leak at 2 A...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 47,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a 200-word blog intro about why product managers should learn to code",
+          "uncoached": {
+            "text": "In today's fast‑moving tech landscape, product managers who understand code have a leg up. When you speak the language of engineers, you can ask better questions, estimate timelines with confidence, and spot potential roadblocks before they derail a sprint. That fluency also earns trust—engineers appreciate a PM who gets why a feature might take longer than it looks.\n\nBeyond day‑to‑day collaboration, coding knowledge opens doors. You’ll be able to prototype ideas quickly, test assumptions with real data, and make more informed decisions about technical trade‑offs. Plus, reading documentation, parsing error logs, and interpreting metrics become second nature, helping you own the full product lifecycle from vision to delivery.\n\nLearning to code doesn’t mean you need to become a senior engineer—it’s about gaining enough technical literacy to bridge the gap between business goals and engineering execution. Whether you spend an hour a week on interactive tutorials or dive deeper into languages like Python or JavaScript, the investment pays off in smoother communication, sharper problem‑solving, and a stronger ability to drive products that users love and developers respect.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "landscape",
+                    "severity": "high",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "41 words: \"Whether you spend an hour a week on interactive tutorials or dive deeper into la...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 7,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 7,
+                "density": 10,
+                "total": 42
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 42,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "You don't need to ship production code or anything close\n\nBut something shifted in how I talked to the team when I started learning. Questions got sharper. Tradeoffs landed differently. I stopped asking \"how long will that take?\" and started asking what's actually expensive to change\n\nThe PMs who ship products, not just features, are the ones who understand what breaks at scale\n\nI'm not talking about writing PRs or setting up CI/CD pipelines\n\nI'm talking about reading a PR diff and recognizing whether this is a refactor or a landmine\n\nKnowing that a \"simple\" UI toggle might mean migrating every user's data\n\nUnderstanding why engineering pushes back on that \"small\" integration that would \"just take a button\"\n\nWhen I worked with engineers who saw me actually dig into their stack during planning, the dynamic changed. They stopped treating my proposals like requests from someone who'd never shipped code\n\nThey became collaborators instead\n\nProduct management has always been about making the right things. In an agentic world, it's also about knowing what's cheap to change and what's not — because agents will make everything cheap to change except the things you didn't anticipate\n\nWant to build something people actually use, not just ship something that looks good in a demo",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "dynamic",
+                    "severity": "medium",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "106 words: \"I stopped asking \"how long will that take?\" and started asking what's actually e...\""
+                  },
+                  {
+                    "type": "long-sentence",
+                    "detail": "47 words: \"In an agentic world, it's also about knowing what's cheap to change and what's n...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 7,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 7,
+                "density": 10,
+                "total": 44
+              },
+              "summary": {
+                "mechanicalIssues": 3,
+                "dimensionScore": 44,
+                "pass": false
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": -1,
+        "dimensionDeltas": {
+          "directness": 2.3,
+          "rhythm": 3.3,
+          "trust": 1,
+          "authenticity": 2.3,
+          "density": -1
+        },
+        "totalScoreDelta": 8
+      }
+    },
+    {
+      "writingType": "email",
+      "samples": [
+        {
+          "prompt": "Draft a follow-up email after a job interview at a company you're excited about",
+          "uncoached": {
+            "text": "Subject: Great Speaking with You – Thank You!  \n\nHi [Interviewer Name],  \n\nI just wanted to say thanks again for taking the time to chat yesterday! I really enjoyed learning more about the team and the work you’re doing at [Company Name].  \n\nOur conversation about [specific topic/project] left me even more excited about the possibility of joining and contributing. I especially loved hearing about [specific detail they mentioned] – it’s exactly the kind of challenge I thrive on.  \n\nI’m super enthusiastic about the opportunity and would love to bring my energy and ideas to the role. Please don’t hesitate to reach out if you need anything else from my end – references, portfolio, or otherwise.  \n\nThanks again, and I hope to hear from you soon!  \n\nBest,  \n[Your Name]",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "7 consecutive sentences with similar length (~17 words): \"Hi [Interviewer Name],  \n\nI just wanted to say thanks again ...\" / \"I really enjoyed learning more about the team and the work y...\" / \"Our conversation about [specific topic/project] left me even...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 4,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 41
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 41,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Hi Sarah\n\nI really enjoyed our conversation yesterday about the growth PM role — especially your thoughts on how you're thinking about expansion into adjacent verticals. The part that stuck with me was when you described the tension between staying true to your core workflows while opening up to new buyer segments. That's exactly the kind of challenge I spent the last year wrestling with at Wasabi, where we had to balance retention for existing cloud customers while building appeal for teams who'd never used object storage before.\n\nI had one more thought about the activation metric question we discussed — I've got a quick framework I've used in three different contexts (cloud storage, developer tools, and marketplace onboarding) that I'd love to walk through if you're curious. It's about mapping the gap between time-to-first-value and willingness-to-invest.\n\nWould you be open to a 15-minute call this week to dive in? Happy to send over the doc first if that's easier\n\nThanks again for making time yesterday",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 45
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 45,
+                "pass": true
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Draft a follow-up email after a job interview at a company you're excited about",
+          "uncoached": {
+            "text": "Subject: Following Up on [Position Name] Interview\n\nHi [Interviewer Name],\n\nThank you so much for taking the time to meet with me yesterday to discuss the [Position Name] role. I really enjoyed learning more about [specific topic discussed] and getting a better sense of the team and company culture.\n\nOur conversation only reinforced my enthusiasm for the opportunity. I'm particularly excited about [specific project/initiative mentioned] and would love to contribute my experience in [relevant skill/experience] to help move things forward.\n\nPlease let me know if you need any additional information from me as you move through your decision-making process. I'm looking forward to hearing from you and hope to join the team soon.\n\nBest regards,\n[Your Name]",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 45
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 45,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Hi [Name], I really enjoyed our conversation yesterday about the product work you described, especially the bits about how the team thinks through pricing when the underlying commodity cost itself is moving\n\nThat part stuck with me because it's not the kind of problem most companies even have to hold in their head. You can't lean on a fixed COGS spreadsheet and call it a day. The margin isn't static, the input isn't predictable, and the customer is buying a promise that's literally priced against a volatile commodity. Most teams paper over that complexity. The fact that yours names it directly is what made me think there's a real opportunity to get closer to what you're building\n\nI've written a short note about how I'd think about that first 30/60/90 — nothing formal, just the way I'd start mapping what's real versus what's assumed in a pricing structure where today's truth might be tomorrow's outlier\n\nWould you be open to a quick chat this week to walk through it? No prep needed on your end — I'd just love to hear if the questions I landed on match the ones you're actually asking right now\n\nLet me know what works — I'm flexible on timing this week\n\nthanks",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "53 words: \"Hi [Name], I really enjoyed our conversation yesterday about the product work yo...\""
+                  },
+                  {
+                    "type": "long-sentence",
+                    "detail": "75 words: \"The fact that yours names it directly is what made me think there's a real oppor...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 47,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Draft a follow-up email after a job interview at a company you're excited about",
+          "uncoached": {
+            "text": "Subject: Great Meeting You Today!  \n\nHi [First Name],  \n\nThanks so much for taking the time to chat with me today about the [Job Title] role — I really enjoyed learning more about what you’re working on at [Company Name]! The conversation left me even more excited about the opportunity to contribute to your team, especially [mention something specific from your conversation, like a project, goal, or value they discussed].  \n\nI’m confident that my background in [relevant skill/experience] would be a great fit for [specific responsibility or initiative they mentioned], and I’d love to bring that enthusiasm and expertise to the role. Please don’t hesitate to reach out if you need any additional information or references — I’m happy to help!  \n\nLooking forward to hearing from you. Thanks again for the great conversation!  \n\nBest regards,  \n[Your Full Name]  \n[Your Phone Number]  \n[Your Email Address]",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Hi [Name]\n\nI really enjoyed our conversation yesterday about [topic]\n\nThe part that stuck with me was how you described [specific thing they said]. It reframed how I was thinking about [related idea].\n\nThat resonated with work I did at DreamWorks, where I spent six months embedded with artists, researchers, and engineers building a collections system that lifted daily active users from 26 to 42 without any mandate. Same principle: tools that fit existing workflows earn trust faster than tools that demand you change your workflow first\n\nI'd love to walk through how that shaped my approach to user discovery and how it connects to what you're building at [Company]\n\nWould you be open to a 20-minute call this week to dive deeper? I'm free Tuesday, Wednesday, or Thursday afternoon\n\nThanks again for the great conversation",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "55 words: \"Same principle: tools that fit existing workflows earn trust faster than tools t...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 47,
+                "pass": false
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": 0.7,
+        "dimensionDeltas": {
+          "directness": 0,
+          "rhythm": 2,
+          "trust": 0,
+          "authenticity": 0,
+          "density": 0
+        },
+        "totalScoreDelta": 2
+      }
+    },
+    {
+      "writingType": "cover-letter",
+      "samples": [
+        {
+          "prompt": "Write an opening paragraph for a PM role at Stripe",
+          "uncoached": {
+            "text": "Dear Hiring Manager,\n\nI am writing to express my strong interest in the Product Manager position at Stripe. With over five years of experience driving product strategy and execution at technology companies ranging from high-growth startups to established enterprises, I have developed a deep expertise in building scalable products that solve complex challenges for merchants and developers. What excites me most about Stripe is your unwavering commitment to expanding the GDP of the internet through elegant economic infrastructure, and I am eager to contribute to that mission by shaping products that empower businesses worldwide to participate in the global economy.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "43 words: \"What excites me most about Stripe is your unwavering commitment to expanding the...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 47,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "I’ve been following Stripe for a while because you sit in a messy part of the market that I think about constantly: money moving through software. Not just the checkout flow, but the boring, high-stakes stuff that makes or breaks a business — payouts that fail, invoices that don't land, cross-border flows that cost more than anyone expected.\n\nThat problem is personal. At Wasabi, I spent three years pricing storage against AWS S3, which meant watching customers stare at a bill they couldn't predict and then call it “too expensive” even when we were 80% cheaper on raw rates. The gap between list price and real cost wasn't a math error — it was a trust error. Same energy here: Stripe's job isn't to be the cheapest rail, it's to make money movement so boring that builders forget it's there.\n\nI'd lean into the unit economics work I've already built — cost models, attribution systems, experimentation frameworks — but adapted to a business where the unit isn't “a GB-month of storage” but “a successful transaction, a recovered payout, a payout that lands before payroll Friday.” I'm not coming in with payments experience, but I've spent the last two years shipping the kind of measurement layer that turns “we think payouts are slow” into “here's where latency actually lives in the chain.”\n\nThat's what drew me here: this isn't a pricing problem or a trust problem — it's both at once, and fixing one without the other just moves the leak elsewhere.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "111 words: \"I'd lean into the unit economics work I've already built — cost models, attribut...\""
+                  }
+                ],
+                "structuralTells": [
+                  {
+                    "pattern": "Negative parallelism (isn't X — it's Y)",
+                    "matches": [
+                      "... drew me here: this isn't a pricing problem or a trust problem — it's both at once, and f..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 7,
+                "authenticity": 7,
+                "density": 10,
+                "total": 44
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 44,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write an opening paragraph for a PM role at Stripe",
+          "uncoached": {
+            "text": "Dear Hiring Manager,\n\nI am excited to apply for the Product Manager role at Stripe, where innovation meets impact at scale. With a track record of driving product strategy for high-growth payment technology platforms, I bring deep expertise in transforming complex technical capabilities into seamless user experiences that drive measurable business outcomes. My background spans fintech and SaaS, where I’ve led cross-functional teams to launch products that processed over $2B in annual transaction volume while maintaining rigorous standards for security, compliance, and reliability. At Stripe, I see an opportunity to contribute to the mission of increasing the GDP of the internet by building the economic infrastructure that powers the next generation of businesses. I am particularly drawn to Stripe’s developer-first philosophy and commitment to elegant solutions, and I am eager to bring my strategic thinking and execution excellence to help shape the future of commerce.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "seamless",
+                    "severity": "high",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "4 consecutive sentences with similar length (~31 words): \"With a track record of driving product strategy for high-gro...\" / \"My background spans fintech and SaaS, where I’ve led cross-f...\" / \"At Stripe, I see an opportunity to contribute to the mission...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 7,
+                "rhythm": 1,
+                "trust": 10,
+                "authenticity": 7,
+                "density": 10,
+                "total": 35
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 35,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Hi Stripe team,\n\nI've been following Stripe for years, especially how you've shaped the mental model for developer-first commerce. When I saw the PM opening on the Billing team, it hit me that I've been living in the same problem space for the past four years, just from the other side of the table.\n\nI'm a product manager who builds things. I shipped an AI-powered search and collections system for 1,000+ artists at DreamWorks Animation, built the growth models and attribution systems that powered Wasabi's cost-comparison strategy against AWS, and I'm currently building Margin — a tool that helps teams evaluate AI agents reliably.\n\nThe work I'm most proud of sits at the intersection of pricing strategy and user trust. At Wasabi, \"cheaper\" alone wasn't converting buyers despite being 80% cheaper than AWS S3 with no egress fees. I built attribution and conversion systems that surfaced which behaviors actually preceded a purchase, then used that to inform how we structured messaging and pricing pages. The cost-comparison calculator that emerged from that work ended up being one of our highest-converting pages and a strong lead qualifier.\n\nThat's the kind of problem I want to work on at Stripe: making pricing decisions concrete when \"unit\" means something different to every audience you serve. I'd love to show you what I built — whether it's the Margin evaluation harness or the pricing systems from Wasabi. Would you be open to a quick conversation?",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "43 words: \"I shipped an AI-powered search and collections system for 1,000+ artists at Drea...\""
+                  },
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "4 consecutive sentences with similar length (~26 words): \"I built attribution and conversion systems that surfaced whi...\" / \"The cost-comparison calculator that emerged from that work e...\" / \"That's the kind of problem I want to work on at Stripe: maki...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 6,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 46
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 46,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write an opening paragraph for a PM role at Stripe",
+          "uncoached": {
+            "text": "I’m excited to apply for the Product Manager position at Stripe because building economic infrastructure that works for everyone aligns deeply with my passion for solving complex, real-world problems at scale. Over the past five years, I’ve led cross-functional teams to ship payment and marketplace products that processed over $2B in transaction volume, consistently balancing merchant needs, compliance requirements, and technical feasibility. My approach centers on ruthless prioritization—whether that meant sunsetting a legacy checkout flow to reduce fraud by 30% or launching a new pricing tier that grew ARR by 18%—and I thrive in environments where data-driven insights meet rapid iteration. At Stripe, I see the opportunity to combine my expertise in payments and growth strategy with a relentless focus on developer experience to unlock new pathways for businesses worldwide to participate in the global economy.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "The thing I keep coming back to is how Stripe made money invisible — not by hiding it, but by making every API call a financial primitive you can reason about. That's the bar I set for products I work on: the user shouldn't have to trust the system, they should understand exactly where value flows. I spent the last four years building the analytical infrastructure that pricing decisions depend on, most recently at Wasabi Technologies where I priced cloud storage against AWS S3 by tracing what converters actually did differently from non-converters. Before that I built the analytics layer for a platform serving 1,000+ artists at DreamWorks Animation, which taught me that tools built for the system's logic instead of the user's workflow will always generate workarounds.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "4 consecutive sentences with similar length (~31 words): \"The thing I keep coming back to is how Stripe made money inv...\" / \"That's the bar I set for products I work on: the user should...\" / \"I spent the last four years building the analytical infrastr...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 5,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 45
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 45,
+                "pass": false
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": 0.7,
+        "dimensionDeltas": {
+          "directness": 1,
+          "rhythm": 2,
+          "trust": -1,
+          "authenticity": 0,
+          "density": 0
+        },
+        "totalScoreDelta": 2
+      }
+    },
+    {
+      "writingType": "outreach",
+      "samples": [
+        {
+          "prompt": "Draft a cold LinkedIn message to a VP of Product at a Series B startup",
+          "uncoached": {
+            "text": "Hi [Name],\n\nI came across your profile while researching product leaders driving growth at Series B companies, and I was impressed by your track record at [Company]. With my background in scaling product strategy for fast-moving teams, I thought there might be some interesting overlap.\n\nI’m currently exploring new opportunities where I can help shape product vision and execution—particularly in areas around user-centric design, cross-functional alignment, and data-informed decision making. I’d love to grab a quick coffee or jump on a brief call to exchange ideas, even if it’s just to compare notes on the challenges of building products post-Series B.\n\nLet me know if you’re open to it!\n\nBest,  \n[Your Name]",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 48
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 48,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Hey [Name] — quick question. Why do you think most AI products ship with the same clunky review flow they had before AI existed?\n\nI've been watching how teams actually use agentic tools day-to-day, and I keep noticing the same friction: the AI does the work, but signing off still means switching tabs, opening a ticket, pasting context, hoping someone reads it. The review layer never evolved because it was bolted on after the fact.\n\nAt DreamWorks I rebuilt the review flow for AI-generated art references — not as a separate system but by embedding the approval directly into the creative tool. Artists went from flagging issues in Jira after the fact to approving or redirecting in-context, in the same click. Adoption jumped, and more importantly, the feedback loop actually caught real quality issues instead of just tracking busywork.\n\nI'm curious whether that maps to how you're thinking about review and approval at [Company]. Is it something you'd rather own as a product decision, or does it keep ending up as a workaround?\n\nHappy to share the specifics of how we wired it in if that's useful. What's your read on where review flows break first in agentic workflows?",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "6 consecutive sentences with similar length (~19 words): \"Artists went from flagging issues in Jira after the fact to ...\" / \"Adoption jumped, and more importantly, the feedback loop act...\" / \"I'm curious whether that maps to how you're thinking about r...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 6,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 46
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 46,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Draft a cold LinkedIn message to a VP of Product at a Series B startup",
+          "uncoached": {
+            "text": "Hey Alex,\n\nI came across your profile and was really impressed by the product vision you've been driving at [Company Name] — especially the recent launch of [specific product/initiative]. The way you've scaled the user experience while keeping it intuitive is exactly the kind of growth I love seeing.\n\nI’m Sam, Head of Growth Marketing at [My Company], where we specialize in helping product teams like yours turn traction into sustainable user activation. I’ve worked with a handful of Series B teams to build data-driven retention loops that actually move the needle, and I’d love to swap notes over a quick 15-minute call.\n\nWould you have 15 minutes open sometime next week to chat about how others are tackling similar growth levers? Happy to work around your schedule.\n\nThanks for your time,\nSam",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 45
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 45,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Hey Alex — I saw your post about scaling product orgs after Series A, and it hit on something I keep running into.\n\nMost startups solve for \"hire fast, build faster.\" The real bottleneck I've observed is \"ship confidence.\" Teams ship fast but nobody's confident the thing they shipped actually moved the needle — because the verification loop is still manual, slow, and easy to ignore.\n\nI spent the last two years building this at DreamWorks (internal tools for 1,000+ artists) and now in my side work helping early-stage teams set up feedback loops that actually get used. The pattern keeps repeating: the best PMs I know aren't the ones with the fanciest frameworks — they're the ones who can ship, then prove it mattered, without the whole team losing context along the way.\n\nI'm curious — does that match what you're seeing at [company]? Or am I solving for a problem that's not actually biting yet?\n\nWould love to grab 15 minutes if this resonates. Happy to share the specific loops that stuck — or just swap war stories about what breaks when you're hiring week-over-week.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "43 words: \"Most startups solve for \"hire fast, build faster.\" The real bottleneck I've obse...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 48
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 48,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Draft a cold LinkedIn message to a VP of Product at a Series B startup",
+          "uncoached": {
+            "text": "Hi [First Name],\n\nI came across your profile while researching product leaders driving growth in fintech, and I was impressed by your track record at [Company]. Congrats on the recent funding round — Series B is a huge milestone, and the product work you’re leading clearly resonates in the market.\n\nI’m currently building a side project focused on improving onboarding flows for early-stage SaaS products, and I’ve been deep in the weeds of user activation strategies, behavioral design, and lean experimentation. Given your experience scaling product from 0 to 1, I’d love to get your take on a few assumptions I’m testing — especially around balancing speed and usability during hypergrowth.\n\nIf you’re open to a quick 15-minute chat, I’d really appreciate the insights. No pitch — just genuine curiosity and maybe a coffee if you’re in [City] sometime soon.\n\nThanks for your time!\n\nBest,  \n[Your Name]",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "4 consecutive sentences with similar length (~26 words): \"Hi [First Name],\n\nI came across your profile while researchi...\" / \"Congrats on the recent funding round — Series B is a huge mi...\" / \"I’m currently building a side project focused on improving o...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 6,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 43
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 43,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Hey Alex — saw you’re scaling Amplitude’s product org through a tough market. Respect.\n\nI’ve been heads-down helping teams figure out the same thing — how to keep building velocity when budget scrutiny hits. Three years ago I shipped an AI search layer at DreamWorks that artists actually trusted (and used) by making every result verifiable in under 30 seconds. The trick wasn’t more features — it was fewer, more honest ones.\n\nI’m curious: when you’re trimming scope this year, how are you deciding what stays core vs. what gets paused? Happy to grab 20 mins if you’ve got a hot take you’ve been dying to test.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 48
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 48,
+                "pass": true
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": 0.3,
+        "dimensionDeltas": {
+          "directness": 0,
+          "rhythm": 0,
+          "trust": 0,
+          "authenticity": 0,
+          "density": 2
+        },
+        "totalScoreDelta": 2
+      }
+    },
+    {
+      "writingType": "prd",
+      "samples": [
+        {
+          "prompt": "Write the problem statement section for a feature that adds dark mode",
+          "uncoached": {
+            "text": "Users increasingly expect applications to support dark mode, a display setting that inverts light and dark UI elements to reduce eye strain, conserve battery life on OLED screens, and accommodate visual preferences or accessibility needs. Despite growing demand, the application currently renders all interface components in a fixed light theme with no option to toggle between schemes. This limitation leads to negative user feedback, lower engagement during evening usage, and reduced compliance with modern accessibility standards such as WCAG 2.1. Additionally, competitors within the same market segment have already implemented dark mode capabilities, positioning this absence as a functional gap that diminishes the product's competitiveness. Without an integrated dark mode option, the application risks user attrition, decreased satisfaction scores, and difficulty meeting the expectations of users who rely on system-wide dark theme preferences. Implementing a native dark mode feature will enhance usability, improve accessibility, and align the application with contemporary design conventions and user expectations.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "additionally",
+                    "severity": "medium",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 7,
+                "rhythm": 2,
+                "trust": 10,
+                "authenticity": 7,
+                "density": 7,
+                "total": 33
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 33,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "## Problem Statement\n\nNight-shift engineers and late-night creators are burning out from eye strain while working in Margin's agent canvas between 9 PM and 6 AM. Heat maps show 23% of daily sessions happen after 8 PM, but only 8% of those users enable system-level dark mode — the rest work in raw white interfaces.\n\nThe current canvas was designed for daylight. Its bright chrome and syntax-highlighted text force users to choose between their circadian rhythm and their work. We've watched session abandonment spike after 10 PM, and qualitative feedback repeatedly mentions \"retinal damage\" and \"my eyes are bleeding.\"\n\nThis isn't about preference. It's about keeping builders productive and healthy when they're solving problems at the hours when inspiration strikes — not when corporate wellness policies do.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": [
+                  {
+                    "pattern": "Negative parallelism (isn't X. It's Y)",
+                    "matches": [
+                      "...re bleeding.\"  This isn't about preference. It's about keeping build..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 6,
+                "trust": 7,
+                "authenticity": 7,
+                "density": 10,
+                "total": 40
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 40,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write the problem statement section for a feature that adds dark mode",
+          "uncoached": {
+            "text": "Modern applications increasingly require theme support to accommodate user preferences and reduce eye strain during extended usage periods, particularly in low-light environments where traditional light-on-dark or dark-on-light interfaces can cause significant visual fatigue. Current implementations lack configurable color schemes, forcing all users into a single visual paradigm that may be suboptimal for their specific viewing conditions or accessibility requirements. This limitation directly impacts user engagement metrics, as individuals working during evening hours or those with visual sensitivities often experience discomfort leading to reduced session durations and increased bounce rates. Furthermore, the absence of dark mode functionality places the application at a competitive disadvantage, as contemporary user expectations demand adaptive interfaces that align with operating system-level theme preferences and industry standards. Without this capability, user retention suffers among demographics who prioritize visual customization, and the application fails to meet baseline accessibility guidelines that recommend providing high-contrast alternatives for sustained reading scenarios. The implementation of a comprehensive dark mode feature directly addresses these pain points by introducing a toggle mechanism that seamlessly transitions the entire interface between light and dark color palettes, ensuring consistent theming across all components while maintaining optimal readability and preserving the brand's visual identity through carefully calibrated contrast ratios and color tokens that meet WCAG 2.1 compliance standards.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "furthermore",
+                    "severity": "medium",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "60 words: \"The implementation of a comprehensive dark mode feature directly addresses these...\""
+                  }
+                ],
+                "structuralTells": [
+                  {
+                    "pattern": "\"Furthermore\" opener",
+                    "matches": [
+                      "...creased bounce rates. Furthermore, the absence of dar..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 7,
+                "rhythm": 6,
+                "trust": 7,
+                "authenticity": 5,
+                "density": 10,
+                "total": 35
+              },
+              "summary": {
+                "mechanicalIssues": 3,
+                "dimensionScore": 35,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "## Problem Statement\n\nArtists and creators using Margin spend extended sessions in the app, often late at night or in low-light environments. The current light-only interface causes eye strain and disrupts workflow during these periods. While the technical implementation of dark mode is straightforward, the real challenge is maintaining color accuracy and contrast for creative work — a problem that standard dark mode toggles don't solve. Users need a dark interface that doesn't compromise their ability to evaluate color, brightness, and detail in their assets.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write the problem statement section for a feature that adds dark mode",
+          "uncoached": {
+            "text": "In recent years, user preference for reduced eye strain and improved readability in low-light environments has led to widespread adoption of dark mode interfaces across digital platforms. Despite this trend, our current application lacks a dark theme option, forcing users to rely on device-level settings or third-party solutions. User feedback consistently highlights the absence of this feature as a source of discomfort during extended usage periods, particularly in dimly lit settings. Additionally, accessibility guidelines, including the Web Content Accessibility Guidelines (WCAG), recommend providing sufficient contrast and customizable display options to support users with visual impairments or light sensitivity. Without a native dark mode implementation, the application risks falling below industry standards for user experience and inclusivity. This gap not only diminishes user satisfaction but also places the product at a competitive disadvantage relative to other software solutions that offer flexible interface customization. To address these concerns, it is essential to implement a robust dark mode feature that seamlessly integrates with the existing user interface while ensuring consistent visual hierarchy, optimal contrast ratios, and compatibility across various supported devices and operating systems.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "robust",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "additionally",
+                    "severity": "medium",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 5,
+                "rhythm": 4,
+                "trust": 10,
+                "authenticity": 5,
+                "density": 7,
+                "total": 31
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 31,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "**Problem statement**\n\nUsers increasingly expect interfaces to adapt to their environment, and many work in low-light conditions where bright UIs cause eye strain and disrupt their workflow. Today's product only ships a light theme, so users in dimly lit situations have no built-in option to reduce luminance.\n\nBeyond preference, this creates real friction: users either strain their eyes during evening work or abandon the product in favor of competitors that offer dark mode. This shows up in support tickets around eye strain, and several high-value users have mentioned switching to alternative tools that adapt to lighting.\n\nThe opportunity is straightforward but measurable. A well-executed dark mode can reduce churn among night-shift users, increase session duration in low-light conditions, and remove a common competitive wedge. The bar is low — users just want the interface to stop fighting them when the lights go down.\n\n**Requirements**\n\n1. **Theme switching**: Users can toggle between light and dark modes at runtime without requiring a page reload or app restart. Preferences persist across sessions via local storage.\n2. **System integration**: The toggle respects the user's OS-level `prefers-color-scheme` setting on first load. If a user manually selects a theme, that choice overrides the system preference for all future sessions until changed.\n3. **Full coverage**: Dark mode applies to every surface — canvas, modals, tooltips, dropdowns, charts, and embedded widgets. No component should render with light-mode-only colors when dark mode is active.\n4. **Contrast compliance**: All text and interactive elements in dark mode meet WCAG 2.1 AA contrast ratios. We'll validate with automated tests against a minimum 4.5:1 ratio for normal text and 3:1 for large text.\n5. **Performance**: Theme switching introduces no perceptible lag. Color values resolve through a CSS variable system so the toggle is a single repaint, not a re-render of component trees.\n6. **Migration safety**: Existing custom themes created with the theme builder (see \"Custom color palettes\" feature) carry forward into dark mode. Light-only customizations get a sensible dark fallback; mixed customizations preserve their explicit dark values where provided.\n7. **Documentation**: We ship a migration guide for enterprise customers who've built custom themes on top of our component library, plus a changelog entry detailing any CSS variable renames.\n\n**Success metrics**\n\n- Primary: Session duration in evening hours (9pm–11pm local time) increases by at least 15% for users who enable dark mode vs. those who keep light mode.\n- Secondary: Support tickets tagged \"eye strain\" or \"brightness\" decrease by 25% quarter-over-quarter after rollout.\n- Secondary: Net Promoter Score for the UI/UX increases by 5 points, with qualitative feedback mentioning dark mode in at least 10% of responses.\n- Secondary: Adoption of dark mode among active users reaches 30% within 6 weeks of launch.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 50
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 50,
+                "pass": true
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": -1.7,
+        "dimensionDeltas": {
+          "directness": 3.7,
+          "rhythm": 3.7,
+          "trust": 0,
+          "authenticity": 3.3,
+          "density": 2
+        },
+        "totalScoreDelta": 12.7
+      }
+    },
+    {
+      "writingType": "blog",
+      "samples": [
+        {
+          "prompt": "Write a paragraph arguing that most product roadmaps are theater",
+          "uncoached": {
+            "text": "Most product roadmaps are elaborate exercises in organizational theater, designed more to reassure stakeholders than to guide meaningful decision-making. These documents often masquerade as strategic blueprints while functioning as optimistic wish lists, littered with arbitrary deadlines and vague priorities that crumble under the weight of real-world uncertainty. Product teams fall into the trap of presenting rigid timelines months or even years into the future, despite operating in environments where market demands shift, user feedback reveals new insights, and technical discoveries unearth unforeseen complexities. The emphasis on crafting visually appealing Gantt charts and color-coded quarters creates an illusion of control, masking the inherently iterative nature of product development. When these roadmaps inevitably diverge from reality, the consequences are not merely logistical—they erode trust, misalign expectations, and divert energy from the actual work of building products that serve users. Rather than static projections, organizations would benefit from embracing dynamic planning frameworks that treat roadmaps as living hypotheses, regularly updated based on evidence and adaptability rather than ceremonial adherence to arbitrary milestones.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "dynamic",
+                    "severity": "medium",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 7,
+                "rhythm": 2,
+                "trust": 10,
+                "authenticity": 7,
+                "density": 10,
+                "total": 36
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 36,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Most product roadmaps read like promises the team never intended to keep. The ritual starts the same way: a PM strings together a dozen features into a quarterly timeline, pads each with a confidence rating, and presents it to executives who nod along because it looks like planning. Nobody on the delivery side believes their own roadmap three months out — let alone six — but everyone keeps the ceremony going because stopping would mean admitting the plan was fiction from the start. The real work happens in weekly re-prioritization sessions where the team quietly abandons half the committed items, but the public roadmap stays frozen so stakeholders have something to point at in all-hands meetings. This isn't planning — it's performance art dressed up as strategy.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": [
+                  {
+                    "pattern": "Negative parallelism (isn't X — it's Y)",
+                    "matches": [
+                      "...ands meetings. This isn't planning — it's performance art dre..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 7,
+                "authenticity": 7,
+                "density": 10,
+                "total": 42
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 42,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a paragraph arguing that most product roadmaps are theater",
+          "uncoached": {
+            "text": "Most product roadmaps are elaborate exercises in organizational theater, carefully choreographed presentations designed to reassure stakeholders rather than guide genuine strategic decision-making. These documents typically masquerade as commitments while existing in a perpetual state of flux, shifting priorities with each new market opportunity or executive whim. Product teams spend disproportionate time polishing timeline visuals and crafting reassuring language, creating polished facades that obscure the reality of uncertainty and resource constraints. When these roadmaps inevitably fail to materialize as promised, the blame falls on implementation challenges rather than fundamental flaws in the planning process itself. Meanwhile, actual customer needs and technical realities remain secondary to maintaining the appearance of strategic coherence. The most successful products often emerge from adaptive experimentation and iterative responses to real feedback, not adherence to predetermined timelines that were never truly achievable.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "6 consecutive sentences with similar length (~22 words): \"Most product roadmaps are elaborate exercises in organizatio...\" / \"These documents typically masquerade as commitments while ex...\" / \"Product teams spend disproportionate time polishing timeline...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 1,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 41
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 41,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Product roadmaps are theater. Not because PMs don't care, but because the act of publishing a fixed timeline three quarters out commits the team to a fiction the moment a customer walks into a usability test or a competitor releases something unexpected. The teams that move fastest stop asking \"does this match the roadmap?\" and start asking \"what did we learn this week, and what changed?\" The roadmap that survives contact with reality is the one nobody bothered to frame and hang on the wall.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "43 words: \"The teams that move fastest stop asking \"does this match the roadmap?\" and start...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 50
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 50,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a paragraph arguing that most product roadmaps are theater",
+          "uncoached": {
+            "text": "Most product roadmaps are elaborate exercises in performative planning rather than genuine strategic instruments, serving primarily to satisfy stakeholder expectations and project an illusion of control over inherently uncertain outcomes. These documents often read like optimistic fiction, filled with aspirational timelines and feature promises that rarely survive contact with real user feedback, market shifts, or technical constraints. Rather than functioning as dynamic guides for decision-making, they become static artifacts maintained for appearances, updated quarterly to show \"progress\" while masking the reality that priorities have already shifted weeks or months prior. Teams spend disproportionate time refining presentation decks instead of engaging in actual product discovery, and executives rely on these polished projections as if they represent commitments rather than speculative guesses dressed up in Gantt chart formatting. The emphasis on visual appeal and linear progression creates dangerous assumptions about predictability in product development, obscuring the iterative, experimental nature of building successful products. When examined honestly, many roadmaps reveal themselves as political tools designed to manage perceptions rather than illuminate viable paths forward.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "dynamic",
+                    "severity": "medium",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "5 consecutive sentences with similar length (~30 words): \"Most product roadmaps are elaborate exercises in performativ...\" / \"These documents often read like optimistic fiction, filled w...\" / \"Rather than functioning as dynamic guides for decision-makin...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 7,
+                "rhythm": 1,
+                "trust": 10,
+                "authenticity": 7,
+                "density": 10,
+                "total": 35
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 35,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "The roadmap that lands in front of customers is usually a peace treaty between what engineering said was possible and what sales promised last quarter. It lays out features in neat quarters, each one framed as a deliberate choice, as if someone sat down and genuinely decided that Q3 should hold \"improved search\" and Q4 should hold \"better sharing.\" The real work happened months earlier, in Slack threads and 1:1s, where priorities were shuffled to match whatever funding round was closest. Customers read the roadmap and think they're seeing a plan. What they're seeing is a compromise that everyone agreed to forget they'd compromised on.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "56 words: \"It lays out features in neat quarters, each one framed as a deliberate choice, a...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 7,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 47,
+                "pass": false
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": -0.3,
+        "dimensionDeltas": {
+          "directness": 2,
+          "rhythm": 8,
+          "trust": -1,
+          "authenticity": 1,
+          "density": -1
+        },
+        "totalScoreDelta": 9
+      }
+    },
+    {
+      "writingType": "resume",
+      "samples": [
+        {
+          "prompt": "Write a bullet point for leading a product redesign that increased retention 15%",
+          "uncoached": {
+            "text": "- Led end-to-end product redesign of mobile app interface, partnering with UX research and data analytics teams to identify friction points and implement targeted improvements; resulted in 15% increase in user retention rates and 25% reduction in churn within six months post-launch.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "42 words: \"- Led end-to-end product redesign of mobile app interface, partnering with UX re...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 47,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Lifted 30-day retention 15% by leading a redesign of the core product experience for [client], shipping incremental changes across four release cycles after surfacing unmet workflow needs through continuous discovery with power users",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a bullet point for leading a product redesign that increased retention 15%",
+          "uncoached": {
+            "text": "• Spearheaded end-to-end product redesign initiative, collaborating cross-functionally with UX, engineering, and marketing teams to modernize platform architecture and user interface, resulting in a 15% increase in user retention and enhanced customer satisfaction scores.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Led a redesign of the core booking experience through continuous discovery with power users; shipped incremental changes across four release cycles and lifted 30-day retention 15%",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a bullet point for leading a product redesign that increased retention 15%",
+          "uncoached": {
+            "text": "• Led end-to-end product redesign initiative, collaborating with UX research and cross-functional engineering teams to overhaul key user flows and feature architecture; implemented iterative usability testing and data-driven iteration cycles that improved user engagement and drove a 15% increase in customer retention within six months of launch.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "47 words: \"• Led end-to-end product redesign initiative, collaborating with UX research and...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 47,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "• Built the measurement system that guided a product redesign, lifting 30-day retention 15% across a 1,000+ user base. I instrumented the platform with Datadog, ran experiment cycles measuring adoption and workflow impact, and segmented usage data by department and use case to surface the behavioral split that informed the redesign.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": -0.7,
+        "dimensionDeltas": {
+          "directness": 0,
+          "rhythm": 0,
+          "trust": 0,
+          "authenticity": 0,
+          "density": 0
+        },
+        "totalScoreDelta": 0
+      }
+    },
+    {
+      "writingType": "slack",
+      "samples": [
+        {
+          "prompt": "Write a message asking your team to review a doc before Friday",
+          "uncoached": {
+            "text": "Hey team! Just a heads up — could everyone take a look at the [doc title] by Friday? I know we’re all swamped, but it’ll help us stay on track for next week’s meeting. Let me know if any questions come up! Thanks! 😊",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 50
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 50,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Hey team, need a quick look at the Q3 roadmap doc before Friday if anyone has 10 minutes to spare. Mainly checking the prioritization framework and timeline assumptions — I want to make sure we're all aligned before I lock it in. Let me know if you can take a peek",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a message asking your team to review a doc before Friday",
+          "uncoached": {
+            "text": "Hey team! 👋 Just dropped the new doc in the shared folder—could you all take a look when you get a chance? Would be great to have any feedback or comments in by Friday so we can keep things moving. Thanks!",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 50
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 50,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Hey team — can y'all take a quick look at the Q3 roadmap doc before Friday? \n\nSam made some updates to the prioritization framework that I'd love to get your gut check on. Nothing fancy, just want to make sure it tracks with how you're thinking about your Q3 priorities.\n\nI can share the link here or drop it in our #product channel — whatever's easier. Let me know!",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "repetitive-structure",
+                    "detail": "4 consecutive sentences with similar length (~16 words): \"Hey team — can y'all take a quick look at the Q3 roadmap doc...\" / \"Sam made some updates to the prioritization framework that I...\" / \"Nothing fancy, just want to make sure it tracks with how you...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 4,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 44
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 44,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write a message asking your team to review a doc before Friday",
+          "uncoached": {
+            "text": "Hey team! Can you all take a look at the new project brief doc before Friday? Just need a quick review of the timeline and budget sections. Thanks!",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 50
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 50,
+                "pass": true
+              }
+            }
+          },
+          "coached": {
+            "text": "Hey, can everyone take a look at the doc before Friday? Need eyes on it, y'all",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 7,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 47
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 47,
+                "pass": true
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": 0.3,
+        "dimensionDeltas": {
+          "directness": 0,
+          "rhythm": -4,
+          "trust": 0,
+          "authenticity": 0,
+          "density": 0
+        },
+        "totalScoreDelta": -4
+      }
+    },
+    {
+      "writingType": "pitch",
+      "samples": [
+        {
+          "prompt": "Write the opening of a pitch deck for a reading annotation tool",
+          "uncoached": {
+            "text": "# Introducing ReadLogic: Intelligent Reading, Amplified Insights\n\n## The Challenge: Information Overload in the Digital Age\n\nToday's professionals consume over 100 documents daily, yet 87% struggle to effectively capture, organize, and retrieve their reading insights. Traditional highlighting tools offer primitive solutions—static marks that disappear across platforms and remain trapped in isolated applications. Teams waste 11 hours weekly recreating analysis already buried in colleagues' notes. The knowledge exists; it's simply inaccessible.\n\n## Our Solution: AI-Powered Reading Intelligence\n\nReadLogic transforms passive reading into active knowledge capture through patent-pending semantic annotation technology. Unlike basic highlighting tools, our platform understands context, automatically tags key concepts, and creates interconnected knowledge networks. Users don't just mark text—they build living libraries of institutional wisdom that grow smarter with each interaction.\n\n## Market Opportunity: $12.8B Addressable Market\n\nThe global knowledge management software market reaches $12.8 billion by 2027, driven by remote work adoption and information worker productivity demands. Early adopters—law firms, consulting agencies, and research institutions—represent a $3.2 billion premium segment willing to pay 5x industry average for sophisticated collaboration features.\n\n## Competitive Advantage: Contextual Intelligence\n\nWhile competitors like Hypothesis and Notion focus on social annotation or basic organization, ReadLogic's proprietary NLP engine delivers unmatched precision. Our technology analyzes document structure, identifies argument frameworks, and suggests connections across users' entire reading histories. This isn't just annotation—it's intelligent synthesis.\n\n## Business Model: Tiered SaaS Subscription\n\nEnterprise licenses start at $49/user/month, with custom AI training packages commanding $50,000 annual contracts. Our freemium foundation drives organic growth while professional-tier features ensure revenue retention. Projected ARR reaches $12 million within 24 months, supported by $2.3 million in pre-launch LOIs from Fortune 500 knowledge workers.\n\n## Traction: Proven Product-Market Fit\n\nBeta testing with 200 enterprise users generated 89% daily active engagement and 94% retention rates. Partner integrations with Microsoft Office and Google Workspace are complete, while three major law firms have committed to year-one subscriptions. Our advisory board includes former executives from Gartner and McKinsey Analytics.\n\n## Financial Projections: Sustainable Growth\n\nInitial funding requirements total $4.5 million across 18 months, allocated primarily toward AI research and enterprise sales team expansion. Revenue forecasts project $89 million by year five, with gross margins exceeding 82%. Conservative growth assumptions reflect proven B2B SaaS benchmarks from comparable knowledge management platforms.\n\n## Funding Ask: Accelerating Market Leadership\n\nWe seek $4.5 million Series A investment to accelerate market penetration and advance our AI capabilities. Funds will support expanding our engineering team, developing industry-specific annotation models, and scaling enterprise sales operations. Investors gain immediate access to a validated market opportunity backed by institutional demand and defensible technology.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "highlighting",
+                    "severity": "high",
+                    "count": 2
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": [
+                  {
+                    "pattern": "Negative parallelism (isn't X — it's Y)",
+                    "matches": [
+                      "...ing histories. This isn't just annotation—it's intelligent synthes..."
+                    ]
+                  },
+                  {
+                    "pattern": "Superficial analysis verb: highlighting",
+                    "matches": [
+                      "...sights. Traditional highlighting tools offer primiti...",
+                      "...ology. Unlike basic highlighting tools, our platform..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 5,
+                "rhythm": 6,
+                "trust": 3,
+                "authenticity": 3,
+                "density": 10,
+                "total": 27
+              },
+              "summary": {
+                "mechanicalIssues": 3,
+                "dimensionScore": 27,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "Most researchers read like they're managing a library — cataloging, filing, organizing sources into neat rows. But reading is a conversation, and the best ideas come from arguing with the page.\n\nMargin is a reading annotation tool built for that conversation. It lets you highlight, comment, and connect ideas across any PDF or web article, then stitches those annotations into a living research trail you can revisit, refine, and build on.\n\nWhere Margin differs is in showing the method, not just collecting notes. Every annotation carries a claim you can verify, link, and trace back to source. The tool lets you turn a marginal note into a search, pull related passages across your library, and export a evidence-backed argument — not just a pile of highlights\n\nBuilt on the Model Context Protocol, Margin connects to your existing AI stack so your notes stay grounded in what you actually read, not what an LLM hallucinates.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [
+                  {
+                    "type": "long-sentence",
+                    "detail": "57 words: \"The tool lets you turn a marginal note into a search, pull related passages acro...\""
+                  }
+                ],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 50
+              },
+              "summary": {
+                "mechanicalIssues": 1,
+                "dimensionScore": 50,
+                "pass": false
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write the opening of a pitch deck for a reading annotation tool",
+          "uncoached": {
+            "text": "In the rapidly evolving landscape of digital education, educators and learners are faced with an overwhelming abundance of content, yet meaningful engagement with text remains a persistent challenge. Despite advances in technology, most digital reading platforms fall short of fostering deep comprehension, critical thinking, and collaborative dialogue. Students often read passively, missing opportunities to interact with material in ways that enhance retention and analytical skills. Meanwhile, instructors struggle to track student progress, provide timely feedback, and cultivate classroom discussions around texts. There is a clear gap between the potential of digital reading environments and their current implementation in educational settings.\n\nReadSmart Connect bridges this divide with an innovative reading annotation tool designed to transform passive consumption into active learning. Built on cutting-edge natural language processing and informed by pedagogical best practices, ReadSmart Connect empowers users to annotate, discuss, and reflect directly within any digital text. Whether highlighting key passages or posing questions for peer review, our platform creates a dynamic layer of interaction that adapts to individual and group learning needs. By integrating seamlessly with existing learning management systems and offering real-time analytics, ReadSmart Connect not only enhances the reading experience but also equips educators with powerful insights into student engagement and understanding.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "landscape",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "foster",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "innovative",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "cutting-edge",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "highlighting",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "fostering",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "dynamic",
+                    "severity": "medium",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": [
+                  {
+                    "pattern": "Superficial analysis verb: highlighting",
+                    "matches": [
+                      "...gital text. Whether highlighting key passages or pos..."
+                    ]
+                  }
+                ]
+              },
+              "dimensions": {
+                "directness": 1,
+                "rhythm": 4,
+                "trust": 7,
+                "authenticity": 1,
+                "density": 10,
+                "total": 23
+              },
+              "summary": {
+                "mechanicalIssues": 8,
+                "dimensionScore": 23,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "**Marginalia**\n\nThe tradition of marginalia stretches back centuries. Fermat scribbled his famous last theorem in a margin. Coleridge filled entire books with his notes. Readers have always needed to think alongside the text.\n\nBut digital reading tools still treat annotation like an afterthought — a feature you toggle on, not a layer you build a practice around. Highlights get buried in a sidebar. Notes disappear into a search bar that only finds exact matches. Quotes that mattered don't connect to the ones you wrote three chapters later.\n\nMargin changes that. It's a custom evaluation harness — the kind of tool I build to close gaps I keep hitting myself — and it lets readers treat annotations like a living workspace. You can replay your highlights across a corpus, connect related passages across books, and turn marginal notes into structured reading sessions. The tool I'm using to write this is built from exactly these problems: I kept wanting to compare notes across papers, track how ideas evolved, and make marginalia worth returning to instead of losing.\n\nThat's the platform layer this role owns — reading infrastructure that compounds, not just captures",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 10,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 50
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 50,
+                "pass": true
+              }
+            }
+          }
+        },
+        {
+          "prompt": "Write the opening of a pitch deck for a reading annotation tool",
+          "uncoached": {
+            "text": "The future of reading is collaborative, interactive, and intelligent. Yet today's readers lack the tools to fully engage with the texts they encounter, from academic papers to news articles to novels.\n\nWe introduce MarginMind, a next-generation reading annotation platform that transforms passive reading into active learning and community discussion. Our AI-powered tool enables users to highlight, annotate, and share insights seamlessly across any digital content, while fostering meaningful dialogue between readers, educators, and researchers.\n\nBuilt for the modern reader—whether a student dissecting complex coursework, a professional staying current in their field, or a lifelong learner exploring new ideas—MarginMind bridges the gap between individual comprehension and collective intelligence.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [
+                  {
+                    "word": "foster",
+                    "severity": "high",
+                    "count": 1
+                  },
+                  {
+                    "word": "fostering",
+                    "severity": "high",
+                    "count": 1
+                  }
+                ],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 5,
+                "rhythm": 6,
+                "trust": 10,
+                "authenticity": 5,
+                "density": 10,
+                "total": 36
+              },
+              "summary": {
+                "mechanicalIssues": 2,
+                "dimensionScore": 36,
+                "pass": false
+              }
+            }
+          },
+          "coached": {
+            "text": "We built Margin because every time we reached for a tool to annotate and organize research, we hit the same wall: the tool gets in the way of thinking.\n\nMargin is a reading layer that stays out of the way. It surfaces your own past annotations when they're relevant, connects ideas across documents without forcing you to file them first, and lets you pull insights back into whatever you're writing — without a separate \"summary\" step.\n\nThe problem isn't that annotation tools are slow, though they are. It's that they demand you structure your thoughts before you've had them.\n\nMost researchers and writers cycle through three moves: read with questions, notice where ideas connect, write to figure out what they actually think. Traditional tools split that loop across apps — highlights in one place, connections in another, drafts in a third. By the time you've reconciled the three, half your thinking has leaked out.\n\nMargin runs as a browser extension with a local-first store, so your notes live where you work. When you highlight a paragraph, the panel shows your related annotations from other documents — not by tag or folder, but by semantic similarity. You can click any highlight to append it to a running note attached to a downstream document, keeping the chain visible.\n\nBuilt it for ourselves first. We shipped 1.0 in three months, and 417 people signed up in the first week after we posted about it on our personal sites. Today, active users annotate 40 pages per month, and spend an average of 18 minutes per session inside the reader.\n\nWe're raising a seed round to add multi-user spaces, so research teams can share a memory layer without overwriting each other. We'll ship that in six months.\n\nThe category is shifting toward ambient, model-assisted research. We're betting that the teams who build the best annotation layer will own the relationship with the reader — not the publisher, not the platform, and not the latest chat interface that forgets everything after you close the tab.\n\nWe're raising $800K at a $4M post. Want to see how it works.",
+            "compliance": {
+              "mechanical": {
+                "killWords": [],
+                "slopPatterns": [],
+                "voiceViolations": [],
+                "structuralTells": []
+              },
+              "dimensions": {
+                "directness": 10,
+                "rhythm": 8,
+                "trust": 10,
+                "authenticity": 10,
+                "density": 10,
+                "total": 48
+              },
+              "summary": {
+                "mechanicalIssues": 0,
+                "dimensionScore": 48,
+                "pass": true
+              }
+            }
+          }
+        }
+      ],
+      "delta": {
+        "mechanicalDelta": -4,
+        "dimensionDeltas": {
+          "directness": 6.3,
+          "rhythm": 4,
+          "trust": 3.3,
+          "authenticity": 7,
+          "density": 0
+        },
+        "totalScoreDelta": 20.7
+      }
+    }
+  ],
+  "overall": {
+    "totalSamples": 27,
+    "avgMechanicalDelta": -0.6,
+    "avgDimensionDelta": 5.8,
+    "perDimensionDelta": {
+      "directness": 1.7,
+      "rhythm": 2.1,
+      "trust": 0.3,
+      "authenticity": 1.5,
+      "density": 0.2
+    }
+  }
+}
