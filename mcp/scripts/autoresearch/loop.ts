@@ -79,7 +79,7 @@ function parseResults(n: number = 10): ResultsState {
 
 function runEval(): EvalResult {
   console.log("Running evaluation...");
-  const result = execSync(`npx tsx ${EVAL_SCRIPT}`, {
+  const result = execSync(`npx tsx ${EVAL_SCRIPT} --arch coached`, {
     encoding: "utf-8",
     timeout: 600_000, // 10 min max
     maxBuffer: 10 * 1024 * 1024,
