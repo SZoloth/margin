@@ -160,6 +160,97 @@ describe("useAnnotations", () => {
     });
   });
 
+  describe("updateHighlight", () => {
+    it("invokes update_highlight and updates local state", async () => {
+      mockInvoke
+        .mockResolvedValueOnce([fakeHighlight("h1", "doc1")])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(undefined); // update_highlight
+
+      const { result } = renderHook(() => useAnnotations());
+      await act(async () => {
+        await result.current.loadAnnotations("doc1");
+      });
+
+      await act(async () => {
+        await result.current.updateHighlight({
+          id: "h1",
+          color: "green",
+          textContent: "test",
+          fromPos: 0,
+          toPos: 4,
+          prefixContext: "pre",
+          suffixContext: "suf",
+        });
+      });
+
+      expect(mockInvoke).toHaveBeenCalledWith("update_highlight", {
+        id: "h1",
+        color: "green",
+        textContent: "test",
+        fromPos: 0,
+        toPos: 4,
+        prefixContext: "pre",
+        suffixContext: "suf",
+      });
+      expect(result.current.highlights[0]?.color).toBe("green");
+      expect(result.current.highlights[0]?.prefix_context).toBe("pre");
+    });
+  });
+
+  describe("updatePositions", () => {
+    it("invokes update_highlight_positions and updates local state", async () => {
+      mockInvoke
+        .mockResolvedValueOnce([fakeHighlight("h1", "doc1")])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(undefined); // update_highlight_positions
+
+      const { result } = renderHook(() => useAnnotations());
+      await act(async () => {
+        await result.current.loadAnnotations("doc1");
+      });
+      expect(result.current.highlights[0]?.from_pos).toBe(0);
+
+      await act(async () => {
+        await result.current.updatePositions([["h1", 10, 14]]);
+      });
+
+      expect(mockInvoke).toHaveBeenCalledWith("update_highlight_positions", {
+        updates: [["h1", 10, 14]],
+      });
+      expect(result.current.highlights[0]?.from_pos).toBe(10);
+      expect(result.current.highlights[0]?.to_pos).toBe(14);
+    });
+
+    it("no-ops on empty updates without invoking", async () => {
+      const { result } = renderHook(() => useAnnotations());
+      await act(async () => {
+        await result.current.updatePositions([]);
+      });
+      expect(mockInvoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("reset", () => {
+    it("clears local state so a closed doc's annotations don't linger", async () => {
+      mockInvoke
+        .mockResolvedValueOnce([fakeHighlight("h1", "doc1")])
+        .mockResolvedValueOnce([fakeNote("n1", "h1")]);
+
+      const { result } = renderHook(() => useAnnotations());
+      await act(async () => {
+        await result.current.loadAnnotations("doc1");
+      });
+      expect(result.current.highlights).toHaveLength(1);
+
+      act(() => result.current.reset());
+
+      expect(result.current.highlights).toEqual([]);
+      expect(result.current.marginNotes).toEqual([]);
+      expect(result.current.isLoaded).toBe(false);
+    });
+  });
+
   describe("continuous feedback preference", () => {
     it("passes the enabled preference when saving correction feedback", async () => {
       mockInvoke.mockResolvedValueOnce(fakeNote("n1", "h1"));

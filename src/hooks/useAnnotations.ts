@@ -21,6 +21,17 @@ export interface UseAnnotationsReturn {
     prefixContext: string | null;
     suffixContext: string | null;
   }) => Promise<Highlight>;
+  updateHighlight: (params: {
+    id: string;
+    color: string;
+    textContent: string;
+    fromPos: number;
+    toPos: number;
+    prefixContext: string | null;
+    suffixContext: string | null;
+  }) => Promise<void>;
+  /** Bulk-sync stored positions after re-anchoring marks to the edited doc. */
+  updatePositions: (updates: [string, number, number][]) => Promise<void>;
   deleteHighlight: (id: string) => Promise<void>;
 
   createMarginNote: (highlightId: string, content: string) => Promise<MarginNote>;
@@ -35,6 +46,8 @@ export interface UseAnnotationsReturn {
   clearAnnotations: (documentId: string) => Promise<void>;
 
   restoreFromCache: (documentId: string, highlights: Highlight[], marginNotes: MarginNote[]) => void;
+  /** Drop all local annotation state — used when the last tab closes. */
+  reset: () => void;
 }
 
 export function useAnnotations(
@@ -99,6 +112,62 @@ export function useAnnotations(
       return highlight;
     },
     [onMutate],
+  );
+
+  const updateHighlight = useCallback(
+    async (params: {
+      id: string;
+      color: string;
+      textContent: string;
+      fromPos: number;
+      toPos: number;
+      prefixContext: string | null;
+      suffixContext: string | null;
+    }): Promise<void> => {
+      await invoke("update_highlight", {
+        id: params.id,
+        color: params.color,
+        textContent: params.textContent,
+        fromPos: params.fromPos,
+        toPos: params.toPos,
+        prefixContext: params.prefixContext,
+        suffixContext: params.suffixContext,
+      });
+      const updated_at = Date.now();
+      setHighlights((prev) =>
+        prev.map((h) =>
+          h.id === params.id
+            ? {
+                ...h,
+                color: params.color,
+                text_content: params.textContent,
+                from_pos: params.fromPos,
+                to_pos: params.toPos,
+                prefix_context: params.prefixContext,
+                suffix_context: params.suffixContext,
+                updated_at,
+              }
+            : h,
+        ),
+      );
+      onMutate?.();
+    },
+    [onMutate],
+  );
+
+  const updatePositions = useCallback(
+    async (updates: [string, number, number][]) => {
+      if (updates.length === 0) return;
+      await invoke("update_highlight_positions", { updates });
+      const positions = new Map(updates.map(([id, from, to]) => [id, { from, to }]));
+      setHighlights((prev) =>
+        prev.map((h) => {
+          const p = positions.get(h.id);
+          return p ? { ...h, from_pos: p.from, to_pos: p.to } : h;
+        }),
+      );
+    },
+    [],
   );
 
   const deleteHighlight = useCallback(async (id: string) => {
@@ -169,12 +238,22 @@ export function useAnnotations(
     setIsLoaded(true);
   }, []);
 
+  const reset = useCallback(() => {
+    currentDocumentIdRef.current = null;
+    loadSeqRef.current += 1;
+    setHighlights([]);
+    setMarginNotes([]);
+    setIsLoaded(false);
+  }, []);
+
   return {
     highlights,
     marginNotes,
     isLoaded,
     loadAnnotations,
     createHighlight,
+    updateHighlight,
+    updatePositions,
     deleteHighlight,
     createMarginNote,
     createMarginNoteWithIntent,
@@ -182,5 +261,6 @@ export function useAnnotations(
     deleteMarginNote,
     clearAnnotations,
     restoreFromCache,
+    reset,
   };
 }

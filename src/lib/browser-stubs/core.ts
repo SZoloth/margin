@@ -111,6 +111,27 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     return row;
   },
 
+  update_highlight: (a) => {
+    const row = highlights.find((h) => h.id === a.id);
+    if (row) {
+      row.color = a.color as string;
+      row.text_content = a.textContent as string;
+      row.from_pos = a.fromPos as number;
+      row.to_pos = a.toPos as number;
+      row.prefix_context = (a.prefixContext as string) ?? null;
+      row.suffix_context = (a.suffixContext as string) ?? null;
+      row.updated_at = Date.now();
+    }
+  },
+
+  update_highlight_color: (a) => {
+    const row = highlights.find((h) => h.id === a.id);
+    if (row) {
+      row.color = a.color as string;
+      row.updated_at = Date.now();
+    }
+  },
+
   delete_highlight: (a) => {
     highlights = highlights.filter((h) => h.id !== a.id);
   },
