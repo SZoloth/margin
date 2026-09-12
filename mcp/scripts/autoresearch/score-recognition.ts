@@ -7,7 +7,7 @@ import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { cleanEnv } from "../shared.ts";
+import { cleanEnv, evalCmd } from "../shared.ts";
 import type { RecognitionResult, RecognitionCase } from "./category-types.ts";
 
 const SKILL_PATH = join(homedir(), ".claude/skills/writing-voice/SKILL.md");
@@ -49,7 +49,7 @@ NOT_CORRECTION <confidence 0-100>
 A correction is feedback about writing quality/voice/style that should be captured as a reusable rule. A revision request ("make it longer", "add a section") is NOT a correction. Approval ("looks good") is NOT a correction.`;
 
   try {
-    const result = execSync("claude --print --model sonnet", {
+    const result = execSync(evalCmd(), {
       input: prompt,
       encoding: "utf-8",
       timeout: 30_000,

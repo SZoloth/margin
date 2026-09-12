@@ -19,7 +19,7 @@ import { execSync } from "child_process";
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { cleanEnv } from "../shared.ts";
+import { cleanEnv, evalCmd } from "../shared.ts";
 import type { EvalResult } from "./score.ts";
 
 const SKILL_PATH = join(homedir(), ".claude/skills/writing-voice/SKILL.md");
@@ -97,7 +97,7 @@ Rules:
 Output the COMPLETE updated SKILL.md file starting with \`---\`. No markdown fences, no commentary before or after — just the raw file content.`;
 
   try {
-    const result = execSync("claude --print --model sonnet", {
+    const result = execSync(evalCmd(), {
       input: prompt,
       encoding: "utf-8",
       timeout: 120_000,

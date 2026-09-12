@@ -13,7 +13,7 @@
  */
 
 import { execSync } from "child_process";
-import { loadWritingRulesForType, stripMetaCommentary, cleanEnv } from "../../shared.ts";
+import { loadWritingRulesForType, stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 function generateUnconstrained(type: string, prompt: string, register: string): string {
   const fullPrompt = `Write the following. Be clear, direct, and specific.
@@ -25,7 +25,7 @@ Output ONLY the prose — no commentary, critique, word counts, or meta-discussi
 
 ${prompt}`;
 
-  const result = execSync("claude --print --model sonnet", {
+  const result = execSync(evalCmd(), {
     input: fullPrompt,
     encoding: "utf-8",
     timeout: 90_000,
@@ -52,7 +52,7 @@ ${draft}
 
 Output ONLY the revised prose — no commentary, explanations, or tracking changes.`;
 
-  const result = execSync("claude --print --model sonnet", {
+  const result = execSync(evalCmd(), {
     input: fullPrompt,
     encoding: "utf-8",
     timeout: 90_000,

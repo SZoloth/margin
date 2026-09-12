@@ -18,7 +18,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { cleanEnv, stripMetaCommentary } from "../../shared.ts";
+import { cleanEnv, stripMetaCommentary, evalCmd } from "../../shared.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -259,7 +259,7 @@ Output ONLY the prose — no commentary, critique, word counts, or meta-discussi
 ${prompt}`;
 
   try {
-    const result = execSync("claude --print --model sonnet", {
+    const result = execSync(evalCmd(), {
       input: fullPrompt,
       encoding: "utf-8",
       timeout: 90_000,

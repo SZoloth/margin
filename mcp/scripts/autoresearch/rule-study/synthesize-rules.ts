@@ -20,7 +20,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { parseArgs } from "util";
 import { createRequire } from "module";
-import { cleanEnv } from "../../shared.ts";
+import { cleanEnv, evalCmd } from "../../shared.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -102,7 +102,7 @@ For each distinct pattern you identify (there may be 1-5 patterns in this set), 
 Output ONLY a JSON array of rule objects. No commentary.`;
 
   try {
-    const result = execSync("claude --print --model sonnet", {
+    const result = execSync(evalCmd(), {
       input: prompt,
       encoding: "utf-8",
       timeout: 60_000,

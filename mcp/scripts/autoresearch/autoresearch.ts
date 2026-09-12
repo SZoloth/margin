@@ -15,7 +15,7 @@ import { execSync } from "child_process";
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { cleanEnv } from "../shared.ts";
+import { cleanEnv, evalCmd } from "../shared.ts";
 import type { Category, CategoryEvalResult } from "./category-types.ts";
 
 const SKILL_PATH = join(homedir(), ".claude/skills/writing-voice/SKILL.md");
@@ -100,7 +100,7 @@ Rules:
 Output the COMPLETE updated SKILL.md starting with \`---\`. No markdown fences, no commentary.`;
 
       try {
-        let result = execSync("claude --print --model sonnet", {
+        let result = execSync(evalCmd(), {
           input: prompt, encoding: "utf-8", timeout: 120_000,
           maxBuffer: 1024 * 1024, env: cleanEnv(),
         }).trim();
@@ -171,7 +171,7 @@ Rules:
 Output the COMPLETE updated SKILL.md starting with \`---\`. No markdown fences, no commentary.`;
 
       try {
-        let result = execSync("claude --print --model sonnet", {
+        let result = execSync(evalCmd(), {
           input: prompt, encoding: "utf-8", timeout: 120_000,
           maxBuffer: 1024 * 1024, env: cleanEnv(),
         }).trim();
@@ -244,7 +244,7 @@ Rules:
 Output the COMPLETE updated SKILL.md starting with \`---\`. No markdown fences, no commentary.`;
 
       try {
-        let result = execSync("claude --print --model sonnet", {
+        let result = execSync(evalCmd(), {
           input: prompt, encoding: "utf-8", timeout: 120_000,
           maxBuffer: 1024 * 1024, env: cleanEnv(),
         }).trim();

@@ -7,7 +7,7 @@ import { execSync } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { cleanEnv } from "../shared.ts";
+import { cleanEnv, evalCmd } from "../shared.ts";
 import type { CreationResult, CreationScenario } from "./category-types.ts";
 
 const SKILL_PATH = join(homedir(), ".claude/skills/writing-voice/SKILL.md");
@@ -39,7 +39,7 @@ The user said: "${scenario.user_feedback}"
 Generate ONLY the \`margin rules create\` command you would run. Output the complete command on a single line, nothing else.`;
 
   try {
-    const result = execSync("claude --print --model sonnet", {
+    const result = execSync(evalCmd(), {
       input: prompt,
       encoding: "utf-8",
       timeout: 30_000,
@@ -94,7 +94,7 @@ SPECIFICITY: <0-5>
 REASON: <one sentence explaining the biggest gap>`;
 
   try {
-    const result = execSync("claude --print --model sonnet", {
+    const result = execSync(evalCmd(), {
       input: prompt,
       encoding: "utf-8",
       timeout: 30_000,

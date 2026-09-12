@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync, existsSync, appendFileSync } from "fs";
 import { execSync } from "child_process";
 import { join } from "path";
-import { cleanEnv } from "../shared.ts";
+import { cleanEnv, evalCmd } from "../shared.ts";
 import type { EvalResult } from "./eval.ts";
 
 // ── Config ─────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ ${ideas || "(empty)"}
 
 Based on the above, propose your next modification to coaching-prompt.md. Remember: one hypothesis, output between <prompt> tags, hypothesis in <hypothesis> tags, optional <ideas> for deferred hypotheses.`;
 
-  const result = execSync("claude --print --model sonnet", {
+  const result = execSync(evalCmd(), {
     input: agentPrompt,
     encoding: "utf-8",
     timeout: 120_000,

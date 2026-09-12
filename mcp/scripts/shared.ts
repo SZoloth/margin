@@ -129,13 +129,20 @@ export function cleanEnv(): NodeJS.ProcessEnv {
 }
 
 /**
+ * The generator command for eval runs. Override with MARGIN_EVAL_CMD —
+ * e.g. `poolside` (free local model) when the Claude CLI is unavailable.
+ * Any `stdin → stdout` command works.
+ */
+export function evalCmd(): string {
+  return process.env.MARGIN_EVAL_CMD ?? "claude --print --model sonnet";
+}
+
+/**
  * LLM generator for eval runs. The command receives the prompt on stdin and
- * must print the prose to stdout. Defaults to Claude Code; override with
- * MARGIN_EVAL_CMD — e.g. `poolside` (free local model) when the Claude CLI
- * is unavailable.
+ * must print the prose to stdout.
  */
 export function evalGenerate(prompt: string): string {
-  const cmd = process.env.MARGIN_EVAL_CMD ?? "claude --print --model sonnet";
+  const cmd = evalCmd();
   return execSync(cmd, {
     input: prompt,
     encoding: "utf-8",

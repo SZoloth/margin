@@ -17,7 +17,7 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { createRequire } from "module";
-import { stripMetaCommentary, cleanEnv } from "../../shared.ts";
+import { stripMetaCommentary, cleanEnv, evalCmd } from "../../shared.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -111,7 +111,7 @@ Output ONLY the prose — no commentary, critique, word counts, or meta-discussi
 ${prompt}`;
 
   try {
-    const result = execSync("claude --print --model sonnet", {
+    const result = execSync(evalCmd(), {
       input: fullPrompt,
       encoding: "utf-8",
       timeout: 90_000,
