@@ -95,6 +95,26 @@ A failed generation surfaces as an error for that sample — a zero-issue or
 all-failed run is invalid evidence, not a pass. Comparison runs save to
 `mcp/scripts/regression/comparison-<date>.json`.
 
+## Autoresearch Loop
+
+`mcp/scripts/autoresearch/` is the optimization layer on top of the eval: a
+hill-climbing loop (`loop.ts --max N`) that mutates `coaching-prompt.md`,
+re-evaluates all 9 types, and keeps or reverts each change with a git commit.
+`program.md` defines the goal (corrections-per-document → 0) and competing
+architectures (A rules, B exemplars, C two-pass editor, D
+corrections-as-context, E hybrid, F governance schema, H DSPy). All
+generation routes through `MARGIN_EVAL_CMD`:
+
+```bash
+cd mcp
+MARGIN_EVAL_CMD=poolside pnpm exec tsx scripts/autoresearch/eval.ts --arch c
+MARGIN_EVAL_CMD=poolside pnpm exec tsx scripts/autoresearch/loop.ts --max 3
+```
+
+Scores accumulate in `autoresearch/results.tsv`; `experiment-log.md` holds
+the March 2026 architecture comparison (arch-c two-pass editor led at 88.9%
+pass rate — unconfirmed on non-Claude providers).
+
 ## Release Confidence
 
 Changes are ready to hand off when:
