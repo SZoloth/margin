@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { indexAllDocuments } from "@/lib/tauri-commands";
+import { reportError } from "@/lib/error-bus";
 
 export interface SearchResult {
   documentId: string;
@@ -23,6 +24,8 @@ export function useSearch() {
 
   const searchIdRef = useRef(0);
   const mdfindTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Consecutive FTS failures — a single blip stays silent, a broken index toasts once
+  const ftsFailStreakRef = useRef(0);
 
   const search = useCallback((q: string) => {
     setQuery(q);
@@ -51,12 +54,16 @@ export function useSearch() {
     })
       .then((ftsResults) => {
         if (searchIdRef.current !== thisSearchId) return;
+        ftsFailStreakRef.current = 0;
         setResults(ftsResults);
         setIsSearching(false);
       })
       .catch((err) => {
         if (searchIdRef.current !== thisSearchId) return;
         console.error("FTS search failed:", err);
+        if (++ftsFailStreakRef.current === 2) {
+          reportError("Search is failing — results may be incomplete", err);
+        }
         setResults([]);
         setIsSearching(false);
       });
@@ -113,7 +120,7 @@ export function useSearch() {
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error("Background indexing failed:", err);
+        reportError("Search index could not be built — results may be stale", err);
       })
       .finally(() => {
         if (cancelled) return;

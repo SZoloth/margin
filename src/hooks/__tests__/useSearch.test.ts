@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useSearch } from "../useSearch";
+import { subscribeErrors } from "@/lib/error-bus";
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn();
@@ -331,6 +332,39 @@ describe("useSearch", () => {
 
     expect(result.current.results).toEqual([]);
     expect(result.current.isSearching).toBe(false);
+  });
+
+  it("reports a user-facing error only after consecutive FTS failures", async () => {
+    const reported = vi.fn();
+    const unsubscribe = subscribeErrors(reported);
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "index_all_documents")
+        return Promise.resolve({ indexed: 0, skipped: 0, errors: 0 });
+      if (cmd === "search_documents")
+        return Promise.reject(new Error("FTS error"));
+      if (cmd === "search_files_on_disk") return Promise.resolve([]);
+      return Promise.resolve([]);
+    });
+
+    const { result } = renderHook(() => useSearch());
+    await act(() => vi.runAllTimersAsync());
+
+    // One failure stays silent (transient blips shouldn't toast)
+    act(() => {
+      result.current.search("one");
+    });
+    await act(() => vi.runAllTimersAsync());
+    expect(reported).not.toHaveBeenCalled();
+
+    // Second consecutive failure surfaces once
+    act(() => {
+      result.current.search("two");
+    });
+    await act(() => vi.runAllTimersAsync());
+    expect(reported).toHaveBeenCalledTimes(1);
+    expect(reported.mock.calls[0][0]).toMatch(/search/i);
+
+    unsubscribe();
   });
 
   it("unmount clears pending mdfind timeout (no leak)", async () => {

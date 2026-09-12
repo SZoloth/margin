@@ -30,7 +30,7 @@ import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedCont
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, syncFeedbackSignal } from "@/lib/tauri-commands";
-import { subscribeErrors } from "@/lib/error-bus";
+import { subscribeErrors, reportError } from "@/lib/error-bus";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -396,6 +396,7 @@ export default function App() {
           if (!markT) return;
           const { tr: recoverTr } = s;
           const fullText = s.doc.textBetween(0, s.doc.content.size, "\n");
+          let failed = 0;
 
           for (const domMark of domMarks) {
             const el = domMark as HTMLElement;
@@ -409,6 +410,7 @@ export default function App() {
               from = editor.view.posAtDOM(el, 0);
               to = from + text.length;
             } catch {
+              failed++;
               continue;
             }
 
@@ -429,7 +431,14 @@ export default function App() {
               recoverTr.addMark(from, to, markT.create({ color, highlightId: highlight.id }));
             } catch (err) {
               console.error("Failed to recover orphan highlight:", err);
+              failed++;
             }
+          }
+
+          if (failed > 0) {
+            reportError(
+              `${failed} highlight${failed === 1 ? "" : "s"} could not be recovered in this document`
+            );
           }
 
           if (recoverTr.steps.length > 0) {
