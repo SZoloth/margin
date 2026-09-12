@@ -7,34 +7,41 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Make Margin's two product pillars explicit and ship the first missing behavior for each pillar on branch `feat/two-pillar-product`.
+Make the eval harness produce real evidence on branch `fix/eval-harness`:
+`adversarial-test.ts` and `compliance-check.ts` run end-to-end against a
+pluggable generation provider.
 
 ### Outcome
 
-Margin treats the Markdown reading and writing experience as a core product, and feedback saved in the margin becomes local learning data without requiring an export step.
+The product thesis ("rules mechanically improve AI output") is measured, not
+asserted. First real run (poolside, email+blog): coached output scores +5.3
+dimension points/sample vs uncoached, rhythm +4.8, mechanical issues flat.
 
 ### Constraints
 
-- Keep Markdown files portable and preserve round-trip behavior.
-- Keep SQLite authoritative for feedback and rules.
-- Keep automatic learning inspectable and reversible; synthesis remains reviewable.
-- Preserve correction-event history after synthesis while updating the current unsynthesized signal in place.
-- Write failing tests before each behavior change.
-- Run `scripts/verify full`, stage only this task's files, commit, and push.
+- Generation goes through `evalGenerate()` in `mcp/scripts/shared.ts`;
+  `MARGIN_EVAL_CMD` overrides the command (default `claude --print --model
+  sonnet`). `poolside` is the known-working free local provider.
+- `claude` CLI auth is broken on this machine (org disabled subscription
+  access + stale API key); `codex exec` fails on a config parse error;
+  `devin -p` needs `devin auth login`. See docs/troubleshooting.md.
+- An all-failed or zero-issue eval run is invalid evidence, not a pass.
+- Stage only this task's files; Linear is the tracker (SAM-161).
 
 ### Steps
 
-1. Add failing tests for first-class formatting controls in the selection toolbar.
-2. Add failing Rust tests for continuous feedback capture and unsynthesized-signal updates.
-3. Implement both behaviors and wire visible error handling into the app.
-4. Rewrite the product contract, architecture, invariants, and evals around the two pillars.
-5. Run the full verification gate, commit, and push.
+1. Fix compliance-check arg parsing and kill-word inflection matching. DONE.
+2. Add `evalGenerate()` provider abstraction; route both scripts through it. DONE.
+3. Verify: mcp tests + tsc pass; real comparison run produces non-empty data. DONE.
+4. Document provider config in docs/evals.md + docs/troubleshooting.md. DONE.
+5. `scripts/verify standard`, then merge to main.
 
-### Decisions
+### Next
 
-- The two pillars are peers. Reading and writing quality is not a disposable input surface for the learning system.
-- A saved correction note becomes a correction row immediately. Later edits update the current unsynthesized row; feedback after synthesis creates a new event.
-- Formatting controls share the selection toolbar with annotation controls so writing and feedback stay in one flow.
+- SAM-958: label the 25 Vale alerts from the 30-doc validation.
+- SAM-161: derive narrow evaluators from correction history (this harness
+  is the substrate for that).
+- Restore `claude`/`codex`/`devin` CLI auth so evals can compare providers.
 
 ### Verification
 

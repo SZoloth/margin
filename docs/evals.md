@@ -67,6 +67,34 @@ When relevant, also verify:
 - visible error handling instead of silent failure
 - generated writing artifacts still reflect the database truth
 
+## Generation Evals
+
+`mcp/scripts/adversarial-test.ts` and `compliance-check.ts` are the loop's proof
+instruments: the first measures coached (rules injected) vs uncoached output
+quality per document type, the second scores a text file against the live
+kill-word / slop / dimension rules.
+
+```bash
+cd mcp
+pnpm eval:check -- <file>            # score one file
+pnpm eval:check -- --type email <f>  # score against a type's rules
+pnpm eval:adversarial -- --types email,blog        # coached only
+pnpm eval:comparison -- --types email,blog         # coached vs uncoached, saves JSON
+```
+
+Generation runs through `evalGenerate()` in `mcp/scripts/shared.ts`, which
+pipes the prompt to a command on stdin and reads the result on stdout. The
+command is overridable:
+
+- `MARGIN_EVAL_CMD` — any `stdin → stdout` generator. Default:
+  `claude --print --model sonnet`. Known working: `poolside` (free local
+  model shim). `codex exec`, `devin -p`, and `pi` also fit the contract when
+  their auth/config is healthy.
+
+A failed generation surfaces as an error for that sample — a zero-issue or
+all-failed run is invalid evidence, not a pass. Comparison runs save to
+`mcp/scripts/regression/comparison-<date>.json`.
+
 ## Release Confidence
 
 Changes are ready to hand off when:

@@ -104,3 +104,29 @@ Malformed JSONL, duplicate gap IDs, missing referenced tests, or a closed gap wi
 ### Fix
 
 Correct the entry in `.harness/gaps.jsonl`, make sure the referenced test file exists, then rerun the audit.
+
+## Eval Generation Fails or Returns Empty
+
+### Symptom
+
+`pnpm eval:adversarial` / `eval:comparison` reports zero deltas or errors on
+every sample; `eval:check` with `--llm` audit errors.
+
+### Likely Cause
+
+The configured generator command (`MARGIN_EVAL_CMD`, default `claude --print
+--model sonnet`) is unauthenticated or broken. Observed on this machine:
+`claude` CLI rejected (org disabled subscription access + stale API key),
+`codex exec` failed on a `config.toml` feature-type parse error, `devin -p`
+needed `devin auth login` re-auth.
+
+### Fix
+
+Point the harness at a healthy stdin→stdout command:
+
+```bash
+MARGIN_EVAL_CMD=poolside pnpm eval:comparison -- --types email,blog
+```
+
+Any command that accepts a prompt on stdin and writes text on stdout works.
+Treat an all-failed or zero-issue run as invalid evidence, not a pass.
