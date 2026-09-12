@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { exportCorrectionsJson, seedRulesFromGuide, openStyleGuideDialog, getWritingRules } from "@/lib/tauri-commands";
 import type { SeedRulesResult } from "@/lib/tauri-commands";
+import { reportError } from "@/lib/error-bus";
 import { CorrectionsTab } from "@/components/style-memory/CorrectionsTab";
 import { RulesTab } from "@/components/style-memory/RulesTab";
 import { WRITING_TYPES } from "@/lib/writing-types";
@@ -158,7 +159,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
           unreviewedCount: rules.filter((r) => r.reviewedAt == null).length,
         });
       })
-      .catch((err: unknown) => console.error("Failed to load rule stats:", err));
+      .catch((err: unknown) => reportError("Could not load rule stats", err));
     return () => {
       cancelled = true;
     };
@@ -211,7 +212,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
         6000,
       );
     } catch (err) {
-      console.error("Failed to export corrections:", err);
+      reportError("Could not export corrections", err);
       setExportStatus("Export failed");
     }
   }, []);

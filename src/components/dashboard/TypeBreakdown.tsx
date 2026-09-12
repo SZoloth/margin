@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getTestRunDetail, type TestRunSummary, type TestRunTypeDetail } from "@/lib/tauri-commands";
+import { reportError } from "@/lib/error-bus";
 
 export function TypeBreakdown({ run }: { run: TestRunSummary }) {
   const [types, setTypes] = useState<TestRunTypeDetail[]>([]);
@@ -13,7 +14,7 @@ export function TypeBreakdown({ run }: { run: TestRunSummary }) {
         );
         setTypes(sorted);
       })
-      .catch((err) => console.error("Failed to load type breakdown:", err));
+      .catch((err) => reportError("Could not load type breakdown", err));
   }, [run.id]);
 
   if (types.length === 0) return null;

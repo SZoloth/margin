@@ -10,6 +10,7 @@ import {
   markCorrectionsUnsynthesized,
 } from "@/lib/tauri-commands";
 import { WRITING_TYPES, type WritingType } from "@/lib/writing-types";
+import { reportError } from "@/lib/error-bus";
 
 const PAGE_SIZE = 500;
 const FILTER_CHIP_TYPES = WRITING_TYPES.slice(0, 6);
@@ -423,7 +424,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       const data = await getCorrectionsFlat(pageLimit);
       setCorrections(data);
     } catch (err) {
-      console.error("Failed to load corrections:", err);
+      reportError("Could not load corrections", err);
     } finally {
       setLoading(false);
     }
@@ -484,7 +485,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
         prev.map((c) => (c.highlightId === highlightId ? { ...c, writingType } : c)),
       );
     } catch (err) {
-      console.error("Failed to update writing type:", err);
+      reportError("Could not update writing type", err);
     }
   }, []);
 
@@ -498,7 +499,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
         return next;
       });
     } catch (err) {
-      console.error("Failed to delete correction:", err);
+      reportError("Could not delete correction", err);
     }
   }, []);
 
@@ -512,7 +513,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
         prev.map((c) => c.highlightId === highlightId ? { ...c, acceptedAt: Date.now() } : c),
       );
     } catch (err) {
-      console.error("Failed to accept correction:", err);
+      reportError("Could not apply correction", err);
     }
   }, [onAcceptEdit]);
 
@@ -535,7 +536,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       setCorrections((prev) => prev.filter((c) => !selectedIds.has(c.highlightId)));
       setSelectedIds(new Set());
     } catch (err) {
-      console.error("Failed to bulk delete:", err);
+      reportError("Bulk delete failed", err);
     }
   }, [selectedIds]);
 
@@ -549,7 +550,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       setSelectedIds(new Set());
       setShowBulkTypeChips(false);
     } catch (err) {
-      console.error("Failed to bulk tag:", err);
+      reportError("Bulk tagging failed", err);
     }
   }, [selectedIds]);
 
@@ -562,7 +563,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       );
       setSelectedIds(new Set());
     } catch (err) {
-      console.error("Failed to requeue corrections:", err);
+      reportError("Could not requeue corrections", err);
     }
   }, [selectedIds]);
 

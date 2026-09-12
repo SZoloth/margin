@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
+import { reportError } from "@/lib/error-bus";
 import { SectionHeader } from "./SectionHeader";
 import { SettingsCard } from "./SettingsCard";
 import { SettingRow } from "./SettingRow";
@@ -57,8 +58,9 @@ export function IntegrationsSection() {
       }
       const nowConnected = await checkMcpConnection();
       setConnected(nowConnected);
-    } catch {
+    } catch (err) {
       setEnabled(!next);
+      reportError("Could not update the Claude MCP integration", err);
     } finally {
       savingRef.current = false;
     }
@@ -69,7 +71,7 @@ export function IntegrationsSection() {
       await writeText(CLAUDE_CODE_SNIPPET);
       triggerCopied();
     } catch {
-      // clipboard write failed
+      reportError("Could not copy to clipboard");
     }
   }, [triggerCopied]);
 

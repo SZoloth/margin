@@ -8,6 +8,7 @@ import {
   exportCorrectionsJson,
 } from "@/lib/tauri-commands";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
+import { reportError } from "@/lib/error-bus";
 import { WRITING_TYPES, type WritingType } from "@/lib/writing-types";
 
 const PAGE_SIZE = 50;
@@ -252,7 +253,7 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
       const total = data.reduce((sum, g) => sum + g.corrections.length, 0);
       setTotalCount(total);
     } catch (err) {
-      console.error("Failed to load corrections:", err);
+      reportError("Could not load corrections", err);
     } finally {
       setLoading(false);
     }
@@ -299,7 +300,7 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
           })),
         );
       } catch (err) {
-        console.error("Failed to update writing type:", err);
+        reportError("Could not update writing type", err);
       }
     },
     [],
@@ -321,7 +322,7 @@ export function CorrectionsPanel({ isOpen, onClose }: CorrectionsPanelProps) {
         );
         setTotalCount((prev) => prev - 1);
       } catch (err) {
-        console.error("Failed to delete correction:", err);
+        reportError("Could not delete correction", err);
       }
     },
     [],
@@ -433,7 +434,7 @@ Stop Conditions (pause and ask)
         8000,
       );
     } catch (err) {
-      console.error("Failed to export corrections:", err);
+      reportError("Could not export corrections", err);
       setExportStatus("Export failed");
     }
   }, [limit, loadCorrections]);

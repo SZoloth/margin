@@ -1,4 +1,5 @@
 import type { TestRunSummary } from "@/lib/tauri-commands";
+import { reportError } from "@/lib/error-bus";
 
 const DIMENSIONS = ["directness", "rhythm", "trust", "authenticity", "density"] as const;
 
@@ -15,7 +16,7 @@ export function DimensionBars({ run }: { run: TestRunSummary }) {
     if (run.dimensionAveragesJson) averages = JSON.parse(run.dimensionAveragesJson);
     if (run.dimensionDeltasJson) deltas = JSON.parse(run.dimensionDeltasJson);
   } catch {
-    console.error("Failed to parse dimension JSON");
+    reportError("Dashboard data was malformed — some results are missing");
   }
 
   return (

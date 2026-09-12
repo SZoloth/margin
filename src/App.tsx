@@ -30,6 +30,7 @@ import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedCont
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, syncFeedbackSignal } from "@/lib/tauri-commands";
+import { subscribeErrors } from "@/lib/error-bus";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -219,7 +220,10 @@ export default function App() {
           } else if (recentDoc.source === "keep-local" && recentDoc.keep_local_id) {
             void keepLocal.getContent(recentDoc.keep_local_id).then((markdown) => {
               void doc.openKeepLocalArticle(recentDoc, markdown);
-            }).catch(console.error);
+            }).catch((err: unknown) => {
+              console.error("Failed to restore keep-local article:", err);
+              setErrorToast({ message: "Could not restore article — is keep-local running?", id: ++errorIdRef.current });
+            });
           }
         }
       }
@@ -293,7 +297,10 @@ export default function App() {
       } else if (cache.document.source === "keep-local" && cache.document.keep_local_id) {
         void keepLocal.getContent(cache.document.keep_local_id).then((markdown) => {
           void doc.openKeepLocalArticle(cache.document!, markdown);
-        }).catch(console.error);
+        }).catch((err: unknown) => {
+          console.error("Failed to restore keep-local article from tab cache:", err);
+          setErrorToast({ message: "Could not restore article — is keep-local running?", id: ++errorIdRef.current });
+        });
       }
     }
   }, [tabsHook.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -519,10 +526,18 @@ export default function App() {
         .catch(() => {});
     } catch (err) {
       console.error("Failed to reload file:", err);
+      setErrorToast({ message: `Could not reload file after external change: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
     }
   }, []);
 
   useFileWatcher(doc.filePath, handleFileChanged);
+
+  // Components outside App's state tree surface errors through the error bus
+  useEffect(() => {
+    return subscribeErrors((message) => {
+      setErrorToast({ message, id: ++errorIdRef.current });
+    });
+  }, []);
 
   // Focus-based fallback: stat the file on window focus and reload if mtime changed.
   // Safety net so a missed watcher event is never permanent.
@@ -657,7 +672,10 @@ export default function App() {
       if (lastPath) {
         void openFilePathRef.current(lastPath);
       }
-    }).catch(console.error);
+    }).catch((err: unknown) => {
+      console.error("Failed to drain pending open files:", err);
+      setErrorToast({ message: "Could not open dropped file", id: ++errorIdRef.current });
+    });
 
     const unlisten = listen<string>("open-file", (event) => {
       void openFilePathRef.current(event.payload);
@@ -806,6 +824,7 @@ export default function App() {
           setFocusHighlightId(restored.id);
         } catch (err) {
           console.error("Failed to undo highlight delete:", err);
+          setErrorToast({ message: `Could not restore highlight: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
         }
         setUndoAction(null);
       },
@@ -1114,6 +1133,7 @@ export default function App() {
             });
           } catch (err) {
             console.error("Failed to persist corrections:", err);
+            setErrorToast({ message: `Corrections were not saved: ${err instanceof Error ? err.message : String(err)}. Highlights kept so you can retry.`, id: ++errorIdRef.current });
           }
         }
       }

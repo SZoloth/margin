@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import type { WritingRule, WritingRuleSeverity } from "@/lib/tauri-commands";
+import { reportError } from "@/lib/error-bus";
 import {
   getWritingRules,
   updateWritingRule,
@@ -443,7 +444,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       const data = await getWritingRules();
       setRules(data);
     } catch (err) {
-      console.error("Failed to load rules:", err);
+      reportError("Could not load writing rules", err);
     } finally {
       setLoading(false);
     }
@@ -483,7 +484,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
     try {
       await exportWritingRules();
     } catch (err) {
-      console.error("Auto-export after rule mutation failed:", err);
+      reportError("Rule saved, but the writing profile export failed", err);
     }
   }, []);
 
@@ -503,7 +504,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       );
       void autoExportAfterRuleMutation();
     } catch (err) {
-      console.error("Failed to update rule:", err);
+      reportError("Could not update rule", err);
       throw err;
     }
   }, [autoExportAfterRuleMutation]);
@@ -519,7 +520,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       });
       void autoExportAfterRuleMutation();
     } catch (err) {
-      console.error("Failed to delete rule:", err);
+      reportError("Could not delete rule", err);
     }
   }, [autoExportAfterRuleMutation]);
 
@@ -535,7 +536,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
         return next;
       });
     } catch (err) {
-      console.error("Failed to mark rule reviewed:", err);
+      reportError("Could not mark rule reviewed", err);
     }
   }, []);
 
@@ -549,7 +550,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       );
       setSelectedIds(new Set());
     } catch (err) {
-      console.error("Failed to bulk mark reviewed:", err);
+      reportError("Bulk review failed", err);
     }
   }, [selectedIds]);
 
@@ -574,7 +575,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       }
       exportTimeoutRef.current = window.setTimeout(() => setExportStatus(null), 5000);
     } catch (err) {
-      console.error("Failed to export rules:", err);
+      reportError("Could not export rules", err);
       setExportStatus("Export failed");
     }
   }, []);
