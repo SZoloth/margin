@@ -179,6 +179,10 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
     // type set (runs last so the rebuild sees every column)
     migrate_writing_rules_widen_type_check(&conn)?;
 
+    // Migration: add archived_at to writing_rules — must run AFTER the
+    // widen rebuild above, whose explicit column list would otherwise drop it.
+    migrate_writing_rules_add_archived_at(&conn)?;
+
     // Cleanup: mark stale running test runs as failed (from previous crashes)
     let _ = conn.execute(
         "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
@@ -1754,6 +1758,25 @@ pub fn seed_guard_patterns_v2(conn: &Connection) -> Result<(), Box<dyn std::erro
 /// Adds a `detection_pattern` column to writing_rules if it doesn't exist.
 /// A rule contributes to the mechanical guard hook ONLY via this column
 /// (a validated regex); example_before is illustrative, never executable.
+/// Adds an `archived_at` column to the writing_rules table if it doesn't exist.
+/// Rules are archived, never deleted — deletion loses provenance forever.
+pub(crate) fn migrate_writing_rules_add_archived_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "archived_at")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN archived_at INTEGER;")?;
+    }
+
+    Ok(())
+}
+
 pub(crate) fn migrate_writing_rules_add_detection_pattern(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let has_column: bool = {
         let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;

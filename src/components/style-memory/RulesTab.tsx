@@ -7,6 +7,8 @@ import {
   deleteWritingRule,
   exportWritingRules,
   markRulesReviewed,
+  getArchivedWritingRules,
+  unarchiveWritingRule,
 } from "@/lib/tauri-commands";
 
 type RulesView = "unreviewed" | "all";
@@ -360,7 +362,7 @@ function RuleCard({
               padding: 0,
             }}
           >
-            Delete
+            Archive
           </button>
         ) : (
           <>
@@ -380,7 +382,7 @@ function RuleCard({
                 padding: 0,
               }}
             >
-              Confirm delete
+              Confirm — recoverable below
             </button>
             <button
               type="button"
@@ -429,6 +431,8 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [archivedRules, setArchivedRules] = useState<WritingRule[] | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const exportTimeoutRef = useRef<number | null>(null);
   const loadedRef = useRef(false);
 
@@ -519,10 +523,39 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
         return next;
       });
       void autoExportAfterRuleMutation();
+      // Keep the archive list honest if it has been loaded.
+      setArchivedRules((prev) => {
+        if (prev === null) return prev;
+        const moved = rules.find((r) => r.id === id);
+        return moved ? [...prev, { ...moved, archivedAt: Date.now() }] : prev;
+      });
     } catch (err) {
-      reportError("Could not delete rule", err);
+      reportError("Could not archive rule", err);
     }
-  }, [autoExportAfterRuleMutation]);
+  }, [autoExportAfterRuleMutation, rules]);
+
+  const handleToggleArchived = useCallback(async () => {
+    const opening = !archivedOpen;
+    setArchivedOpen(opening);
+    if (opening && archivedRules === null) {
+      try {
+        setArchivedRules(await getArchivedWritingRules());
+      } catch (err) {
+        reportError("Could not load archived rules", err);
+      }
+    }
+  }, [archivedOpen, archivedRules]);
+
+  const handleRestore = useCallback(async (id: string) => {
+    try {
+      await unarchiveWritingRule(id);
+      setArchivedRules((prev) => prev?.filter((r) => r.id !== id) ?? prev);
+      void loadRules();
+      void autoExportAfterRuleMutation();
+    } catch (err) {
+      reportError("Could not restore rule", err);
+    }
+  }, [autoExportAfterRuleMutation, loadRules]);
 
   const handleMarkReviewed = useCallback(async (id: string) => {
     try {
@@ -786,6 +819,84 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
               </div>
             ))
           )}
+
+          {/* Archived — deleted rules keep their provenance and can return */}
+          <div style={{ marginTop: 32 }}>
+            <button
+              type="button"
+              onClick={() => void handleToggleArchived()}
+              style={{
+                fontSize: "var(--text-xs)",
+                fontWeight: 600,
+                color: "var(--color-text-secondary)",
+                textTransform: "uppercase",
+                letterSpacing: "0.3px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  transform: archivedOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                  transition: "transform 150ms ease",
+                }}
+              >
+                {"\u25BE"}
+              </span>
+              Archived{archivedRules !== null ? ` (${archivedRules.length})` : ""}
+            </button>
+            {archivedOpen &&
+              (archivedRules === null ? (
+                <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", padding: "12px 0" }}>
+                  Loading…
+                </div>
+              ) : archivedRules.length === 0 ? (
+                <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", padding: "12px 0" }}>
+                  Nothing archived.
+                </div>
+              ) : (
+                archivedRules.map((rule) => (
+                  <div
+                    key={rule.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: 8,
+                      padding: "8px 0",
+                      borderBottom: "1px solid var(--color-border)",
+                      opacity: 0.7,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0, fontSize: "var(--text-sm)", color: "var(--color-text-primary)" }}>
+                      {rule.ruleText}
+                    </div>
+                    <SourceBadge source={rule.source} />
+                    <button
+                      type="button"
+                      onClick={() => void handleRestore(rule.id)}
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--color-text-secondary)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        textUnderlineOffset: 2,
+                        padding: 0,
+                      }}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))
+              ))}
+          </div>
         </div>
       </div>
     </>

@@ -160,6 +160,8 @@ export const SCHEMA_SQL = `
     reviewed_at INTEGER,
     register TEXT,
     polarity TEXT,
+    detection_pattern TEXT,
+    archived_at INTEGER,
     UNIQUE(writing_type, category, rule_text)
   );
 

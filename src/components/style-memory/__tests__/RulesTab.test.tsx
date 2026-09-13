@@ -115,8 +115,8 @@ describe("RulesTab — SeverityBadge", () => {
     // Reset call count in case previous test's fire-and-forget leaked
     vi.mocked(exportWritingRules).mockClear();
 
-    await user.click(screen.getByRole("button", { name: "Delete" }));
-    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+    await user.click(screen.getByRole("button", { name: "Archive" }));
+    await user.click(screen.getByRole("button", { name: "Confirm — recoverable below" }));
 
     await waitFor(() => {
       expect(deleteWritingRule).toHaveBeenCalledWith("r1");

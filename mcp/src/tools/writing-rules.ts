@@ -26,7 +26,7 @@ export interface WritingRule {
  * Synthesis candidates are invisible to MCP consumers until reviewed
  * (reviewed_at set by the UI or `margin rules accept`).
  */
-const REVIEW_GATE = `NOT (source = 'synthesis-candidate' AND reviewed_at IS NULL)`;
+const REVIEW_GATE = `NOT (source = 'synthesis-candidate' AND reviewed_at IS NULL) AND archived_at IS NULL`;
 
 export function getWritingRules(
   db: Database.Database,
@@ -272,7 +272,12 @@ export function deleteWritingRule(
   db: Database.Database,
   ruleId: string,
 ): { success: true } | { error: string } {
-  const result = db.prepare("DELETE FROM writing_rules WHERE id = ?").run(ruleId);
+  // Archive, never delete: a hard DELETE loses the synthesized-from
+  // provenance that keeps source corrections stamped. Re-synthesizing the
+  // same rule updates fields but leaves archived_at set — deletes stick.
+  const result = db
+    .prepare("UPDATE writing_rules SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL")
+    .run(nowMillis(), nowMillis(), ruleId);
 
   if (result.changes === 0) {
     return { error: `Writing rule not found: ${ruleId}` };

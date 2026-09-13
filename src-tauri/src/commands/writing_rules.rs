@@ -27,6 +27,7 @@ pub struct WritingRule {
     pub register: Option<String>,
     pub polarity: Option<String>,
     pub detection_pattern: Option<String>,
+    pub archived_at: Option<i64>,
 }
 
 fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
@@ -49,13 +50,14 @@ fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
         register: row.get(15)?,
         polarity: row.get(16)?,
         detection_pattern: row.get(17)?,
+        archived_at: row.get(18)?,
     })
 }
 
 const RULES_SELECT: &str =
     "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
             example_before, example_after, source, signal_count, notes, created_at, updated_at,
-            reviewed_at, register, polarity, detection_pattern
+            reviewed_at, register, polarity, detection_pattern, archived_at
      FROM writing_rules";
 
 fn fetch_writing_rules(
@@ -64,13 +66,13 @@ fn fetch_writing_rules(
 ) -> rusqlite::Result<Vec<WritingRule>> {
     match writing_type {
         Some(wt) => {
-            let sql = format!("{RULES_SELECT} WHERE writing_type = ?1 ORDER BY signal_count DESC, created_at DESC");
+            let sql = format!("{RULES_SELECT} WHERE writing_type = ?1 AND archived_at IS NULL ORDER BY signal_count DESC, created_at DESC");
             let mut stmt = conn.prepare(&sql)?;
             let rows = stmt.query_map([wt], rule_from_row)?;
             rows.collect()
         }
         None => {
-            let sql = format!("{RULES_SELECT} ORDER BY writing_type, signal_count DESC, created_at DESC");
+            let sql = format!("{RULES_SELECT} WHERE archived_at IS NULL ORDER BY writing_type, signal_count DESC, created_at DESC");
             let mut stmt = conn.prepare(&sql)?;
             let rows = stmt.query_map([], rule_from_row)?;
             rows.collect()
@@ -671,8 +673,26 @@ fn update_rule(
     Ok(())
 }
 
+/// Rules are archived, never deleted: a hard DELETE would lose the
+/// provenance (`synthesized-from:` notes) that keeps its source corrections
+/// stamped. Archived rules are invisible to every read/enforcement path and
+/// stay archived if the same rule is re-synthesized.
 fn delete_rule(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    let rows = conn.execute("DELETE FROM writing_rules WHERE id = ?1", [id])?;
+    let rows = conn.execute(
+        "UPDATE writing_rules SET archived_at = ?1, updated_at = ?1 WHERE id = ?2 AND archived_at IS NULL",
+        rusqlite::params![now_millis(), id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+fn unarchive_rule(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE writing_rules SET archived_at = NULL, updated_at = ?1 WHERE id = ?2 AND archived_at IS NOT NULL",
+        rusqlite::params![now_millis(), id],
+    )?;
     if rows == 0 {
         return Err(rusqlite::Error::QueryReturnedNoRows);
     }
@@ -722,6 +742,33 @@ pub async fn delete_writing_rule(
     }
     export_artifacts();
     Ok(())
+}
+
+#[tauri::command]
+pub async fn unarchive_writing_rule(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        unarchive_rule(&conn, &id).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_archived_writing_rules(
+    state: tauri::State<'_, DbPool>,
+) -> Result<Vec<WritingRule>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let sql = format!("{RULES_SELECT} WHERE archived_at IS NOT NULL ORDER BY archived_at DESC");
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], rule_from_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1195,6 +1242,7 @@ mod tests {
         }
         // detection_pattern via the production migration
         crate::db::migrations::migrate_writing_rules_add_detection_pattern(&conn).unwrap();
+        crate::db::migrations::migrate_writing_rules_add_archived_at(&conn).unwrap();
         conn
     }
 
@@ -1509,20 +1557,39 @@ mod tests {
         assert!(new_ts > old_ts);
     }
 
-    // --- delete_rule tests ---
+    // --- delete_rule tests (soft-archive: the row survives, hidden from reads) ---
 
     #[test]
-    fn delete_rule_removes_row() {
+    fn delete_rule_archives_row() {
         let conn = setup_db();
         insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
         insert_rule(&conn, "r2", "email", "tone", "Be brief", "should-fix");
 
         delete_rule(&conn, "r1").unwrap();
 
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0))
+        // Row survives with archived_at stamped — provenance is preserved.
+        let archived: Option<i64> = conn
+            .query_row("SELECT archived_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(count, 1);
+        assert!(archived.is_some());
+        // ...but it is invisible to every normal read.
+        assert_eq!(fetch_writing_rules(&conn, None).unwrap().len(), 1);
+        assert!(fetch_writing_rules(&conn, Some("general")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn unarchive_rule_restores_row() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        delete_rule(&conn, "r1").unwrap();
+        unarchive_rule(&conn, "r1").unwrap();
+
+        assert_eq!(fetch_writing_rules(&conn, None).unwrap().len(), 1);
+        // Double-unarchive and archive-of-archived both fail cleanly.
+        assert!(unarchive_rule(&conn, "r1").is_err());
+        assert!(delete_rule(&conn, "r1").is_ok());
+        assert!(delete_rule(&conn, "r1").is_err());
     }
 
     #[test]

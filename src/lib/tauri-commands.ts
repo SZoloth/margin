@@ -152,6 +152,7 @@ export interface WritingRule {
   notes: string | null;
   reviewedAt: number | null;
   detectionPattern: string | null;
+  archivedAt?: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -244,6 +245,14 @@ export async function updateWritingRule(
 
 export async function deleteWritingRule(id: string): Promise<void> {
   return invoke<void>("delete_writing_rule", { id });
+}
+
+export async function unarchiveWritingRule(id: string): Promise<void> {
+  return invoke<void>("unarchive_writing_rule", { id });
+}
+
+export async function getArchivedWritingRules(): Promise<WritingRule[]> {
+  return invoke<WritingRule[]>("get_archived_writing_rules");
 }
 
 export type SnapshotType = "pre_external_edit" | "manual";

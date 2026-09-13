@@ -285,19 +285,25 @@ describe("updateWritingRule", () => {
 });
 
 describe("deleteWritingRule", () => {
-  it("deletes a rule", () => {
+  it("archives a rule — row survives, hidden from reads", () => {
     insertRule("r1", "general", "tone", "Be direct", "should-fix");
 
     const result = deleteWritingRule(db, "r1");
     expect(result).toHaveProperty("success");
 
-    const count = (db.prepare("SELECT COUNT(*) as c FROM writing_rules").get() as { c: number }).c;
-    expect(count).toBe(0);
+    const archived = db
+      .prepare("SELECT archived_at as a FROM writing_rules WHERE id = 'r1'")
+      .get() as { a: number | null };
+    expect(archived.a).not.toBeNull();
+    expect(getWritingRules(db)).toHaveLength(0);
   });
 
-  it("errors for nonexistent rule", () => {
-    const result = deleteWritingRule(db, "nonexistent");
-    expect(result).toHaveProperty("error");
+  it("errors for nonexistent or already-archived rule", () => {
+    insertRule("r1", "general", "tone", "Be direct", "should-fix");
+    deleteWritingRule(db, "r1");
+
+    expect(deleteWritingRule(db, "nonexistent")).toHaveProperty("error");
+    expect(deleteWritingRule(db, "r1")).toHaveProperty("error");
   });
 });
 

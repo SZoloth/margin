@@ -88,6 +88,8 @@ pub fn run() {
             commands::writing_rules::export_writing_rules,
             commands::writing_rules::update_writing_rule,
             commands::writing_rules::delete_writing_rule,
+            commands::writing_rules::unarchive_writing_rule,
+            commands::writing_rules::get_archived_writing_rules,
             commands::writing_rules::export_voice_profile,
             commands::writing_rules::mark_rules_reviewed,
             commands::writing_rules::mark_rules_unreviewed,

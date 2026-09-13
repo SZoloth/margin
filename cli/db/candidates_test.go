@@ -20,7 +20,7 @@ func setupRulesDB(t *testing.T) *sql.DB {
 		when_to_apply TEXT, why TEXT, severity TEXT, example_before TEXT,
 		example_after TEXT, source TEXT, signal_count INTEGER DEFAULT 1,
 		notes TEXT, created_at INTEGER, updated_at INTEGER,
-		detection_pattern TEXT, reviewed_at INTEGER,
+		detection_pattern TEXT, reviewed_at INTEGER, archived_at INTEGER,
 		UNIQUE(writing_type, category, rule_text)
 	)`)
 	if err != nil {

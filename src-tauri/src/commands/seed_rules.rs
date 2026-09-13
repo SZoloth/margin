@@ -306,6 +306,7 @@ mod tests {
                 updated_at INTEGER NOT NULL,
                 reviewed_at INTEGER,
                 register TEXT,
+                archived_at INTEGER,
                 UNIQUE(writing_type, category, rule_text)
             );",
         )
