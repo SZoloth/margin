@@ -41,6 +41,19 @@ interface CommandPaletteProps {
 
 type Column = "files" | "actions";
 
+// FTS snippets arrive with <mark> tags around matches — everything else is
+// raw document text and must be escaped before it becomes HTML.
+export function renderSnippet(snippet: string): string {
+  const escaped = snippet
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+  return escaped
+    .replaceAll("&lt;mark&gt;", "<mark>")
+    .replaceAll("&lt;/mark&gt;", "</mark>");
+}
+
 function fuzzyMatch(query: string, text: string): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
@@ -553,7 +566,7 @@ export function CommandPalette({
                           whiteSpace: "nowrap",
                           maxWidth: "100%",
                         }}
-                        dangerouslySetInnerHTML={{ __html: result.snippet }}
+                        dangerouslySetInnerHTML={{ __html: renderSnippet(result.snippet) }}
                       />
                     </button>
                   );

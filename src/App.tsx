@@ -34,7 +34,7 @@ import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
-import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, getWritingRules } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, getWritingRules, bulkTagCorrections } from "@/lib/tauri-commands";
 import { subscribeErrors, reportError } from "@/lib/error-bus";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
@@ -1469,6 +1469,9 @@ export default function App() {
         correctionCount,
         promptCount,
         noteOnlyCount,
+        correctionHighlightIds: correctionsSaved
+          ? [...new Set(unexportedMarginNotes.map((n) => n.highlight_id))]
+          : [],
       };
     },
     [editor, doc.currentDoc, polarityMap, rationaleMap],
@@ -1686,6 +1689,12 @@ export default function App() {
         onOpenSettings={() => {
           setSettingsSection("writing");
           setShowSettings(true);
+        }}
+        onRetag={(highlightIds, writingType) => {
+          if (highlightIds.length === 0) return;
+          bulkTagCorrections(highlightIds, writingType).catch((err: unknown) => {
+            setErrorToast({ message: `Could not re-tag corrections: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
+          });
         }}
       />
 

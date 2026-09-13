@@ -10,6 +10,7 @@ interface ExportAnnotationsPopoverProps {
   persistCorrections: boolean;
   hasMarginNotes?: boolean;
   onOpenSettings: () => void;
+  onRetag?: (highlightIds: string[], writingType: string) => void;
 }
 
 export function ExportAnnotationsPopover({
@@ -19,6 +20,7 @@ export function ExportAnnotationsPopover({
   persistCorrections,
   hasMarginNotes = false,
   onOpenSettings,
+  onRetag,
 }: ExportAnnotationsPopoverProps) {
   const [result, setResult] = useState<ExportResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -52,37 +54,38 @@ export function ExportAnnotationsPopover({
 
   const onExportRef = useRef(onExport);
   onExportRef.current = onExport;
+  const cancelledRef = useRef(false);
 
-  // Auto-export when popover opens. Uses ref for onExport to avoid
-  // re-triggering when the parent callback identity changes. Cancellation
-  // flag guards against state updates after StrictMode cleanup.
-  useEffect(() => {
-    if (!isOpen) return;
-
-    let cancelled = false;
-
-    (async () => {
-      setExporting(true);
-      try {
-        const wt = showWritingTypeSelector ? writingType : null;
-        const res = await onExportRef.current(wt);
-        if (!cancelled) {
-          setResult(res);
-          setErrorMessage(null);
-        }
-      } catch (err) {
-        console.error("Export failed:", err);
-        if (!cancelled) {
-          setResult(null);
-          setErrorMessage("Export failed. Please try again.");
-        }
-      } finally {
-        if (!cancelled) setExporting(false);
+  const runExport = async (wt: string | null) => {
+    setExporting(true);
+    try {
+      const res = await onExportRef.current(wt);
+      if (!cancelledRef.current) {
+        setResult(res);
+        setErrorMessage(null);
       }
-    })();
+    } catch (err) {
+      console.error("Export failed:", err);
+      if (!cancelledRef.current) {
+        setResult(null);
+        setErrorMessage("Export failed. Please try again.");
+      }
+    } finally {
+      if (!cancelledRef.current) setExporting(false);
+    }
+  };
 
-    return () => { cancelled = true; };
-  }, [isOpen]);
+  // Auto-export when popover opens — but only when corrections aren't being
+  // persisted. When they are, the writing type must be chosen first so it
+  // lands on the saved rows rather than silently defaulting.
+  useEffect(() => {
+    if (!isOpen || showWritingTypeSelector) return;
+
+    cancelledRef.current = false;
+    void runExport(null);
+
+    return () => { cancelledRef.current = true; };
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isMounted) return null;
 
@@ -241,7 +244,7 @@ export function ExportAnnotationsPopover({
               </div>
             )}
 
-            {/* Writing type tag */}
+            {/* Writing type tag — re-tags persisted corrections */}
             {result.correctionsSaved && showWritingTypeSelector && (
               <div
                 style={{
@@ -260,7 +263,10 @@ export function ExportAnnotationsPopover({
                   <button
                     key={wt.value}
                     type="button"
-                    onClick={() => setWritingType(wt.value)}
+                    onClick={() => {
+                      setWritingType(wt.value);
+                      onRetag?.(result.correctionHighlightIds ?? [], wt.value);
+                    }}
                     style={{
                       padding: "2px 8px",
                       fontSize: "var(--text-xs)",
@@ -340,6 +346,62 @@ export function ExportAnnotationsPopover({
                 </button>
               </div>
             )}
+          </div>
+        ) : showWritingTypeSelector ? (
+          /* Pre-export: choose the writing type before corrections are persisted. */
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div
+              style={{
+                color: "var(--color-text-primary)",
+                fontSize: "var(--text-base)",
+                fontWeight: 500,
+              }}
+            >
+              Export annotations
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+                Tag as
+              </span>
+              {WRITING_TYPES.map((wt) => (
+                <button
+                  key={wt.value}
+                  type="button"
+                  onClick={() => setWritingType(wt.value)}
+                  style={{
+                    padding: "2px 8px",
+                    fontSize: "var(--text-xs)",
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                    fontWeight: writingType === wt.value ? 600 : 400,
+                    color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                    backgroundColor: writingType === wt.value ? "var(--hover-bg)" : "transparent",
+                    border: writingType === wt.value ? "1px solid var(--color-border)" : "1px solid transparent",
+                    borderRadius: "var(--radius-sm)",
+                    cursor: "pointer",
+                    transition: "all 150ms ease",
+                  }}
+                >
+                  {wt.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => void runExport(writingType)}
+              style={{
+                alignSelf: "flex-start",
+                padding: "6px 14px",
+                fontSize: "var(--text-sm)",
+                fontWeight: 500,
+                color: "var(--color-page)",
+                backgroundColor: "var(--color-text-primary)",
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                cursor: "pointer",
+              }}
+            >
+              Export
+            </button>
           </div>
         ) : null}
       </div>

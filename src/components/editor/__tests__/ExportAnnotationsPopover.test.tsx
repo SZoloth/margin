@@ -46,4 +46,94 @@ describe("ExportAnnotationsPopover", () => {
       vi.useRealTimers();
     }
   });
+
+  it("waits for a writing type before exporting when corrections persist", async () => {
+    vi.useFakeTimers();
+    try {
+      const onExport = vi.fn().mockResolvedValue({
+        highlightCount: 2,
+        noteCount: 1,
+        snippets: [],
+        correctionsSaved: true,
+        correctionsFile: "corrections-2026-09-12.jsonl",
+        correctionHighlightIds: ["h1"],
+      });
+
+      render(
+        <ExportAnnotationsPopover
+          isOpen
+          onExport={onExport}
+          onClose={vi.fn()}
+          persistCorrections
+          hasMarginNotes
+          onOpenSettings={vi.fn()}
+          onRetag={vi.fn()}
+        />,
+      );
+
+      await act(async () => {
+        vi.runAllTimers();
+      });
+      await act(async () => {});
+
+      // No auto-export — the picker must come first
+      expect(onExport).not.toHaveBeenCalled();
+      expect(screen.getByText("Export annotations")).toBeTruthy();
+
+      await act(async () => {
+        screen.getByText("Export").click();
+        await vi.runAllTimersAsync();
+      });
+
+      expect(onExport).toHaveBeenCalledTimes(1);
+      expect(onExport).toHaveBeenCalledWith("general");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("re-tags persisted corrections when a post-export chip is clicked", async () => {
+    vi.useFakeTimers();
+    try {
+      const onRetag = vi.fn();
+      const onExport = vi.fn().mockResolvedValue({
+        highlightCount: 2,
+        noteCount: 1,
+        snippets: [],
+        correctionsSaved: true,
+        correctionsFile: "corrections-2026-09-12.jsonl",
+        correctionHighlightIds: ["h1", "h2"],
+      });
+
+      render(
+        <ExportAnnotationsPopover
+          isOpen
+          onExport={onExport}
+          onClose={vi.fn()}
+          persistCorrections
+          hasMarginNotes
+          onOpenSettings={vi.fn()}
+          onRetag={onRetag}
+        />,
+      );
+
+      await act(async () => {
+        vi.runAllTimers();
+      });
+      await act(async () => {
+        screen.getByText("Export").click();
+        await vi.runAllTimersAsync();
+      });
+      await act(async () => {});
+
+      const blogChip = screen.getByText("Blog");
+      await act(async () => {
+        blogChip.click();
+      });
+
+      expect(onRetag).toHaveBeenCalledWith(["h1", "h2"], "blog");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

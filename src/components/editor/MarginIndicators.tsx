@@ -81,19 +81,17 @@ export function MarginIndicators({
   useEffect(() => {
     updatePositions();
 
-    const scrollContainer = document.querySelector("[data-scroll-container]");
-    if (scrollContainer) {
-      scrollContainer.addEventListener("scroll", updatePositions);
-    }
+    // Dots live inside the scroll container and are positioned in document
+    // space, so scroll changes nothing — only layout changes (editor updates,
+    // window resize) can move a mark's document-space top.
+    window.addEventListener("resize", updatePositions);
 
     if (editor) {
       editor.on("update", updatePositions);
     }
 
     return () => {
-      if (scrollContainer) {
-        scrollContainer.removeEventListener("scroll", updatePositions);
-      }
+      window.removeEventListener("resize", updatePositions);
       if (editor) {
         editor.off("update", updatePositions);
       }
