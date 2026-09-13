@@ -141,7 +141,7 @@ export function AppShell({
   return (
     <div
       className="flex flex-col h-dvh overflow-hidden"
-      style={{ backgroundColor: "var(--color-page)" }}
+      style={{ backgroundColor: "var(--color-page)", position: "relative" }}
     >
       {/* Invisible hover hotzone — 24px — triggers chrome reveal + drag */}
       <div
@@ -160,7 +160,7 @@ export function AppShell({
         }}
       />
 
-      {/* Auto-collapsing chrome bar — push-down flex child */}
+      {/* Auto-collapsing chrome bar — overlays the reader, no reflow */}
       <ChromeBar
         isVisible={chrome.chromeVisible}
         tabs={tabs}

@@ -77,14 +77,25 @@ export function ChromeBar({
   return (
     <div
       style={{
-        maxHeight: isVisible ? 70 : 0,
-        overflow: "hidden",
-        flexShrink: 0,
+        // Overlay, not a flex child — revealing chrome slides over the
+        // reader instead of reflowing the text underneath it.
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 70,
+        zIndex: 30,
+        transform: isVisible ? "translateY(0)" : "translateY(-100%)",
+        // visibility hidden keeps hidden chrome out of keyboard tab order;
+        // delayed so the slide-out transition completes first.
+        visibility: isVisible ? "visible" : "hidden",
         transition: isVisible
-          ? "max-height 200ms var(--ease-entrance)"
-          : "max-height 150ms var(--ease-exit)",
+          ? "transform 200ms var(--ease-entrance)"
+          : "transform 150ms var(--ease-exit), visibility 0s 150ms",
         backgroundColor: "var(--color-sidebar)",
         borderBottom: isVisible ? "1px solid var(--color-border)" : "none",
+        boxShadow: isVisible ? "0 8px 24px rgba(0,0,0,0.08)" : "none",
+        pointerEvents: isVisible ? "auto" : "none",
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
