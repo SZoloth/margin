@@ -17,9 +17,17 @@ export interface RuleMatch {
 
 interface RuleScanMeta {
   matches?: RuleMatch[];
+  /** Mark one match as open — renders data-open on its decoration span. */
+  open?: { from: number; to: number } | null;
 }
 
-const ruleScanKey = new PluginKey<DecorationSet>("ruleScan");
+interface RuleScanState {
+  set: DecorationSet;
+  matches: RuleMatch[];
+  open: { from: number; to: number } | null;
+}
+
+const ruleScanKey = new PluginKey<RuleScanState>("ruleScan");
 
 const MAX_MATCHES = 200;
 
@@ -120,13 +128,18 @@ export function scanDocForRules(doc: PMNode, rules: WritingRule[]): RuleMatch[] 
   return matches;
 }
 
-function buildDecorations(state: EditorState, matches: RuleMatch[]): DecorationSet {
+function buildDecorations(
+  state: EditorState,
+  matches: RuleMatch[],
+  open: { from: number; to: number } | null,
+): DecorationSet {
   const decos = matches
     .filter((m) => m.from < m.to && m.to <= state.doc.content.size)
     .map((m) =>
       Decoration.inline(m.from, m.to, {
         class: `rule-violation rule-violation--${m.severity}`,
         "data-rule-id": m.ruleId,
+        ...(open && m.from === open.from && m.to === open.to ? { "data-open": "" } : {}),
       }),
     );
   return DecorationSet.create(state.doc, decos);
@@ -135,6 +148,14 @@ function buildDecorations(state: EditorState, matches: RuleMatch[]): DecorationS
 /** Dispatch updated matches into the scan plugin. */
 export function setRuleScanMatches(tr: Transaction, matches: RuleMatch[]): Transaction {
   return tr.setMeta(ruleScanKey, { matches } satisfies RuleScanMeta);
+}
+
+/** Mark/unmark the match whose card is open — drives the data-open wash. */
+export function setRuleScanOpen(
+  tr: Transaction,
+  open: { from: number; to: number } | null,
+): Transaction {
+  return tr.setMeta(ruleScanKey, { open } satisfies RuleScanMeta);
 }
 
 /**
@@ -147,21 +168,43 @@ export const RuleScan = Extension.create({
 
   addProseMirrorPlugins() {
     return [
-      new Plugin<DecorationSet>({
+      new Plugin<RuleScanState>({
         key: ruleScanKey,
         state: {
-          init: (_config, state) => buildDecorations(state, []),
+          init: (_config, state) => ({
+            set: buildDecorations(state, [], null),
+            matches: [],
+            open: null,
+          }),
           apply(tr, old, _oldState, newState) {
             const meta = tr.getMeta(ruleScanKey) as RuleScanMeta | undefined;
             if (meta?.matches !== undefined) {
-              return buildDecorations(newState, meta.matches);
+              return {
+                set: buildDecorations(newState, meta.matches, old.open),
+                matches: meta.matches,
+                open: old.open,
+              };
             }
-            return tr.docChanged ? old.map(tr.mapping, tr.doc) : old;
+            if (meta && "open" in meta) {
+              return {
+                set: buildDecorations(newState, old.matches, meta.open ?? null),
+                matches: old.matches,
+                open: meta.open ?? null,
+              };
+            }
+            if (!tr.docChanged) return old;
+            const open = old.open
+              ? {
+                  from: tr.mapping.map(old.open.from),
+                  to: tr.mapping.map(old.open.to),
+                }
+              : null;
+            return { set: old.set.map(tr.mapping, tr.doc), matches: old.matches, open };
           },
         },
         props: {
           decorations(state) {
-            return ruleScanKey.getState(state);
+            return ruleScanKey.getState(state)?.set ?? DecorationSet.empty;
           },
           handleClick(view, _pos, event) {
             const el = (event.target as HTMLElement).closest?.(".rule-violation");
@@ -169,6 +212,10 @@ export const RuleScan = Extension.create({
             // The match payload isn't on the decoration — the listener
             // resolves ruleId → rule from the rules list it already holds.
             const from = view.posAtDOM(el, 0);
+            const to = from + ((el as HTMLElement).textContent?.length ?? 0);
+            const tr = setRuleScanOpen(view.state.tr, { from, to });
+            tr.setMeta("addToHistory", false);
+            view.dispatch(tr);
             window.dispatchEvent(
               new CustomEvent("margin:rule-violation", {
                 detail: {
@@ -176,7 +223,7 @@ export const RuleScan = Extension.create({
                   rect: (el as HTMLElement).getBoundingClientRect(),
                   el,
                   from,
-                  to: from + ((el as HTMLElement).textContent?.length ?? 0),
+                  to,
                   matched: (el as HTMLElement).textContent ?? "",
                 },
               }),
