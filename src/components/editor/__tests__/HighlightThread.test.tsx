@@ -145,10 +145,10 @@ describe("HighlightThread", () => {
     const group = document.body.querySelector("[role='radiogroup'][aria-label='Highlight color']");
     expect(group).toBeTruthy();
 
-    // Current color (blue) is the checked radio
+    // Current color (blue) is the checked radio — ring hugs the dot, not the button
     const blue = group?.querySelector("[aria-label='Highlight blue']") as HTMLButtonElement;
     expect(blue.getAttribute("aria-checked")).toBe("true");
-    expect(blue.className).toContain("toolbar-color-btn--selected");
+    expect(blue.querySelector(".thread-color-dot--selected")).toBeTruthy();
 
     const pink = group?.querySelector("[aria-label='Highlight pink']") as HTMLButtonElement;
     fireEvent.click(pink);

@@ -407,17 +407,11 @@ export function HighlightThread({
               aria-checked={highlight.color === c.name}
               aria-label={`Highlight ${c.name}`}
               onClick={() => onRecolor(highlight.id, c.name)}
-              className={`toolbar-color-btn thread-color-btn${highlight.color === c.name ? " toolbar-color-btn--selected" : ""}`}
+              className="thread-color-btn"
             >
               <span
-                style={{
-                  display: "block",
-                  width: 16,
-                  height: 16,
-                  borderRadius: "50%",
-                  backgroundColor: c.css,
-                  border: "1.5px solid var(--color-border)",
-                }}
+                className={`thread-color-dot${highlight.color === c.name ? " thread-color-dot--selected" : ""}`}
+                style={{ backgroundColor: c.css }}
               />
             </button>
           ))}
@@ -475,7 +469,7 @@ export function HighlightThread({
         <div
           role="radiogroup"
           aria-label="Note intent"
-          style={{ display: "flex", gap: 4, marginBottom: 6 }}
+          className="thread-intents"
         >
           {(["correction", "note", "prompt"] as const).map((intent) => (
             <button
@@ -487,9 +481,9 @@ export function HighlightThread({
               className="note-action-btn text-[length:var(--text-xs)]"
               style={{
                 fontWeight: newNoteIntent === intent ? 600 : 400,
-                background: newNoteIntent === intent ? "var(--hover-bg)" : "transparent",
+                color: newNoteIntent === intent ? "var(--color-text-primary)" : "var(--color-text-secondary)",
                 borderRadius: "var(--radius-sm)",
-                padding: "1px 6px",
+                padding: "1px 5px",
               }}
             >
               {intent}
