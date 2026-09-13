@@ -24,6 +24,8 @@ interface IndicatorPosition {
   top: number;
   noteCount: number;
   color: string;
+  /** First line of the latest note — fans out beside the dot on hover. */
+  preview: string;
 }
 
 export function MarginIndicators({
@@ -46,10 +48,13 @@ export function MarginIndicators({
     const containerRect = scrollContainer.getBoundingClientRect();
     const scrollTop = scrollContainer.scrollTop;
 
-    // Pre-build note count map to avoid O(H×N) on every scroll frame
+    // Pre-build note maps to avoid O(H×N) on every scroll frame
     const noteCountByHighlight = new Map<string, number>();
+    const latestNoteByHighlight = new Map<string, MarginNote>();
     for (const n of marginNotes) {
       noteCountByHighlight.set(n.highlight_id, (noteCountByHighlight.get(n.highlight_id) ?? 0) + 1);
+      const cur = latestNoteByHighlight.get(n.highlight_id);
+      if (!cur || n.updated_at > cur.updated_at) latestNoteByHighlight.set(n.highlight_id, n);
     }
 
     const highlightsWithNotes = highlights.filter((h) => noteCountByHighlight.has(h.id));
@@ -72,6 +77,7 @@ export function MarginIndicators({
         top,
         noteCount: noteCountByHighlight.get(h.id) ?? 0,
         color: h.color,
+        preview: latestNoteByHighlight.get(h.id)?.content.split("\n")[0] ?? "",
       });
     }
 
@@ -103,10 +109,9 @@ export function MarginIndicators({
   return (
     <>
       {positions.map((pos) => (
-        <button
+        <div
           key={pos.highlightId}
-          type="button"
-          className="margin-indicator-dot"
+          className="margin-indicator"
           style={{
             top: pos.top,
             // The open thread is the indicator — hide the duplicate dot.
@@ -114,31 +119,41 @@ export function MarginIndicators({
             visibility: pos.highlightId === activeHighlightId ? "hidden" : "visible",
             transition: "opacity 140ms ease",
           }}
-          onClick={() => {
-            if (!editor) return;
-            // Prefer ID-based lookup; fall back to text matching for orphan marks
-            const mark =
-              editor.view.dom.querySelector(`mark[data-highlight-id="${pos.highlightId}"]`) ??
-              Array.from(editor.view.dom.querySelectorAll("mark[data-color]")).find(
-                (m) => m.textContent === highlights.find((h) => h.id === pos.highlightId)?.text_content,
-              );
-            if (mark) {
-              onClickHighlight(pos.highlightId, mark.getBoundingClientRect());
-            }
-          }}
-          aria-label={`${pos.noteCount} note${pos.noteCount !== 1 ? "s" : ""}`}
-          title={`${pos.noteCount} note${pos.noteCount !== 1 ? "s" : ""}`}
         >
-          <span
-            style={{
-              display: "block",
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              backgroundColor: DOT_COLORS[pos.color] ?? `var(--color-highlight-${pos.color})`,
+          {pos.preview && (
+            <div className="margin-note-peek" aria-hidden="true">
+              {pos.preview}
+            </div>
+          )}
+          <button
+            type="button"
+            className="margin-indicator-dot"
+            onClick={() => {
+              if (!editor) return;
+              // Prefer ID-based lookup; fall back to text matching for orphan marks
+              const mark =
+                editor.view.dom.querySelector(`mark[data-highlight-id="${pos.highlightId}"]`) ??
+                Array.from(editor.view.dom.querySelectorAll("mark[data-color]")).find(
+                  (m) => m.textContent === highlights.find((h) => h.id === pos.highlightId)?.text_content,
+                );
+              if (mark) {
+                onClickHighlight(pos.highlightId, mark.getBoundingClientRect());
+              }
             }}
-          />
-        </button>
+            aria-label={`${pos.noteCount} note${pos.noteCount !== 1 ? "s" : ""}`}
+            title={`${pos.noteCount} note${pos.noteCount !== 1 ? "s" : ""}`}
+          >
+            <span
+              style={{
+                display: "block",
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                backgroundColor: DOT_COLORS[pos.color] ?? `var(--color-highlight-${pos.color})`,
+              }}
+            />
+          </button>
+        </div>
       ))}
     </>
   );

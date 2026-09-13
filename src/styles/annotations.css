@@ -1,4 +1,21 @@
 /* Right-gutter margin note dots */
+.margin-indicator {
+  position: absolute;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  /* New doc ⇒ new mount ⇒ the entrance plays once on open, never on
+     re-render — annotations fan in with the document. */
+  animation: mi-fade-in 260ms var(--ease-entrance) both;
+}
+
+@keyframes mi-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+
 .margin-indicator-dot {
   position: absolute;
   right: 0;
@@ -12,6 +29,33 @@
   background: none;
   border: none;
   transition: transform var(--duration-fast) var(--ease-micro);
+}
+
+/* Note peek — first line of the latest note fans out into the lane on
+   approach (hover/focus). Carries the note's own words, not chrome. */
+.margin-note-peek {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%) translateX(4px);
+  width: 190px;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ease-micro),
+    transform 120ms var(--ease-micro);
+}
+
+.margin-indicator:hover .margin-note-peek,
+.margin-indicator:focus-within .margin-note-peek {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
 }
 
 .margin-indicator-dot:hover {
@@ -54,6 +98,7 @@
   opacity: 0.75;
   cursor: pointer;
   transform: translateY(-50%);
+  animation: mi-fade-in 260ms var(--ease-entrance) both;
   transition: opacity var(--duration-fast) var(--ease-micro),
     transform var(--duration-fast) var(--ease-micro);
 }
