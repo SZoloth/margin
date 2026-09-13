@@ -7,39 +7,42 @@ Replace the active task section when new substantial work starts.
 
 ### Task
 
-Autoresearch optimization: 4-agent research fan-out synthesized into
-`docs/research/autoresearch-synthesis-2026-09-12.md`; eval-fidelity fixes
-landed; re-baselining on the repaired harness.
+Reader polish + correction→rule loop closure (SAM-1141 done, SAM-1146 done).
+Annotation resurfacing is live end-to-end: reviewed rules scan the open
+doc, underline matches, open a margin-lane rule card, and apply one-click
+fixes.
 
 ### Done this session
 
-- Research synthesis committed — ranked P0-P3 backlog combining vault,
-  GitHub stars (503), X bookmarks, Deft/Every/DSPy literature, and a repo
-  audit that found the eval was scoring ~4%-recall proxy on dirty data.
-- Eval fidelity landed (8b83e3e): restored 6 lost Tier-2a checks, slop
-  scoring via detection_pattern, prod-parity correction/rule filters in
-  all generators, REGISTER_MAP aligned to production, per_type in
-  EvalResult.
-- Loop fixes (eead928, 7dac0e7): provider-scoped best (poolside runs were
-  auto-reverted vs claude-era 0.889) + last-eval.json feedback channel
-  (violations + per-type scores now reach the mutating agent).
-- First poolside loop run completed: run 24 KEPT as the provider baseline
-  (0.37); earlier runs 22-23 correctly reverted.
-- a84ad78: typeConstraint length bounds ported to all generators;
-  `--arch skill` wired into eval.ts (production path now scorable);
-  ideas.md consolidated as the single backlog.
+- SAM-1141 all 13 findings shipped (71922ac, a0b24ce): candidate promotion,
+  provenance, recurrence merge, triage path, queue-count fix.
+- Annotation resurfacing (dc54b10): rule-scan decoration plugin, rule card,
+  one-click apply, general-type scoping, browser-stub fixture.
+- Rule card reworked into margin lane (007a346…eaf9884): shared thread
+  chrome, hairline in the leading, severity pill, serif-italic match echo,
+  focus trap + restore, toggle-close, replace-all, case-insensitive
+  literals, capitalization-preserving apply, enter/exit motion.
+- Critical freeze fixed (7f22c09): open-state lives in PM plugin state —
+  React never mutates PM-managed decoration DOM (was a transaction/
+  MutationObserver loop).
+- Reader polish: highlight entrance animation, ⌘. color cycling on open
+  threads, Butterick recommended-typography preset (2ecd20e).
+- Minimap rail (201f72c): doc-relative annotation ticks + viewport thumb,
+  click-to-jump, portal-rendered past reader-grid opacity.
+- Note peek (e08b429): hover/focus a dot fans the note's first line into
+  the margin lane; mount animations give annotations a fan-in on doc open.
 
 ### Next (mission order)
 
-1. Re-baseline archs on repaired harness (null + a running; then c/e/d
-   confirm under new checker) — experiment-log rankings are suspect.
-2. SAM-1134: second-provider comparison (needs claude/codex auth or codex
-   CLI upgrade for gpt-6-astra) → then mark Proof gate.
+1. Archive-not-delete for writing rules — deleting loses provenance
+   forever; archive keeps it recoverable.
+2. SAM-1134: second-provider eval — muse-null done (66.7%/45.9/14 beats
+   poolside's best); muse-c running; muse-skill pending.
 3. DB repair: 43 auto-synthesized rules have inverted example_before —
    excluded from eval, still in production loads.
-4. Scenario B (corrections + top-10 rules) — the synthesis's #1 untested
-   architecture.
-5. SAM-135 conversational feedback — biggest consumer feature.
+4. SAM-135 conversational feedback — biggest consumer feature.
+5. Re-grade rule card once more after latest visual pass; remaining nits:
+   responsive margin-lane collapse, anchor-off-viewport dismissal.
 
 ## 2026-09-04 Codex prompt cleanup
 
