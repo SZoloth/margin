@@ -151,6 +151,7 @@ export interface WritingRule {
   signalCount: number;
   notes: string | null;
   reviewedAt: number | null;
+  detectionPattern: string | null;
   createdAt: number;
   updatedAt: number;
 }

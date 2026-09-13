@@ -26,6 +26,7 @@ pub struct WritingRule {
     pub reviewed_at: Option<i64>,
     pub register: Option<String>,
     pub polarity: Option<String>,
+    pub detection_pattern: Option<String>,
 }
 
 fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
@@ -47,13 +48,14 @@ fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
         reviewed_at: row.get(14)?,
         register: row.get(15)?,
         polarity: row.get(16)?,
+        detection_pattern: row.get(17)?,
     })
 }
 
 const RULES_SELECT: &str =
     "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
             example_before, example_after, source, signal_count, notes, created_at, updated_at,
-            reviewed_at, register, polarity
+            reviewed_at, register, polarity, detection_pattern
      FROM writing_rules";
 
 fn fetch_writing_rules(
@@ -1191,6 +1193,8 @@ mod tests {
         if !has_polarity {
             conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));").unwrap();
         }
+        // detection_pattern via the production migration
+        crate::db::migrations::migrate_writing_rules_add_detection_pattern(&conn).unwrap();
         conn
     }
 

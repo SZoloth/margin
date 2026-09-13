@@ -1754,7 +1754,7 @@ pub fn seed_guard_patterns_v2(conn: &Connection) -> Result<(), Box<dyn std::erro
 /// Adds a `detection_pattern` column to writing_rules if it doesn't exist.
 /// A rule contributes to the mechanical guard hook ONLY via this column
 /// (a validated regex); example_before is illustrative, never executable.
-fn migrate_writing_rules_add_detection_pattern(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn migrate_writing_rules_add_detection_pattern(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let has_column: bool = {
         let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
         let columns: Vec<String> = stmt

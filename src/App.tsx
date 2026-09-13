@@ -10,6 +10,8 @@ const Reader = lazy(() => import("@/components/editor/Reader"));
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
+import { RuleViolationPopover } from "@/components/editor/RuleViolationPopover";
+import { scanDocForRules, setRuleScanMatches } from "@/components/editor/extensions/rule-scan";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
 import { useHighlightShortcut } from "@/hooks/useHighlightShortcut";
@@ -35,6 +37,7 @@ import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedCont
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
 import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, getWritingRules, bulkTagCorrections } from "@/lib/tauri-commands";
+import type { WritingRule } from "@/lib/tauri-commands";
 import { subscribeErrors, reportError } from "@/lib/error-bus";
 import { listen } from "@tauri-apps/api/event";
 import { stat } from "@tauri-apps/plugin-fs";
@@ -92,6 +95,8 @@ export default function App() {
   const [findBarOpen, setFindBarOpen] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const [writingRules, setWritingRules] = useState<WritingRule[]>([]);
+  const [rulePopover, setRulePopover] = useState<{ rule: WritingRule; rect: DOMRect } | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
   const [polarityMap, setPolarityMap] = useState<Map<string, "positive" | "corrective">>(new Map());
   const [rationaleMap, setRationaleMap] = useState<Map<string, string>>(new Map());
@@ -846,6 +851,51 @@ export default function App() {
       window.removeEventListener("margin:highlight-delete", handleHighlightDelete);
     };
   }, [editor, resolveHighlight, handleDeleteHighlight]);
+
+  // Resurfacing: scan the open doc against reviewed rules so past
+  // corrections come back as underlines in the text being read.
+  const writingRulesRef = useRef<WritingRule[]>([]);
+  writingRulesRef.current = writingRules;
+  useEffect(() => {
+    let cancelled = false;
+    getWritingRules()
+      .then((rules) => { if (!cancelled) setWritingRules(rules); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [doc.currentDoc?.id]);
+
+  useEffect(() => {
+    if (!editor) return;
+    let timer: number | null = null;
+    const runScan = () => {
+      if (editor.isDestroyed) return;
+      const matches = scanDocForRules(editor.state.doc, writingRulesRef.current);
+      const tr = setRuleScanMatches(editor.state.tr, matches);
+      tr.setMeta("addToHistory", false);
+      editor.view.dispatch(tr);
+    };
+    runScan();
+    const onTransaction = ({ transaction }: { transaction: Transaction }) => {
+      if (!transaction.docChanged) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(runScan, 600);
+    };
+    editor.on("transaction", onTransaction);
+    return () => {
+      editor.off("transaction", onTransaction);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [editor, writingRules]);
+
+  useEffect(() => {
+    const onRuleViolation = (e: Event) => {
+      const { ruleId, rect } = (e as CustomEvent).detail as { ruleId: string; rect: DOMRect };
+      const rule = writingRulesRef.current.find((r) => r.id === ruleId);
+      if (rule) setRulePopover({ rule, rect });
+    };
+    window.addEventListener("margin:rule-violation", onRuleViolation);
+    return () => window.removeEventListener("margin:rule-violation", onRuleViolation);
+  }, []);
 
 
   const handleEditorReady = useCallback((ed: Editor) => {
@@ -1704,6 +1754,14 @@ export default function App() {
           />
         );
       })()}
+
+      {rulePopover && (
+        <RuleViolationPopover
+          rule={rulePopover.rule}
+          rect={rulePopover.rect}
+          onClose={() => setRulePopover(null)}
+        />
+      )}
 
       <ExportAnnotationsPopover
         isOpen={showExportPopover}

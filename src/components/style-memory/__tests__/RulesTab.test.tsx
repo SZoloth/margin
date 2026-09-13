@@ -34,6 +34,7 @@ const baseRule = {
   exampleAfter: null,
   notes: null,
   reviewedAt: null,
+  detectionPattern: null,
   createdAt: Date.now(),
   updatedAt: Date.now(),
 } as const;
