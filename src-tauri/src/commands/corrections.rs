@@ -1065,6 +1065,8 @@ mod tests {
             reviewed_at INTEGER,
             register TEXT,
             polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+            detection_pattern TEXT,
+            archived_at INTEGER,
             UNIQUE(writing_type, category, rule_text)
         );"
     }

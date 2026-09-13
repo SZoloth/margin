@@ -251,6 +251,8 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   export_writing_rules: () => ({ markdownPath: "", hookPath: "", ruleCount: 0 }),
   update_writing_rule: () => undefined,
   delete_writing_rule: () => undefined,
+  unarchive_writing_rule: () => undefined,
+  get_archived_writing_rules: () => [],
 
   // --- Tabs -----------------------------------------------------------------
   save_open_tabs: () => undefined,

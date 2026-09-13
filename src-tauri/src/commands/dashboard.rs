@@ -82,7 +82,7 @@ pub fn get_dashboard_summary_inner(
     let limit = limit.unwrap_or(10).clamp(1, 100);
 
     let rule_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM writing_rules WHERE archived_at IS NULL", [], |r| r.get(0))
         .map_err(|e| e.to_string())?;
 
     let mut stmt = conn
@@ -264,7 +264,7 @@ pub async fn start_test_run(
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
 
     let rule_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM writing_rules WHERE archived_at IS NULL", [], |r| r.get(0))
         .map_err(|e| e.to_string())?;
 
     let run_id = Uuid::new_v4().to_string();
@@ -719,7 +719,8 @@ mod tests {
                 source TEXT NOT NULL,
                 signal_count INTEGER NOT NULL DEFAULT 1,
                 created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
+                updated_at INTEGER NOT NULL,
+                archived_at INTEGER
             );",
         )
         .unwrap();

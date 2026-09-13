@@ -100,14 +100,14 @@ func GetWritingRules(d *sql.DB, writingType *string) ([]WritingRule, error) {
 			`SELECT id, writing_type, category, rule_text, when_to_apply,
 			        why, severity, example_before, example_after, source,
 			        signal_count, notes, created_at, updated_at, detection_pattern, reviewed_at
-			 FROM writing_rules WHERE writing_type = ?
+			 FROM writing_rules WHERE writing_type = ? AND archived_at IS NULL
 			 ORDER BY signal_count DESC, created_at DESC`, *writingType)
 	} else {
 		rows, err = d.Query(
 			`SELECT id, writing_type, category, rule_text, when_to_apply,
 			        why, severity, example_before, example_after, source,
 			        signal_count, notes, created_at, updated_at, detection_pattern, reviewed_at
-			 FROM writing_rules
+			 FROM writing_rules WHERE archived_at IS NULL
 			 ORDER BY writing_type, signal_count DESC, created_at DESC`)
 	}
 	if err != nil {
@@ -352,8 +352,14 @@ func GetProhibitionRules(d *sql.DB) ([]WritingRule, error) {
 	return rules, nil
 }
 
+// DeleteWritingRule archives the rule rather than deleting it — a hard
+// DELETE loses the synthesized-from provenance that keeps its source
+// corrections stamped. Mirrors the app's `delete_rule` in
+// src-tauri/src/commands/writing_rules.rs.
 func DeleteWritingRule(d *sql.DB, ruleID string) error {
-	result, err := d.Exec("DELETE FROM writing_rules WHERE id = ?", ruleID)
+	result, err := d.Exec(
+		"UPDATE writing_rules SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL",
+		NowMillis(), NowMillis(), ruleID)
 	if err != nil {
 		return err
 	}

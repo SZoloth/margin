@@ -525,14 +525,14 @@ server.tool(
 
 server.tool(
   "margin_delete_writing_rule",
-  "Delete a writing rule by ID.",
-  { id: z.string().describe("Writing rule ID to delete") },
+  "Archive a writing rule by ID. The rule is hidden from every read and export path but is not destroyed — its provenance is preserved and it can be restored in the Margin app. Re-synthesizing the same rule does not un-archive it.",
+  { id: z.string().describe("Writing rule ID to archive") },
   async ({ id }) => withDbAndExport(() => {
     const result = deleteWritingRule(getWriteDb(), id);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
     }
-    return { content: [{ type: "text", text: "Writing rule deleted." }] };
+    return { content: [{ type: "text", text: "Writing rule archived." }] };
   }),
 );
 
