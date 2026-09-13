@@ -296,11 +296,11 @@ describe("delete cascade: correction + highlight removal", () => {
     const deleteResult = deleteCorrection(db, corrResult.highlight_id);
     expect(deleteResult).toEqual({ success: true });
 
-    // Both rows should be gone
+    // Correction row gone; the highlight itself is preserved (matches UI delete semantics)
     const highlightAfter = db
       .prepare("SELECT id FROM highlights WHERE id = ?")
       .get(corrResult.highlight_id);
-    expect(highlightAfter).toBeUndefined();
+    expect(highlightAfter).toBeTruthy();
 
     const correctionAfter = db
       .prepare("SELECT id FROM corrections WHERE highlight_id = ?")

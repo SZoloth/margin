@@ -45,7 +45,7 @@ func (r WritingRule) IsUnreviewedCandidate() bool {
 const unreviewedCandidateFilter = `NOT (source = 'synthesis-candidate' AND reviewed_at IS NULL)`
 
 var (
-	ValidSeverities  = []string{"must-fix", "should-fix", "nice-to-fix"}
+	ValidSeverities = []string{"must-fix", "should-fix", "nice-to-fix"}
 	// Canonical writing types — union of this list and the MCP server's
 	// VALID_WRITING_TYPES (mcp/src/tools/writing-rules.ts). Mirrored by the
 	// writing_type CHECK on writing_rules (src-tauri/src/db/migrations.rs).
@@ -295,7 +295,7 @@ func GetHighSignalRules(d *sql.DB, limit int, writingType string) ([]WritingRule
 		 FROM writing_rules
 		 WHERE (signal_count >= 2 OR severity = 'must-fix')
 		   AND category != 'prohibition'
-		   AND ` + unreviewedCandidateFilter + `
+		   AND `+unreviewedCandidateFilter+`
 		   AND (?1 = '' OR writing_type = 'general' OR writing_type = ?1)
 		 ORDER BY signal_count DESC
 		 LIMIT ?2`, writingType, limit)
@@ -426,12 +426,74 @@ func InsertCandidateRules(d *sql.DB, candidates []CandidateRuleInput) (int, erro
 		}
 		if n, _ := res.RowsAffected(); n > 0 {
 			inserted++
+			continue
+		}
+		// Conflict on UNIQUE(writing_type, category, rule_text): the same rule
+		// was synthesized before. Recurrence is signal — bump signal_count and
+		// merge provenance, or the new source corrections never get stamped
+		// synthesized on acceptance and resurface in the queue forever.
+		var existingID string
+		var existingNotes sql.NullString
+		err = tx.QueryRow(
+			`SELECT id, notes FROM writing_rules
+			 WHERE writing_type = ? AND category = ? AND rule_text = ?`,
+			c.WritingType, c.Category, c.RuleText).Scan(&existingID, &existingNotes)
+		if err != nil {
+			return inserted, err
+		}
+		_, err = tx.Exec(
+			`UPDATE writing_rules
+			 SET signal_count = signal_count + ?, notes = ?, updated_at = ?
+			 WHERE id = ?`,
+			sc, mergeProvenance(existingNotes.String, c.SourceHighlights), now, existingID)
+		if err != nil {
+			return inserted, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return inserted, err
 	}
 	return inserted, nil
+}
+
+// mergeProvenance unions highlight ids into a `synthesized-from:<ids>` notes
+// value (the prefix format mark_reviewed parses). Non-provenance note text is
+// preserved after a "; " separator so provenance stays parseable.
+func mergeProvenance(existingNotes string, newHighlights []string) *string {
+	seen := map[string]bool{}
+	var ids []string
+	rest := ""
+	if rest0, ok := strings.CutPrefix(existingNotes, "synthesized-from:"); ok {
+		// id list ends at the first ';' or newline; free text may follow
+		head := rest0
+		if idx := strings.IndexAny(rest0, ";\n"); idx >= 0 {
+			head, rest = rest0[:idx], rest0[idx+1:]
+		}
+		for _, h := range strings.Split(head, ",") {
+			h = strings.TrimSpace(h)
+			if h != "" && !seen[h] {
+				seen[h] = true
+				ids = append(ids, h)
+			}
+		}
+	} else {
+		rest = existingNotes
+	}
+	for _, h := range newHighlights {
+		h = strings.TrimSpace(h)
+		if h != "" && !seen[h] {
+			seen[h] = true
+			ids = append(ids, h)
+		}
+	}
+	if len(ids) == 0 && strings.TrimSpace(rest) == "" {
+		return nil
+	}
+	out := "synthesized-from:" + strings.Join(ids, ",")
+	if strings.TrimSpace(rest) != "" {
+		out += "; " + strings.TrimSpace(rest)
+	}
+	return &out
 }
 
 // GetCandidateRules returns synthesis candidates awaiting review (or all
@@ -500,8 +562,12 @@ func AcceptCandidateRule(d *sql.DB, ruleID string) error {
 	}
 
 	// Mark the source corrections synthesized so they leave the queue.
+	// The id list ends at the first ';' or newline — free text may follow.
 	if notes.Valid && strings.HasPrefix(notes.String, "synthesized-from:") {
-		ids := strings.Split(strings.TrimPrefix(notes.String, "synthesized-from:"), ",")
+		rest := strings.TrimPrefix(notes.String, "synthesized-from:")
+		idList, _, _ := strings.Cut(rest, ";")
+		idList, _, _ = strings.Cut(idList, "\n")
+		ids := strings.Split(idList, ",")
 		for _, id := range ids {
 			id = strings.TrimSpace(id)
 			if id == "" {

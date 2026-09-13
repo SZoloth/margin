@@ -980,11 +980,16 @@ fn mark_reviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64
 }
 
 /// Parses `synthesized-from:<highlight-id>,...` provenance notes into ids.
+/// The id list ends at the first `;` or newline — trailing free text must
+/// not glue onto the last id (that id would never match on stamping).
 fn parse_synthesized_from(notes: &str) -> impl Iterator<Item = &str> {
     notes
         .strip_prefix("synthesized-from:")
         .into_iter()
-        .flat_map(|rest| rest.split(','))
+        .flat_map(|rest| {
+            let id_list = rest.split([';', '\n']).next().unwrap_or("");
+            id_list.split(',')
+        })
         .map(str::trim)
         .filter(|h| !h.is_empty())
 }
@@ -1855,6 +1860,18 @@ mod tests {
             .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(synth, None);
+    }
+
+    #[test]
+    fn provenance_ids_end_at_semicolon() {
+        // MCP writes `synthesized-from:h1,h2; free text` — the free text must
+        // not glue onto the last id or that correction is never stamped.
+        let ids: Vec<&str> = parse_synthesized_from("synthesized-from:h1,h2; agent note here").collect();
+        assert_eq!(ids, ["h1", "h2"]);
+        let ids: Vec<&str> = parse_synthesized_from("synthesized-from:h1,h2\nmulti-line note").collect();
+        assert_eq!(ids, ["h1", "h2"]);
+        let ids: Vec<&str> = parse_synthesized_from("synthesized-from:h1 , h2").collect();
+        assert_eq!(ids, ["h1", "h2"]);
     }
 
     #[test]

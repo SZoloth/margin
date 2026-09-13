@@ -239,9 +239,10 @@ export function deleteCorrection(
     return { error: `Correction not found for highlight: ${highlightId}` };
   }
 
+  // Correction row only — matches the UI delete_correction command. The
+  // highlight and its margin notes survive; removing those is a separate
+  // destructive action.
   db.prepare("DELETE FROM corrections WHERE highlight_id = ?").run(highlightId);
-  // Also delete the highlight (cascades to margin_notes)
-  db.prepare("DELETE FROM highlights WHERE id = ?").run(highlightId);
 
   return { success: true };
 }

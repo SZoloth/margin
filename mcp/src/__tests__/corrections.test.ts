@@ -271,7 +271,7 @@ describe("createCorrection", () => {
 });
 
 describe("deleteCorrection", () => {
-  it("deletes correction and associated highlight", () => {
+  it("deletes correction but preserves the highlight", () => {
     // Insert doc + highlight + correction manually
     db.prepare(
       "INSERT INTO documents (id, source, title, last_opened_at, created_at) VALUES ('doc1', 'file', 'Test', 1000, 1000)",
@@ -286,9 +286,9 @@ describe("deleteCorrection", () => {
     const result = deleteCorrection(db, "h1");
     expect(result).toHaveProperty("success");
 
-    // Both should be gone
+    // Correction gone, highlight preserved (matches UI delete semantics)
     expect(db.prepare("SELECT id FROM corrections WHERE highlight_id = 'h1'").get()).toBeUndefined();
-    expect(db.prepare("SELECT id FROM highlights WHERE id = 'h1'").get()).toBeUndefined();
+    expect(db.prepare("SELECT id FROM highlights WHERE id = 'h1'").get()).toBeTruthy();
   });
 
   it("errors for nonexistent correction", () => {
