@@ -74,6 +74,15 @@
   color: var(--color-text-secondary);
 }
 
+/* Anchor hairline — ties the thread to its passage (desktop only) */
+.thread-anchor-line {
+  position: fixed;
+  height: 1.5px;
+  pointer-events: none;
+  z-index: 50;
+  transition: opacity var(--duration-normal) var(--ease-entrance);
+}
+
 /* Color swatch row — recolor lives in the thread, not a separate picker */
 .thread-colors {
   display: flex;

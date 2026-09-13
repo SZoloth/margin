@@ -172,4 +172,27 @@ describe("HighlightThread", () => {
 
     expect(document.body.querySelector(".thread-colors")).toBeNull();
   });
+
+  it("renders an anchor hairline from the highlight edge to the thread", () => {
+    render(
+      <HighlightThread
+        highlight={mockHighlight}
+        notes={mockNotes}
+        onAddNote={vi.fn()}
+        onUpdateNote={vi.fn()}
+        onDeleteNote={vi.fn()}
+        onDeleteHighlight={vi.fn()}
+        onClose={vi.fn()}
+        anchorRect={new DOMRect(100, 100, 200, 20)}
+        isVisible={true}
+      />,
+    );
+
+    const line = document.body.querySelector(".thread-anchor-line") as HTMLElement;
+    expect(line).toBeTruthy();
+    // Starts at the highlight's right edge (x=300), ends at the popover's left
+    expect(line.style.left).toBe("300px");
+    expect(line.style.top).toBe("110px"); // passage midline
+    expect(parseFloat(line.style.width)).toBeGreaterThanOrEqual(8);
+  });
 });

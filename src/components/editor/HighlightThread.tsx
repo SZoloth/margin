@@ -304,9 +304,26 @@ export function HighlightThread({
   const gap = 12;
   const left = Math.min(liveRect.right + gap, window.innerWidth - popoverWidth - 8);
   const top = Math.max(8, Math.min(liveRect.top, window.innerHeight - 400));
+  const popoverLeft = Math.max(8, left);
+  const connectorWidth = popoverLeft - liveRect.right;
 
   return createPortal(
-    <div
+    <>
+      {/* Anchor hairline — the thread is tied to its passage, not floating */}
+      {!isMobile && connectorWidth >= 8 && (
+        <div
+          aria-hidden="true"
+          className="thread-anchor-line"
+          style={{
+            top: liveRect.top + liveRect.height / 2,
+            left: liveRect.right,
+            width: connectorWidth,
+            background: `color-mix(in srgb, var(--color-highlight-${highlight.color}) 55%, var(--color-text-primary))`,
+            opacity: isVisible ? 1 : 0,
+          }}
+        />
+      )}
+      <div
       ref={popoverRef}
       role="dialog"
       aria-label="Highlight notes"
@@ -321,7 +338,7 @@ export function HighlightThread({
           : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
       } : {
         top,
-        left: Math.max(8, left),
+        left: popoverLeft,
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? "scale(1)" : "scale(0.97)",
         transformOrigin: "left top",
@@ -505,7 +522,8 @@ export function HighlightThread({
         )}
         <div className="thread-hint">⌘↵ save · Esc keeps highlight</div>
       </div>
-    </div>,
+      </div>
+    </>,
     document.body,
   );
 }
