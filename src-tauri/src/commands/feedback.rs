@@ -76,11 +76,14 @@ pub(crate) fn sync_continuous_feedback(
         rows
     };
 
+    // Only rows this sync owns are mutable — session_id 'continuous'. Rows
+    // written by export (persist_corrections) or MCP margin_create_correction
+    // carry their own session ids and must not be updated or deleted here.
     let existing = conn
         .query_row(
             "SELECT id, polarity, rationale
          FROM corrections
-         WHERE highlight_id = ?1 AND synthesized_at IS NULL
+         WHERE highlight_id = ?1 AND synthesized_at IS NULL AND session_id = 'continuous'
          ORDER BY created_at DESC LIMIT 1",
             [highlight_id],
             |row| {
@@ -298,6 +301,55 @@ mod tests {
         assert_eq!(captured.0, 1);
         assert_eq!(captured.1, r#"["First note.","Second note."]"#);
         assert_eq!(captured.2.as_deref(), Some("positive"));
+    }
+
+    #[test]
+    fn does_not_delete_a_row_written_by_export_or_mcp() {
+        let conn = setup_db();
+        // A correction row written outside this sync (export session / MCP).
+        conn.execute(
+            "INSERT INTO corrections VALUES (
+                'c1', 'h1', 'doc1', 'mcp-session', 'weak sentence', NULL, NULL, NULL,
+                '[\"MCP note\"]', 'Test document', 'file', '/tmp/test.md', NULL,
+                'yellow', 1000, 1000, NULL, NULL, NULL, NULL, NULL, NULL, NULL)",
+            [],
+        ).unwrap();
+
+        // UI note edit with no correction notes must not touch the foreign row.
+        let changed = sync_continuous_feedback(&conn, "h1", None, None, 2000).unwrap();
+        assert!(!changed);
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn ui_signal_coexists_with_a_foreign_row() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO corrections VALUES (
+                'c1', 'h1', 'doc1', 'mcp-session', 'weak sentence', NULL, NULL, NULL,
+                '[\"MCP note\"]', 'Test document', 'file', '/tmp/test.md', NULL,
+                'yellow', 1000, 1000, NULL, NULL, NULL, NULL, NULL, NULL, NULL)",
+            [],
+        ).unwrap();
+        add_note(&conn, "n1", "UI note.", 1500);
+
+        sync_continuous_feedback(&conn, "h1", None, None, 2000).unwrap();
+
+        // Both rows exist — the UI sync did not overwrite the foreign row's notes.
+        let rows: Vec<(String, String)> = conn
+            .prepare("SELECT session_id, notes_json FROM corrections ORDER BY session_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|(s, n)| s == "mcp-session" && n == "[\"MCP note\"]"));
+        assert!(rows.iter().any(|(s, n)| s == "continuous" && n == "[\"UI note.\"]"));
     }
 
     #[test]

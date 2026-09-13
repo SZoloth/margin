@@ -17,6 +17,10 @@ export interface BuildCorrectionExportInputsParams {
   polarityMap: Map<string, "positive" | "corrective">;
   rationaleMap: Map<string, string>;
   getExtendedContext: (highlight: Highlight) => string | null;
+  /** Current document text at the highlight's range — when it differs from
+   *  text_content the user rewrote the passage after flagging it, and the new
+   *  text is the richest correction signal: the drafted→sent delta. */
+  getCurrentText?: (highlight: Highlight) => string | null;
 }
 
 export interface BuildCorrectionExportInputsResult {
@@ -33,6 +37,7 @@ export function buildCorrectionExportInputs({
   polarityMap,
   rationaleMap,
   getExtendedContext,
+  getCurrentText,
 }: BuildCorrectionExportInputsParams): BuildCorrectionExportInputsResult {
   const notesByHighlightAndIntent = new Map<string, Map<MarginNote["intent"], string[]>>();
   for (const note of marginNotes) {
@@ -51,6 +56,10 @@ export function buildCorrectionExportInputs({
     const byIntent = notesByHighlightAndIntent.get(h.id);
     if (!byIntent) continue;
 
+    const currentText = getCurrentText?.(h) ?? null;
+    const suggestedEdit =
+      currentText && currentText.trim() !== h.text_content.trim() ? currentText : null;
+
     for (const intent of ["correction", "prompt"] as const) {
       const notes = byIntent.get(intent);
       if (!notes || notes.length === 0) continue;
@@ -66,6 +75,7 @@ export function buildCorrectionExportInputs({
         polarity: intent === "correction" ? polarityMap.get(h.id) ?? null : null,
         intent,
         rationale: intent === "correction" ? rationaleMap.get(h.id) ?? null : null,
+        suggested_edit: intent === "correction" ? suggestedEdit : null,
       });
     }
 

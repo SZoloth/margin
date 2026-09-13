@@ -184,6 +184,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   get_corrections_by_document: () => [],
   get_corrections_flat: () => [],
   update_correction_writing_type: () => undefined,
+  set_correction_category: () => undefined,
   delete_correction: () => undefined,
   export_corrections_json: () => ({ count: 0, highlightIds: [] }),
   mark_corrections_synthesized: () => 0,

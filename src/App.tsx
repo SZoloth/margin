@@ -1392,6 +1392,13 @@ export default function App() {
           polarityMap,
           rationaleMap,
           getExtendedContext: (h) => getExtendedContext(editor, h.from_pos, h.to_pos),
+          getCurrentText: (h) => {
+            try {
+              return editor.state.doc.textBetween(h.from_pos, h.to_pos, "\n", "\n");
+            } catch {
+              return null; // range out of bounds — positions moved mid-export
+            }
+          },
         });
         const correctionInputs: CorrectionInput[] = exportInputs.inputs;
         correctionCount = exportInputs.correctionCount;

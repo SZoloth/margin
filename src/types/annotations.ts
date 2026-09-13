@@ -61,6 +61,8 @@ export interface CorrectionDetail {
   suggestedEdit: string | null;
   acceptedAt: number | null;
   rationale?: string | null;
+  /** Triage category — 'non-feedback' rows are excluded from synthesis. */
+  category?: string | null;
 }
 
 export interface DocumentCorrections {

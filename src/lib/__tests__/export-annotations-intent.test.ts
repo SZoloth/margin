@@ -56,4 +56,47 @@ describe("buildCorrectionExportInputs", () => {
     expect(result.promptCount).toBe(1);
     expect(result.noteOnlyCount).toBe(1);
   });
+
+  it("captures the drafted→sent delta as suggested_edit when the marked text changed", () => {
+    const result = buildCorrectionExportInputs({
+      highlights: [highlight("h1", "weak phrase", 0)],
+      marginNotes: [note("n1", "h1", "AI filler", "correction")],
+      writingType: "general",
+      polarityMap: new Map(),
+      rationaleMap: new Map(),
+      getExtendedContext: () => null,
+      // The user rewrote the flagged passage before exporting.
+      getCurrentText: () => "a sharper phrase",
+    });
+
+    expect(result.inputs[0]!.suggested_edit).toBe("a sharper phrase");
+  });
+
+  it("leaves suggested_edit null when the marked text is unchanged", () => {
+    const result = buildCorrectionExportInputs({
+      highlights: [highlight("h1", "weak phrase", 0)],
+      marginNotes: [note("n1", "h1", "AI filler", "correction")],
+      writingType: "general",
+      polarityMap: new Map(),
+      rationaleMap: new Map(),
+      getExtendedContext: () => null,
+      getCurrentText: () => "weak phrase",
+    });
+
+    expect(result.inputs[0]!.suggested_edit).toBeNull();
+  });
+
+  it("does not attach suggested_edit to prompt-intent rows", () => {
+    const result = buildCorrectionExportInputs({
+      highlights: [highlight("h1", "weak phrase", 0)],
+      marginNotes: [note("n1", "h1", "rewrite this", "prompt")],
+      writingType: "general",
+      polarityMap: new Map(),
+      rationaleMap: new Map(),
+      getExtendedContext: () => null,
+      getCurrentText: () => "a sharper phrase",
+    });
+
+    expect(result.inputs[0]!.suggested_edit).toBeNull();
+  });
 });

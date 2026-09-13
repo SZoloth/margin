@@ -183,6 +183,10 @@ export async function bulkDeleteCorrections(highlightIds: string[]): Promise<num
   return invoke<number>("bulk_delete_corrections", { highlightIds });
 }
 
+export async function setCorrectionCategory(highlightId: string, category: string | null): Promise<void> {
+  return invoke<void>("set_correction_category", { highlightId, category });
+}
+
 export async function bulkTagCorrections(highlightIds: string[], writingType: string): Promise<number> {
   return invoke<number>("bulk_tag_corrections", { highlightIds, writingType });
 }

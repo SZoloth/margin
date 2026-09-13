@@ -78,6 +78,7 @@ pub fn run() {
             commands::corrections::bulk_tag_corrections,
             commands::corrections::bulk_set_polarity_corrections,
             commands::corrections::update_correction_rationale,
+            commands::corrections::set_correction_category,
             commands::corrections::get_voice_signals,
             commands::corrections::mark_corrections_synthesized,
             commands::corrections::mark_corrections_unsynthesized,

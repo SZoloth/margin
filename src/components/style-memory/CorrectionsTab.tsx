@@ -4,6 +4,7 @@ import {
   getCorrectionsFlat,
   updateCorrectionWritingType,
   deleteCorrection,
+  setCorrectionCategory,
   acceptCorrection,
   bulkDeleteCorrections,
   bulkTagCorrections,
@@ -177,6 +178,7 @@ function CorrectionCard({
   onToggleSelect,
   onUpdateType,
   onDelete,
+  onTriage,
   onAccept,
 }: {
   correction: CorrectionDetail;
@@ -184,6 +186,7 @@ function CorrectionCard({
   onToggleSelect: (highlightId: string) => void;
   onUpdateType: (highlightId: string, writingType: WritingType) => void;
   onDelete: (highlightId: string) => void;
+  onTriage: (highlightId: string) => void;
   onAccept?: (highlightId: string, matchText: string, suggestedEdit: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -288,6 +291,29 @@ function CorrectionCard({
             </span>
           )}
           <span>{formatRelativeTime(correction.createdAt)}</span>
+          {correction.category !== "non-feedback" && !isSynthesized && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTriage(correction.highlightId);
+              }}
+              title="Keep the row but exclude it from synthesis"
+              style={{
+                padding: 0,
+                fontSize: "var(--text-xs)",
+                color: "var(--color-text-secondary)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+                textUnderlineOffset: 2,
+                opacity: 0.6,
+              }}
+            >
+              Not feedback
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -437,9 +463,16 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
     }
   }, [loadCorrections]);
 
-  // Counts for view toggle
-  const inboxCount = useMemo(() => corrections.filter((c) => c.synthesizedAt == null).length, [corrections]);
-  const archiveCount = useMemo(() => corrections.filter((c) => c.synthesizedAt != null).length, [corrections]);
+  // Counts for view toggle. The pending count mirrors the synthesis query
+  // (CORRECTION_FILTER): unsynthesized AND has notes AND not triaged as
+  // non-feedback — so "Synthesize N pending" matches what synthesis consumes.
+  const synthesisEligible = useMemo(
+    () => corrections.filter((c) => c.synthesizedAt == null && c.notes.length > 0 && c.category !== "non-feedback"),
+    [corrections],
+  );
+  const isResolved = (c: CorrectionDetail) => c.synthesizedAt != null || c.category === "non-feedback";
+  const inboxCount = useMemo(() => corrections.filter((c) => !isResolved(c)).length, [corrections]);
+  const archiveCount = useMemo(() => corrections.filter(isResolved).length, [corrections]);
 
   // Report stats to parent
   useEffect(() => {
@@ -453,16 +486,16 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       total: corrections.length,
       documentCount: docs.size,
       untaggedCount: untagged,
-      unsynthesizedCount: inboxCount,
+      unsynthesizedCount: synthesisEligible.length,
     });
-  }, [corrections, onStatsChange, inboxCount]);
+  }, [corrections, onStatsChange, synthesisEligible, inboxCount]);
 
   // Filtering
   const filtered = useMemo(() =>
     corrections.filter((c) => {
       // View filter
-      if (view === "inbox" && c.synthesizedAt != null) return false;
-      if (view === "archive" && c.synthesizedAt == null) return false;
+      if (view === "inbox" && isResolved(c)) return false;
+      if (view === "archive" && !isResolved(c)) return false;
       if (untaggedOnly && c.writingType) return false;
       if (activeFilter && c.writingType !== activeFilter) return false;
       if (polarityFilter && c.polarity !== polarityFilter) return false;
@@ -516,6 +549,17 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       reportError("Could not apply correction", err);
     }
   }, [onAcceptEdit]);
+
+  const handleTriage = useCallback(async (highlightId: string) => {
+    try {
+      await setCorrectionCategory(highlightId, "non-feedback");
+      setCorrections((prev) =>
+        prev.map((c) => (c.highlightId === highlightId ? { ...c, category: "non-feedback" } : c)),
+      );
+    } catch (err) {
+      reportError("Could not triage correction", err);
+    }
+  }, []);
 
   const handleToggleSelect = useCallback((highlightId: string) => {
     setSelectedIds((prev) => {
@@ -811,6 +855,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
                       onToggleSelect={handleToggleSelect}
                       onUpdateType={handleUpdateType}
                       onDelete={handleDelete}
+                      onTriage={handleTriage}
                       onAccept={onAcceptEdit ? handleAccept : undefined}
                     />
                   ))}

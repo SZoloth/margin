@@ -351,6 +351,39 @@ describe("createWritingRule", () => {
     }
   });
 
+  it("routes synthesized_from rules through the review gate with provenance notes", () => {
+    const result = createWritingRule(db, {
+      rule_text: "Prefer concrete verbs",
+      writing_type: "blog",
+      category: "word-choice",
+      severity: "should-fix",
+      synthesized_from: ["h1", "h2", "h3"],
+    });
+
+    expect(result).not.toHaveProperty("error");
+    if (!("error" in result)) {
+      expect(result.source).toBe("synthesis-candidate");
+      expect(result.signalCount).toBe(3);
+      expect(result.notes).toBe("synthesized-from:h1,h2,h3");
+    }
+  });
+
+  it("merges provenance with caller notes", () => {
+    const result = createWritingRule(db, {
+      rule_text: "Cut hedges",
+      writing_type: "general",
+      category: "hedging",
+      severity: "should-fix",
+      synthesized_from: ["h9"],
+      notes: "recurring pattern",
+    });
+
+    expect(result).not.toHaveProperty("error");
+    if (!("error" in result)) {
+      expect(result.notes).toBe("synthesized-from:h9; recurring pattern");
+    }
+  });
+
   it("rejects invalid severity", () => {
     const result = createWritingRule(db, {
       rule_text: "Some rule",
