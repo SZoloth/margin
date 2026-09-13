@@ -23,6 +23,51 @@
   outline-offset: -1px;
 }
 
+/* Sparse minimap — a thin rail at the viewport's right edge carrying
+   document-relative annotation positions plus a current-viewport thumb. */
+.minimap-rail {
+  position: fixed;
+  top: 72px;
+  bottom: 24px;
+  right: 2px;
+  width: 14px;
+  z-index: 40;
+}
+
+.minimap-thumb {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  border-radius: 2px;
+  background: var(--color-text-tertiary);
+  opacity: 0.25;
+}
+
+.minimap-tick {
+  position: absolute;
+  left: 2px;
+  width: 10px;
+  height: 3px;
+  padding: 0;
+  border: none;
+  border-radius: 1.5px;
+  opacity: 0.75;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: opacity var(--duration-fast) var(--ease-micro),
+    transform var(--duration-fast) var(--ease-micro);
+}
+
+.minimap-tick:hover {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1.8);
+}
+
+.minimap-tick:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 1px;
+}
+
 /* Margin note indicator */
 .margin-note-indicator {
   position: relative;

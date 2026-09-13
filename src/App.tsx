@@ -56,6 +56,7 @@ import { ErrorToast } from "@/components/ui/ErrorToast";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { useUpdater } from "@/hooks/useUpdater";
 import { MarginIndicators } from "@/components/editor/MarginIndicators";
+import { MinimapRail } from "@/components/editor/MinimapRail";
 import type { UndoAction } from "@/components/ui/UndoToast";
 import { useDiffReview } from "@/hooks/useDiffReview";
 import { DiffBanner } from "@/components/editor/DiffBanner";
@@ -1710,17 +1711,29 @@ export default function App() {
       }
       marginIndicators={
         editor && annotations.isLoaded ? (
-          <MarginIndicators
-            editor={editor}
-            highlights={annotations.highlights}
-            marginNotes={annotations.marginNotes}
-            onClickHighlight={(highlightId, rect) => {
-              setFocusHighlightId(highlightId);
-              setAnchorRect(rect);
-              setAutoFocusNew(true);
-            }}
-            activeHighlightId={focusHighlightId}
-          />
+          <>
+            <MarginIndicators
+              editor={editor}
+              highlights={annotations.highlights}
+              marginNotes={annotations.marginNotes}
+              onClickHighlight={(highlightId, rect) => {
+                setFocusHighlightId(highlightId);
+                setAnchorRect(rect);
+                setAutoFocusNew(true);
+              }}
+              activeHighlightId={focusHighlightId}
+            />
+            <MinimapRail
+              editor={editor}
+              highlights={annotations.highlights}
+              marginNotes={annotations.marginNotes}
+              onClickHighlight={(highlightId, rect) => {
+                setFocusHighlightId(highlightId);
+                setAnchorRect(rect);
+                setAutoFocusNew(true);
+              }}
+            />
+          </>
         ) : undefined
       }
     >

@@ -36,6 +36,30 @@ Select any text and choose a highlight color from the floating toolbar. Click a 
 Teams can leverage Margin to build a personal writing style profile from their own corrections.
 
 > "The art of reading is the art of picking up cues from a text." — Mortimer Adler
+
+## How it works
+
+Every correction you make is saved as structured feedback. Margin watches what you fix — not just what you flag — and distills it into writing rules that travel with you.
+
+The annotation rail on the right shows where your notes live. In long documents, a minimap at the window's edge marks each annotation's position in the whole piece, so a glance tells you where the thinking happened.
+
+## A longer walk
+
+Reading is a conversation. When you highlight a passage and write a note, you are doing two things at once: responding to this document, and teaching the system what you value. The second part compounds.
+
+Over time the rules get sharper. Early corrections are broad — cut filler, prefer verbs. Later ones get specific to your voice: the constructions you reach for when you are hedging, the openings you overuse, the words you have trained yourself to distrust.
+
+None of this requires a separate review session. The same underline that marked your attention becomes the surface where the correction lives, and the same correction becomes the rule that catches the next draft. Reading and improving are one loop.
+
+## Why local-first
+
+Your documents are markdown files on disk. Your annotations live beside them. The style profile that accumulates is yours — a portable artifact, not a platform feature. Export it, version it, feed it to whatever model writes your next draft.
+
+The goal is not a smarter editor. It is a reader that remembers what you taught it, and a writer that does not make the same mistake twice.
+
+## Closing thought
+
+Tools shape attention. A highlighter that only marks is a memory aid. A highlighter that teaches is something else — an argument with your future drafts, won once instead of over and over.
 `;
 
 // ---------------------------------------------------------------------------
