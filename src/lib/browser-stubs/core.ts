@@ -200,7 +200,28 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     ruleCount: 0,
   }),
 
-  get_writing_rules: () => [],
+  get_writing_rules: () => [
+    // One fixture rule so rule-resurfacing underlines are exercisable in
+    // browser dev mode — "leverage" gets the dotted underline.
+    {
+      id: "stub-rule-1",
+      writingType: "general",
+      category: "kill-words",
+      ruleText: "leverage",
+      whenToApply: null,
+      why: "Empty corporate verb — say what you actually mean.",
+      severity: "must-fix",
+      exampleBefore: "leverage",
+      exampleAfter: "use",
+      source: "synthesis",
+      signalCount: 4,
+      notes: null,
+      reviewedAt: 1,
+      detectionPattern: null,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ],
   export_writing_rules: () => ({ markdownPath: "", hookPath: "", ruleCount: 0 }),
   update_writing_rule: () => undefined,
   delete_writing_rule: () => undefined,
