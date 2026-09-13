@@ -124,4 +124,52 @@ describe("HighlightThread", () => {
     expect(saveBtn).toBeTruthy();
     expect(saveBtn?.textContent).toBe("Save");
   });
+
+  it("renders in-thread color swatches that recolor via onRecolor", () => {
+    const onRecolor = vi.fn();
+    render(
+      <HighlightThread
+        highlight={mockHighlight}
+        notes={mockNotes}
+        onAddNote={vi.fn()}
+        onUpdateNote={vi.fn()}
+        onDeleteNote={vi.fn()}
+        onDeleteHighlight={vi.fn()}
+        onRecolor={onRecolor}
+        onClose={vi.fn()}
+        anchorRect={new DOMRect(100, 100, 200, 20)}
+        isVisible={true}
+      />,
+    );
+
+    const group = document.body.querySelector("[role='radiogroup'][aria-label='Highlight color']");
+    expect(group).toBeTruthy();
+
+    // Current color (blue) is the checked radio
+    const blue = group?.querySelector("[aria-label='Highlight blue']") as HTMLButtonElement;
+    expect(blue.getAttribute("aria-checked")).toBe("true");
+    expect(blue.className).toContain("toolbar-color-btn--selected");
+
+    const pink = group?.querySelector("[aria-label='Highlight pink']") as HTMLButtonElement;
+    fireEvent.click(pink);
+    expect(onRecolor).toHaveBeenCalledWith("h1", "pink");
+  });
+
+  it("hides the swatch row when onRecolor is not provided", () => {
+    render(
+      <HighlightThread
+        highlight={mockHighlight}
+        notes={mockNotes}
+        onAddNote={vi.fn()}
+        onUpdateNote={vi.fn()}
+        onDeleteNote={vi.fn()}
+        onDeleteHighlight={vi.fn()}
+        onClose={vi.fn()}
+        anchorRect={new DOMRect(100, 100, 200, 20)}
+        isVisible={true}
+      />,
+    );
+
+    expect(document.body.querySelector(".thread-colors")).toBeNull();
+  });
 });

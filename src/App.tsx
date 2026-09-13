@@ -988,54 +988,82 @@ export default function App() {
         }
         if (onboarding.step === "welcome") {
           onboarding.advanceToHighlighted();
-          setOnboardingToast("Highlight saved. Try adding a note \u2014 select text and click the comment icon.");
+          setOnboardingToast("Highlight saved \u2014 the note panel opens automatically once you open a file (\u2318O).");
+        } else if (onboarding.step === "highlighted") {
+          onboarding.advanceToNoted();
+          setOnboardingToast("Annotations saved. Open more files with \u2318O.");
         }
         return;
       }
 
-      await persistHighlight(resolvedColor, from, to);
+      const ids = await persistHighlight(resolvedColor, from, to);
+      const highlightId = ids[0];
+      if (!highlightId) return;
+
+      // Highlighting is the first step of noting, not a separate gesture —
+      // open the thread immediately, focused on the new-note field (SAM-1144).
+      requestAnimationFrame(() => {
+        const mark = editor.view.dom.querySelector(
+          `mark[data-highlight-id="${highlightId}"]`,
+        );
+        if (mark) {
+          setAnchorRect(mark.getBoundingClientRect());
+        }
+        setFocusHighlightId(highlightId);
+        setAutoFocusNew(true);
+      });
     },
-    [editor, doc.currentDoc, persistHighlight, settings.defaultHighlightColor, onboarding.step],
+    [editor, doc.currentDoc, persistHighlight, settings.defaultHighlightColor, onboarding],
+  );
+  // Recolor from the thread's swatch row: update the row in place (notes and
+  // anchors survive) and retint the mark. PM marks are immutable, so the mark
+  // is removed and re-added with the new color attr.
+  const handleRecolor = useCallback(
+    async (highlightId: string, color: string) => {
+      const h = annotationsRef.current.highlights.find((x) => x.id === highlightId);
+      if (!h || h.color === color) return;
+      try {
+        await annotationsRef.current.updateHighlight({
+          id: h.id,
+          color,
+          textContent: h.text_content,
+          fromPos: h.from_pos,
+          toPos: h.to_pos,
+          prefixContext: h.prefix_context,
+          suffixContext: h.suffix_context,
+        });
+      } catch (err) {
+        console.error("Failed to recolor highlight:", err);
+        setErrorToast({
+          message: `Could not change highlight color: ${err instanceof Error ? err.message : String(err)}`,
+          id: ++errorIdRef.current,
+        });
+        return;
+      }
+
+      const currentEditor = editorRef.current;
+      if (!currentEditor || currentEditor.isDestroyed) return;
+      const markType = currentEditor.state.schema.marks.highlight;
+      if (!markType) return;
+      const tr = currentEditor.state.tr;
+      currentEditor.state.doc.descendants((node, pos) => {
+        if (!node.isText) return;
+        const mark = node.marks.find(
+          (m) => m.type.name === "highlight" && m.attrs.highlightId === highlightId,
+        );
+        if (mark) {
+          tr.removeMark(pos, pos + node.nodeSize, mark);
+          tr.addMark(pos, pos + node.nodeSize, markType.create({ ...mark.attrs, color }));
+        }
+      });
+      tr.setMeta("addToHistory", false);
+      if (tr.steps.length > 0) {
+        currentEditor.view.dispatch(tr);
+      }
+    },
+    [],
   );
 
-  const handleNote = useCallback(async (range?: { from: number; to: number }) => {
-    if (!editor) return;
-    const { from, to } = range ?? editor.state.selection;
-    if (from === to) return;
-
-    // Onboarding: visual-only highlight+note, advance to complete
-    if (!doc.currentDoc) {
-      const markType = editor.state.schema.marks.highlight;
-      if (markType) {
-        const tr = editor.state.tr.addMark(
-          from, to,
-          markType.create({ color: settings.defaultHighlightColor }),
-        );
-        tr.setMeta("addToHistory", false);
-        editor.view.dispatch(tr);
-      }
-      if (onboarding.step === "welcome" || onboarding.step === "highlighted") {
-        onboarding.advanceToNoted();
-        setOnboardingToast("Annotations saved. Open more files with \u2318O.");
-      }
-      return;
-    }
-
-    const ids = await persistHighlight(settings.defaultHighlightColor, from, to);
-    const highlightId = ids[0];
-    if (!highlightId) return;
-
-    requestAnimationFrame(() => {
-      const mark = editor.view.dom.querySelector(
-        `mark[data-highlight-id="${highlightId}"]`,
-      );
-      if (mark) {
-        setAnchorRect(mark.getBoundingClientRect());
-      }
-      setFocusHighlightId(highlightId);
-      setAutoFocusNew(true);
-    });
-  }, [editor, doc.currentDoc, persistHighlight, onboarding.step, settings.defaultHighlightColor]);
   // Remove every highlight whose mark intersects the selection. Rows are
   // deleted whole (same semantics as the thread's Remove button); idless
   // visual-only marks are cleared within the selection only. One undo toast
@@ -1530,7 +1558,6 @@ export default function App() {
       <FloatingToolbar
         editor={editor}
         onHighlight={handleHighlight}
-        onNote={handleNote}
         defaultColor={settings.defaultHighlightColor}
       />
 
@@ -1595,6 +1622,7 @@ export default function App() {
               });
             }}
             onDeleteHighlight={handleDeleteHighlight}
+            onRecolor={handleRecolor}
             onSetPolarity={(highlightId, polarity) => {
               setPolarityMap((prev) => {
                 const next = new Map(prev);
