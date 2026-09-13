@@ -45,6 +45,8 @@ const ARCH_LABELS: Record<string, string> = {
   b: "exemplars",
   c: "editor",
   "c-corr": "editor-corrections",
+  "c-crit": "editor-self-critique",
+  "c-crit-rules": "editor-critique-rules",
   d: "corrections",
   "d-chrono": "corrections-chrono-lehmann",
   e: "hybrid",
@@ -68,6 +70,10 @@ async function loadGenerator(arch: string): Promise<GenerateFn> {
       return (await import("./generators/arch-c-editor.ts")).generate;
     case "c-corr":
       return (await import("./generators/arch-c-corrections.ts")).generate;
+    case "c-crit":
+      return (await import("./generators/arch-c-critique.ts")).generate;
+    case "c-crit-rules":
+      return (await import("./generators/arch-c-crit-rules.ts")).generate;
     case "d":
       return (await import("./generators/arch-d-corrections.ts")).generate;
     case "d-chrono":
@@ -99,8 +105,8 @@ function parseArch(): string {
   const archIdx = args.indexOf("--arch");
   if (archIdx === -1 || archIdx + 1 >= args.length) return "a";
   const value = args[archIdx + 1];
-  if (!value || !["a", "a-top10", "b", "c", "c-corr", "d", "d-chrono", "e", "e-top10", "f", "h", "skill", "coached", "null"].includes(value)) {
-    console.error(`Invalid --arch value: ${value}. Use a, a-top10, b, c, c-corr, d, d-chrono, e, e-top10, f, h, skill, coached, or null.`);
+  if (!value || !["a", "a-top10", "b", "c", "c-corr", "c-crit", "c-crit-rules", "d", "d-chrono", "e", "e-top10", "f", "h", "skill", "coached", "null"].includes(value)) {
+    console.error(`Invalid --arch value: ${value}. Use a, a-top10, b, c, c-corr, c-crit, c-crit-rules, d, d-chrono, e, e-top10, f, h, skill, coached, or null.`);
     process.exit(1);
   }
   return value;
