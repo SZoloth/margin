@@ -123,9 +123,8 @@
 .thread-hint {
   margin-top: 6px;
   font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
-  opacity: 0.6;
 }
 
 .thread-body {
@@ -177,15 +176,13 @@
   background: transparent;
   font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
   font-size: var(--text-base);
-  font-style: italic;
   line-height: 1.5;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   outline: none;
 }
 
 .thread-textarea::placeholder {
   color: var(--color-text-secondary);
-  opacity: 0.5;
 }
 
 /* Action buttons (shared by thread and legacy) */

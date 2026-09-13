@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import type { Editor } from "@tiptap/core";
+import type { Transaction } from "@tiptap/pm/state";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
 import { UnsavedChangesDialog } from "@/components/layout/UnsavedChangesDialog";
@@ -58,6 +59,21 @@ import { WelcomeBar } from "@/components/onboarding/WelcomeBar";
 import { OnboardingToast } from "@/components/onboarding/OnboardingToast";
 
 const showUIFork = import.meta.env.MODE !== "production";
+
+// WebKit scrolls the reader container when a mark mutation detaches the live
+// DOM selection mid-dispatch — pin scrollTop across it so highlighting,
+// removing, or undoing a highlight never jumps the page.
+function dispatchPreservingScroll(editor: Editor, tr: Transaction): void {
+  const el = document.querySelector("[data-scroll-container]");
+  const top = el instanceof HTMLElement ? el.scrollTop : 0;
+  editor.view.dispatch(tr);
+  if (el instanceof HTMLElement) {
+    el.scrollTop = top;
+    requestAnimationFrame(() => {
+      el.scrollTop = top;
+    });
+  }
+}
 
 export default function App() {
   const { settings, setSetting } = useSettings();
@@ -796,7 +812,7 @@ export default function App() {
         }
       });
       if (tr.steps.length > 0) {
-        editor.view.dispatch(tr);
+        dispatchPreservingScroll(editor, tr);
       }
     }
 
@@ -828,7 +844,7 @@ export default function App() {
                 highlight.to_pos,
                 restoreMarkType.create({ color: highlight.color, highlightId: restored.id }),
               );
-              currentEditor.view.dispatch(restoreTr);
+              dispatchPreservingScroll(currentEditor, restoreTr);
             }
           }
           // Re-open the thread
@@ -961,7 +977,7 @@ export default function App() {
           tr.addMark(op.from, op.to, markType.create({ color: op.color, highlightId: op.id }));
         }
         tr.setMeta("addToHistory", false);
-        editor.view.dispatch(tr);
+        dispatchPreservingScroll(editor, tr);
       }
       return ids;
     },
@@ -984,7 +1000,7 @@ export default function App() {
             markType.create({ color: resolvedColor }),
           );
           tr.setMeta("addToHistory", false);
-          editor.view.dispatch(tr);
+          dispatchPreservingScroll(editor, tr);
         }
         if (onboarding.step === "welcome") {
           onboarding.advanceToHighlighted();
