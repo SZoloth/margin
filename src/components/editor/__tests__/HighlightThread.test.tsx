@@ -34,7 +34,7 @@ describe("HighlightThread", () => {
     cleanup();
   });
 
-  it("applies highlight color to excerpt border", () => {
+  it("renders the unified top row with a Remove action", () => {
     render(
       <HighlightThread
         highlight={mockHighlight}
@@ -49,54 +49,10 @@ describe("HighlightThread", () => {
       />,
     );
 
-    // HighlightThread renders via portal into document.body
-    const excerpt = document.body.querySelector(".thread-excerpt");
-    expect(excerpt).toBeTruthy();
-    expect((excerpt as HTMLElement).style.borderLeftColor).toBe(
-      "var(--color-highlight-blue)",
-    );
-  });
-
-  it("uses yellow color for yellow highlights", () => {
-    const yellowHighlight = { ...mockHighlight, color: "yellow" };
-    render(
-      <HighlightThread
-        highlight={yellowHighlight}
-        notes={mockNotes}
-        onAddNote={vi.fn()}
-        onUpdateNote={vi.fn()}
-        onDeleteNote={vi.fn()}
-        onDeleteHighlight={vi.fn()}
-        onClose={vi.fn()}
-        anchorRect={new DOMRect(100, 100, 200, 20)}
-        isVisible={true}
-      />,
-    );
-
-    const excerpt = document.body.querySelector(".thread-excerpt");
-    expect((excerpt as HTMLElement).style.borderLeftColor).toBe(
-      "var(--color-highlight-yellow)",
-    );
-  });
-
-  it("thread header label has thread-header-label class for 11px/0.08em styling", () => {
-    render(
-      <HighlightThread
-        highlight={mockHighlight}
-        notes={mockNotes}
-        onAddNote={vi.fn()}
-        onUpdateNote={vi.fn()}
-        onDeleteNote={vi.fn()}
-        onDeleteHighlight={vi.fn()}
-        onClose={vi.fn()}
-        anchorRect={new DOMRect(100, 100, 200, 20)}
-        isVisible={true}
-      />,
-    );
-
-    const label = document.body.querySelector(".thread-header-label");
-    expect(label).toBeTruthy();
-    expect(label?.textContent).toBe("Notes");
+    const top = document.body.querySelector(".thread-top");
+    expect(top).toBeTruthy();
+    const remove = top?.querySelector(".note-action-btn--delete");
+    expect(remove?.textContent).toBe("Remove");
   });
 
   it("save button has note-action-btn--primary class", () => {

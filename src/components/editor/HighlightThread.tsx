@@ -3,21 +3,14 @@ import { createPortal } from "react-dom";
 import type { Highlight, MarginNote } from "@/types/annotations";
 import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 
-type Polarity = "positive" | "corrective" | null;
-type NoteIntent = MarginNote["intent"];
-
 interface HighlightThreadProps {
   highlight: Highlight;
   notes: MarginNote[];
-  polarity?: Polarity;
-  rationale?: string | null;
-  onAddNote: (highlightId: string, content: string, intent: NoteIntent) => void;
+  onAddNote: (highlightId: string, content: string) => void;
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
   onDeleteHighlight: (id: string) => void;
   onRecolor?: (highlightId: string, color: string) => void;
-  onSetPolarity?: (highlightId: string, polarity: Polarity) => void;
-  onUpdateRationale?: (highlightId: string, rationale: string | null) => void;
   onClose: () => void;
   anchorRect: DOMRect | null;
   autoFocusNew?: boolean;
@@ -140,35 +133,23 @@ function ThreadMessage({
 export function HighlightThread({
   highlight,
   notes,
-  polarity,
-  rationale,
   onAddNote,
   onUpdateNote,
   onDeleteNote,
   onDeleteHighlight,
   onRecolor,
-  onSetPolarity,
-  onUpdateRationale,
   onClose,
   anchorRect,
   autoFocusNew,
   isVisible,
 }: HighlightThreadProps) {
   const [newNoteValue, setNewNoteValue] = useState("");
-  const [newNoteIntent, setNewNoteIntent] = useState<NoteIntent>("correction");
-  const [rationaleValue, setRationaleValue] = useState(rationale ?? "");
-  const [rationaleSaving, setRationaleSaving] = useState(false);
   // Live anchor rect — the prop is a snapshot; scrolling makes it stale, so
   // re-measure the highlight's DOM rect on scroll/resize (rAF-throttled).
   const [liveRect, setLiveRect] = useState<DOMRect | null>(anchorRect);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
-
-  // Sync rationale value when prop changes
-  useEffect(() => {
-    setRationaleValue(rationale ?? "");
-  }, [rationale]);
 
   // Keep the anchor rect in sync with the prop and with layout changes.
   useEffect(() => {
@@ -282,10 +263,9 @@ export function HighlightThread({
   const handleAddNote = useCallback(() => {
     const trimmed = newNoteValue.trim();
     if (!trimmed) return;
-    onAddNote(highlight.id, trimmed, newNoteIntent);
+    onAddNote(highlight.id, trimmed);
     setNewNoteValue("");
-    setNewNoteIntent("correction");
-  }, [newNoteValue, newNoteIntent, highlight.id, onAddNote]);
+  }, [newNoteValue, highlight.id, onAddNote]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -348,148 +328,53 @@ export function HighlightThread({
           : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
       }}
     >
-      {/* Header */}
-      <div className="thread-header">
-        <span className="thread-header-label">Notes</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {onSetPolarity && (
-            <>
+      {/* Top row: swatches left, remove right — no header chrome */}
+      <div className="thread-top">
+        {onRecolor && (
+          <div className="thread-colors" role="radiogroup" aria-label="Highlight color">
+            {HIGHLIGHT_COLORS.map((c) => (
               <button
+                key={c.name}
                 type="button"
-                onClick={() => onSetPolarity(highlight.id, polarity === "positive" ? null : "positive")}
-                className="note-action-btn text-[length:var(--text-xs)]"
-                title="Positive signal — do more of this"
-                style={{
-                  fontWeight: polarity === "positive" ? 600 : 400,
-                  color: polarity === "positive" ? "var(--color-positive, #2d8a4e)" : undefined,
-                  background: polarity === "positive" ? "var(--color-positive-bg, rgba(45, 138, 78, 0.1))" : undefined,
-                  borderRadius: "var(--radius-sm)",
-                  padding: "1px 6px",
-                }}
+                role="radio"
+                aria-checked={highlight.color === c.name}
+                aria-label={`Highlight ${c.name}`}
+                onClick={() => onRecolor(highlight.id, c.name)}
+                className="thread-color-btn"
               >
-                +
+                <span
+                  className={`thread-color-dot${highlight.color === c.name ? " thread-color-dot--selected" : ""}`}
+                  style={{ backgroundColor: c.css }}
+                />
               </button>
-              <button
-                type="button"
-                onClick={() => onSetPolarity(highlight.id, polarity === "corrective" ? null : "corrective")}
-                className="note-action-btn text-[length:var(--text-xs)]"
-                title="Corrective signal — avoid this"
-                style={{
-                  fontWeight: polarity === "corrective" ? 600 : 400,
-                  color: polarity === "corrective" ? "var(--color-corrective, #d97706)" : undefined,
-                  background: polarity === "corrective" ? "var(--color-corrective-bg, rgba(217, 119, 6, 0.1))" : undefined,
-                  borderRadius: "var(--radius-sm)",
-                  padding: "1px 6px",
-                }}
-              >
-                −
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => onDeleteHighlight(highlight.id)}
-            className="note-action-btn note-action-btn--delete text-[length:var(--text-xs)]"
-          >
-            Remove
-          </button>
-        </div>
-      </div>
-
-      {/* Color swatches — recolor lives in the thread, not a separate picker */}
-      {onRecolor && (
-        <div className="thread-colors" role="radiogroup" aria-label="Highlight color">
-          {HIGHLIGHT_COLORS.map((c) => (
-            <button
-              key={c.name}
-              type="button"
-              role="radio"
-              aria-checked={highlight.color === c.name}
-              aria-label={`Highlight ${c.name}`}
-              onClick={() => onRecolor(highlight.id, c.name)}
-              className="thread-color-btn"
-            >
-              <span
-                className={`thread-color-dot${highlight.color === c.name ? " thread-color-dot--selected" : ""}`}
-                style={{ backgroundColor: c.css }}
-              />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Highlight excerpt */}
-      <div
-        className="thread-excerpt"
-        style={{ borderLeftColor: `var(--color-highlight-${highlight.color})` }}
-      >
-        <p>{highlight.text_content}</p>
-      </div>
-
-      {/* Rationale input — shown when polarity is positive */}
-      {polarity === "positive" && onUpdateRationale && (
-        <div style={{ padding: "8px 0 4px" }}>
-          <textarea
-            value={rationaleValue}
-            onChange={(e) => setRationaleValue(e.target.value)}
-            onBlur={() => {
-              if (!rationaleSaving) {
-                setRationaleSaving(true);
-                onUpdateRationale(highlight.id, rationaleValue.trim() || null);
-                setRationaleSaving(false);
-              }
-            }}
-            placeholder="Why does this work?"
-            rows={2}
-            className="thread-textarea"
-            style={{
-              fontSize: "var(--text-xs)",
-              color: "var(--color-positive, #2d8a4e)",
-              borderColor: "var(--color-positive-bg, rgba(45, 138, 78, 0.3))",
-              resize: "none",
-            }}
-          />
-        </div>
-      )}
-
-      {/* Notes thread */}
-      <div className="thread-body">
-        {notes.map((note) => (
-          <ThreadMessage
-            key={note.id}
-            note={note}
-            onUpdate={onUpdateNote}
-            onDelete={onDeleteNote}
-          />
-        ))}
-      </div>
-
-      {/* New note input */}
-      <div className="thread-footer">
-        <div
-          role="radiogroup"
-          aria-label="Note intent"
-          className="thread-intents"
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => onDeleteHighlight(highlight.id)}
+          className="note-action-btn note-action-btn--delete text-[length:var(--text-xs)]"
         >
-          {(["correction", "note", "prompt"] as const).map((intent) => (
-            <button
-              key={intent}
-              type="button"
-              role="radio"
-              aria-checked={newNoteIntent === intent}
-              onClick={() => setNewNoteIntent(intent)}
-              className="note-action-btn text-[length:var(--text-xs)]"
-              style={{
-                fontWeight: newNoteIntent === intent ? 600 : 400,
-                color: newNoteIntent === intent ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                borderRadius: "var(--radius-sm)",
-                padding: "1px 5px",
-              }}
-            >
-              {intent}
-            </button>
+          Remove
+        </button>
+      </div>
+
+      {/* Existing notes */}
+      {notes.length > 0 && (
+        <div className="thread-body">
+          {notes.map((note) => (
+            <ThreadMessage
+              key={note.id}
+              note={note}
+              onUpdate={onUpdateNote}
+              onDelete={onDeleteNote}
+            />
           ))}
         </div>
+      )}
+
+      {/* New note input — every annotation is a note; correction is the default intent */}
+      <div className="thread-footer">
         <textarea
           ref={textareaRef}
           value={newNoteValue}
