@@ -180,9 +180,9 @@ export function RuleViolationPopover({
   const previousFocusRef = useRef<Element | null>(null);
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
-    const first = ref.current?.querySelector<HTMLElement>(
-      ".rule-violation-apply, .thread-icon-btn",
-    );
+    const first =
+      ref.current?.querySelector<HTMLElement>(".rule-violation-apply") ??
+      ref.current?.querySelector<HTMLElement>(".thread-icon-btn");
     first?.focus({ preventScroll: true });
     return () => {
       if (previousFocusRef.current instanceof HTMLElement) {
