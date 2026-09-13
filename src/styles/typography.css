@@ -189,6 +189,20 @@
   outline-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Dark mode: light-on-dark text gains optical weight (halation), so
+   tracking loosens slightly — headings keep less negative tracking. */
+:root[data-theme="dark"] .reader-content {
+  letter-spacing: 0.008em;
+}
+
+:root[data-theme="dark"] .reader-content h1 {
+  letter-spacing: -0.014em;
+}
+
+:root[data-theme="dark"] .reader-content h2 {
+  letter-spacing: -0.005em;
+}
+
 /* Task lists */
 .reader-content ul[data-type="taskList"] {
   list-style: none;
