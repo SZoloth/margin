@@ -79,6 +79,58 @@ export function collectMarkExtents(
   return extents;
 }
 
+/**
+ * Distinct `highlightId`s carried by `markName` marks intersecting [from, to).
+ * `hasUnbacked` reports whether any mark in range lacks a backing row id
+ * (visual-only marks from onboarding or pasted HTML).
+ */
+export function collectMarkIdsInRange(
+  doc: PMNode,
+  markName: string,
+  from: number,
+  to: number,
+): { ids: Set<string>; hasUnbacked: boolean } {
+  const ids = new Set<string>();
+  let hasUnbacked = false;
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isText || !node.text) return true;
+    const segFrom = Math.max(from, pos);
+    const segTo = Math.min(to, pos + node.nodeSize);
+    if (segFrom >= segTo) return true;
+    const mark = node.marks.find((m) => m.type.name === markName);
+    if (!mark) return true;
+    const id = mark.attrs.highlightId as string | null | undefined;
+    if (id) ids.add(id);
+    else hasUnbacked = true;
+    return true;
+  });
+  return { ids, hasUnbacked };
+}
+
+/**
+ * True when every text character in [from, to) carries a `markType` mark.
+ * Non-text content (images, gaps) doesn't disqualify — only text is judged.
+ */
+export function rangeFullyMarked(
+  doc: PMNode,
+  markType: MarkType,
+  from: number,
+  to: number,
+): boolean {
+  let sawText = false;
+  let allMarked = true;
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isText || !node.text) return true;
+    const segFrom = Math.max(from, pos);
+    const segTo = Math.min(to, pos + node.nodeSize);
+    if (segFrom >= segTo) return true;
+    sawText = true;
+    if (!node.marks.some((m) => m.type === markType)) allMarked = false;
+    return true;
+  });
+  return sawText && allMarked;
+}
+
 export interface HighlightOverlapPlan {
   /**
    * Existing highlight fully covered by the new range — reuse its row/id for

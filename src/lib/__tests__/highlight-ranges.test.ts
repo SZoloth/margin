@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { MultiColorHighlight } from "@/components/editor/extensions/highlight";
-import { allowedMarkRanges, collectMarkExtents, planHighlightOverlap } from "../highlight-ranges";
+import { allowedMarkRanges, collectMarkExtents, planHighlightOverlap, collectMarkIdsInRange, rangeFullyMarked } from "../highlight-ranges";
 
 const schema = getSchema([StarterKit, MultiColorHighlight]);
 const highlightType = schema.marks.highlight!;
@@ -190,5 +190,62 @@ describe("planHighlightOverlap", () => {
     expect(plan.reuse?.id).toBe("h1");
     expect(plan.deleteIds).toEqual([]);
     expect(plan.shrink).toEqual([]);
+  });
+});
+
+describe("collectMarkIdsInRange", () => {
+  it("collects distinct ids of marks intersecting the range", () => {
+    const d = doc([
+      { type: "paragraph", content: [
+        { type: "text", text: "aa", marks: [hl("h1")] },
+        { type: "text", text: "bb", marks: [hl("h2")] },
+        { type: "text", text: "cc", marks: [hl("h3")] },
+      ]},
+    ]);
+    // range 2-5 touches h1 (1-3) and h2 (3-5), not h3 (5-7)
+    const { ids, hasUnbacked } = collectMarkIdsInRange(d, "highlight", 2, 5);
+    expect([...ids].sort()).toEqual(["h1", "h2"]);
+    expect(hasUnbacked).toBe(false);
+  });
+
+  it("flags idless marks as unbacked", () => {
+    const d = doc([
+      { type: "paragraph", content: [
+        { type: "text", text: "abcdef", marks: [{ type: "highlight", attrs: { color: "yellow", highlightId: null } }] },
+      ]},
+    ]);
+    const { ids, hasUnbacked } = collectMarkIdsInRange(d, "highlight", 1, 4);
+    expect(ids.size).toBe(0);
+    expect(hasUnbacked).toBe(true);
+  });
+
+  it("returns empty when no marks in range", () => {
+    const d = doc([p("plain")]);
+    const { ids, hasUnbacked } = collectMarkIdsInRange(d, "highlight", 1, 4);
+    expect(ids.size).toBe(0);
+    expect(hasUnbacked).toBe(false);
+  });
+});
+
+describe("rangeFullyMarked", () => {
+  it("true when all text in range carries the mark", () => {
+    const d = doc([p("abcdef", [hl("h1")])]); // text at 1-7
+    expect(rangeFullyMarked(d, highlightType, 1, 7)).toBe(true);
+    expect(rangeFullyMarked(d, highlightType, 2, 5)).toBe(true);
+  });
+
+  it("false when any text in range lacks the mark", () => {
+    const d = doc([
+      { type: "paragraph", content: [
+        { type: "text", text: "aa", marks: [hl("h1")] },
+        { type: "text", text: "bb" },
+      ]},
+    ]);
+    expect(rangeFullyMarked(d, highlightType, 1, 5)).toBe(false);
+  });
+
+  it("false when the range contains no text", () => {
+    const d = doc([{ type: "paragraph" }]);
+    expect(rangeFullyMarked(d, highlightType, 0, 2)).toBe(false);
   });
 });

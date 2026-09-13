@@ -106,15 +106,6 @@ fn update_highlight_fields(
     Ok(())
 }
 
-fn set_highlight_color(conn: &Connection, id: &str, color: &str, now: i64) -> Result<(), String> {
-    conn.execute(
-        "UPDATE highlights SET color = ?1, updated_at = ?2 WHERE id = ?3",
-        rusqlite::params![color, now, id],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 fn remove_highlight(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM highlights WHERE id = ?1", rusqlite::params![id])
         .map_err(|e| e.to_string())?;
@@ -300,19 +291,6 @@ pub async fn update_highlight(
         suffix_context.as_deref(),
         now,
     )?;
-    touch_document(&conn, &doc_id)?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn update_highlight_color(state: tauri::State<'_, DbPool>, id: String, color: String) -> Result<(), String> {
-    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    let now = now_millis();
-
-    set_highlight_color(&conn, &id, &color, now)?;
-
-    let doc_id = document_id_for_highlight(&conn, &id)?;
     touch_document(&conn, &doc_id)?;
 
     Ok(())
@@ -608,20 +586,6 @@ mod tests {
         let err = update_highlight_fields(&conn, "h1", "green", "  ", 0, 4, None, None, 2000)
             .expect_err("empty text should be rejected");
         assert!(err.contains("empty highlight text"));
-    }
-
-    #[test]
-    fn update_highlight_color_changes_color_and_timestamp() {
-        let conn = setup_db();
-        insert_doc(&conn, "doc1");
-        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
-
-        set_highlight_color(&conn, "h1", "green", 2000).unwrap();
-
-        let highlights = fetch_highlights(&conn, "doc1").unwrap();
-        assert_eq!(highlights[0].color, "green");
-        assert_eq!(highlights[0].updated_at, 2000);
-        assert_eq!(highlights[0].created_at, 1000);
     }
 
     #[test]

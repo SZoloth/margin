@@ -20,6 +20,9 @@
     "version:sync": "bash scripts/sync-version.sh"
   },
   "dependencies": {
+    "@fontsource/instrument-sans": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/newsreader": "5.3.0",
     "@hugeicons/core-free-icons": "^3.1.1",
     "@hugeicons/react": "^1.1.5",
     "@tauri-apps/api": "^2",
@@ -32,7 +35,7 @@
     "@tiptap/extension-highlight": "^2.11",
     "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-link": "^2.27.2",
-    "@tiptap/extension-strike": "^3.20.0",
+    "@tiptap/extension-strike": "^2.27.3",
     "@tiptap/extension-table": "^2.27.2",
     "@tiptap/extension-table-cell": "^2.27.2",
     "@tiptap/extension-table-header": "^2.27.2",

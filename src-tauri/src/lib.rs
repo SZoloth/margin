@@ -44,7 +44,6 @@ pub fn run() {
             commands::documents::upsert_document,
             commands::annotations::create_highlight,
             commands::annotations::get_highlights,
-            commands::annotations::update_highlight_color,
             commands::annotations::update_highlight,
             commands::annotations::delete_highlight,
             commands::annotations::create_margin_note,

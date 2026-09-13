@@ -34,6 +34,8 @@ interface AppShellProps {
   // Reader layout
   tocElement?: React.ReactNode;
   marginIndicators?: React.ReactNode;
+  /** Pinned to the right end of the chrome tab row (e.g. reader dials). */
+  readerControls?: React.ReactNode;
 }
 
 export function AppShell({
@@ -57,6 +59,7 @@ export function AppShell({
   hasSampleContent,
   tocElement,
   marginIndicators,
+  readerControls,
 }: AppShellProps) {
   const chrome = useChrome();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -168,6 +171,7 @@ export function AppShell({
         onNewTab={() => { setOpenForNewTab(true); setPaletteOpen(true); }}
         onMouseEnter={chrome.handleChromeEnter}
         onMouseLeave={chrome.handleChromeLeave}
+        trailing={readerControls}
       />
 
       <FindBar editor={editor} isOpen={findBarOpen} onClose={onCloseFindBar} />

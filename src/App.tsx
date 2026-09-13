@@ -2,13 +2,16 @@ import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react"
 import type { Editor } from "@tiptap/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AppShell } from "@/components/layout/AppShell";
+import { UnsavedChangesDialog } from "@/components/layout/UnsavedChangesDialog";
 import { UIFork } from "uifork";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
 import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
+import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
+import { useHighlightShortcut } from "@/hooks/useHighlightShortcut";
 import { useAnnotations } from "@/hooks/useAnnotations";
 import { useKeepLocal } from "@/hooks/useKeepLocal";
 import { useFileWatcher } from "@/hooks/useFileWatcher";
@@ -25,7 +28,7 @@ import type { Section } from "@/components/settings/SettingsNav";
 import { TableOfContents } from "@/components/layout/TableOfContents";
 import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor, resolveAnchor, buildDocTextMap, docPosToFlat, flatToDocPos } from "@/lib/text-anchoring";
-import { allowedMarkRanges, planHighlightOverlap } from "@/lib/highlight-ranges";
+import { allowedMarkRanges, planHighlightOverlap, collectMarkIdsInRange, rangeFullyMarked } from "@/lib/highlight-ranges";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
@@ -1033,6 +1036,125 @@ export default function App() {
       setAutoFocusNew(true);
     });
   }, [editor, doc.currentDoc, persistHighlight, onboarding.step, settings.defaultHighlightColor]);
+  // Remove every highlight whose mark intersects the selection. Rows are
+  // deleted whole (same semantics as the thread's Remove button); idless
+  // visual-only marks are cleared within the selection only. One undo toast
+  // covers the batch.
+  const handleRemoveHighlights = useCallback(async () => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty || from === to) return;
+
+    const markType = editor.state.schema.marks.highlight;
+    if (!markType) return;
+
+    const { ids, hasUnbacked } = collectMarkIdsInRange(editor.state.doc, "highlight", from, to);
+    if (ids.size === 0 && !hasUnbacked) return;
+
+    const removed = highlightsRef.current.filter((h) => ids.has(h.id));
+
+    try {
+      for (const id of ids) {
+        await annotationsRef.current.deleteHighlight(id);
+      }
+    } catch (err) {
+      console.error("Failed to remove highlight:", err);
+      setErrorToast({
+        message: `Could not remove highlight: ${err instanceof Error ? err.message : String(err)}`,
+        id: ++errorIdRef.current,
+      });
+      return;
+    }
+
+    if (focusHighlightId && ids.has(focusHighlightId)) {
+      setFocusHighlightId(null);
+      setAnchorRect(null);
+      setAutoFocusNew(false);
+    }
+
+    const { state } = editor;
+    const tr = state.tr;
+    state.doc.descendants((node, pos) => {
+      if (!node.isText) return;
+      const mark = node.marks.find((m) => m.type.name === "highlight");
+      if (!mark) return;
+      const id = mark.attrs.highlightId as string | null;
+      if (id && ids.has(id)) {
+        // Backed highlight — remove the whole mark, not just the in-range part
+        tr.removeMark(pos, pos + node.nodeSize, mark);
+      } else if (!id) {
+        // Visual-only mark — clear only where it intersects the selection
+        const s = Math.max(pos, from);
+        const e = Math.min(pos + node.nodeSize, to);
+        if (s < e) tr.removeMark(s, e, mark);
+      }
+    });
+    if (tr.steps.length > 0) {
+      editor.view.dispatch(tr);
+    }
+
+    if (removed.length === 0) return;
+
+    setUndoAction({
+      id: String(++undoIdRef.current),
+      message:
+        removed.length === 1
+          ? "Highlight deleted"
+          : `${removed.length} highlights deleted`,
+      onUndo: async () => {
+        const currentEditor = editorRef.current;
+        for (const h of removed) {
+          try {
+            const restored = await annotationsRef.current.createHighlight({
+              documentId: h.document_id,
+              color: h.color,
+              textContent: h.text_content,
+              fromPos: h.from_pos,
+              toPos: h.to_pos,
+              prefixContext: h.prefix_context,
+              suffixContext: h.suffix_context,
+            });
+            if (currentEditor && !currentEditor.isDestroyed) {
+              const mt = currentEditor.state.schema.marks.highlight;
+              if (mt) {
+                const restoreTr = currentEditor.state.tr;
+                restoreTr.addMark(
+                  h.from_pos,
+                  h.to_pos,
+                  mt.create({ color: h.color, highlightId: restored.id }),
+                );
+                currentEditor.view.dispatch(restoreTr);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to undo highlight delete:", err);
+            setErrorToast({
+              message: `Could not restore highlight: ${err instanceof Error ? err.message : String(err)}`,
+              id: ++errorIdRef.current,
+            });
+          }
+        }
+        setUndoAction(null);
+      },
+      onCommit: () => setUndoAction(null),
+    });
+  }, [editor, focusHighlightId]);
+
+  // Cmd+Shift+H — apply the default highlight color, or remove highlight when
+  // the selection is already fully highlighted (same toggle shape as Cmd+B).
+  const handleHighlightChord = useCallback(() => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty || from === to) return;
+    const markType = editor.state.schema.marks.highlight;
+    if (markType && rangeFullyMarked(editor.state.doc, markType, from, to)) {
+      void handleRemoveHighlights();
+    } else {
+      void handleHighlight();
+    }
+  }, [editor, handleHighlight, handleRemoveHighlights]);
+
+  useHighlightShortcut(handleHighlightChord);
 
   // Complete onboarding when a real file is opened
   useEffect(() => {
@@ -1364,6 +1486,9 @@ export default function App() {
           />
         ) : undefined
       }
+      readerControls={
+        <ReaderControls settings={settings} setSetting={setSetting} />
+      }
       marginIndicators={
         editor && annotations.isLoaded ? (
           <MarginIndicators
@@ -1553,115 +1678,16 @@ export default function App() {
         const tab = tabsHook.tabs.find((t) => t.id === tabsHook.pendingCloseTabId);
         if (!tab) return null;
         return (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
+          <UnsavedChangesDialog
+            title={tab.title}
+            isVisible={unsavedDialog.isVisible}
+            onCancel={tabsHook.cancelCloseTab}
+            onCloseWithoutSaving={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
+            onSaveAndClose={async () => {
+              await doc.saveCurrentFile();
+              tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!);
             }}
-          >
-            <div
-              onClick={tabsHook.cancelCloseTab}
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.3)",
-                opacity: unsavedDialog.isVisible ? 1 : 0,
-                transition: `opacity ${unsavedDialog.isVisible ? "200ms var(--ease-entrance)" : "150ms var(--ease-exit)"}`,
-              }}
-            />
-            <div
-              role="dialog"
-              aria-label="Unsaved changes"
-              style={{
-                position: "relative",
-                backgroundColor: "var(--color-page)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius-lg)",
-                padding: "20px 24px",
-                minWidth: "min(340px, calc(100vw - 32px))",
-                maxWidth: "min(400px, calc(100vw - 32px))",
-                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-                opacity: unsavedDialog.isVisible ? 1 : 0,
-                transform: unsavedDialog.isVisible ? "scale(1) translateY(0)" : "scale(0.97) translateY(4px)",
-                transition: unsavedDialog.isVisible
-                  ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
-                  : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
-              }}
-            >
-              <button
-                onClick={tabsHook.cancelCloseTab}
-                aria-label="Close"
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  right: 12,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--color-text-secondary)",
-                  fontSize: "var(--text-lg)",
-                  lineHeight: 1,
-                  padding: "2px 6px",
-                  borderRadius: "var(--radius-sm)",
-                }}
-              >
-                ×
-              </button>
-              <div style={{ marginBottom: 16 }}>
-                <div
-                  style={{
-                    fontSize: "var(--text-base)",
-                    fontWeight: 600,
-                    color: "var(--color-text-primary)",
-                    marginBottom: 6,
-                  }}
-                >
-                  Unsaved changes
-                </div>
-                <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                  "{tab.title}" has unsaved changes.
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: "var(--text-sm)",
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--color-border)",
-                    background: "none",
-                    color: "var(--color-text-secondary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Close without saving
-                </button>
-                <button
-                  onClick={async () => {
-                    await doc.saveCurrentFile();
-                    tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!);
-                  }}
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: "var(--text-sm)",
-                    borderRadius: "var(--radius-md)",
-                    border: "none",
-                    backgroundColor: "var(--color-accent)",
-                    color: "white",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                >
-                  Save and close
-                </button>
-              </div>
-            </div>
-          </div>
+          />
         );
       })()}
 

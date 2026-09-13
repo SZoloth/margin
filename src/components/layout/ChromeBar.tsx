@@ -14,6 +14,8 @@ interface ChromeBarProps {
   onNewTab: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  /** Optional control pinned to the right end of the tab row (e.g. reader dials). */
+  trailing?: React.ReactNode;
 }
 
 export function ChromeBar({
@@ -26,6 +28,7 @@ export function ChromeBar({
   onNewTab,
   onMouseEnter,
   onMouseLeave,
+  trailing,
 }: ChromeBarProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -321,6 +324,12 @@ export function ChromeBar({
               <HugeiconsIcon icon={Add01Icon} size={13} color="currentColor" strokeWidth={2} />
             </button>
           </>
+        )}
+
+        {trailing && (
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+            {trailing}
+          </div>
         )}
       </div>
     </div>
