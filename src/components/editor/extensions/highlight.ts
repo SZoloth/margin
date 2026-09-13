@@ -29,6 +29,15 @@ export const MultiColorHighlight = Highlight.extend({
         renderHTML: (attributes: Record<string, string | null>) =>
           attributes.highlightId ? { "data-highlight-id": attributes.highlightId } : {},
       },
+      // Set only on the creation dispatch — plays the entrance animation.
+      // Never parsed back (paste/reload marks are calm) and cleared by a
+      // follow-up transaction; a persistent attr would flash on re-renders.
+      fresh: {
+        default: false,
+        parseHTML: () => false,
+        renderHTML: (attributes: Record<string, boolean>) =>
+          attributes.fresh ? { "data-fresh": "" } : {},
+      },
     };
   },
 
