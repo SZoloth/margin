@@ -28,6 +28,7 @@ import {
   createCorrection,
   deleteCorrection,
   updateCorrectionWritingType,
+  setCorrectionCategory,
   setCorrectionPolarity,
   getVoiceSignals,
 } from "./tools/corrections.js";
@@ -356,6 +357,22 @@ server.tool(
 );
 
 server.tool(
+  "margin_set_correction_category",
+  "Triage a correction's category. Use 'non-feedback' to exclude it from synthesis queries; null clears the triage.",
+  {
+    highlight_id: z.string().describe("Highlight ID of the correction"),
+    category: z.string().nullable().describe("Category to set (e.g. 'non-feedback'), or null to clear"),
+  },
+  async ({ highlight_id, category }) => withDbAndExport(() => {
+    const result = setCorrectionCategory(getWriteDb(), highlight_id, category);
+    if ("error" in result) {
+      return { content: [{ type: "text", text: result.error }], isError: true };
+    }
+    return { content: [{ type: "text", text: "Correction category updated." }] };
+  }),
+);
+
+server.tool(
   "margin_update_margin_note",
   "Update the content of an existing margin note. Returns the updated note record.",
   {
@@ -470,6 +487,7 @@ server.tool(
     source: z.string().optional().describe("Source of the rule (default: synthesis)"),
     signal_count: z.number().int().min(1).optional().describe("How many times this pattern was observed (default: 1)"),
     register: z.string().nullable().optional().describe("Register scope: 'all' (universal), 'casual' (slack/outreach/email), 'professional' (pitch/prd/blog/resume/cover-letter)"),
+    synthesized_from: z.array(z.string()).optional().describe("Highlight IDs of the corrections this rule was synthesized from. When provided, the rule enters as a review-gated candidate and accepting it marks those corrections synthesized."),
   },
   async (params) => withDbAndExport(() => {
     const result = createWritingRule(getWriteDb(), params);

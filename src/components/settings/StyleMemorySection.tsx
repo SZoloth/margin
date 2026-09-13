@@ -200,7 +200,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
           unsynthesizedCount: Math.max(0, prev.unsynthesizedCount - result.count),
         }));
         const idsJson = JSON.stringify(result.highlightIds);
-        const prompt = `Analyze ${result.count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Pay attention to polarity tags — separate patterns to reinforce (+positive) from patterns to fix (+corrective). Save each rule via the margin_create_writing_rule MCP tool.\n\nAfter ALL rules are created, call margin_mark_corrections_synthesized with highlight_ids: ${idsJson}`;
+        const prompt = `Analyze ${result.count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Pay attention to polarity tags — separate patterns to reinforce (+positive) from patterns to fix (+corrective). Save each rule via the margin_create_writing_rule MCP tool, and ALWAYS pass synthesized_from with the highlight_ids of the corrections that motivated the rule (valid ids: ${idsJson}). Rules created this way enter as review candidates — accepting them in Margin automatically marks the source corrections synthesized, so do NOT call margin_mark_corrections_synthesized.`;
         await writeText(prompt);
         setExportStatus("Prompt copied — paste into your coding agent");
       }

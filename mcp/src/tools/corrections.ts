@@ -19,6 +19,8 @@ export interface CorrectionRecord {
   extendedContext: string | null;
   rationale: string | null;
   synthesizedAt: number | null;
+  /** Triage category — 'non-feedback' rows are excluded from synthesis. */
+  category?: string | null;
 }
 
 export interface CorrectionsSummary {
@@ -50,7 +52,11 @@ export function getCorrections(
   if (synthesized === true) {
     conditions.push("synthesized_at IS NOT NULL");
   } else if (synthesized === false) {
+    // Match CORRECTION_FILTER (mcp/scripts/shared.ts): pending = unsynthesized
+    // AND has notes AND not triaged as non-feedback.
     conditions.push("synthesized_at IS NULL");
+    conditions.push("notes_json IS NOT NULL AND notes_json != '[]'");
+    conditions.push("(category IS NULL OR category != 'non-feedback')");
   }
   params.push(clampedLimit);
 
@@ -60,7 +66,7 @@ export function getCorrections(
               document_title as documentTitle, document_id as documentId, created_at as createdAt,
               writing_type as writingType, polarity, prefix_context as prefixContext,
               suffix_context as suffixContext, extended_context as extendedContext,
-              rationale, synthesized_at as synthesizedAt
+              rationale, synthesized_at as synthesizedAt, category
        FROM corrections
        WHERE ${conditions.join(" AND ")}
        ORDER BY created_at DESC
@@ -80,9 +86,10 @@ export function getAllCorrectionsForProfile(
               document_title as documentTitle, document_id as documentId, created_at as createdAt,
               writing_type as writingType, polarity, prefix_context as prefixContext,
               suffix_context as suffixContext, extended_context as extendedContext,
-              rationale, synthesized_at as synthesizedAt
+              rationale, synthesized_at as synthesizedAt, category
        FROM corrections
        WHERE session_id != '__backfilled__'
+         AND (category IS NULL OR category != 'non-feedback')
        ORDER BY created_at DESC`,
     )
     .all() as RawCorrectionRow[];
@@ -141,6 +148,7 @@ interface RawCorrectionRow {
   extendedContext: string | null;
   rationale: string | null;
   synthesizedAt: number | null;
+  category: string | null;
 }
 
 export interface CreateCorrectionResult {
@@ -246,6 +254,22 @@ export function updateCorrectionWritingType(
   const result = db
     .prepare("UPDATE corrections SET writing_type = ?, updated_at = ? WHERE highlight_id = ?")
     .run(writingType, nowMillis(), highlightId);
+
+  if (result.changes === 0) {
+    return { error: `Correction not found for highlight: ${highlightId}` };
+  }
+
+  return { success: true };
+}
+
+export function setCorrectionCategory(
+  db: Database.Database,
+  highlightId: string,
+  category: string | null,
+): { success: true } | { error: string } {
+  const result = db
+    .prepare("UPDATE corrections SET category = ?, updated_at = ? WHERE highlight_id = ?")
+    .run(category, nowMillis(), highlightId);
 
   if (result.changes === 0) {
     return { error: `Correction not found for highlight: ${highlightId}` };
@@ -382,5 +406,6 @@ function parseRow(row: RawCorrectionRow): CorrectionRecord {
     extendedContext: row.extendedContext,
     rationale: row.rationale ?? null,
     synthesizedAt: row.synthesizedAt ?? null,
+    category: row.category ?? null,
   };
 }

@@ -49,6 +49,7 @@ pub struct CorrectionDetail {
     pub suggested_edit: Option<String>,
     pub accepted_at: Option<i64>,
     pub rationale: Option<String>,
+    pub category: Option<String>,
 }
 
 #[derive(Debug)]
@@ -344,7 +345,8 @@ fn fetch_corrections_flat(
     let mut stmt = conn.prepare(
         "SELECT highlight_id, original_text, notes_json, extended_context,
                 highlight_color, writing_type, polarity, document_title, created_at,
-                synthesized_at, feedback_type, suggested_edit, accepted_at, rationale
+                synthesized_at, feedback_type, suggested_edit, accepted_at, rationale,
+                category
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY CASE WHEN synthesized_at IS NULL THEN 0 ELSE 1 END, created_at DESC
@@ -370,6 +372,7 @@ fn fetch_corrections_flat(
             suggested_edit: row.get(11)?,
             accepted_at: row.get(12)?,
             rationale: row.get(13)?,
+            category: row.get(14)?,
         })
     })?;
 
@@ -439,7 +442,7 @@ fn fetch_corrections_by_document(
         "SELECT highlight_id, original_text, notes_json, extended_context,
                 highlight_color, writing_type, polarity, document_title, document_id,
                 document_path, created_at, synthesized_at, feedback_type,
-                suggested_edit, accepted_at, rationale
+                suggested_edit, accepted_at, rationale, category
          FROM corrections
          WHERE session_id != '__backfilled__'
          ORDER BY created_at DESC
@@ -469,6 +472,7 @@ fn fetch_corrections_by_document(
                 suggested_edit: row.get(13)?,
                 accepted_at: row.get(14)?,
                 rationale: row.get(15)?,
+                category: row.get(16)?,
             },
         ))
     })?;
@@ -503,6 +507,21 @@ fn update_writing_type(
     let rows = conn.execute(
         "UPDATE corrections SET writing_type = ?1, updated_at = ?2 WHERE highlight_id = ?3",
         rusqlite::params![writing_type, now_millis(), highlight_id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+fn set_category_by_highlight(
+    conn: &Connection,
+    highlight_id: &str,
+    category: Option<&str>,
+) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE corrections SET category = ?1, updated_at = ?2 WHERE highlight_id = ?3",
+        rusqlite::params![category, now_millis(), highlight_id],
     )?;
     if rows == 0 {
         return Err(rusqlite::Error::QueryReturnedNoRows);
@@ -637,6 +656,23 @@ pub async fn update_correction_writing_type(
     {
         let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
         update_writing_type(&conn, &highlight_id, &writing_type).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+/// Triage path: set a correction's category (e.g. 'non-feedback' to exclude it
+/// from synthesis queries, or NULL to clear). Previously raw SQL only.
+#[tauri::command]
+pub async fn set_correction_category(
+    state: tauri::State<'_, DbPool>,
+    highlight_id: String,
+    category: Option<String>,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        set_category_by_highlight(&conn, &highlight_id, category.as_deref())
+            .map_err(|e| e.to_string())?;
     }
     export_artifacts();
     Ok(())
@@ -860,7 +896,7 @@ fn fetch_voice_signals(
         Some(p) => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
                     highlight_color, writing_type, polarity, document_title, created_at,
-                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale
+                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale, category
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity = ?1
              ORDER BY created_at DESC
@@ -870,7 +906,7 @@ fn fetch_voice_signals(
         None => (
             "SELECT highlight_id, original_text, notes_json, extended_context,
                     highlight_color, writing_type, polarity, document_title, created_at,
-                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale
+                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale, category
              FROM corrections
              WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
              ORDER BY created_at DESC
@@ -900,6 +936,7 @@ fn fetch_voice_signals(
             suggested_edit: row.get(11)?,
             accepted_at: row.get(12)?,
             rationale: row.get(13)?,
+            category: row.get(14)?,
         })
     })?;
 
@@ -1456,6 +1493,33 @@ mod tests {
     fn update_writing_type_nonexistent_fails() {
         let conn = setup_full_db();
         let result = update_writing_type(&conn, "nonexistent", "blog");
+        assert!(result.is_err());
+    }
+
+    // --- set_correction_category tests ---
+
+    #[test]
+    fn set_category_marks_non_feedback_and_clears() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+
+        set_category_by_highlight(&conn, "h1", Some("non-feedback")).unwrap();
+        let cat: Option<String> = conn
+            .query_row("SELECT category FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cat.as_deref(), Some("non-feedback"));
+
+        set_category_by_highlight(&conn, "h1", None).unwrap();
+        let cat: Option<String> = conn
+            .query_row("SELECT category FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cat, None);
+    }
+
+    #[test]
+    fn set_category_nonexistent_fails() {
+        let conn = setup_full_db();
+        let result = set_category_by_highlight(&conn, "nonexistent", Some("non-feedback"));
         assert!(result.is_err());
     }
 

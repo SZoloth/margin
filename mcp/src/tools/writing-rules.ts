@@ -84,6 +84,11 @@ export interface CreateWritingRuleParams {
   signal_count?: number;
   register?: string | null;
   polarity?: string | null;
+  /** Highlight IDs of the corrections this rule was synthesized from.
+   *  When present, the rule enters as a review-gated candidate and the
+   *  provenance is recorded so mark_rules_reviewed can stamp the source
+   *  corrections synthesized. */
+  synthesized_from?: string[];
 }
 
 export function createWritingRule(
@@ -100,8 +105,12 @@ export function createWritingRule(
 
   const id = crypto.randomUUID();
   const now = nowMillis();
-  const source = params.source ?? "synthesis";
-  const signalCount = params.signal_count ?? 1;
+  // Rules carrying correction provenance go through the review gate —
+  // same contract as the CLI add-candidates path.
+  const source = params.synthesized_from?.length
+    ? "synthesis-candidate"
+    : params.source ?? "synthesis";
+  const signalCount = params.signal_count ?? params.synthesized_from?.length ?? 1;
   if (!Number.isInteger(signalCount) || signalCount < 1) {
     return { error: `Invalid signal_count "${String(params.signal_count)}". Must be an integer >= 1.` };
   }
@@ -110,6 +119,12 @@ export function createWritingRule(
       params.polarity !== "positive" && params.polarity !== "corrective") {
     return { error: `Invalid polarity "${params.polarity}". Allowed: positive, corrective` };
   }
+
+  // Provenance marker must prefix notes — mark_reviewed parses
+  // `synthesized-from:<id>,...` to stamp source corrections on accept.
+  const notes = params.synthesized_from?.length
+    ? `synthesized-from:${params.synthesized_from.join(",")}${params.notes ? `; ${params.notes}` : ""}`
+    : params.notes ?? null;
 
   db.prepare(
     `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at, register, polarity)
@@ -133,7 +148,7 @@ export function createWritingRule(
     id, params.writing_type, params.category, params.rule_text,
     params.when_to_apply ?? null, params.why ?? null, params.severity,
     params.example_before ?? null, params.example_after ?? null,
-    source, signalCount, params.notes ?? null, now, now,
+    source, signalCount, notes, now, now,
     params.register ?? null, params.polarity ?? null,
   );
 
