@@ -495,7 +495,12 @@ export function HighlightThread({
         {/* Meta row: recolor swatches left, save hint right */}
         <div className="thread-meta">
           {onRecolor ? (
-            <div className="thread-colors" role="radiogroup" aria-label="Highlight color">
+            <div
+              className="thread-colors"
+              role="radiogroup"
+              aria-label="Highlight color"
+              title="Cycle color: ⌘."
+            >
               {HIGHLIGHT_COLORS.map((c) => (
                 <button
                   key={c.name}

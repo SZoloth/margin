@@ -37,6 +37,7 @@ import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor, resolveAnchor, buildDocTextMap, docPosToFlat, flatToDocPos } from "@/lib/text-anchoring";
 import { allowedMarkRanges, planHighlightOverlap, collectMarkIdsInRange, rangeFullyMarked } from "@/lib/highlight-ranges";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
+import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
@@ -1453,6 +1454,22 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Cycle the open highlight's color in place: Cmd+. (no leaving the
+  // keyboard, no reaching for the swatches).
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.code !== "Period") return;
+      const cur = lastHighlightRef.current;
+      if (!highlightThread.isMounted || !cur) return;
+      e.preventDefault();
+      const idx = HIGHLIGHT_COLORS.findIndex((c) => c.name === cur.highlight.color);
+      const next = HIGHLIGHT_COLORS[(idx + 1) % HIGHLIGHT_COLORS.length];
+      if (next) void handleRecolor(cur.highlight.id, next.name);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [highlightThread.isMounted, handleRecolor]);
 
   const handleAcceptEdit = useCallback(
     (highlightId: string, matchText: string, suggestedEdit: string) => {
