@@ -233,3 +233,31 @@ Feeding the rules to the critic is worse still — the critique pass
 produces generic tics the reviser then over-corrects around. The
 editor-pass architecture (revise directly against rules) remains the
 best structure; don't add a critic stage.
+
+### Second-provider comparison — muse-spark (2026-09-13, pi/opencode muse-spark-1.3)
+
+| Architecture | Pass rate | Mean dim | Mech issues |
+|---|---|---|---|
+| null (no rules, one-shot) | 66.7% | 45.9 | 14 |
+| c (editor + rules) | 70.4% | 47.0 | 9 |
+
+**Provider-robust: `c` > `null` on muse-spark, same as poolside.** Muse's
+one-shot baseline already beats poolside's best architecture, and adding
+the rules+editor pass still buys +4pp pass rate and ~⅓ fewer mechanical
+issues. The architecture ranking transfers across providers — the rule
+layer's value isn't a poolside artifact.
+
+Completed table (muse-spark):
+
+| Architecture | Pass rate | Mean dim | Mech issues |
+|---|---|---|---|
+| c (editor + rules) | **70.4%** | **47.0** | **9** |
+| null (no rules) | 66.7% | 45.9 | 14 |
+| skill (production path) | 66.7% | 45.3 | 9 |
+
+Notable: the production `skill` arch ties the null baseline on muse —
+the skill file format itself adds nothing for this provider; the
+editor-pass structure is what converts rules into wins. Cross-provider
+verdict: `c` is the best architecture on both poolside and muse-spark,
+so optimize the two-pass editor + synthesized rules, not a critic stage
+or skill-file packaging.

@@ -1,0 +1,187 @@
+{
+  "provider": "pi (opencode) \u2014 muse-spark-1.3-contributor-free",
+  "date": "2026-09-13",
+  "command": "MARGIN_EVAL_CMD='pi --offline --model opencode/muse-spark-1.3-contributor-free --print --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files' tsx eval.ts --arch <arch>",
+  "arches": {
+    "null": {
+      "arch": "null (null-hypothesis)",
+      "pass_rate": 0.667,
+      "mean_dimension": 45.9,
+      "total_mechanical": 14,
+      "worst_violations": [
+        "voice:long-sentence (\u00d74)",
+        "kill-word:landscape (\u00d73)",
+        "voice:repetitive-structure (\u00d72)",
+        "voice:missing-terminal-punctuation (\u00d72)",
+        "kill-word:moreover (\u00d71)"
+      ],
+      "per_type": {
+        "general": {
+          "passed": 0,
+          "total": 3,
+          "mean_dimension": 34.7
+        },
+        "email": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 45.7
+        },
+        "cover-letter": {
+          "passed": 1,
+          "total": 3,
+          "mean_dimension": 47.3
+        },
+        "outreach": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 47
+        },
+        "prd": {
+          "passed": 2,
+          "total": 3,
+          "mean_dimension": 45.3
+        },
+        "blog": {
+          "passed": 1,
+          "total": 3,
+          "mean_dimension": 47
+        },
+        "resume": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 47
+        },
+        "slack": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 49.3
+        },
+        "pitch": {
+          "passed": 2,
+          "total": 3,
+          "mean_dimension": 49.3
+        }
+      },
+      "total_samples": 27,
+      "duration_seconds": 318.2
+    },
+    "c": {
+      "arch": "c (editor)",
+      "pass_rate": 0.704,
+      "mean_dimension": 47,
+      "total_mechanical": 9,
+      "worst_violations": [
+        "voice:repetitive-structure (\u00d75)",
+        "voice:missing-terminal-punctuation (\u00d74)"
+      ],
+      "per_type": {
+        "general": {
+          "passed": 1,
+          "total": 3,
+          "mean_dimension": 45.7
+        },
+        "email": {
+          "passed": 2,
+          "total": 3,
+          "mean_dimension": 48
+        },
+        "cover-letter": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 47.3
+        },
+        "outreach": {
+          "passed": 2,
+          "total": 3,
+          "mean_dimension": 46.3
+        },
+        "prd": {
+          "passed": 0,
+          "total": 3,
+          "mean_dimension": 47.3
+        },
+        "blog": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 47
+        },
+        "resume": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 47
+        },
+        "slack": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 47
+        },
+        "pitch": {
+          "passed": 2,
+          "total": 3,
+          "mean_dimension": 47.3
+        }
+      },
+      "total_samples": 27,
+      "duration_seconds": 1116.5
+    },
+    "skill": {
+      "arch": "skill (skill-production-path)",
+      "pass_rate": 0.667,
+      "mean_dimension": 45.3,
+      "total_mechanical": 9,
+      "worst_violations": [
+        "voice:repetitive-structure (\u00d75)",
+        "voice:missing-terminal-punctuation (\u00d74)"
+      ],
+      "per_type": {
+        "general": {
+          "passed": 2,
+          "total": 3,
+          "mean_dimension": 46.7
+        },
+        "email": {
+          "passed": 1,
+          "total": 3,
+          "mean_dimension": 40.7
+        },
+        "cover-letter": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 43.7
+        },
+        "outreach": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 45.3
+        },
+        "prd": {
+          "passed": 0,
+          "total": 3,
+          "mean_dimension": 47.7
+        },
+        "blog": {
+          "passed": 1,
+          "total": 3,
+          "mean_dimension": 44
+        },
+        "resume": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 47
+        },
+        "slack": {
+          "passed": 3,
+          "total": 3,
+          "mean_dimension": 49.3
+        },
+        "pitch": {
+          "passed": 2,
+          "total": 3,
+          "mean_dimension": 43.3
+        }
+      },
+      "total_samples": 27,
+      "duration_seconds": 672.9
+    }
+  }
+}
