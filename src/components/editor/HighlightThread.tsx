@@ -45,7 +45,7 @@ function ThreadMessage({
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
-      textareaRef.current.focus();
+      textareaRef.current.focus({ preventScroll: true });
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
@@ -185,7 +185,7 @@ export function HighlightThread({
     return () => {
       // Restore focus on unmount
       if (previousFocusRef.current instanceof HTMLElement) {
-        previousFocusRef.current.focus();
+        previousFocusRef.current.focus({ preventScroll: true });
       }
     };
   }, []);
@@ -197,7 +197,7 @@ export function HighlightThread({
   // Auto-focus the new note textarea when opening from Note button
   useEffect(() => {
     if (autoFocusNew && textareaRef.current) {
-      textareaRef.current.focus();
+      textareaRef.current.focus({ preventScroll: true });
     }
   }, [autoFocusNew]);
 
@@ -246,12 +246,12 @@ export function HighlightThread({
       if (e.shiftKey) {
         if (document.activeElement === first) {
           e.preventDefault();
-          last.focus();
+          last.focus({ preventScroll: true });
         }
       } else {
         if (document.activeElement === last) {
           e.preventDefault();
-          first.focus();
+          first.focus({ preventScroll: true });
         }
       }
     };
@@ -353,7 +353,7 @@ export function HighlightThread({
         <button
           type="button"
           onClick={() => onDeleteHighlight(highlight.id)}
-          className="note-action-btn note-action-btn--delete text-[length:var(--text-xs)]"
+          className="note-action-btn note-action-btn--delete text-[length:var(--text-sm)]"
         >
           Remove
         </button>
@@ -385,7 +385,7 @@ export function HighlightThread({
           }}
           onKeyDown={handleKeyDown}
           className="thread-textarea"
-          placeholder="What's the judgment here?"
+          placeholder="Add a note"
           rows={1}
         />
         {newNoteValue.trim() && (
@@ -393,7 +393,7 @@ export function HighlightThread({
             <button
               type="button"
               onClick={handleAddNote}
-              className="note-action-btn note-action-btn--primary text-[length:var(--text-xs)]"
+              className="note-action-btn note-action-btn--primary text-[length:var(--text-sm)]"
             >
               Save
             </button>
