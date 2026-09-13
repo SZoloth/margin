@@ -91,13 +91,8 @@ export function RuleViolationPopover({
 
   useEffect(() => setLiveRect(rect), [rect]);
 
-  // Keep the underline's wash on for the card's lifetime — the hairline is
-  // not enough of a tie once the cursor leaves the word.
-  useEffect(() => {
-    if (!anchor) return;
-    anchor.setAttribute("data-open", "");
-    return () => anchor.removeAttribute("data-open");
-  }, [anchor]);
+  // The open-state wash lives on the decoration itself (data-open set via
+  // setRuleScanOpen) — mutating PM-managed DOM here would fight the view.
 
   // Re-measure the anchor on scroll/resize — a fixed-position card against
   // a scrolling document needs a live rect or it orphans instantly. If the

@@ -11,7 +11,11 @@ import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
 import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { RuleViolationPopover } from "@/components/editor/RuleViolationPopover";
-import { scanDocForRules, setRuleScanMatches } from "@/components/editor/extensions/rule-scan";
+import {
+  scanDocForRules,
+  setRuleScanMatches,
+  setRuleScanOpen,
+} from "@/components/editor/extensions/rule-scan";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
 import { useHighlightShortcut } from "@/hooks/useHighlightShortcut";
@@ -1788,8 +1792,20 @@ export default function App() {
               return;
             }
             ed.chain().focus().insertContentAt({ from, to }, replacement).run();
+            const clearTr = setRuleScanOpen(ed.state.tr, null);
+            clearTr.setMeta("addToHistory", false);
+            ed.view.dispatch(clearTr);
+            setRulePopover(null);
           }}
-          onClose={() => setRulePopover(null)}
+          onClose={() => {
+            const ed = editorRef.current;
+            if (ed && !ed.isDestroyed) {
+              const tr = setRuleScanOpen(ed.state.tr, null);
+              tr.setMeta("addToHistory", false);
+              ed.view.dispatch(tr);
+            }
+            setRulePopover(null);
+          }}
         />
       )}
 
