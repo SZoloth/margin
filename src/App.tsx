@@ -963,10 +963,29 @@ export default function App() {
       if (markOps.length > 0) {
         const tr = editor.state.tr;
         for (const op of markOps) {
-          tr.addMark(op.from, op.to, markType.create({ color: op.color, highlightId: op.id }));
+          tr.addMark(op.from, op.to, markType.create({ color: op.color, highlightId: op.id, fresh: true }));
         }
         tr.setMeta("addToHistory", false);
         dispatchPreservingScroll(editor, tr);
+
+        // Clear `fresh` once the entrance animation has played — without this
+        // the attr would retrigger the animation on unrelated re-renders.
+        setTimeout(() => {
+          if (editor.isDestroyed) return;
+          const clearTr = editor.state.tr;
+          editor.state.doc.descendants((node, pos) => {
+            if (!node.isText) return;
+            const m = node.marks.find((mk) => mk.type.name === "highlight" && mk.attrs.fresh);
+            if (m) {
+              clearTr.removeMark(pos, pos + node.nodeSize, m);
+              clearTr.addMark(pos, pos + node.nodeSize, markType.create({ ...m.attrs, fresh: false }));
+            }
+          });
+          if (clearTr.steps.length > 0) {
+            clearTr.setMeta("addToHistory", false);
+            dispatchPreservingScroll(editor, clearTr);
+          }
+        }, 600);
       }
       return ids;
     },
@@ -976,10 +995,9 @@ export default function App() {
   const handleHighlight = useCallback(
     async (color?: string) => {
       const resolvedColor = color ?? settings.defaultHighlightColor;
-      if (!editor) { console.log("[hh] bail: no editor"); return; }
+      if (!editor) return;
       const { from, to } = editor.state.selection;
-      if (from === to) { console.log("[hh] bail: empty sel"); return; }
-      console.log("[hh] running", { from, to, hasDoc: !!doc.currentDoc });
+      if (from === to) return;
 
       // Onboarding: visual-only highlight, no persistence
       if (!doc.currentDoc) {

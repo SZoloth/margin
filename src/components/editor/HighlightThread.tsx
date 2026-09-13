@@ -428,7 +428,7 @@ export function HighlightThread({
           onClick={handleRemoveHighlight}
           className="thread-icon-btn thread-icon-btn--destructive"
           aria-label="Remove highlight and notes"
-          title="Remove highlight and notes"
+          title="Remove highlight and notes (or ⇧click the highlight)"
         >
           <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.5} />
         </button>

@@ -176,6 +176,21 @@
   cursor: pointer;
 }
 
+/* Entrance — a brief warm swell as the mark lands. Gated on data-fresh so
+   ProseMirror re-renders don't replay it. */
+.tiptap mark[data-fresh] {
+  animation: highlight-in 550ms var(--ease-micro) 1;
+}
+
+@keyframes highlight-in {
+  from {
+    filter: brightness(1.45) saturate(1.3);
+  }
+  to {
+    filter: none;
+  }
+}
+
 .tiptap mark[data-color]:hover {
   filter: brightness(0.95);
 }
