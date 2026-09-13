@@ -82,6 +82,20 @@ function dispatchPreservingScroll(editor: Editor, tr: Transaction): void {
   }
 }
 
+// Keep the matched text's capitalization when applying a fix —
+// "Leverage" → "Use", not "use".
+function preserveCase(matched: string, replacement: string): string {
+  if (!matched || !replacement) return replacement;
+  if (matched.length > 1 && matched === matched.toUpperCase()) {
+    return replacement.toUpperCase();
+  }
+  const first = matched[0];
+  if (first && first === first.toUpperCase() && first !== first.toLowerCase()) {
+    return replacement.charAt(0).toUpperCase() + replacement.slice(1);
+  }
+  return replacement;
+}
+
 export default function App() {
   const { settings, setSetting } = useSettings();
   const doc = useDocument();
@@ -106,8 +120,11 @@ export default function App() {
     el: HTMLElement | null;
     from: number;
     to: number;
+    allRanges: { from: number; to: number }[];
     matched: string;
   } | null>(null);
+  const rulePopoverRef = useRef(rulePopover);
+  rulePopoverRef.current = rulePopover;
   const [autoFocusNew, setAutoFocusNew] = useState(false);
   const [polarityMap, setPolarityMap] = useState<Map<string, "positive" | "corrective">>(new Map());
   const [rationaleMap, setRationaleMap] = useState<Map<string, string>>(new Map());
@@ -900,16 +917,33 @@ export default function App() {
 
   useEffect(() => {
     const onRuleViolation = (e: Event) => {
-      const { ruleId, rect, el, from, to, matched } = (e as CustomEvent).detail as {
+      const { ruleId, rect, el, from, to, allRanges, matched } = (e as CustomEvent)
+        .detail as {
         ruleId: string;
         rect: DOMRect;
         el: HTMLElement | null;
         from: number;
         to: number;
+        allRanges: { from: number; to: number }[];
         matched: string;
       };
+      // Clicking the open violation toggles it closed.
+      const open = rulePopoverRef.current;
+      if (open && open.from === from && open.to === to) {
+        setRulePopover(null);
+        return;
+      }
       const rule = writingRulesRef.current.find((r) => r.id === ruleId);
-      if (rule) setRulePopover({ rule, rect, el: el ?? null, from, to, matched });
+      if (rule)
+        setRulePopover({
+          rule,
+          rect,
+          el: el ?? null,
+          from,
+          to,
+          allRanges: allRanges ?? [],
+          matched,
+        });
     };
     window.addEventListener("margin:rule-violation", onRuleViolation);
     return () => window.removeEventListener("margin:rule-violation", onRuleViolation);
@@ -1781,6 +1815,7 @@ export default function App() {
           from={rulePopover.from}
           to={rulePopover.to}
           matched={rulePopover.matched}
+          allRanges={rulePopover.allRanges}
           onApply={(from, to, replacement) => {
             const ed = editorRef.current;
             if (!ed || ed.isDestroyed) return;
@@ -1791,10 +1826,34 @@ export default function App() {
               setRulePopover(null);
               return;
             }
-            ed.chain().focus().insertContentAt({ from, to }, replacement).run();
-            const clearTr = setRuleScanOpen(ed.state.tr, null);
-            clearTr.setMeta("addToHistory", false);
-            ed.view.dispatch(clearTr);
+            const fixed = preserveCase(rulePopover.matched, replacement);
+            ed.chain().focus().insertContentAt({ from, to }, fixed).run();
+            const rescan = setRuleScanMatches(
+              ed.state.tr,
+              scanDocForRules(ed.state.doc, writingRulesRef.current),
+            );
+            rescan.setMeta("addToHistory", false);
+            ed.view.dispatch(rescan);
+            setRulePopover(null);
+          }}
+          onApplyAll={(replacement) => {
+            const ed = editorRef.current;
+            if (!ed || ed.isDestroyed) return;
+            // Walk ranges back-to-front so earlier positions stay valid.
+            const ranges = [...rulePopover.allRanges].sort((a, b) => b.from - a.from);
+            let tr = ed.state.tr;
+            for (const r of ranges) {
+              const current = tr.doc.textBetween(r.from, r.to, "", "");
+              tr = tr.insertText(preserveCase(current, replacement), r.from, r.to);
+            }
+            tr.setMeta("addToHistory", true);
+            ed.view.dispatch(tr);
+            const rescan = setRuleScanMatches(
+              ed.state.tr,
+              scanDocForRules(ed.state.doc, writingRulesRef.current),
+            );
+            rescan.setMeta("addToHistory", false);
+            ed.view.dispatch(rescan);
             setRulePopover(null);
           }}
           onClose={() => {
