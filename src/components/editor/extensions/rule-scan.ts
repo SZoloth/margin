@@ -33,8 +33,7 @@ const MAX_MATCHES = 200;
 
 interface CompiledMatcher {
   rule: WritingRule;
-  regex: RegExp | null;
-  literal: string | null;
+  regex: RegExp;
 }
 
 /**
@@ -47,29 +46,29 @@ function compileRule(rule: WritingRule): CompiledMatcher | null {
   const isCandidate = rule.source === "synthesis-candidate" && rule.reviewedAt === null;
   if (isCandidate || rule.writingType !== "general") return null;
 
-  if (rule.detectionPattern) {
-    try {
-      return { rule, regex: new RegExp(rule.detectionPattern, "gi"), literal: null };
-    } catch {
-      return null;
+  try {
+    if (rule.detectionPattern) {
+      return { rule, regex: new RegExp(rule.detectionPattern, "gi") };
     }
-  }
-  if (rule.category === "kill-words") {
-    return { rule, regex: null, literal: rule.ruleText };
-  }
-  if (rule.exampleBefore) {
-    if (rule.category === "auto-synthesized") {
-      return { rule, regex: null, literal: rule.exampleBefore };
+    if (rule.category === "kill-words") {
+      return { rule, regex: new RegExp(escapeRegExp(rule.ruleText), "gi") };
     }
-    if (rule.category === "ai-slop" || rule.category === "heading-patterns") {
-      try {
-        return { rule, regex: new RegExp(rule.exampleBefore, "gi"), literal: null };
-      } catch {
-        return null;
+    if (rule.exampleBefore) {
+      if (rule.category === "auto-synthesized") {
+        return { rule, regex: new RegExp(escapeRegExp(rule.exampleBefore), "gi") };
+      }
+      if (rule.category === "ai-slop" || rule.category === "heading-patterns") {
+        return { rule, regex: new RegExp(rule.exampleBefore, "gi") };
       }
     }
+  } catch {
+    return null;
   }
   return null;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -89,38 +88,22 @@ export function scanDocForRules(doc: PMNode, rules: WritingRule[]): RuleMatch[] 
     if (node.marks.some((m) => m.type.name === "code")) return true;
 
     const text = node.text ?? "";
-    for (const { rule, regex, literal } of matchers) {
+    for (const { rule, regex } of matchers) {
       if (matches.length >= MAX_MATCHES) break;
-      if (regex) {
-        regex.lastIndex = 0;
-        let m: RegExpExecArray | null;
-        while ((m = regex.exec(text)) !== null) {
-          if (m[0].length === 0) break;
-          matches.push({
-            from: pos + m.index,
-            to: pos + m.index + m[0].length,
-            ruleId: rule.id,
-            ruleText: rule.ruleText,
-            severity: rule.severity,
-            why: rule.why,
-            suggestion: rule.exampleAfter,
-          });
-          if (matches.length >= MAX_MATCHES) break;
-        }
-      } else if (literal) {
-        let idx = text.indexOf(literal);
-        while (idx !== -1 && matches.length < MAX_MATCHES) {
-          matches.push({
-            from: pos + idx,
-            to: pos + idx + literal.length,
-            ruleId: rule.id,
-            ruleText: rule.ruleText,
-            severity: rule.severity,
-            why: rule.why,
-            suggestion: rule.exampleAfter,
-          });
-          idx = text.indexOf(literal, idx + literal.length);
-        }
+      regex.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(text)) !== null) {
+        if (m[0].length === 0) break;
+        matches.push({
+          from: pos + m.index,
+          to: pos + m.index + m[0].length,
+          ruleId: rule.id,
+          ruleText: rule.ruleText,
+          severity: rule.severity,
+          why: rule.why,
+          suggestion: rule.exampleAfter,
+        });
+        if (matches.length >= MAX_MATCHES) break;
       }
     }
     return true;
@@ -213,17 +196,26 @@ export const RuleScan = Extension.create({
             // resolves ruleId → rule from the rules list it already holds.
             const from = view.posAtDOM(el, 0);
             const to = from + ((el as HTMLElement).textContent?.length ?? 0);
+            const ruleId = (el as HTMLElement).dataset.ruleId ?? "";
             const tr = setRuleScanOpen(view.state.tr, { from, to });
             tr.setMeta("addToHistory", false);
             view.dispatch(tr);
+            // All ranges for this rule — lets the card offer "N of M"
+            // context and a replace-all without re-scanning.
+            const all =
+              ruleScanKey
+                .getState(view.state)
+                ?.matches.filter((m) => m.ruleId === ruleId)
+                .map((m) => ({ from: m.from, to: m.to })) ?? [];
             window.dispatchEvent(
               new CustomEvent("margin:rule-violation", {
                 detail: {
-                  ruleId: (el as HTMLElement).dataset.ruleId ?? "",
+                  ruleId,
                   rect: (el as HTMLElement).getBoundingClientRect(),
                   el,
                   from,
                   to,
+                  allRanges: all,
                   matched: (el as HTMLElement).textContent ?? "",
                 },
               }),

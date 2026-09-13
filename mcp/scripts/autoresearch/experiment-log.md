@@ -217,3 +217,19 @@ it's the thing that makes feedback enforceable. Raw corrections are too
 specific/noisy to generalize at edit time; the distilled rules
 generalize. This is the strongest evidence yet that the product loop's
 synthesis step is the mechanism, not overhead.
+
+### Self-critique pass — negative result (2026-09-13, poolside)
+
+| Architecture | Pass rate | Mean dim | Mech issues |
+|---|---|---|---|
+| c-crit (draft → critique → revise) | 51.9% | 43.9 | 28 |
+| c-crit-rules (critique sees rules) | 40.7% | 43.5 | 32 |
+| c (two-pass editor) — control | 66.7% | 44.0 | 16 |
+
+**An explicit critique stage hurts.** Interposing "list what makes this
+draft sound like AI" between generation and revision drops the pass rate
+15pp below the plain editor and nearly doubles mechanical issues.
+Feeding the rules to the critic is worse still — the critique pass
+produces generic tics the reviser then over-corrects around. The
+editor-pass architecture (revise directly against rules) remains the
+best structure; don't add a critic stage.
