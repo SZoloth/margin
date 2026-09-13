@@ -24,6 +24,18 @@ const rowLabel: React.CSSProperties = {
   fontFamily: "'Instrument Sans', system-ui, sans-serif",
 };
 
+// Practical Typography–faithful combo: serif, ~18px, tighter leading
+// (1.5 ≈ Butterick's 120–145% ceiling for comfortable reading), ~66ch.
+const RECOMMENDED: Pick<
+  Settings,
+  "fontFamily" | "fontSize" | "lineSpacing" | "readerWidth"
+> = {
+  fontFamily: "serif",
+  fontSize: "default",
+  lineSpacing: "compact",
+  readerWidth: "default",
+};
+
 /**
  * In-reader typography controls ("Aa"). Mirrors the Reading settings section
  * through the same persisted settings keys — one source of truth, two surfaces.
@@ -34,6 +46,12 @@ export function ReaderControls({ settings, setSetting }: ReaderControlsProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+
+  const isRecommended =
+    settings.fontFamily === RECOMMENDED.fontFamily &&
+    settings.fontSize === RECOMMENDED.fontSize &&
+    settings.lineSpacing === RECOMMENDED.lineSpacing &&
+    settings.readerWidth === RECOMMENDED.readerWidth;
 
   const open = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
@@ -171,6 +189,39 @@ export function ReaderControls({ settings, setSetting }: ReaderControlsProps) {
                 onChange={(v) => setSetting("readerWidth", v)}
                 ariaLabel="Reader width"
               />
+            </div>
+            <div
+              style={{
+                borderTop: "1px solid var(--color-border)",
+                paddingTop: 10,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setSetting("fontFamily", RECOMMENDED.fontFamily);
+                  setSetting("fontSize", RECOMMENDED.fontSize);
+                  setSetting("lineSpacing", RECOMMENDED.lineSpacing);
+                  setSetting("readerWidth", RECOMMENDED.readerWidth);
+                }}
+                disabled={isRecommended}
+                style={{
+                  fontSize: "var(--text-xs)",
+                  fontWeight: 500,
+                  color: isRecommended
+                    ? "var(--color-text-tertiary)"
+                    : "var(--color-text-primary)",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: isRecommended ? "default" : "pointer",
+                }}
+              >
+                {isRecommended ? "Recommended settings applied" : "Reset to recommended"}
+              </button>
             </div>
           </div>,
           document.body,
