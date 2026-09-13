@@ -34,15 +34,15 @@ fixes.
 
 ### Next (mission order)
 
-1. Archive-not-delete for writing rules — deleting loses provenance
-   forever; archive keeps it recoverable.
-2. SAM-1134: second-provider eval — muse-null done (66.7%/45.9/14 beats
+1. ~~Archive-not-delete~~ — shipped ef33d96 (archived_at column, soft
+   archive across app/Go/MCP, Archived section with Restore in RulesTab).
+2. ~~Inverted auto-synthesized rules~~ — already absent from the DB
+   (verified live: 0 rows); eval-side exclusion stays as defense.
+3. SAM-1134: second-provider eval — muse-null done (66.7%/45.9/14 beats
    poolside's best); muse-c running; muse-skill pending.
-3. DB repair: 43 auto-synthesized rules have inverted example_before —
-   excluded from eval, still in production loads.
 4. SAM-135 conversational feedback — biggest consumer feature.
-5. Re-grade rule card once more after latest visual pass; remaining nits:
-   responsive margin-lane collapse, anchor-off-viewport dismissal.
+5. Rule-card residual nits: responsive margin-lane collapse (768–1100px),
+   anchor-off-viewport dismissal.
 
 ## 2026-09-04 Codex prompt cleanup
 
