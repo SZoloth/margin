@@ -34,10 +34,13 @@ function formatTimeAgo(timestamp: number): string {
 
 function ThreadMessage({
   note,
+  fresh,
   onUpdate,
   onDelete,
 }: {
   note: MarginNote;
+  /** Arrived during this open — plays the save-bridge entrance once. */
+  fresh?: boolean;
   onUpdate: (noteId: string, content: string) => void;
   onDelete: (noteId: string) => void;
 }) {
@@ -79,7 +82,7 @@ function ThreadMessage({
 
   if (isEditing) {
     return (
-      <div className="thread-message">
+      <div className={`thread-message${fresh ? " thread-message--fresh" : ""}`}>
         <textarea
           ref={textareaRef}
           value={editValue}
@@ -114,7 +117,7 @@ function ThreadMessage({
   }
 
   return (
-    <div className="thread-message">
+    <div className={`thread-message${fresh ? " thread-message--fresh" : ""}`}>
       <p className="thread-message-content">{note.content}</p>
       <div className="thread-message-actions">
         <span className="thread-message-time">{formatTimeAgo(note.created_at)}</span>
@@ -295,6 +298,11 @@ export function HighlightThread({
     return () => popover.removeEventListener("keydown", handleTab);
   }, []);
 
+  // Notes present at mount replay no entrance — only notes added during
+  // this open blur-bridge in (composer → saved note swap).
+  const mountNoteIds = useRef<Set<string> | null>(null);
+  const mountSet = (mountNoteIds.current ??= new Set(notes.map((n) => n.id)));
+
   const handleAddNote = useCallback(() => {
     const trimmed = newNoteValue.trim();
     if (!trimmed) return;
@@ -450,6 +458,7 @@ export function HighlightThread({
             <ThreadMessage
               key={note.id}
               note={note}
+              fresh={!mountSet.has(note.id)}
               onUpdate={onUpdateNote}
               onDelete={onDeleteNote}
             />

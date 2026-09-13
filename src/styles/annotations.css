@@ -299,6 +299,28 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Save-bridge: composer → saved note swaps with a brief blur+fade instead
+   of an instant DOM swap. Plays once on mount for notes added mid-open. */
+.thread-message--fresh {
+  animation: note-blur-in 140ms var(--ease-entrance) both;
+}
+
+@keyframes note-blur-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-message--fresh,
+  .margin-indicator,
+  .minimap-tick {
+    animation: none;
+  }
+}
+
 .thread-message:last-child {
   border-bottom: none;
 }
