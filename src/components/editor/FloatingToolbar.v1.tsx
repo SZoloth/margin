@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Comment01Icon } from "@hugeicons/core-free-icons";
 import type { Editor } from "@tiptap/core";
 
 import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
@@ -9,7 +7,6 @@ import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 interface FloatingToolbarProps {
   editor: Editor | null;
   onHighlight: (color?: string) => void;
-  onNote: (range?: { from: number; to: number }) => void;
   defaultColor?: string;
 }
 
@@ -31,7 +28,6 @@ const INLINE_FORMATS: Array<{
 export function FloatingToolbar({
   editor,
   onHighlight,
-  onNote,
   defaultColor = "yellow",
 }: FloatingToolbarProps) {
   const [isMounted, setIsMounted] = useState(false);
@@ -39,7 +35,6 @@ export function FloatingToolbar({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [isFlipped, setIsFlipped] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const noteSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const applyInlineFormat = useCallback((format: InlineFormat) => {
     if (!editor) return;
@@ -58,13 +53,6 @@ export function FloatingToolbar({
         chain.toggleCode().run();
         break;
     }
-  }, [editor]);
-
-  const currentSelectionRange = useCallback(() => {
-    if (!editor) return null;
-    const { from, to, empty } = editor.state.selection;
-    if (empty || from === to) return null;
-    return { from, to };
   }, [editor]);
 
   const updatePosition = useCallback(() => {
@@ -274,32 +262,6 @@ export function FloatingToolbar({
         </button>
       ))}
 
-      {/* Divider */}
-      <div
-        style={{
-          width: 1,
-          height: 18,
-          backgroundColor: "var(--color-border)",
-          margin: "0 2px",
-          flexShrink: 0,
-        }}
-      />
-
-      {/* Note */}
-      <button
-        type="button"
-        onMouseDown={() => {
-          noteSelectionRef.current = currentSelectionRange();
-        }}
-        onClick={() => {
-          onNote(noteSelectionRef.current ?? currentSelectionRange() ?? undefined);
-          noteSelectionRef.current = null;
-        }}
-        className="toolbar-btn"
-        aria-label="Add note"
-      >
-        <HugeiconsIcon icon={Comment01Icon} size={18} color="currentColor" strokeWidth={1.5} />
-      </button>
     </div>,
     document.body,
   );

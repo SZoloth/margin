@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { Highlight, MarginNote } from "@/types/annotations";
+import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 
 type Polarity = "positive" | "corrective" | null;
 type NoteIntent = MarginNote["intent"];
@@ -14,6 +15,7 @@ interface HighlightThreadProps {
   onUpdateNote: (noteId: string, content: string) => void;
   onDeleteNote: (noteId: string) => void;
   onDeleteHighlight: (id: string) => void;
+  onRecolor?: (highlightId: string, color: string) => void;
   onSetPolarity?: (highlightId: string, polarity: Polarity) => void;
   onUpdateRationale?: (highlightId: string, rationale: string | null) => void;
   onClose: () => void;
@@ -144,6 +146,7 @@ export function HighlightThread({
   onUpdateNote,
   onDeleteNote,
   onDeleteHighlight,
+  onRecolor,
   onSetPolarity,
   onUpdateRationale,
   onClose,
@@ -376,6 +379,34 @@ export function HighlightThread({
         </div>
       </div>
 
+      {/* Color swatches — recolor lives in the thread, not a separate picker */}
+      {onRecolor && (
+        <div className="thread-colors" role="radiogroup" aria-label="Highlight color">
+          {HIGHLIGHT_COLORS.map((c) => (
+            <button
+              key={c.name}
+              type="button"
+              role="radio"
+              aria-checked={highlight.color === c.name}
+              aria-label={`Highlight ${c.name}`}
+              onClick={() => onRecolor(highlight.id, c.name)}
+              className={`toolbar-color-btn thread-color-btn${highlight.color === c.name ? " toolbar-color-btn--selected" : ""}`}
+            >
+              <span
+                style={{
+                  display: "block",
+                  width: 16,
+                  height: 16,
+                  borderRadius: "50%",
+                  backgroundColor: c.css,
+                  border: "1.5px solid var(--color-border)",
+                }}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Highlight excerpt */}
       <div
         className="thread-excerpt"
@@ -458,7 +489,7 @@ export function HighlightThread({
           }}
           onKeyDown={handleKeyDown}
           className="thread-textarea"
-          placeholder="Add a note..."
+          placeholder="What's the judgment here?"
           rows={1}
         />
         {newNoteValue.trim() && (
@@ -472,6 +503,7 @@ export function HighlightThread({
             </button>
           </div>
         )}
+        <div className="thread-hint">⌘↵ save · Esc keeps highlight</div>
       </div>
     </div>,
     document.body,

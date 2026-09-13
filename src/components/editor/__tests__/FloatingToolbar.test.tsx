@@ -1,16 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, act } from "@testing-library/react";
 
-// @hugeicons/core-free-icons is a 41k-line CJS bundle — loading it in a worker thread
-// causes a startup timeout before any test code runs. Mock both packages so only the
-// FloatingToolbar logic is exercised here; icon rendering is not under test.
-vi.mock("@hugeicons/react", () => ({
-  HugeiconsIcon: () => null,
-}));
-vi.mock("@hugeicons/core-free-icons", () => ({
-  Comment01Icon: {},
-}));
-
 import { FloatingToolbar } from "../FloatingToolbar";
 
 // Minimal Editor mock with the events and state the toolbar needs
@@ -58,7 +48,6 @@ describe("FloatingToolbar", () => {
         <FloatingToolbar
           editor={editor}
           onHighlight={vi.fn()}
-          onNote={vi.fn()}
         />,
       );
 
@@ -90,7 +79,6 @@ describe("FloatingToolbar", () => {
         <FloatingToolbar
           editor={editor}
           onHighlight={vi.fn()}
-          onNote={vi.fn()}
         />,
       );
 
@@ -138,7 +126,6 @@ describe("FloatingToolbar", () => {
         <FloatingToolbar
           editor={editor}
           onHighlight={vi.fn()}
-          onNote={vi.fn()}
           defaultColor="yellow"
         />,
       );
@@ -168,7 +155,6 @@ describe("FloatingToolbar", () => {
         <FloatingToolbar
           editor={editor}
           onHighlight={vi.fn()}
-          onNote={vi.fn()}
         />,
       );
 
@@ -188,19 +174,16 @@ describe("FloatingToolbar", () => {
     }
   });
 
-  it("passes the mousedown selection range to the note action", async () => {
+  it("clicking a color swatch applies that highlight color", async () => {
     vi.useFakeTimers();
     try {
       const editor = createMockEditor(true);
-      (editor.state.selection as { from: number; to: number }).from = 3;
-      (editor.state.selection as { from: number; to: number }).to = 8;
-      const onNote = vi.fn();
+      const onHighlight = vi.fn();
 
       render(
         <FloatingToolbar
           editor={editor}
-          onHighlight={vi.fn()}
-          onNote={onNote}
+          onHighlight={onHighlight}
         />,
       );
 
@@ -209,15 +192,11 @@ describe("FloatingToolbar", () => {
         vi.runAllTimers();
       });
 
-      const noteButton = document.body.querySelector("[aria-label='Add note']") as HTMLButtonElement;
-      expect(noteButton).toBeTruthy();
+      const blueBtn = document.body.querySelector("[aria-label='Highlight blue']") as HTMLButtonElement;
+      expect(blueBtn).toBeTruthy();
+      fireEvent.click(blueBtn);
 
-      fireEvent.mouseDown(noteButton);
-      (editor.state.selection as { from: number; to: number }).from = 4;
-      (editor.state.selection as { from: number; to: number }).to = 5;
-      fireEvent.click(noteButton);
-
-      expect(onNote).toHaveBeenCalledWith({ from: 3, to: 8 });
+      expect(onHighlight).toHaveBeenCalledWith("blue");
     } finally {
       vi.useRealTimers();
     }
@@ -239,7 +218,6 @@ describe("FloatingToolbar", () => {
         <FloatingToolbar
           editor={editor}
           onHighlight={vi.fn()}
-          onNote={vi.fn()}
         />,
       );
 
