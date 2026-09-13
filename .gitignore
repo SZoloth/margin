@@ -22,6 +22,7 @@ __pycache__/
 *.pyc
 .venv/
 .worktrees
+.playground/
 
 # Generated evaluation artifacts can contain private source prose.
 mcp/scripts/autoresearch/autoresearch-results.tsv

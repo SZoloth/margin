@@ -33,6 +33,8 @@ Margin is a local-first reading and annotation app. Open markdown files, highlig
 
 Select any text and choose a highlight color from the floating toolbar. Click a highlight to add a margin note.
 
+Teams can leverage Margin to build a personal writing style profile from their own corrections.
+
 > "The art of reading is the art of picking up cues from a text." — Mortimer Adler
 `;
 

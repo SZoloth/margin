@@ -96,7 +96,14 @@ export default function App() {
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [writingRules, setWritingRules] = useState<WritingRule[]>([]);
-  const [rulePopover, setRulePopover] = useState<{ rule: WritingRule; rect: DOMRect } | null>(null);
+  const [rulePopover, setRulePopover] = useState<{
+    rule: WritingRule;
+    rect: DOMRect;
+    el: HTMLElement | null;
+    from: number;
+    to: number;
+    matched: string;
+  } | null>(null);
   const [autoFocusNew, setAutoFocusNew] = useState(false);
   const [polarityMap, setPolarityMap] = useState<Map<string, "positive" | "corrective">>(new Map());
   const [rationaleMap, setRationaleMap] = useState<Map<string, string>>(new Map());
@@ -889,9 +896,16 @@ export default function App() {
 
   useEffect(() => {
     const onRuleViolation = (e: Event) => {
-      const { ruleId, rect } = (e as CustomEvent).detail as { ruleId: string; rect: DOMRect };
+      const { ruleId, rect, el, from, to, matched } = (e as CustomEvent).detail as {
+        ruleId: string;
+        rect: DOMRect;
+        el: HTMLElement | null;
+        from: number;
+        to: number;
+        matched: string;
+      };
       const rule = writingRulesRef.current.find((r) => r.id === ruleId);
-      if (rule) setRulePopover({ rule, rect });
+      if (rule) setRulePopover({ rule, rect, el: el ?? null, from, to, matched });
     };
     window.addEventListener("margin:rule-violation", onRuleViolation);
     return () => window.removeEventListener("margin:rule-violation", onRuleViolation);
@@ -1759,6 +1773,22 @@ export default function App() {
         <RuleViolationPopover
           rule={rulePopover.rule}
           rect={rulePopover.rect}
+          anchorEl={rulePopover.el}
+          from={rulePopover.from}
+          to={rulePopover.to}
+          matched={rulePopover.matched}
+          onApply={(from, to, replacement) => {
+            const ed = editorRef.current;
+            if (!ed || ed.isDestroyed) return;
+            // Apply only if the flagged text still sits at the same range —
+            // otherwise the card's MutationObserver will close it anyway.
+            const current = ed.state.doc.textBetween(from, to, "", "");
+            if (current !== rulePopover.matched) {
+              setRulePopover(null);
+              return;
+            }
+            ed.chain().focus().insertContentAt({ from, to }, replacement).run();
+          }}
           onClose={() => setRulePopover(null)}
         />
       )}
