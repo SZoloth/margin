@@ -1558,7 +1558,6 @@ export default function App() {
       <FloatingToolbar
         editor={editor}
         onHighlight={handleHighlight}
-        defaultColor={settings.defaultHighlightColor}
       />
 
       {diffReview.mode === "reviewing" && (
@@ -1622,6 +1621,15 @@ export default function App() {
             onDeleteHighlight={handleDeleteHighlight}
             onRecolor={handleRecolor}
             onClose={() => {
+              // Highlights are provisional until they carry a note — a mark
+              // with no judgment is noise, so closing noteless removes it
+              // (select-to-copy and dismissed selections stay clean).
+              if (focusHighlightId) {
+                const hasNotes = annotationsRef.current.marginNotes.some(
+                  (n) => n.highlight_id === focusHighlightId,
+                );
+                if (!hasNotes) void handleDeleteHighlight(focusHighlightId);
+              }
               setFocusHighlightId(null);
               setAnchorRect(null);
               setAutoFocusNew(false);
