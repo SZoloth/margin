@@ -1,27 +1,27 @@
-import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, act } from "@testing-library/react";
 
 import { FloatingToolbar } from "../FloatingToolbar";
+import { allowedMarkRanges } from "@/lib/highlight-ranges";
 
-// Minimal Editor mock with the events and state the toolbar needs
-function createMockEditor(hasSelection: boolean) {
+vi.mock("@/lib/highlight-ranges", () => ({
+  allowedMarkRanges: vi.fn(() => [{ from: 0, to: 10 }]),
+}));
+
+const SETTLE_MS = 250;
+
+// Minimal Editor mock with the state surface the selection watcher reads
+function createMockEditor(opts: { hasSelection?: boolean; hasMark?: boolean; focused?: boolean } = {}) {
   const listeners: Record<string, Array<() => void>> = {};
-  const run = vi.fn();
-  const toggleBold = vi.fn(() => ({ run }));
-  const toggleItalic = vi.fn(() => ({ run }));
-  const toggleStrike = vi.fn(() => ({ run }));
-  const toggleCode = vi.fn(() => ({ run }));
-  const focus = vi.fn(() => ({ toggleBold, toggleItalic, toggleStrike, toggleCode }));
+  const markType = { name: "highlight" };
+  const hasSelection = opts.hasSelection ?? true;
   return {
     state: {
       selection: { empty: !hasSelection, from: 0, to: hasSelection ? 10 : 0 },
+      schema: { marks: { highlight: markType } },
+      doc: { rangeHasMark: vi.fn(() => opts.hasMark ?? false) },
     },
-    isFocused: true,
-    view: {
-      coordsAtPos: () => ({ top: 100, bottom: 120, left: 50, right: 150 }),
-    },
-    chain: () => ({ focus }),
-    isActive: vi.fn(() => false),
+    isFocused: opts.focused ?? true,
     on: (event: string, fn: () => void) => {
       (listeners[event] ??= []).push(fn);
     },
@@ -35,194 +35,196 @@ function createMockEditor(hasSelection: boolean) {
     _trigger: (event: string) => {
       for (const fn of listeners[event] ?? []) fn();
     },
-    _formatting: { focus, toggleBold, toggleItalic, toggleStrike, toggleCode, run },
   } as unknown as import("@tiptap/core").Editor & { _trigger: (e: string) => void };
 }
 
-describe("FloatingToolbar", () => {
-  it("renders with role='toolbar' and aria-label", async () => {
+describe("FloatingToolbar (selection watcher)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(allowedMarkRanges).mockReturnValue([{ from: 0, to: 10 }]);
+  });
+
+  it("renders nothing — selection is the gesture, no toolbar UI", async () => {
     vi.useFakeTimers();
     try {
-      const editor = createMockEditor(true);
-      render(
-        <FloatingToolbar
-          editor={editor}
-          onHighlight={vi.fn()}
-        />,
-      );
-
-      // Trigger selection update to mount toolbar; flush rAF via fake timers
+      const editor = createMockEditor();
+      render(<FloatingToolbar editor={editor} onHighlight={vi.fn()} />);
       await act(async () => {
         editor._trigger("selectionUpdate");
-        vi.runAllTimers();
+        vi.advanceTimersByTime(SETTLE_MS + 50);
       });
-
-      const toolbar = document.body.querySelector("[role='toolbar']");
-      expect(toolbar).toBeTruthy();
-      expect(toolbar?.getAttribute("aria-label")).toBe("Formatting and feedback");
+      expect(document.body.querySelector("[role='toolbar']")).toBeNull();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("unmounts after selection is cleared", async () => {
-    // FloatingToolbar calls requestAnimationFrame(() => setIsVisible(true)) when first
-    // mounting. In React 19, un-awaited act() leaves a polling loop that waits for all
-    // pending async work — including rAF — before resolving. Since jsdom never fires rAF
-    // automatically this loop runs until the 30s testTimeout.
-    // Fix: use fake timers so vi.runAllTimers() fires rAF synchronously, then await each
-    // act() to prevent dangling React 19 act() promises.
+  it("auto-applies the highlight once a selection settles", async () => {
     vi.useFakeTimers();
     try {
-      const editor = createMockEditor(true);
-      render(
-        <FloatingToolbar
-          editor={editor}
-          onHighlight={vi.fn()}
-        />,
-      );
+      const editor = createMockEditor();
+      const onHighlight = vi.fn();
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
 
-      // Mount toolbar — flush rAF via fake timers so isVisible becomes true
       await act(async () => {
         editor._trigger("selectionUpdate");
-        vi.runAllTimers();
+        vi.advanceTimersByTime(SETTLE_MS + 50);
       });
 
-      expect(document.body.querySelector("[role='toolbar']")).toBeTruthy();
+      expect(onHighlight).toHaveBeenCalledTimes(1);
+      expect(onHighlight).toHaveBeenCalledWith();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
-      // Clear selection
+  it("debounces mid-drag updates — fires only after the selection settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor();
+      const onHighlight = vi.fn();
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(100);
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(100);
+      });
+      expect(onHighlight).not.toHaveBeenCalled();
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(SETTLE_MS + 50);
+      });
+      expect(onHighlight).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not fire for an empty selection", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor({ hasSelection: false });
+      const onHighlight = vi.fn();
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(SETTLE_MS + 50);
+      });
+      expect(onHighlight).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fires only once while a selection is held", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor();
+      const onHighlight = vi.fn();
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(SETTLE_MS + 50);
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(SETTLE_MS + 50);
+      });
+      expect(onHighlight).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("re-arms after the selection collapses and a new one is made", async () => {
+    vi.useFakeTimers();
+    try {
+      const editor = createMockEditor();
+      const onHighlight = vi.fn();
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(SETTLE_MS + 50);
+      });
+      expect(onHighlight).toHaveBeenCalledTimes(1);
+
+      // Collapse, then select again — the mark is gone so it should refire
       (editor.state.selection as { empty: boolean }).empty = true;
       await act(async () => {
         editor._trigger("selectionUpdate");
       });
-
-      // Simulate transitionend with propertyName so the opacity handler fires.
-      // jsdom lacks TransitionEvent; attach propertyName to a plain Event instead.
-      const toolbar = document.body.querySelector("[role='toolbar']");
-      if (toolbar) {
-        await act(async () => {
-          const evt = new Event("transitionend", { bubbles: true });
-          Object.defineProperty(evt, "propertyName", { value: "opacity" });
-          toolbar.dispatchEvent(evt);
-        });
-      }
-
-      // Toolbar should be unmounted (transitionend triggered setIsMounted(false))
-      // or if still present, it should be hidden (opacity: 0)
-      const toolbarAfter = document.body.querySelector("[role='toolbar']");
-      if (toolbarAfter) {
-        expect(toolbarAfter.getAttribute("style")).toContain("opacity: 0");
-      }
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("applies toolbar-color-btn--selected class to default color button", async () => {
-    vi.useFakeTimers();
-    try {
-      const editor = createMockEditor(true);
-      render(
-        <FloatingToolbar
-          editor={editor}
-          onHighlight={vi.fn()}
-          defaultColor="yellow"
-        />,
-      );
-
+      (editor.state.selection as { empty: boolean }).empty = false;
       await act(async () => {
         editor._trigger("selectionUpdate");
-        vi.runAllTimers();
+        vi.advanceTimersByTime(SETTLE_MS + 50);
       });
-
-      const yellowBtn = document.body.querySelector("[aria-label='Highlight yellow']");
-      expect(yellowBtn).toBeTruthy();
-      expect(yellowBtn?.className).toContain("toolbar-color-btn--selected");
-
-      // Non-default buttons should NOT have the selected class
-      const blueBtn = document.body.querySelector("[aria-label='Highlight blue']");
-      expect(blueBtn?.className).not.toContain("toolbar-color-btn--selected");
+      expect(onHighlight).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("uses CSS variable references for entrance easing", async () => {
+  it("re-arms when a different range is selected without collapsing first", async () => {
     vi.useFakeTimers();
     try {
-      const editor = createMockEditor(true);
-      render(
-        <FloatingToolbar
-          editor={editor}
-          onHighlight={vi.fn()}
-        />,
-      );
-
-      await act(async () => {
-        editor._trigger("selectionUpdate");
-        vi.runAllTimers();
-      });
-
-      const toolbar = document.body.querySelector("[role='toolbar']") as HTMLElement;
-      expect(toolbar).toBeTruthy();
-      // Toolbar may start with exit easing (not yet visible) or entrance easing
-      // Either way, it should use CSS variables, not hardcoded cubic-bezier
-      expect(toolbar.style.transition).toMatch(/var\(--ease-(entrance|exit)\)/);
-      expect(toolbar.style.transition).not.toContain("cubic-bezier");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("clicking a color swatch applies that highlight color", async () => {
-    vi.useFakeTimers();
-    try {
-      const editor = createMockEditor(true);
+      const editor = createMockEditor();
       const onHighlight = vi.fn();
-
-      render(
-        <FloatingToolbar
-          editor={editor}
-          onHighlight={onHighlight}
-        />,
-      );
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
 
       await act(async () => {
         editor._trigger("selectionUpdate");
-        vi.runAllTimers();
+        vi.advanceTimersByTime(SETTLE_MS + 50);
       });
+      expect(onHighlight).toHaveBeenCalledTimes(1);
 
-      const blueBtn = document.body.querySelector("[aria-label='Highlight blue']") as HTMLButtonElement;
-      expect(blueBtn).toBeTruthy();
-      fireEvent.click(blueBtn);
-
-      expect(onHighlight).toHaveBeenCalledWith("blue");
+      // Selection moves to a different range without an empty intermediate state
+      const sel = editor.state.selection as { from: number; to: number };
+      sel.from = 20;
+      sel.to = 30;
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(SETTLE_MS + 50);
+      });
+      expect(onHighlight).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("renders only highlight swatches — annotation is the workflow, not formatting", async () => {
+  it("skips selections fully covered by an existing highlight", async () => {
     vi.useFakeTimers();
     try {
-      const editor = createMockEditor(true);
-      render(
-        <FloatingToolbar
-          editor={editor}
-          onHighlight={vi.fn()}
-        />,
-      );
+      const editor = createMockEditor({ hasMark: true });
+      const onHighlight = vi.fn();
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
 
       await act(async () => {
         editor._trigger("selectionUpdate");
-        vi.runAllTimers();
+        vi.advanceTimersByTime(SETTLE_MS + 50);
       });
+      expect(onHighlight).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
-      const toolbar = document.body.querySelector("[role='toolbar']") as HTMLElement;
-      expect(toolbar).toBeTruthy();
-      // Five swatches, no text-formatting buttons
-      expect(toolbar.querySelectorAll("[aria-label^='Highlight ']")).toHaveLength(5);
-      expect(toolbar.querySelector("[aria-label^='Bold']")).toBeNull();
+  it("skips selections where the mark is not allowed (code blocks)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(allowedMarkRanges).mockReturnValue([]);
+      const editor = createMockEditor();
+      const onHighlight = vi.fn();
+      render(<FloatingToolbar editor={editor} onHighlight={onHighlight} />);
+
+      await act(async () => {
+        editor._trigger("selectionUpdate");
+        vi.advanceTimersByTime(SETTLE_MS + 50);
+      });
+      expect(onHighlight).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

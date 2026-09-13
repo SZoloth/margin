@@ -399,7 +399,9 @@ export function HighlightThread({
             </button>
           </div>
         )}
-        <div className="thread-hint">⌘↵ save · Esc keeps highlight</div>
+        <div className="thread-hint">
+          ⌘↵ save · Esc {notes.length > 0 ? "closes" : "removes highlight"}
+        </div>
       </div>
       </div>
     </>,
