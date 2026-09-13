@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/core";
 
@@ -10,21 +10,6 @@ interface FloatingToolbarProps {
   defaultColor?: string;
 }
 
-type InlineFormat = "bold" | "italic" | "strike" | "code";
-
-const INLINE_FORMATS: Array<{
-  format: InlineFormat;
-  label: string;
-  shortcut?: string;
-  glyph: string;
-  style?: CSSProperties;
-}> = [
-  { format: "bold", label: "Bold", shortcut: "⌘B", glyph: "B", style: { fontWeight: 700 } },
-  { format: "italic", label: "Italic", shortcut: "⌘I", glyph: "I", style: { fontStyle: "italic" } },
-  { format: "strike", label: "Strikethrough", glyph: "S", style: { textDecoration: "line-through" } },
-  { format: "code", label: "Inline code", glyph: "<>" },
-];
-
 export function FloatingToolbar({
   editor,
   onHighlight,
@@ -35,25 +20,6 @@ export function FloatingToolbar({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [isFlipped, setIsFlipped] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
-
-  const applyInlineFormat = useCallback((format: InlineFormat) => {
-    if (!editor) return;
-    const chain = editor.chain().focus();
-    switch (format) {
-      case "bold":
-        chain.toggleBold().run();
-        break;
-      case "italic":
-        chain.toggleItalic().run();
-        break;
-      case "strike":
-        chain.toggleStrike().run();
-        break;
-      case "code":
-        chain.toggleCode().run();
-        break;
-    }
-  }, [editor]);
 
   const updatePosition = useCallback(() => {
     if (!editor) return;
@@ -197,46 +163,8 @@ export function FloatingToolbar({
         e.preventDefault();
       }}
     >
-      {INLINE_FORMATS.map(({ format, label, shortcut, glyph, style }) => {
-        const isActive = editor.isActive(format);
-        return (
-          <button
-            key={format}
-            type="button"
-            onClick={() => applyInlineFormat(format)}
-            className={`toolbar-btn${isActive ? " toolbar-btn--active" : ""}`}
-            aria-label={`${label}${shortcut ? ` (${shortcut})` : ""}`}
-            aria-pressed={isActive}
-            title={`${label}${shortcut ? ` ${shortcut}` : ""}`}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                minWidth: 18,
-                fontFamily: format === "code" ? "var(--font-mono, ui-monospace, monospace)" : "var(--font-sans, system-ui, sans-serif)",
-                fontSize: format === "code" ? 12 : 15,
-                lineHeight: 1,
-                ...style,
-              }}
-            >
-              {glyph}
-            </span>
-          </button>
-        );
-      })}
-
-      <div
-        aria-hidden="true"
-        style={{
-          width: 1,
-          height: 18,
-          backgroundColor: "var(--color-border)",
-          margin: "0 2px",
-          flexShrink: 0,
-        }}
-      />
-
-      {/* Color picker circles — default color first */}
+      {/* Color picker circles — default color first. This toolbar's only job
+          is choosing the highlight color; the note lives in the thread. */}
       {[...HIGHLIGHT_COLORS].sort((a, b) =>
         a.name === defaultColor ? -1 : b.name === defaultColor ? 1 : 0
       ).map((c) => (

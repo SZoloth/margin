@@ -202,18 +202,10 @@ describe("FloatingToolbar", () => {
     }
   });
 
-  it("offers Markdown formatting without leaving the selection", async () => {
+  it("renders only highlight swatches — annotation is the workflow, not formatting", async () => {
     vi.useFakeTimers();
     try {
-      const editor = createMockEditor(true) as unknown as import("@tiptap/core").Editor & {
-        _trigger: (event: string) => void;
-        _formatting: {
-          focus: ReturnType<typeof vi.fn>;
-          toggleBold: ReturnType<typeof vi.fn>;
-          run: ReturnType<typeof vi.fn>;
-        };
-      };
-
+      const editor = createMockEditor(true);
       render(
         <FloatingToolbar
           editor={editor}
@@ -226,21 +218,11 @@ describe("FloatingToolbar", () => {
         vi.runAllTimers();
       });
 
-      const bold = document.body.querySelector("[aria-label='Bold (⌘B)']") as HTMLButtonElement;
-      const italic = document.body.querySelector("[aria-label='Italic (⌘I)']");
-      const strike = document.body.querySelector("[aria-label='Strikethrough']");
-      const code = document.body.querySelector("[aria-label='Inline code']");
-
-      expect(bold).toBeTruthy();
-      expect(italic).toBeTruthy();
-      expect(strike).toBeTruthy();
-      expect(code).toBeTruthy();
-
-      fireEvent.click(bold);
-
-      expect(editor._formatting.focus).toHaveBeenCalledOnce();
-      expect(editor._formatting.toggleBold).toHaveBeenCalledOnce();
-      expect(editor._formatting.run).toHaveBeenCalledOnce();
+      const toolbar = document.body.querySelector("[role='toolbar']") as HTMLElement;
+      expect(toolbar).toBeTruthy();
+      // Five swatches, no text-formatting buttons
+      expect(toolbar.querySelectorAll("[aria-label^='Highlight ']")).toHaveLength(5);
+      expect(toolbar.querySelector("[aria-label^='Bold']")).toBeNull();
     } finally {
       vi.useRealTimers();
     }
