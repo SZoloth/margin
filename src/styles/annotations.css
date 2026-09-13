@@ -339,3 +339,67 @@
     padding: 6px 10px;
   }
 }
+
+/* Resurfaced writing rules — a quiet dotted underline, distinct from
+   user highlights. Your past corrections coming back in the text. */
+.rule-violation {
+  text-decoration: underline dotted var(--color-warning);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.rule-violation--must-fix {
+  text-decoration-color: var(--color-danger);
+}
+
+.rule-violation--nice-to-fix {
+  text-decoration-color: var(--color-text-tertiary);
+}
+
+.rule-violation-popover {
+  width: 280px;
+  background: var(--popover-bg, var(--color-page));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rule-violation-popover-severity {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-warning);
+}
+
+.rule-violation-popover-severity--must-fix {
+  color: var(--color-danger-text);
+}
+
+.rule-violation-popover-severity--nice-to-fix {
+  color: var(--color-text-tertiary);
+}
+
+.rule-violation-popover-text {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.rule-violation-popover-why {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.rule-violation-popover-suggestion {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}

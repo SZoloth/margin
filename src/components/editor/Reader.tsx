@@ -18,6 +18,7 @@ import { MultiColorHighlight } from "./extensions/highlight";
 import { MarginNote } from "./extensions/margin-note";
 import { DiffMark } from "./extensions/diff-mark";
 import { FrontMatter } from "./extensions/front-matter";
+import { RuleScan } from "./extensions/rule-scan";
 import { Search } from "./extensions/search";
 import "../../styles/editor.css";
 
@@ -76,6 +77,7 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady, onDirtyEdi
       MultiColorHighlight.configure({ multicolor: true }),
       MarginNote,
       DiffMark,
+      RuleScan,
       Search,
       Markdown.configure({
         html: true,
