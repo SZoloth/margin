@@ -49,9 +49,7 @@ export function FloatingToolbar({ editor, onHighlight }: FloatingToolbarProps) {
         const sel = state.selection;
         if (sel.empty || !editor.isFocused) return;
         const lastFired = firedRangeRef.current;
-        if (lastFired && lastFired.from === sel.from && lastFired.to === sel.to) {
-          return;
-        }
+        if (lastFired && lastFired.from === sel.from && lastFired.to === sel.to) return;
 
         const markType = state.schema.marks.highlight;
         if (!markType) return;
@@ -60,9 +58,7 @@ export function FloatingToolbar({ editor, onHighlight }: FloatingToolbarProps) {
         if (state.doc.rangeHasMark(sel.from, sel.to, markType)) return;
         // Silent skip where marks aren't allowed (code) — the toast on the
         // explicit path is for gestures the user actually initiated.
-        if (allowedMarkRanges(state.doc, markType, sel.from, sel.to).length === 0) {
-          return;
-        }
+        if (allowedMarkRanges(state.doc, markType, sel.from, sel.to).length === 0) return;
 
         firedRangeRef.current = { from: sel.from, to: sel.to };
         onHighlightRef.current();

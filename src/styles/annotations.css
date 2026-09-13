@@ -46,24 +46,81 @@
 
 /* ─── Thread popover ─── */
 .thread-popover {
+  --popover-bg: var(--color-page);
   position: fixed;
   z-index: 50;
   width: 300px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   border: 1px solid var(--color-border);
-  background-color: var(--color-page);
+  background-color: var(--popover-bg);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.1);
   transition: opacity var(--duration-normal) var(--ease-entrance), transform var(--duration-normal) var(--ease-entrance);
   display: flex;
   flex-direction: column;
 }
 
-/* Top row — swatches left, remove right. No header chrome. */
+/* A slip of brighter paper on the cream page — dark mode stays on tokens. */
+:root:not([data-theme="dark"]) .thread-popover {
+  --popover-bg: #ffffff;
+}
+
+/* Top row — close and remove icons only. × closes; trash (hover-revealed)
+   deletes the highlight and its notes. No header chrome. */
 .thread-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 6px 8px 0;
+}
+
+.thread-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 140ms var(--ease-micro), background-color 140ms var(--ease-micro),
+    opacity var(--duration-fast) var(--ease-micro);
+}
+
+.thread-icon-btn:hover {
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-subtle);
+}
+
+.thread-icon-btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 1px;
+}
+
+/* Destructive affordance is hover-revealed on the card; danger only on its
+   own hover. visibility (not just opacity) so the hidden button can't be
+   hit-tested or tabbed to before it's ever been seen. */
+.thread-icon-btn--destructive {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.thread-popover:hover .thread-icon-btn--destructive,
+.thread-icon-btn--destructive:focus-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Touch has no hover — the bottom sheet shows delete outright. */
+.thread-popover--mobile .thread-icon-btn--destructive {
+  opacity: 1;
+  visibility: visible;
+}
+
+.thread-icon-btn--destructive:hover {
+  color: var(--color-danger-text);
 }
 
 /* Anchor hairline — ties the thread to its passage (desktop only) */
@@ -73,6 +130,10 @@
   pointer-events: none;
   z-index: 50;
   transition: opacity var(--duration-normal) var(--ease-entrance);
+}
+
+.thread-anchor-line--vertical {
+  width: 1.5px;
 }
 
 /* Color swatch row — recolor lives in the thread, not a separate picker */
@@ -115,22 +176,32 @@
   box-sizing: border-box;
 }
 
-/* Selected ring hugs the dot, not the button */
+/* Selected ring hugs the dot, not the button — knockout matches the card's
+   actual background so it stays clean on the white slip. */
 .thread-color-dot--selected {
-  box-shadow: 0 0 0 2px var(--color-page), 0 0 0 3.5px var(--color-text-secondary);
+  box-shadow: 0 0 0 2px var(--popover-bg, var(--color-page)), 0 0 0 3.5px var(--color-text-secondary);
+}
+
+/* Footer meta row — recolor swatches left, save hint right */
+.thread-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
 }
 
 .thread-hint {
-  margin-top: 6px;
   font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
 }
 
 .thread-body {
   max-height: 280px;
   overflow-y: auto;
   padding: 4px 12px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .thread-message {
@@ -144,37 +215,46 @@
 
 .thread-message-time {
   font-size: var(--text-xs);
-  color: var(--color-text-secondary);
-  opacity: 0.6;
-  display: block;
-  margin-bottom: 2px;
+  color: var(--color-text-tertiary);
+  margin-right: 4px;
 }
 
+/* Your voice, not the document's — sans roman. Italic serif is reserved
+   for quoted authorial text. */
 .thread-message-content {
-  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
+  font-family: var(--font-sans, system-ui, sans-serif);
   font-size: var(--text-base);
-  font-style: italic;
   line-height: 1.5;
   color: var(--color-text-primary);
 }
 
 .thread-message-actions {
   display: flex;
+  align-items: center;
   gap: 4px;
   margin-top: 4px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-micro);
+}
+
+.thread-message:hover .thread-message-actions,
+.thread-message:focus-within .thread-message-actions,
+.thread-message-actions--visible {
+  opacity: 1;
 }
 
 .thread-footer {
   padding: 8px 12px 10px;
-  border-top: 1px solid var(--color-border);
 }
 
+/* Your voice in the act of speaking — sans roman, same register the saved
+   note renders in. */
 .thread-textarea {
   width: 100%;
   resize: none;
   border: none;
   background: transparent;
-  font-family: var(--reader-font-family, 'Newsreader', Georgia, serif);
+  font-family: var(--font-sans, system-ui, sans-serif);
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--color-text-primary);
@@ -182,7 +262,7 @@
 }
 
 .thread-textarea::placeholder {
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 /* Action buttons (shared by thread and legacy) */

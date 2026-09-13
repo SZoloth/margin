@@ -51,8 +51,10 @@ describe("HighlightThread", () => {
 
     const top = document.body.querySelector(".thread-top");
     expect(top).toBeTruthy();
-    const remove = top?.querySelector(".note-action-btn--delete");
-    expect(remove?.textContent).toBe("Remove");
+    const remove = top?.querySelector(".thread-icon-btn--destructive");
+    expect(remove?.getAttribute("aria-label")).toBe("Remove highlight and notes");
+    const close = top?.querySelector(".thread-icon-btn:not(.thread-icon-btn--destructive)");
+    expect(close).toBeTruthy();
   });
 
   it("save button has note-action-btn--primary class", () => {
@@ -148,7 +150,7 @@ describe("HighlightThread", () => {
     expect(line).toBeTruthy();
     // Starts at the highlight's right edge (x=300), ends at the popover's left
     expect(line.style.left).toBe("300px");
-    expect(line.style.top).toBe("110px"); // passage midline
+    expect(line.style.top).toBe("123px"); // inter-line leading below the mark — underlines no text
     expect(parseFloat(line.style.width)).toBeGreaterThanOrEqual(8);
   });
 });

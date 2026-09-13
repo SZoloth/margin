@@ -15,6 +15,8 @@ interface MarginIndicatorsProps {
   highlights: Highlight[];
   marginNotes: MarginNote[];
   onClickHighlight: (highlightId: string, rect: DOMRect) => void;
+  /** Highlight whose thread is open — its dot dims so the card is the indicator. */
+  activeHighlightId?: string | null;
 }
 
 interface IndicatorPosition {
@@ -29,6 +31,7 @@ export function MarginIndicators({
   highlights,
   marginNotes,
   onClickHighlight,
+  activeHighlightId,
 }: MarginIndicatorsProps) {
   const [positions, setPositions] = useState<IndicatorPosition[]>([]);
 
@@ -106,7 +109,13 @@ export function MarginIndicators({
           key={pos.highlightId}
           type="button"
           className="margin-indicator-dot"
-          style={{ top: pos.top }}
+          style={{
+            top: pos.top,
+            // The open thread is the indicator — hide the duplicate dot.
+            opacity: pos.highlightId === activeHighlightId ? 0 : 1,
+            visibility: pos.highlightId === activeHighlightId ? "hidden" : "visible",
+            transition: "opacity 140ms ease",
+          }}
           onClick={() => {
             if (!editor) return;
             // Prefer ID-based lookup; fall back to text matching for orphan marks
@@ -129,7 +138,6 @@ export function MarginIndicators({
               height: 10,
               borderRadius: "50%",
               backgroundColor: DOT_COLORS[pos.color] ?? `var(--color-highlight-${pos.color})`,
-              opacity: 1.0,
             }}
           />
         </button>
