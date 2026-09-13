@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Cancel01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import type { Highlight, MarginNote } from "@/types/annotations";
 import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 
@@ -70,6 +72,7 @@ function ThreadMessage({
       handleSave();
     }
     if (e.key === "Escape") {
+      e.stopPropagation();
       setIsEditing(false);
     }
   };
@@ -89,18 +92,18 @@ function ThreadMessage({
           className="thread-textarea"
           rows={1}
         />
-        <div className="thread-message-actions" style={{ marginTop: 4 }}>
+        <div className="thread-message-actions thread-message-actions--visible" style={{ marginTop: 4 }}>
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); setIsEditing(false); }}
-            className="note-action-btn text-[length:var(--text-xs)]"
+            className="note-action-btn text-[length:var(--text-sm)]"
           >
             Cancel
           </button>
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); handleSave(); }}
-            className="note-action-btn text-[length:var(--text-xs)]"
+            className="note-action-btn text-[length:var(--text-sm)]"
             style={{ fontWeight: 500 }}
           >
             Save
@@ -112,16 +115,16 @@ function ThreadMessage({
 
   return (
     <div className="thread-message">
-      <span className="thread-message-time">{formatTimeAgo(note.created_at)}</span>
       <p className="thread-message-content">{note.content}</p>
       <div className="thread-message-actions">
-        <button type="button" onClick={startEditing} className="note-action-btn text-[length:var(--text-xs)]">
+        <span className="thread-message-time">{formatTimeAgo(note.created_at)}</span>
+        <button type="button" onClick={startEditing} className="note-action-btn text-[length:var(--text-sm)]">
           Edit
         </button>
         <button
           type="button"
           onClick={() => onDelete(note.id)}
-          className="note-action-btn note-action-btn--delete text-[length:var(--text-xs)]"
+          className="note-action-btn note-action-btn--delete text-[length:var(--text-sm)]"
         >
           Delete
         </button>
@@ -143,10 +146,25 @@ export function HighlightThread({
   autoFocusNew,
   isVisible,
 }: HighlightThreadProps) {
+  // Drafts survive dismissal — closing a thread must never eat a half-typed
+  // note. Persisted per-highlight in sessionStorage.
+  const draftKey = `margin:draft:${highlight.id}`;
   const [newNoteValue, setNewNoteValue] = useState("");
+  useEffect(() => {
+    try {
+      setNewNoteValue(sessionStorage.getItem(`margin:draft:${highlight.id}`) ?? "");
+    } catch {
+      setNewNoteValue("");
+    }
+  }, [highlight.id]);
+
   // Live anchor rect — the prop is a snapshot; scrolling makes it stale, so
   // re-measure the highlight's DOM rect on scroll/resize (rAF-throttled).
   const [liveRect, setLiveRect] = useState<DOMRect | null>(anchorRect);
+  // The thread lives in the margin lane (right of the text column), not on
+  // top of the passage it annotates — measured from the reader column edge.
+  const [laneX, setLaneX] = useState<number | null>(null);
+  const [popoverH, setPopoverH] = useState(200);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
@@ -165,9 +183,19 @@ export function HighlightThread({
         const mark = document.querySelector(
           `mark[data-highlight-id="${CSS.escape(highlight.id)}"]`,
         );
-        if (mark) setLiveRect(mark.getBoundingClientRect());
+        if (mark) {
+          // Anchor at the mark's terminus — the union rect of a wrapped
+          // (multi-line) mark launches the hairline from whitespace right of
+          // where the last line actually ends.
+          const rects = mark.getClientRects();
+          setLiveRect(rects[rects.length - 1] ?? mark.getBoundingClientRect());
+        }
+        const col = document.querySelector(".reader-content-column");
+        if (col) setLaneX(col.getBoundingClientRect().right + 24);
+        if (popoverRef.current) setPopoverH(popoverRef.current.offsetHeight);
       });
     };
+    remeasure();
     // Scroll events don't bubble — capture phase catches the reader's
     // scroll container as well as any nested scrollers.
     window.addEventListener("scroll", remeasure, { capture: true, passive: true });
@@ -178,6 +206,13 @@ export function HighlightThread({
       cancelAnimationFrame(rafId);
     };
   }, [highlight.id]);
+
+  // Card height changes with content (notes arriving, textarea autogrow) —
+  // keep the measured height fresh so the top clamp and hairline bridge
+  // stay honest.
+  useEffect(() => {
+    if (popoverRef.current) setPopoverH(popoverRef.current.offsetHeight);
+  }, [notes.length, newNoteValue]);
 
   // Save previous focus on mount
   useEffect(() => {
@@ -265,7 +300,38 @@ export function HighlightThread({
     if (!trimmed) return;
     onAddNote(highlight.id, trimmed);
     setNewNoteValue("");
+    try {
+      sessionStorage.removeItem(`margin:draft:${highlight.id}`);
+    } catch {
+      /* storage unavailable */
+    }
   }, [newNoteValue, highlight.id, onAddNote]);
+
+  // A draft is only meaningful while its mark lives — clear it when the
+  // thread unmounts with no saved notes (provisional mark deleted on close).
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  useEffect(
+    () => () => {
+      if (notesRef.current.length === 0) {
+        try {
+          sessionStorage.removeItem(`margin:draft:${highlight.id}`);
+        } catch {
+          /* storage unavailable */
+        }
+      }
+    },
+    [highlight.id],
+  );
+
+  const handleRemoveHighlight = () => {
+    try {
+      sessionStorage.removeItem(`margin:draft:${highlight.id}`);
+    } catch {
+      /* storage unavailable */
+    }
+    onDeleteHighlight(highlight.id);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -279,13 +345,26 @@ export function HighlightThread({
 
   const isMobile = window.innerWidth < 768;
 
-  // Desktop: position to the right of the highlight
+  // Desktop: marginalia never covers its subject — anchor the thread in the
+  // margin lane just right of the text column. Fall back to hugging the mark
+  // when the lane doesn't fit (narrow windows).
   const popoverWidth = 300;
-  const gap = 12;
-  const left = Math.min(liveRect.right + gap, window.innerWidth - popoverWidth - 8);
-  const top = Math.max(8, Math.min(liveRect.top, window.innerHeight - 400));
+  const laneFits = laneX !== null && laneX + popoverWidth <= window.innerWidth - 8;
+  const left = laneFits
+    ? laneX
+    : Math.min(liveRect.right + 12, window.innerWidth - popoverWidth - 8);
+  const top = Math.max(8, Math.min(liveRect.top, window.innerHeight - popoverH - 8));
   const popoverLeft = Math.max(8, left);
   const connectorWidth = popoverLeft - liveRect.right;
+
+  // The hairline runs through the inter-line leading just below the mark —
+  // guaranteed whitespace, so it never underlines text it doesn't annotate.
+  // When the card is clamped away from the mark's line, a vertical segment
+  // bridges the gap down to (or up from) the card's bottom edge.
+  const lineY = liveRect.bottom + 3;
+  const cardTop = top;
+  const cardBottom = top + popoverH;
+  const lineHitsCard = lineY >= cardTop && lineY <= cardBottom;
 
   return createPortal(
     <>
@@ -295,9 +374,22 @@ export function HighlightThread({
           aria-hidden="true"
           className="thread-anchor-line"
           style={{
-            top: liveRect.top + liveRect.height / 2,
+            top: lineY,
             left: liveRect.right,
             width: connectorWidth,
+            background: `color-mix(in srgb, var(--color-highlight-${highlight.color}) 55%, var(--color-text-primary))`,
+            opacity: isVisible ? 1 : 0,
+          }}
+        />
+      )}
+      {!isMobile && connectorWidth >= 8 && !lineHitsCard && (
+        <div
+          aria-hidden="true"
+          className="thread-anchor-line thread-anchor-line--vertical"
+          style={{
+            top: Math.min(lineY, cardBottom),
+            left: popoverLeft,
+            height: Math.abs(lineY - cardBottom),
             background: `color-mix(in srgb, var(--color-highlight-${highlight.color}) 55%, var(--color-text-primary))`,
             opacity: isVisible ? 1 : 0,
           }}
@@ -328,34 +420,26 @@ export function HighlightThread({
           : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
       }}
     >
-      {/* Top row: swatches left, remove right — no header chrome */}
+      {/* Top row: quiet icons only — × closes (provisional marks disappear),
+          trash removes the highlight and its notes. No header chrome. */}
       <div className="thread-top">
-        {onRecolor && (
-          <div className="thread-colors" role="radiogroup" aria-label="Highlight color">
-            {HIGHLIGHT_COLORS.map((c) => (
-              <button
-                key={c.name}
-                type="button"
-                role="radio"
-                aria-checked={highlight.color === c.name}
-                aria-label={`Highlight ${c.name}`}
-                onClick={() => onRecolor(highlight.id, c.name)}
-                className="thread-color-btn"
-              >
-                <span
-                  className={`thread-color-dot${highlight.color === c.name ? " thread-color-dot--selected" : ""}`}
-                  style={{ backgroundColor: c.css }}
-                />
-              </button>
-            ))}
-          </div>
-        )}
         <button
           type="button"
-          onClick={() => onDeleteHighlight(highlight.id)}
-          className="note-action-btn note-action-btn--delete text-[length:var(--text-sm)]"
+          onClick={handleRemoveHighlight}
+          className="thread-icon-btn thread-icon-btn--destructive"
+          aria-label="Remove highlight and notes"
+          title="Remove highlight and notes"
         >
-          Remove
+          <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.5} />
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="thread-icon-btn"
+          aria-label={notes.length === 0 ? "Close (removes highlight)" : "Close thread"}
+          title={notes.length === 0 ? "Close — removes highlight" : "Close"}
+        >
+          <HugeiconsIcon icon={Cancel01Icon} size={14} strokeWidth={1.5} />
         </button>
       </div>
 
@@ -382,10 +466,19 @@ export function HighlightThread({
             setNewNoteValue(e.target.value);
             e.target.style.height = "auto";
             e.target.style.height = `${e.target.scrollHeight}px`;
+            try {
+              if (e.target.value) {
+                sessionStorage.setItem(draftKey, e.target.value);
+              } else {
+                sessionStorage.removeItem(draftKey);
+              }
+            } catch {
+              /* storage unavailable — draft stays in memory */
+            }
           }}
           onKeyDown={handleKeyDown}
           className="thread-textarea"
-          placeholder="Add a note"
+          placeholder="What should change here?"
           rows={1}
         />
         {newNoteValue.trim() && (
@@ -399,8 +492,33 @@ export function HighlightThread({
             </button>
           </div>
         )}
-        <div className="thread-hint">
-          ⌘↵ save · Esc {notes.length > 0 ? "closes" : "removes highlight"}
+        {/* Meta row: recolor swatches left, save hint right */}
+        <div className="thread-meta">
+          {onRecolor ? (
+            <div className="thread-colors" role="radiogroup" aria-label="Highlight color">
+              {HIGHLIGHT_COLORS.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  role="radio"
+                  aria-checked={highlight.color === c.name}
+                  aria-label={`Highlight ${c.name}`}
+                  onClick={() => onRecolor(highlight.id, c.name)}
+                  className="thread-color-btn"
+                >
+                  <span
+                    className={`thread-color-dot${highlight.color === c.name ? " thread-color-dot--selected" : ""}`}
+                    style={{ backgroundColor: c.css }}
+                  />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span />
+          )}
+          <span className="thread-hint">
+            ⌘↵ save{notes.length === 0 ? " · Esc removes" : ""}
+          </span>
         </div>
       </div>
       </div>

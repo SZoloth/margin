@@ -721,75 +721,20 @@ export default function App() {
     return null;
   }, []);
 
-  // Handle highlight click → open thread popover
-  useEffect(() => {
-    const handleHighlightClick = (e: Event) => {
-      const { element, highlightId, text } = (e as CustomEvent).detail;
-      if (!element) return;
-      const match = resolveHighlight({ highlightId, text });
-      if (match) {
-        setAnchorRect((element as HTMLElement).getBoundingClientRect());
-        setFocusHighlightId(match.id);
-        setAutoFocusNew(false);
-      }
-    };
-
-    const handleHighlightDelete = async (e: Event) => {
-      const { element, highlightId, text } = (e as CustomEvent).detail;
-      if (!element || !editor) return;
-      const el = element as HTMLElement;
-      const match = resolveHighlight({ highlightId, text });
-      if (!match) return;
-
-      let markFrom: number;
-      let markTo: number;
-      try {
-        markFrom = editor.view.posAtDOM(el, 0);
-        markTo = markFrom + (el.textContent?.length ?? 0);
-      } catch {
-        markFrom = -1;
-        markTo = -1;
-      }
-
-      await annotations.deleteHighlight(match.id);
-
-      const { state } = editor;
-      const { tr } = state;
-      const markType = state.schema.marks.highlight;
-      if (!markType) return;
-
-      if (markFrom >= 0 && markTo >= 0) {
-        tr.removeMark(markFrom, markTo, markType);
-      } else {
-        state.doc.descendants((node, pos) => {
-          if (!node.isText) return;
-          const hlMark = node.marks.find(
-            (m) => m.type.name === "highlight" && m.attrs.highlightId === match.id,
-          );
-          if (hlMark) {
-            tr.removeMark(pos, pos + node.nodeSize, hlMark);
-          }
-        });
-      }
-
-      if (tr.steps.length > 0) {
-        editor.view.dispatch(tr);
-      }
-    };
-
-    window.addEventListener("margin:highlight-click", handleHighlightClick);
-    window.addEventListener("margin:highlight-delete", handleHighlightDelete);
-    return () => {
-      window.removeEventListener("margin:highlight-click", handleHighlightClick);
-      window.removeEventListener("margin:highlight-delete", handleHighlightDelete);
-    };
-  }, [editor, annotations, resolveHighlight]);
-
   const handleDeleteHighlight = useCallback(async (id: string) => {
     if (!editor) return;
 
     const highlight = annotations.highlights.find((h) => h.id === id);
     if (!highlight) return;
+
+    // Snapshot the thread's notes before CASCADE eats them — undo must
+    // restore the judgment, not just the mark.
+    const notesSnapshot = annotations.marginNotes.filter((n) => n.highlight_id === id);
+    try {
+      sessionStorage.removeItem(`margin:draft:${id}`);
+    } catch {
+      /* storage unavailable */
+    }
 
     // Delete immediately
     await annotations.deleteHighlight(id);
@@ -816,11 +761,15 @@ export default function App() {
       }
     }
 
+    // Undo only exists when something unrecoverable was lost — a bare
+    // provisional mark's disappearance is expected, not an event.
+    if (notesSnapshot.length === 0) return;
+
     // Show undo toast
     const actionId = String(++undoIdRef.current);
     setUndoAction({
       id: actionId,
-      message: "Highlight deleted",
+      message: "Highlight and notes deleted",
       onUndo: async () => {
         // Re-create the highlight — use refs to avoid stale closures
         try {
@@ -847,6 +796,14 @@ export default function App() {
               dispatchPreservingScroll(currentEditor, restoreTr);
             }
           }
+          // Restore the notes — the judgment is the precious part
+          for (const n of notesSnapshot) {
+            await annotationsRef.current.createMarginNoteWithIntent(
+              restored.id,
+              n.content,
+              n.intent,
+            );
+          }
           // Re-open the thread
           setFocusHighlightId(restored.id);
         } catch (err) {
@@ -858,6 +815,38 @@ export default function App() {
       onCommit: () => setUndoAction(null),
     });
   }, [editor, annotations]);
+
+  // Handle highlight click → open thread popover
+  useEffect(() => {
+    const handleHighlightClick = (e: Event) => {
+      const { element, highlightId, text } = (e as CustomEvent).detail;
+      if (!element) return;
+      const match = resolveHighlight({ highlightId, text });
+      if (match) {
+        setAnchorRect((element as HTMLElement).getBoundingClientRect());
+        setFocusHighlightId(match.id);
+        setAutoFocusNew(true);
+      }
+    };
+
+    const handleHighlightDelete = async (e: Event) => {
+      const { element, highlightId, text } = (e as CustomEvent).detail;
+      if (!element) return;
+      const match = resolveHighlight({ highlightId, text });
+      if (!match) return;
+      // One delete path — undo, note restoration, draft and focus cleanup
+      // all live in handleDeleteHighlight.
+      await handleDeleteHighlight(match.id);
+    };
+
+    window.addEventListener("margin:highlight-click", handleHighlightClick);
+    window.addEventListener("margin:highlight-delete", handleHighlightDelete);
+    return () => {
+      window.removeEventListener("margin:highlight-click", handleHighlightClick);
+      window.removeEventListener("margin:highlight-delete", handleHighlightDelete);
+    };
+  }, [editor, resolveHighlight, handleDeleteHighlight]);
+
 
   const handleEditorReady = useCallback((ed: Editor) => {
     setEditor(ed);
@@ -987,9 +976,10 @@ export default function App() {
   const handleHighlight = useCallback(
     async (color?: string) => {
       const resolvedColor = color ?? settings.defaultHighlightColor;
-      if (!editor) return;
+      if (!editor) { console.log("[hh] bail: no editor"); return; }
       const { from, to } = editor.state.selection;
-      if (from === to) return;
+      if (from === to) { console.log("[hh] bail: empty sel"); return; }
+      console.log("[hh] running", { from, to, hasDoc: !!doc.currentDoc });
 
       // Onboarding: visual-only highlight, no persistence
       if (!doc.currentDoc) {
@@ -1097,6 +1087,24 @@ export default function App() {
 
     const removed = highlightsRef.current.filter((h) => ids.has(h.id));
 
+    // Snapshot each thread's notes before CASCADE eats them — undo restores
+    // the judgment, not just the marks.
+    const notesSnapshot = new Map<string, { content: string; intent: "correction" | "note" | "prompt" }[]>();
+    for (const n of annotationsRef.current.marginNotes) {
+      if (ids.has(n.highlight_id)) {
+        const list = notesSnapshot.get(n.highlight_id) ?? [];
+        list.push({ content: n.content, intent: n.intent });
+        notesSnapshot.set(n.highlight_id, list);
+      }
+    }
+    for (const id of ids) {
+      try {
+        sessionStorage.removeItem(`margin:draft:${id}`);
+      } catch {
+        /* storage unavailable */
+      }
+    }
+
     try {
       for (const id of ids) {
         await annotationsRef.current.deleteHighlight(id);
@@ -1137,14 +1145,17 @@ export default function App() {
       editor.view.dispatch(tr);
     }
 
-    if (removed.length === 0) return;
+    // A bare mark's disappearance is expected — the toast only earns its
+    // interrupt when notes (the judgment) went with it.
+    const removedWithNotes = removed.filter((h) => (notesSnapshot.get(h.id)?.length ?? 0) > 0);
+    if (removedWithNotes.length === 0) return;
 
     setUndoAction({
       id: String(++undoIdRef.current),
       message:
         removed.length === 1
-          ? "Highlight deleted"
-          : `${removed.length} highlights deleted`,
+          ? "Highlight and notes deleted"
+          : `${removed.length} highlights and their notes deleted`,
       onUndo: async () => {
         const currentEditor = editorRef.current;
         for (const h of removed) {
@@ -1169,6 +1180,14 @@ export default function App() {
                 );
                 currentEditor.view.dispatch(restoreTr);
               }
+            }
+            // Restore the notes — the judgment is the precious part
+            for (const n of notesSnapshot.get(h.id) ?? []) {
+              await annotationsRef.current.createMarginNoteWithIntent(
+                restored.id,
+                n.content,
+                n.intent,
+              );
             }
           } catch (err) {
             console.error("Failed to undo highlight delete:", err);
@@ -1542,8 +1561,9 @@ export default function App() {
             onClickHighlight={(highlightId, rect) => {
               setFocusHighlightId(highlightId);
               setAnchorRect(rect);
-              setAutoFocusNew(false);
+              setAutoFocusNew(true);
             }}
+            activeHighlightId={focusHighlightId}
           />
         ) : undefined
       }
