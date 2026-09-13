@@ -930,6 +930,12 @@ export default function App() {
       // Clicking the open violation toggles it closed.
       const open = rulePopoverRef.current;
       if (open && open.from === from && open.to === to) {
+        const ed = editorRef.current;
+        if (ed && !ed.isDestroyed) {
+          const tr = setRuleScanOpen(ed.state.tr, null);
+          tr.setMeta("addToHistory", false);
+          ed.view.dispatch(tr);
+        }
         setRulePopover(null);
         return;
       }
@@ -948,6 +954,9 @@ export default function App() {
     window.addEventListener("margin:rule-violation", onRuleViolation);
     return () => window.removeEventListener("margin:rule-violation", onRuleViolation);
   }, []);
+
+  // A doc switch orphans the card — its anchor/ranges belong to the old doc.
+  useEffect(() => setRulePopover(null), [doc.currentDoc?.id]);
 
 
   const handleEditorReady = useCallback((ed: Editor) => {
