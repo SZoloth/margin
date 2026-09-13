@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -173,6 +174,50 @@ func TestInsertCandidateRulesAcceptsCanonicalTypes(t *testing.T) {
 		}
 		if n != 1 {
 			t.Fatalf("canonical type %q: inserted %d, want 1", wt, n)
+		}
+	}
+}
+
+// A repeated correction synthesizing to the same rule must bump signal_count
+// and merge provenance — INSERT OR IGNORE alone would drop both, leaving the
+// new source corrections unstamped on acceptance (they'd resurface forever).
+func TestInsertCandidateRulesRecurrenceMerges(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	in := CandidateRuleInput{
+		Category: "tone", RuleText: "Be direct", WritingType: "email",
+		Severity: "should-fix", SignalCount: 1, SourceHighlights: []string{"h1"},
+	}
+	if _, err := InsertCandidateRules(d, []CandidateRuleInput{in}); err != nil {
+		t.Fatal(err)
+	}
+	// Same rule synthesized again from a different correction.
+	in.SourceHighlights = []string{"h2", "h3"}
+	in.SignalCount = 2
+	n, err := InsertCandidateRules(d, []CandidateRuleInput{in})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("recurrence reported %d inserts, want 0", n)
+	}
+
+	var signal int
+	var notes string
+	err = d.QueryRow(
+		`SELECT signal_count, notes FROM writing_rules
+		 WHERE writing_type='email' AND category='tone' AND rule_text='Be direct'`).
+		Scan(&signal, &notes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signal != 3 {
+		t.Errorf("signal_count = %d, want 3 (1 + 2)", signal)
+	}
+	for _, want := range []string{"synthesized-from:", "h1", "h2", "h3"} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("provenance notes %q missing %q", notes, want)
 		}
 	}
 }

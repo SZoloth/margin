@@ -384,6 +384,31 @@ describe("createWritingRule", () => {
     }
   });
 
+  it("unions provenance on upsert conflict instead of overwriting", () => {
+    createWritingRule(db, {
+      rule_text: "Lead with the outcome",
+      writing_type: "email",
+      category: "structure",
+      severity: "should-fix",
+      synthesized_from: ["h1"],
+    });
+    const result = createWritingRule(db, {
+      rule_text: "Lead with the outcome",
+      writing_type: "email",
+      category: "structure",
+      severity: "should-fix",
+      synthesized_from: ["h2", "h3"],
+      notes: "keeps coming up",
+    });
+
+    expect(result).not.toHaveProperty("error");
+    if (!("error" in result)) {
+      // Earlier source corrections must not be lost — they get stamped on accept.
+      expect(result.notes).toBe("synthesized-from:h1,h2,h3; keeps coming up");
+      expect(result.signalCount).toBe(3);
+    }
+  });
+
   it("rejects invalid severity", () => {
     const result = createWritingRule(db, {
       rule_text: "Some rule",

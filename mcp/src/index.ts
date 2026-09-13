@@ -329,14 +329,14 @@ server.tool(
 
 server.tool(
   "margin_delete_correction",
-  "Delete a correction and its associated highlight by highlight_id.",
+  "Delete a correction row by highlight_id. The highlight and its margin notes are preserved.",
   { highlight_id: z.string().describe("Highlight ID of the correction to delete") },
   async ({ highlight_id }) => withDbAndExport(() => {
     const result = deleteCorrection(getWriteDb(), highlight_id);
     if ("error" in result) {
       return { content: [{ type: "text", text: result.error }], isError: true };
     }
-    return { content: [{ type: "text", text: "Correction and highlight deleted." }] };
+    return { content: [{ type: "text", text: "Correction deleted (highlight preserved)." }] };
   }),
 );
 

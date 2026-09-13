@@ -198,3 +198,22 @@ neither approaches the two-pass editor (66.7%, 16 mech). The data-layer
 ranking now: **editor pass > production skill path > corrections-only >
 hybrids > rules-only > zero-shot on pass; inverse on raw dims.** Editing
 after drafting beats coaching before drafting.
+
+### c-corr — editor pass against corrections, not rules (2026-09-12, poolside)
+
+Two-pass editor where pass 2 edits the draft against raw correction
+history instead of the synthesized rule set — tests whether the
+correction→rule compression is doing real work or is just ceremony.
+
+| Architecture | Pass rate | Mean dim | Mech issues |
+|---|---|---|---|
+| c-corr (editor + corrections) | 55.6% | 41.7 | 35 |
+| c (editor + rules) — control | 66.7% | 44.0 | 16 |
+
+**The rule layer is load-bearing.** Same two-pass architecture, only the
+edit-target swapped: corrections history loses 11pp of pass rate and
+more than doubles mechanical issues. Synthesis isn't a storage format —
+it's the thing that makes feedback enforceable. Raw corrections are too
+specific/noisy to generalize at edit time; the distilled rules
+generalize. This is the strongest evidence yet that the product loop's
+synthesis step is the mechanism, not overhead.
