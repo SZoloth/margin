@@ -203,8 +203,10 @@ describe("browser mock invoke", () => {
     expect(await mockInvoke("get_corrections_flat")).toEqual([]);
   });
 
-  it("returns empty arrays for writing rules commands", async () => {
-    expect(await mockInvoke("get_writing_rules")).toEqual([]);
+  it("returns the fixture writing rule for resurfacing exercises", async () => {
+    const rules = (await mockInvoke("get_writing_rules")) as Record<string, unknown>[];
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatchObject({ id: "stub-rule-1", ruleText: "leverage" });
     const exportResult = (await mockInvoke("export_writing_rules")) as Record<string, unknown>;
     expect(exportResult).toHaveProperty("markdownPath");
     expect(exportResult).toHaveProperty("hookPath");

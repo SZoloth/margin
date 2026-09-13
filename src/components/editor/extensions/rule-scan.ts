@@ -163,16 +163,21 @@ export const RuleScan = Extension.create({
           decorations(state) {
             return ruleScanKey.getState(state);
           },
-          handleClick(_view, _pos, event) {
+          handleClick(view, _pos, event) {
             const el = (event.target as HTMLElement).closest?.(".rule-violation");
             if (!el) return false;
             // The match payload isn't on the decoration — the listener
             // resolves ruleId → rule from the rules list it already holds.
+            const from = view.posAtDOM(el, 0);
             window.dispatchEvent(
               new CustomEvent("margin:rule-violation", {
                 detail: {
                   ruleId: (el as HTMLElement).dataset.ruleId ?? "",
                   rect: (el as HTMLElement).getBoundingClientRect(),
+                  el,
+                  from,
+                  to: from + ((el as HTMLElement).textContent?.length ?? 0),
+                  matched: (el as HTMLElement).textContent ?? "",
                 },
               }),
             );
