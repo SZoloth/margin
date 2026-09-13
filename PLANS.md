@@ -38,11 +38,16 @@ fixes.
    archive across app/Go/MCP, Archived section with Restore in RulesTab).
 2. ~~Inverted auto-synthesized rules~~ — already absent from the DB
    (verified live: 0 rows); eval-side exclusion stays as defense.
-3. SAM-1134: second-provider eval — muse-null done (66.7%/45.9/14 beats
-   poolside's best); muse-c running; muse-skill pending.
-4. SAM-135 conversational feedback — biggest consumer feature.
-5. Rule-card residual nits: responsive margin-lane collapse (768–1100px),
-   anchor-off-viewport dismissal.
+3. ~~SAM-1134~~ — Done. c (editor+rules) is best on both providers:
+   muse 70.4%/47.0/9 vs null 66.7%/45.9/14; skill ties null. Baseline
+   committed: regression/baseline-muse-spark-2026-09-13.json (dee28ea).
+4. SAM-135 conversational feedback — biggest consumer feature. Needs a
+   provider/streaming design decision before build (chat panel vs. the
+   deterministic resurfacing loop that now exists).
+5. ~~Rule-card residual nits~~ — already shipped: off-viewport dismissal
+   and responsive margin-lane→sheet fallback are both live.
+6. SAM-1147 — all shipped except library-as-shelf (speculative);
+   commented.
 
 ## 2026-09-04 Codex prompt cleanup
 
