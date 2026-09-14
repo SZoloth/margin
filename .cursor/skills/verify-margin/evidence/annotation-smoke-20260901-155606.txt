@@ -1,0 +1,163 @@
+
+> margin@1.17.0 test:frontend /workspace
+> vitest run src -- --reporter=verbose src/components/editor/__tests__/HighlightThread.test.tsx
+
+
+ RUN  v4.0.18 /workspace
+
+ ✓ src/components/editor/__tests__/DiffBanner.test.tsx (5 tests) 92ms
+ ✓ src/hooks/__tests__/useSettings.test.ts (13 tests) 62ms
+ ✓ src/components/settings/__tests__/StyleMemorySection.test.tsx (1 test) 48ms
+ ✓ src/components/style-memory/__tests__/RulesTab.test.tsx (3 tests) 130ms
+ ✓ src/components/style-memory/__tests__/CorrectionsTab.test.tsx (1 test) 45ms
+ ✓ src/components/settings/__tests__/SettingsPage.test.tsx (6 tests) 71ms
+ ✓ src/components/settings/__tests__/ReadingSection.test.tsx (8 tests) 105ms
+ ✓ src/lib/__tests__/browser-stubs.test.ts (19 tests) 85ms
+ ✓ src/components/layout/__tests__/TabBar.test.tsx (7 tests) 46ms
+ ✓ src/components/editor/__tests__/Reader.test.tsx (4 tests) 597ms
+stdout | src/components/editor/__tests__/front-matter.test.tsx > Front matter round-trip > preserves front matter through getMarkdown()
+=== initial getMarkdown ===
+"---\ntitle: Test\nauthor: Jane\ntags: [a, b]\n---\n\n# Hello\n\nSome body text."
+
+stdout | src/components/editor/__tests__/front-matter.test.tsx > Front matter round-trip > preserves front matter after setContent (file open simulation)
+=== doc JSON (first 3 nodes) ===
+[
+  {
+    "type": "frontMatter",
+    "attrs": {
+      "content": "title: Test\nauthor: Jane\ntags: [a, b]"
+    }
+  },
+  {
+    "type": "heading",
+    "attrs": {
+      "level": 1
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Hello"
+      }
+    ]
+  },
+  {
+    "type": "paragraph",
+    "content": [
+      {
+        "type": "text",
+        "text": "Some body text."
+      }
+    ]
+  }
+]
+=== after setContent getMarkdown ===
+"---\ntitle: Test\nauthor: Jane\ntags: [a, b]\n---\n\n# Hello\n\nSome body text."
+
+stdout | src/components/editor/__tests__/front-matter.test.tsx > Front matter round-trip > round-trips after simulated user edit
+=== after edit getMarkdown (first 80 chars) ===
+"---\ntitle: Test\nauthor: Jane\ntags: [a, b]\n---\n\n# Hello\n\nSome body text.Added tex"
+=== doc JSON (first 3 nodes) ===
+[
+  {
+    "type": "frontMatter",
+    "attrs": {
+      "content": "title: Test\nauthor: Jane\ntags: [a, b]"
+    }
+  },
+  {
+    "type": "heading",
+    "attrs": {
+      "level": 1
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Hello"
+      }
+    ]
+  },
+  {
+    "type": "paragraph",
+    "content": [
+      {
+        "type": "text",
+        "text": "Some body text.Added text."
+      }
+    ]
+  }
+]
+
+stdout | src/components/editor/__tests__/front-matter.test.tsx > Front matter round-trip > preserves front matter with full document including HR and task lists
+=== FULL DOC: first 5 node types ===
+[ 'frontMatter', 'heading', 'paragraph', 'heading', 'paragraph' ]
+=== FULL DOC: getMarkdown first 120 chars ===
+"---\ntitle: The Marginal Annotator\nauthor: Sam Zoloth\ndate: 2026-03-02\ntags: [reading, annotations, design]\ndraft: true\n-"
+
+ ✓ src/components/editor/__tests__/front-matter.test.tsx (5 tests) 368ms
+ ✓ src/components/editor/__tests__/FloatingToolbar.test.tsx (6 tests) 47ms
+ ✓ src/components/settings/__tests__/ToggleSwitch.test.tsx (4 tests) 39ms
+ ✓ src/lib/__tests__/apply-accepted-correction.test.tsx (2 tests) 35ms
+ ✓ src/hooks/__tests__/useFileWatcher.test.ts (6 tests) 27ms
+ ✓ src/lib/__tests__/export-annotations-footer.test.ts (6 tests) 22ms
+ ✓ src/components/editor/__tests__/ExportAnnotationsPopover.test.tsx (1 test) 8ms
+ ✓ src/hooks/__tests__/useTableOfContents.test.tsx (1 test) 297ms
+ ✓ src/hooks/__tests__/useTabs.test.ts (25 tests) 121ms
+ ✓ src/components/settings/__tests__/SegmentedControl.test.tsx (8 tests) 70ms
+ ✓ src/hooks/__tests__/useDiffReview.test.ts (20 tests) 87ms
+ ✓ src/lib/__tests__/mcp-bridge.test.ts (17 tests) 63ms
+ ✓ src/hooks/__tests__/useKeepLocal.test.ts (11 tests) 53ms
+ ✓ src/components/settings/__tests__/SettingsNav.test.tsx (5 tests) 48ms
+ ✓ src/components/editor/__tests__/search.test.tsx (10 tests) 49ms
+stdout | src/hooks/__tests__/useSearch.test.ts > useSearch > background indexing on mount sets isIndexing
+Indexed 5 documents (2 skipped, 0 errors)
+
+stderr | src/hooks/__tests__/useSearch.test.ts > useSearch > indexDocument and removeIndex invoke correctly, swallow errors
+Remove index failed: Error: db error
+    at /workspace/src/hooks/__tests__/useSearch.test.ts:271:66
+    at Mock (file:///workspace/node_modules/.pnpm/@vitest+spy@4.0.18/node_modules/@vitest/spy/dist/index.js:285:34)
+    at invoke (/workspace/src/hooks/__tests__/useSearch.test.ts:8:35)
+    at Object.removeIndex (/workspace/src/hooks/useSearch.ts:95:13)
+    at /workspace/src/hooks/__tests__/useSearch.test.ts:291:28
+    at /workspace/node_modules/.pnpm/@testing-library+react@16.3.2_@testing-library+dom@10.4.1_@types+react-dom@19.2.3_@type_893f466751a7d66081fd06e9edb9241a/node_modules/@testing-library/react/dist/act-compat.js:47:24
+    at process.env.NODE_ENV.exports.act (/workspace/node_modules/.pnpm/react@19.2.4/node_modules/react/cjs/react.development.js:814:22)
+    at Proxy.<anonymous> (/workspace/node_modules/.pnpm/@testing-library+react@16.3.2_@testing-library+dom@10.4.1_@types+react-dom@19.2.3_@type_893f466751a7d66081fd06e9edb9241a/node_modules/@testing-library/react/dist/act-compat.js:46:25)
+    at /workspace/src/hooks/__tests__/useSearch.test.ts:290:11
+    at file:///workspace/node_modules/.pnpm/@vitest+runner@4.0.18/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | src/hooks/__tests__/useSearch.test.ts > useSearch > FTS error clears results, resets isSearching
+FTS search failed: Error: FTS error
+    at /workspace/src/hooks/__tests__/useSearch.test.ts:309:31
+    at Mock (file:///workspace/node_modules/.pnpm/@vitest+spy@4.0.18/node_modules/@vitest/spy/dist/index.js:285:34)
+    at invoke (/workspace/src/hooks/__tests__/useSearch.test.ts:8:35)
+    at Object.search (/workspace/src/hooks/useSearch.ts:48:5)
+    at /workspace/src/hooks/__tests__/useSearch.test.ts:328:22
+    at /workspace/node_modules/.pnpm/@testing-library+react@16.3.2_@testing-library+dom@10.4.1_@types+react-dom@19.2.3_@type_893f466751a7d66081fd06e9edb9241a/node_modules/@testing-library/react/dist/act-compat.js:47:24
+    at process.env.NODE_ENV.exports.act (/workspace/node_modules/.pnpm/react@19.2.4/node_modules/react/cjs/react.development.js:814:22)
+    at Proxy.<anonymous> (/workspace/node_modules/.pnpm/@testing-library+react@16.3.2_@testing-library+dom@10.4.1_@types+react-dom@19.2.3_@type_893f466751a7d66081fd06e9edb9241a/node_modules/@testing-library/react/dist/act-compat.js:46:25)
+    at /workspace/src/hooks/__tests__/useSearch.test.ts:327:5
+    at file:///workspace/node_modules/.pnpm/@vitest+runner@4.0.18/node_modules/@vitest/runner/dist/index.js:915:20
+
+ ✓ src/hooks/__tests__/useSearch.test.ts (9 tests) 46ms
+ ✓ src/components/layout/__tests__/Sidebar.test.tsx (7 tests) 42ms
+ ✓ src/lib/__tests__/format-style-memory.test.ts (11 tests) 42ms
+ ✓ src/lib/__tests__/text-anchoring.test.ts (10 tests) 35ms
+ ✓ src/components/settings/__tests__/ColorPicker.test.tsx (4 tests) 33ms
+ ✓ src/hooks/__tests__/useDocument.test.ts (7 tests) 34ms
+ ✓ src/components/editor/__tests__/DiffNavChip.test.tsx (4 tests) 25ms
+ ✓ src/components/settings/__tests__/IntegrationsSection.test.tsx (3 tests) 25ms
+ ✓ src/components/settings/__tests__/WritingSection.test.tsx (2 tests) 21ms
+ ✓ src/lib/__tests__/search-utils.test.ts (6 tests) 21ms
+ ✓ src/hooks/__tests__/useAnnotations.test.ts (4 tests) 18ms
+ ✓ src/lib/__tests__/export-clear-policy.test.ts (4 tests) 13ms
+ ✓ src/components/settings/__tests__/SectionHeader.test.tsx (2 tests) 10ms
+ ✓ src/components/settings/__tests__/SettingRow.test.tsx (2 tests) 10ms
+ ✓ src/lib/__tests__/export-annotations-intent.test.ts (1 test) 4ms
+ ✓ src/components/editor/__tests__/HighlightThread.test.tsx (4 tests) 26ms
+ ✓ src/lib/__tests__/diff-engine.test.ts (16 tests) 61ms
+ ✓ src/lib/__tests__/layer-boundaries.test.ts (4 tests) 20ms
+
+ Test Files  43 passed (43)
+      Tests  294 passed (294)
+   Start at  15:56:06
+   Duration  4.75s (transform 500ms, setup 285ms, import 867ms, tests 3.10s, environment 248ms)
+
