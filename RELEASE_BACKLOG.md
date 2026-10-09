@@ -10,6 +10,15 @@ Unreleased changes ready to ship.
 
 ## Shipped
 
+### v1.17.1 (2026-10-09)
+
+First release since v1.16.2. It includes the v1.17.0 work, whose July release failed at notarization, plus the fresh-user fixes from #61:
+
+- `fix(seed): stop seeding personal voice-calibration rules for new users` — new installs start with an empty voice profile
+- `feat: bundle margin-cli and make agent config writes opt-in` — export works without a separate CLI install; new Writing guard setting, off by default
+- `feat: bundle the MCP server so Claude Desktop works without Node` — `margin-mcp` sidecar, plus the missing fs permissions that made the Claude Desktop switch always fail
+- `fix: first-run UI defects found in hands-on QA` — sample no longer hidden after the first highlight, Browse files… in ⌘O, readable onboarding tip, note popover hides in Settings
+
 ### v1.16.2 (2026-03-23)
 
 - `fix(sam-199): programmatic window drag + suppress native title bleed` — removes native title bar bleed-through
