@@ -447,7 +447,23 @@ if __name__ == "__main__":
 `, string(killWordsJSON), string(hardPatternsJSON), string(softPatternsJSON), string(headingPatternsJSON))
 }
 
+// AgentIntegrationEnabled reports whether exports may write Claude Code's guard
+// and Codex's AGENTS.md. It mirrors the app's Writing guard setting
+// (agent_integration_enabled in src-tauri/src/commands/writing_rules.rs):
+// ~/.margin/agent-integration holds "on" or "off"; without it, a guard written
+// by an earlier Margin means the user already opted in.
+func AgentIntegrationEnabled(home string) bool {
+	setting, err := os.ReadFile(filepath.Join(home, ".margin", "agent-integration"))
+	if err == nil {
+		return strings.TrimSpace(string(setting)) == "on"
+	}
+	_, err = os.Stat(filepath.Join(home, ".claude", "hooks", "writing_guard.py"))
+	return err == nil
+}
+
 // ExportProfile writes the unified writing profile and agent-specific artifacts.
+// With the default target, agent artifacts are written only when
+// AgentIntegrationEnabled; otherwise it behaves like target="markdown".
 //
 // target="" (default): writes ~/.margin/writing-rules.md and
 // ~/.claude/hooks/writing_guard.py. Also updates ~/.codex/AGENTS.md if
@@ -486,6 +502,9 @@ func ExportProfile(dbPath string, target string) error {
 	}
 
 	home, _ := os.UserHomeDir()
+	if target == "" && !AgentIntegrationEnabled(home) {
+		target = "markdown"
+	}
 
 	// Always write writing-rules.md — the universal, LLM-agnostic artifact.
 	profileMD := FormatProfileMarkdown(rules, corrections)

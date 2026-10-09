@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { ExportBridge } from "./export-bridge.js";
 import { openReadDb, openWriteDb, nowMillis } from "./db.js";
-import { startExportBridge } from "./startup.js";
+import { marginCliCommand, startExportBridge } from "./startup.js";
 import {
   listDocuments,
   getDocument,
@@ -91,13 +91,13 @@ function dbErrorMessage(err: unknown): string {
 
 /**
  * Auto-export unified writing profile via the `margin` CLI (single-writer pattern).
- * The CLI reads from SQLite and writes ~/.margin/writing-rules.md and any
- * agent-specific artifacts (e.g. ~/.claude/hooks/writing_guard.py for Claude Code).
+ * The CLI reads from SQLite and writes ~/.margin/writing-rules.md, plus the
+ * Claude Code guard and Codex AGENTS.md when the user's Writing guard setting allows.
  * Fire-and-forget — errors are logged but don't fail the mutation.
  */
 async function autoExportWritingProfile(): Promise<void> {
   return new Promise((resolve) => {
-    execFile("margin", ["export", "profile"], (err, _stdout, stderr) => {
+    execFile(marginCliCommand(), ["export", "profile"], (err, _stdout, stderr) => {
       if (err) {
         // eslint-disable-next-line no-console
         console.error("Auto-export writing profile failed:", stderr || err.message);
@@ -893,6 +893,9 @@ function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+// The client closing stdin ends the session; without this the export bridge
+// keeps the process alive after Claude quits.
+process.stdin.on("end", shutdown);
 
 main().catch((err) => {
   console.error("MCP server error:", err);

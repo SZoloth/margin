@@ -1,28 +1,40 @@
 import Database from "better-sqlite3";
+import { createRequire } from "module";
 import { homedir } from "os";
 import { join } from "path";
 
 const DB_PATH = join(homedir(), ".margin", "margin.db");
 
+// The app ships this server as a single Bun-compiled binary (margin-mcp), where
+// better-sqlite3's native addon can't be loaded. Bun's built-in bun:sqlite covers
+// everything used here (prepare/get/all/run, exec, transaction).
+function openDatabase(path: string, write: boolean): Database.Database {
+  if (process.versions.bun) {
+    const { Database: BunDatabase } = createRequire(import.meta.url)("bun:sqlite");
+    return new BunDatabase(path, write ? { readwrite: true, create: false } : { readonly: true });
+  }
+  return new Database(path, write ? { fileMustExist: true } : { readonly: true });
+}
+
 export function openReadDb(path: string = DB_PATH): Database.Database {
-  const db = new Database(path, { readonly: true });
+  const db = openDatabase(path, false);
   // If the DB isn't already in WAL mode, enabling it requires write access (to create the -wal file).
   // In readonly mode this can fail, but reads should still work.
   try {
-    db.pragma("journal_mode = WAL");
+    db.exec("PRAGMA journal_mode = WAL");
   } catch {
     // Ignore: best-effort for better concurrent read performance when the DB is already WAL-enabled.
   }
-  db.pragma("busy_timeout = 5000");
+  db.exec("PRAGMA busy_timeout = 5000");
   return db;
 }
 
 export function openWriteDb(path: string = DB_PATH): Database.Database {
-  const db = new Database(path, { fileMustExist: true });
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.pragma("busy_timeout = 5000");
-  db.pragma("synchronous = NORMAL");
+  const db = openDatabase(path, true);
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
+  db.exec("PRAGMA busy_timeout = 5000");
+  db.exec("PRAGMA synchronous = NORMAL");
   return db;
 }
 
