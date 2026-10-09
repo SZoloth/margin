@@ -2,7 +2,7 @@
 
 Date: 2026-10-09. Branch `fix/consumer-first-run`. Tested against a release build of main (`9c37fac`), launched with `HOME` pointed at an empty scratch folder so a stranger's first launch could be simulated without touching Sam's `~/.margin`.
 
-**Method limit:** computer-use access to Margin was declined, so this pass didn't click through the UI. Findings come from the fresh-install database, the contents of the app bundle, the code paths a new user reaches, and the test suites. A hands-on click-through of onboarding, highlighting, notes, and export is still owed.
+**Method:** findings 1 to 5 come from the fresh-install database, the bundle contents and the code paths. Findings 8 to 12 come from a hands-on click-through later the same day, run on a QA build (`identifier: com.samzoloth.margin-qa`) launched with a scratch `HOME`. The separate app ID matters because the web view keeps its storage under the real `~/Library/WebKit/<bundle id>` whatever `HOME` says. Without it, a production-ID test inherits Sam's onboarding flag and display settings.
 
 ## Findings
 
@@ -15,6 +15,13 @@ Date: 2026-10-09. Branch `fix/consumer-first-run`. Tested against a release buil
 | 5 | Blocker | The "Claude Desktop" integration points at `Resources/mcp/dist/index.js` and runs it with `node`. The bundle contains no `mcp/` folder, and most users don't have Node installed. Turning the toggle on writes a Claude config entry that can't start. | **Open.** Needs a decision: compile the MCP server to a single binary (for example `bun build --compile`) and ship it as a second sidecar, or hide the toggle in release builds. Before it ships, `mcp/src/index.ts` must respect the Writing guard setting: its automatic export runs `margin export profile` with no target, which writes `~/.claude` even when the switch is off. |
 | 6 | Polish | Downloads are Apple Silicon only (`aarch64` DMG). Intel Macs get no build. | Open. A universal build is a one-line target change, at the cost of CI time. |
 | 7 | Polish | The `/margin` download page doesn't exist yet. | Open (see SHAREABLE-PLAN.md). |
+| 8 | Blocker | The first highlight on the onboarding sample drew the empty-state quote on top of the document. The welcome line auto-dismisses after 8 s and moves onboarding to "highlighted", so the first highlight completed onboarding. The "sample is showing" flag depended on that step, so it switched off while the sample stayed in the editor. | **Fixed.** `isShowingSample()` in `src/lib/sample-document.ts` depends only on "no file open, text loaded", with a regression test. Verified on screen. |
+| 9 | Blocker | File > Open (⌘O) only opens the Spotlight search palette. A file Spotlight hasn't indexed can't be opened at all, and nothing called the existing native picker (`openFileDialog`). | **Fixed.** A "Browse files…" palette action opens the system picker and opens the chosen file, with a test. Verified that the picker appears. |
+| 10 | Polish | The "Teach Margin your style" tip used a 4% black background, so it sat unreadably on top of body text. | **Fixed.** It now has an opaque page background and a shadow. Verified on screen. |
+| 11 | Polish | An open note popover stayed floating over the Settings page. | **Fixed.** The thread hides while Settings is open and comes back, draft intact, when Settings closes. Verified on screen. |
+| 12 | Polish | macOS offers a verification code from Messages inside the palette search and note fields. `autoComplete="off"` is already set on the palette and doesn't stop it. | Open. This is WKWebView's one-time-code AutoFill, not a Margin attribute. Low priority. |
+
+Verified working on screen: the onboarding sample loads on first launch; highlighting a real file opens the note box (five colours); notes save as corrections; the Writing guard switch is off by default and, once turned on, writes only into the scratch home; exported rules include the new note.
 
 ## Verification
 
