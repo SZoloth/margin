@@ -1019,6 +1019,31 @@ mod tests {
     }
 
     #[test]
+    fn seed_voice_and_editorial_rules_ships_no_personal_voice_rules() {
+        // A new user's voice profile must start empty; seeded rules are
+        // generic editorial guidance only.
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_writing_rules_add_reviewed_at(&conn).unwrap();
+
+        seed_voice_and_editorial_rules(&conn).unwrap();
+
+        let voice: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'voice-calibration'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(voice, 0);
+
+        let seeded: i64 = conn
+            .query_row("SELECT COUNT(*) FROM writing_rules WHERE source = 'seed-v1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(seeded > 0, "generic editorial rules are still seeded");
+    }
+
+    #[test]
     fn seed_prohibition_rules_seeds_once_with_ids() {
         let conn = Connection::open_in_memory().unwrap();
         migrate_add_writing_rules_table(&conn).unwrap();
@@ -1415,63 +1440,9 @@ pub fn seed_voice_and_editorial_rules(conn: &Connection) -> Result<(), Box<dyn s
         .unwrap_or(0);
 
     // Each tuple: (writing_type, category, rule_text, severity, when_to_apply, why, signal_count)
+    // Voice-calibration rules are never seeded: they describe one person's voice
+    // and must come from the user's own corrections.
     let rules: Vec<(&str, &str, &str, &str, Option<&str>, Option<&str>, i64)> = vec![
-        // === Voice calibration (from voice-profile.md) ===
-
-        // Punctuation invariants
-        ("general", "voice-calibration", "Almost never end messages with periods (~0.8%). This is the single strongest voice signal.", "must-fix",
-         Some("All casual and semi-formal writing"), Some("Periods on short messages are the #1 AI tell for this voice"), 10),
-        ("general", "voice-calibration", "Questions get question marks (~13%). Excitement gets exclamation marks (~4%). Everything else just ends.", "should-fix",
-         Some("End-of-sentence punctuation"), Some("Matches natural punctuation distribution"), 5),
-        ("general", "voice-calibration", "Ellipsis for trailing off or softening. Em-dashes for asides and pivots.", "nice-to-fix",
-         Some("Mid-sentence punctuation"), None, 3),
-        ("general", "voice-calibration", "Double exclamation (!!) for genuine excitement, not performative energy. Interrobang (!? or ?!) for comedic disbelief.", "nice-to-fix",
-         Some("Emphasis punctuation"), None, 2),
-
-        // Capitalization
-        ("general", "voice-calibration", "Standard capitalization at sentence start (~99%). Selective ALL CAPS for emphasis on single words, not whole phrases.", "should-fix",
-         Some("All writing"), Some("Shifted from lowercase circa 2018, now consistent"), 5),
-
-        // Length and rhythm
-        ("general", "voice-calibration", "Median message: 27 characters / 5 words. Short is default. 23.5% of messages are fragments (≤3 words).", "should-fix",
-         Some("Casual and logistics registers"), Some("Length calibration from 168k messages"), 8),
-        ("general", "voice-calibration", "Prefers sending multiple short messages over one long one. Long messages (80+ chars) reserved for explaining, storytelling, or logistics.", "should-fix",
-         Some("Message length decisions"), None, 5),
-
-        // Hedging
-        ("general", "voice-calibration", "Hedges 3.6x more than declares. 'I think', 'probably', 'maybe', 'kinda' are load-bearing words — calibrated social softening, not uncertainty.", "must-fix",
-         Some("All writing"), Some("The hedge creates room for the other person"), 8),
-        ("general", "voice-calibration", "Declaratives reserved for things actually known or felt strongly: 'definitely', 'for sure', '100%'.", "should-fix",
-         Some("Strong assertions"), None, 3),
-
-        // Register rules
-        ("general", "voice-calibration", "Casual/banter: opens with Yo/Hey/So/Dude/Wait, closes with no punctuation (76%), contractions always (gonna/wanna/kinda), humor through absurd escalation and self-deprecation.", "should-fix",
-         Some("Default register"), None, 5),
-        ("general", "voice-calibration", "Logistics/planning: direct but warm. Softened asks ('Any chance you could...', 'Mind if I...'). 'Let me know' to close open loops. 'Sweet' as acknowledgment.", "should-fix",
-         Some("Scheduling and coordination"), None, 4),
-        ("general", "voice-calibration", "Explaining/persuading: longer messages (80-200 chars), 'I mean' as pivot not filler, em-dashes and parentheticals increase, additive structure (also/and/plus).", "should-fix",
-         Some("Making arguments or explaining"), None, 4),
-        ("general", "voice-calibration", "Emotional/heartfelt: 'I appreciate [specific thing]', vulnerability through understatement not overwrought language, 'Really' as sincerity intensifier.", "should-fix",
-         Some("Emotional or supportive contexts"), None, 3),
-        ("general", "voice-calibration", "Professional/outreach: capitalization and punctuation more conventional, still avoids periods on casual messages, 'I'd love to' not 'I would love to', specificity over generality.", "should-fix",
-         Some("Work contacts and networking"), None, 4),
-
-        // Forbidden patterns
-        ("general", "voice-calibration", "Never use 'I hope this message finds you well' or any corporate opener.", "must-fix",
-         Some("Message openings"), Some("Corporate-speak tell"), 5),
-        ("general", "voice-calibration", "Never write 'utilize' — it's 'use'. Never write 'I wanted to reach out' — just reach out.", "must-fix",
-         Some("Word choice"), Some("Inflated language tells"), 5),
-        ("general", "voice-calibration", "Never use 'that being said', 'having said that', 'furthermore', 'moreover', 'additionally'.", "must-fix",
-         Some("Transitions"), Some("AI transition word tells"), 5),
-        ("general", "voice-calibration", "Never use 'folks' — it's 'people', 'y'all', or 'everyone'. Never use 'feel free to' — just tell them they can.", "should-fix",
-         Some("Word choice"), None, 3),
-        ("general", "voice-calibration", "Never use 'absolutely' as agreement — it's 'yeah', 'for sure', or 'definitely'. Never write 'apologies for the delay' — just respond.", "should-fix",
-         Some("Response patterns"), None, 3),
-        ("general", "voice-calibration", "'Haha' > 'lol' > 'lmao' for laugh markers. Almost never emoji alone for laughter.", "nice-to-fix",
-         Some("Humor markers"), None, 3),
-        ("general", "voice-calibration", "No sign-off — messages just end. 'Let me know' to leave the ball in their court. Rarely says goodbye.", "should-fix",
-         Some("Message closings"), None, 4),
-
         // === Editorial rules (from writing-rules.md) ===
 
         // Voice test
