@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useId } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { reportError } from "@/lib/error-bus";
@@ -13,6 +13,7 @@ import {
   disableMcpInClaude,
   checkMcpConnection,
 } from "@/lib/mcp-bridge";
+import { getAgentIntegration, setAgentIntegration } from "@/lib/tauri-commands";
 
 const CLAUDE_CODE_SNIPPET = `{
   "mcpServers": {
@@ -28,16 +29,20 @@ export function IntegrationsSection() {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showSnippet, setShowSnippet] = useState(false);
+  const [guardEnabled, setGuardEnabled] = useState(false);
   const savingRef = useRef(false);
+  const desktopLabelId = useId();
+  const guardLabelId = useId();
   const { copied, triggerCopied } = useCopyFeedback();
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([isMcpEnabledInClaude(), checkMcpConnection()]).then(
-      ([enabledRes, connectedRes]) => {
+    Promise.allSettled([isMcpEnabledInClaude(), checkMcpConnection(), getAgentIntegration()]).then(
+      ([enabledRes, connectedRes, guardRes]) => {
         if (cancelled) return;
         setEnabled(enabledRes.status === "fulfilled" && enabledRes.value);
         setConnected(connectedRes.status === "fulfilled" && connectedRes.value);
+        setGuardEnabled(guardRes.status === "fulfilled" && guardRes.value);
         setLoading(false);
       },
     );
@@ -66,6 +71,16 @@ export function IntegrationsSection() {
     }
   }, []);
 
+  const handleGuardToggle = useCallback(async (next: boolean) => {
+    setGuardEnabled(next);
+    try {
+      await setAgentIntegration(next);
+    } catch (err) {
+      setGuardEnabled(!next);
+      reportError("Could not update the writing guard setting", err);
+    }
+  }, []);
+
   const handleCopy = useCallback(async () => {
     try {
       await writeText(CLAUDE_CODE_SNIPPET);
@@ -88,9 +103,10 @@ export function IntegrationsSection() {
           <>
             <SettingRow
               label="Claude Desktop"
+              labelId={desktopLabelId}
               description="Auto-configured — toggle to enable or disable"
             >
-              <ToggleSwitch checked={enabled} onChange={handleToggle} />
+              <ToggleSwitch checked={enabled} onChange={handleToggle} ariaLabelledBy={desktopLabelId} />
             </SettingRow>
 
             {enabled && (
@@ -108,6 +124,18 @@ export function IntegrationsSection() {
                   : "Not connected \u2014 restart Claude to connect"}
               </div>
             )}
+
+            <SettingRow
+              label="Writing guard"
+              labelId={guardLabelId}
+              description="Let Margin add your writing rules to Claude Code and Codex. Margin edits files in ~/.claude and ~/.codex."
+            >
+              <ToggleSwitch
+                checked={guardEnabled}
+                onChange={handleGuardToggle}
+                ariaLabelledBy={guardLabelId}
+              />
+            </SettingRow>
 
             <SettingRow
               label="Claude Code"

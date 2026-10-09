@@ -174,6 +174,15 @@ export async function exportWritingRules(): Promise<WritingRulesExportResult> {
   return invoke<WritingRulesExportResult>("export_writing_rules");
 }
 
+/** Whether exports may write Claude Code's writing guard and Codex's AGENTS.md. */
+export async function getAgentIntegration(): Promise<boolean> {
+  return invoke<boolean>("get_agent_integration");
+}
+
+export async function setAgentIntegration(enabled: boolean): Promise<void> {
+  return invoke<void>("set_agent_integration", { enabled });
+}
+
 export async function getCorrectionsFlat(limit?: number): Promise<CorrectionDetail[]> {
   return invoke<CorrectionDetail[]>(
     "get_corrections_flat",

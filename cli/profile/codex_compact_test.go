@@ -101,3 +101,34 @@ func TestProfilePreservesInstructionInsteadOfQuotingItAsAWord(t *testing.T) {
 		t.Fatal("profile must preserve the instruction, not wrap it as a banned word")
 	}
 }
+
+func TestExportProfileMarkdownTargetTouchesNoAgentConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, dir := range []string{".margin", ".codex"} {
+		if err := os.Mkdir(filepath.Join(home, dir), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d := setupCoachingDB(t)
+	defer d.Close()
+	insertTestRule(t, d, "approved", "general", "must-fix", 1, nil, nil)
+	dbPath := filepath.Join(home, "rules.db")
+	if _, err := d.Exec("VACUUM INTO ?", dbPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ExportProfile(dbPath, "markdown"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(home, ".margin", "writing-rules.md")); err != nil {
+		t.Fatal("markdown target must still write the profile")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude")); !os.IsNotExist(err) {
+		t.Fatal("markdown target must not create ~/.claude")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatal("markdown target must not write ~/.codex/AGENTS.md")
+	}
+}

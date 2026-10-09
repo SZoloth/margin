@@ -454,6 +454,8 @@ if __name__ == "__main__":
 // ~/.codex exists (opt-in by directory presence). Errors updating Codex are
 // non-fatal — they don't break the Claude pipeline if Codex isn't set up.
 //
+// target="markdown": writes only ~/.margin/writing-rules.md.
+//
 // target="codex": writes ~/.margin/writing-rules.md and ~/.codex/AGENTS.md.
 // Skips writing_guard.py — Codex uses prompt-level instructions instead of a hook.
 func ExportProfile(dbPath string, target string) error {
@@ -490,6 +492,12 @@ func ExportProfile(dbPath string, target string) error {
 	rulesPath := filepath.Join(home, ".margin", "writing-rules.md")
 	if err := os.WriteFile(rulesPath, []byte(profileMD), 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", rulesPath, err)
+	}
+
+	if target == "markdown" {
+		// Markdown target: the profile only. The app uses this until the user
+		// opts in to changing Claude Code and Codex configuration.
+		return nil
 	}
 
 	if target == "codex" {

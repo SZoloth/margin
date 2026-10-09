@@ -9,6 +9,12 @@ vi.mock("@/lib/mcp-bridge", () => ({
   checkMcpConnection: vi.fn().mockResolvedValue(false),
 }));
 
+const setAgentIntegration = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/tauri-commands", () => ({
+  getAgentIntegration: vi.fn().mockResolvedValue(false),
+  setAgentIntegration: (enabled: boolean) => setAgentIntegration(enabled),
+}));
+
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
@@ -19,7 +25,7 @@ describe("IntegrationsSection", () => {
 
     // Wait for async loading to complete
     expect(await screen.findByText("Claude Desktop")).toBeInTheDocument();
-    expect(screen.getByRole("switch")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Claude Desktop" })).toBeInTheDocument();
   });
 
   it("renders Claude Code section with copy button", async () => {
@@ -43,5 +49,20 @@ describe("IntegrationsSection", () => {
     fireEvent.click(showButton);
 
     expect(screen.getByText(/"mcpServers"/)).toBeInTheDocument();
+  });
+
+  it("writing guard is off until the user turns it on", async () => {
+    render(<IntegrationsSection />);
+
+    const guard = await screen.findByRole("switch", { name: "Writing guard" });
+    expect(guard).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(guard);
+
+    expect(setAgentIntegration).toHaveBeenCalledWith(true);
+    expect(await screen.findByRole("switch", { name: "Writing guard" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 });

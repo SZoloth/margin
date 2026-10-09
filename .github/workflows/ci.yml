@@ -56,6 +56,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Go (builds the bundled margin-cli)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 

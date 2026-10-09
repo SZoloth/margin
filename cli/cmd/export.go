@@ -36,6 +36,8 @@ Default (no --target flag): writes ~/.margin/writing-rules.md and
 ~/.claude/hooks/writing_guard.py. Also updates ~/.codex/AGENTS.md if
 ~/.codex exists (Codex CLI is installed).
 
+--target markdown: writes only ~/.margin/writing-rules.md.
+
 --target codex: writes ~/.margin/writing-rules.md and ~/.codex/AGENTS.md.
 Skips writing_guard.py — Codex uses prompt-level rules instead of a hook.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -115,7 +117,7 @@ var exportSynthesisCmd = &cobra.Command{
 
 func init() {
 	exportWaitCmd.Flags().Int("timeout", 300, "timeout in seconds (max 600)")
-	exportProfileCmd.Flags().String("target", "", "agent target: omit for Claude Code (default), or 'codex'")
+	exportProfileCmd.Flags().String("target", "", "agent target: omit for Claude Code (default), 'markdown' (profile only), or 'codex'")
 
 	exportCoachingCmd.Flags().String("type", "", "writing type (email, blog, cover-letter, etc.)")
 	exportCoachingCmd.Flags().String("register", "", "register override (casual, professional, etc.)")
