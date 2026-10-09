@@ -1,5 +1,35 @@
-import { describe, it, expect } from "vitest";
-import { renderSnippet } from "../CommandPalette";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { CommandPalette, renderSnippet } from "../CommandPalette";
+
+const openFileDialog = vi.fn();
+vi.mock("@/lib/tauri-commands", () => ({
+  openFileDialog: () => openFileDialog(),
+}));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue([]) }));
+
+describe("CommandPalette browse action", () => {
+  it("opens the system file picker and opens the chosen file", async () => {
+    openFileDialog.mockResolvedValue("/Users/reader/Documents/notes.md");
+    const onOpenFilePath = vi.fn();
+    render(
+      <CommandPalette
+        isOpen
+        onClose={vi.fn()}
+        recentDocs={[]}
+        onSelectRecentDoc={vi.fn()}
+        onOpenFilePath={onOpenFilePath}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("option", { name: /Browse files/ }));
+
+    await waitFor(() =>
+      expect(onOpenFilePath).toHaveBeenCalledWith("/Users/reader/Documents/notes.md", false),
+    );
+  });
+});
 
 describe("renderSnippet", () => {
   it("keeps FTS <mark> tags as real elements", () => {

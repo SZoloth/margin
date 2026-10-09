@@ -1,3 +1,15 @@
+import { existsSync } from "fs";
+import { dirname, join } from "path";
+
+/**
+ * The `margin` CLI to run for exports. Inside Margin.app the server binary
+ * (margin-mcp) sits next to the bundled margin-cli; elsewhere, use PATH.
+ */
+export function marginCliCommand(execPath: string = process.execPath): string {
+  const bundled = join(dirname(execPath), "margin-cli");
+  return existsSync(bundled) ? bundled : "margin";
+}
+
 type ErrnoError = Error & { code?: string };
 
 export type ExportBridgeLike = {

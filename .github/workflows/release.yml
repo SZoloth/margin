@@ -19,6 +19,15 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Install Bun (builds the bundled margin-mcp)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Go (builds the bundled margin-cli)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 

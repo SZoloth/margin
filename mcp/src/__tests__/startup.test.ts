@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { startExportBridge } from "../startup.js";
+import { mkdtempSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { marginCliCommand, startExportBridge } from "../startup.js";
+
+describe("marginCliCommand", () => {
+  it("uses the margin-cli bundled next to the server binary", () => {
+    const dir = mkdtempSync(join(tmpdir(), "margin-mcp-"));
+    writeFileSync(join(dir, "margin-cli"), "");
+    expect(marginCliCommand(join(dir, "margin-mcp"))).toBe(join(dir, "margin-cli"));
+  });
+
+  it("falls back to margin on PATH when nothing is bundled", () => {
+    const dir = mkdtempSync(join(tmpdir(), "margin-mcp-"));
+    expect(marginCliCommand(join(dir, "node"))).toBe("margin");
+  });
+});
 
 class FakeBridge {
   startedPorts: number[] = [];

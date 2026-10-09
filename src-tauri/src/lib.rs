@@ -86,6 +86,8 @@ pub fn run() {
             commands::tabs::save_open_tabs,
             commands::writing_rules::get_writing_rules,
             commands::writing_rules::export_writing_rules,
+            commands::writing_rules::get_agent_integration,
+            commands::writing_rules::set_agent_integration,
             commands::writing_rules::update_writing_rule,
             commands::writing_rules::delete_writing_rule,
             commands::writing_rules::unarchive_writing_rule,

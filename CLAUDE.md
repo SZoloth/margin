@@ -80,9 +80,18 @@ pnpm tsc --noEmit     # Type check without emitting
 
 After Rust changes, run `cargo check`. After TypeScript changes, run `pnpm tsc --noEmit`. Don't assume the first implementation compiles.
 
-**No browser automation.** This is a Tauri webview, not a browser tab. Chrome DevTools MCP, Puppeteer, Playwright cannot connect. Write tests or ask user to verify manually.
+**No browser automation.** This is a Tauri webview, not a browser tab. Chrome DevTools MCP, Puppeteer, Playwright cannot connect. Write tests, or drive the running app with computer-use (bundle id `com.samzoloth.margin`).
 
-**Dev only.** Use `pnpm tauri dev` (hot reload, orange "dev" badge). Launching production `Margin.app` is blocked by hook (`no_prod_app.py`).
+**Dev by default; production builds only as an isolated QA copy.** Use `pnpm tauri dev` (hot reload, orange "dev" badge) for development. To QA a production build as a first-time user, build it under a separate app ID and point `HOME` at a scratch folder. `HOME` gives it a fresh `~/.margin`. The separate ID gives it fresh web-view storage, which lives under the real `~/Library/WebKit/<bundle id>` whatever `HOME` says. Without it the build shares Sam's onboarding flag and display settings.
+
+```bash
+pnpm tauri build --bundles app --config '{"identifier":"com.samzoloth.margin-qa","productName":"Margin QA","bundle":{"createUpdaterArtifacts":false}}'
+open -n --env HOME=/tmp/margin-qa "src-tauri/target/release/bundle/macos/Margin QA.app"
+```
+
+Reset between runs: `rm -rf /tmp/margin-qa ~/Library/WebKit/com.samzoloth.margin-qa`.
+
+The `no_prod_app.py` hook blocks launching the installed `/Applications/Margin.app` (it runs old code) and any production launch that would use Sam's real `~/.margin`.
 
 ## Issue tracking
 

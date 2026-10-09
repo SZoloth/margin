@@ -1,3 +1,8 @@
+/** The first-run sample is on screen whenever text is loaded without a file behind it. */
+export function isShowingSample(currentDoc: unknown, content: string): boolean {
+  return currentDoc === null && content.length > 0;
+}
+
 export const SAMPLE_DOCUMENT_CONTENT = `# The Pencil in the Margins
 
 Most people read passively. Words wash over them, leaving behind a vague impression — a feeling that something was good or important, but nothing precise enough to act on. The book gets shelved. The article gets bookmarked. Whatever sparked recognition in the moment dissolves before it can become anything useful.

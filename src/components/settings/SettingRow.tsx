@@ -1,14 +1,16 @@
 interface SettingRowProps {
   label: string;
+  /** Id for the label, so a control can point at it with aria-labelledby. */
+  labelId?: string;
   description?: string;
   children: React.ReactNode;
 }
 
-export function SettingRow({ label, description, children }: SettingRowProps) {
+export function SettingRow({ label, labelId, description, children }: SettingRowProps) {
   return (
     <div className="flex items-center justify-between gap-4 py-4">
       <div className="flex flex-col">
-        <span className="text-[length:var(--text-base)] font-medium text-[var(--color-text-primary)]">
+        <span id={labelId} className="text-[length:var(--text-base)] font-medium text-[var(--color-text-primary)]">
           {label}
         </span>
         {description && (

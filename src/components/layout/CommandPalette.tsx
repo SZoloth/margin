@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Document } from "@/types/document";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { reportError } from "@/lib/error-bus";
+import { openFileDialog } from "@/lib/tauri-commands";
 
 interface FileResult {
   path: string;
@@ -115,6 +116,18 @@ export function CommandPalette({
 
   const actions: Action[] = [
     { id: "open", label: "Open new tab", shortcut: ["⌘", "O"], onAction: () => { setIsNewTabMode(true); setQuery(""); setSelectedFileIndex(0); setSelectedColumn("files"); } },
+    {
+      id: "browse",
+      label: "Browse files…",
+      shortcut: [],
+      onAction: () => {
+        const asNewTab = isNewTabMode;
+        onClose();
+        openFileDialog()
+          .then((path) => { if (path) onOpenFilePath(path, asNewTab); })
+          .catch((err) => reportError("Could not open the file picker", err));
+      },
+    },
     ...(onCloseTab ? [{ id: "close", label: "Close tab", shortcut: ["⌘", "W"], onAction: () => { onClose(); onCloseTab(); } }] : []),
     ...(onExport ? [{ id: "export", label: "Export annotations", shortcut: ["⌘", "⇧", "E"], onAction: () => { onClose(); onExport(); } }] : []),
     ...(onOpenFind ? [{ id: "find", label: "Find in document", shortcut: ["⌘", "F"], onAction: () => { onClose(); onOpenFind(); } }] : []),

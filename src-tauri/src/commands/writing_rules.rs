@@ -811,7 +811,18 @@ fn resolve_margin_cli_from_path(home: &Path, path: &str) -> Result<PathBuf, Stri
     ))
 }
 
+/// The CLI shipped inside Margin.app (Tauri `externalBin`), next to the app binary.
+fn bundled_cli_beside(exe: &Path) -> Option<PathBuf> {
+    let candidate = exe.parent()?.join("margin-cli");
+    candidate.is_file().then_some(candidate)
+}
+
 fn resolve_margin_cli() -> Result<PathBuf, String> {
+    // The bundled copy wins so the app always runs the CLI it was built with.
+    if let Some(bundled) = std::env::current_exe().ok().as_deref().and_then(bundled_cli_beside) {
+        return Ok(bundled);
+    }
+
     let home = dirs::home_dir().ok_or("Could not determine home directory")?;
     let path = std::env::var("PATH").unwrap_or_default();
     if let Ok(found) = resolve_margin_cli_from_path(&home, &path) {
@@ -837,20 +848,68 @@ fn resolve_margin_cli() -> Result<PathBuf, String> {
     ))
 }
 
+fn agent_integration_setting_path(home: &Path) -> PathBuf {
+    home.join(".margin").join("agent-integration")
+}
+
+/// Whether exports may write Claude Code's guard hook and Codex's AGENTS.md.
+/// Those files change how other apps behave, so this is off until the user
+/// turns it on. Users whose earlier Margin already wrote the guard keep it on.
+fn agent_integration_enabled(home: &Path) -> bool {
+    match fs::read_to_string(agent_integration_setting_path(home)) {
+        Ok(setting) => setting.trim() == "on",
+        Err(_) => home.join(".claude").join("hooks").join("writing_guard.py").is_file(),
+    }
+}
+
+fn write_agent_integration(home: &Path, enabled: bool) -> Result<(), String> {
+    let path = agent_integration_setting_path(home);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, if enabled { "on\n" } else { "off\n" }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_agent_integration() -> Result<bool, String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    Ok(agent_integration_enabled(&home))
+}
+
+#[tauri::command]
+pub async fn set_agent_integration(enabled: bool) -> Result<(), String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    write_agent_integration(&home, enabled)?;
+    if enabled {
+        export_artifacts();
+    }
+    Ok(())
+}
+
 /// Delegate file generation to the `margin` CLI (single-writer pattern).
-/// The CLI reads from SQLite and writes both ~/.margin/writing-rules.md
-/// and ~/.claude/hooks/writing_guard.py.
+/// The CLI reads from SQLite and writes ~/.margin/writing-rules.md, plus
+/// ~/.claude/hooks/writing_guard.py when agent integration is on. The hook
+/// path is empty when it was not written.
 fn run_cli_export() -> Result<(String, String), String> {
     let home = dirs::home_dir().ok_or("Could not determine home directory")?;
     let md_path = home.join(".margin").join("writing-rules.md");
-    let hook_path = home.join(".claude").join("hooks").join("writing_guard.py");
+    let agents = agent_integration_enabled(&home);
+    let hook_path = if agents {
+        home.join(".claude").join("hooks").join("writing_guard.py").to_string_lossy().to_string()
+    } else {
+        String::new()
+    };
     let margin_cli = resolve_margin_cli().map_err(|e| {
         margin_app_log(&format!("Writing rules export failed: {e}"));
         e
     })?;
 
+    let mut args = vec!["export", "profile"];
+    if !agents {
+        args.extend(["--target", "markdown"]);
+    }
     let output = std::process::Command::new(&margin_cli)
-        .args(["export", "profile"])
+        .args(&args)
         .output()
         .map_err(|e| {
             let message = format!("Failed to run `{}` export profile: {e}", margin_cli.display());
@@ -865,10 +924,7 @@ fn run_cli_export() -> Result<(String, String), String> {
         return Err(message);
     }
 
-    Ok((
-        md_path.to_string_lossy().to_string(),
-        hook_path.to_string_lossy().to_string(),
-    ))
+    Ok((md_path.to_string_lossy().to_string(), hook_path))
 }
 
 /// Shared inner logic: delegate file writing to CLI, read rules + corrections for return values.
@@ -1474,6 +1530,45 @@ mod tests {
 
         assert!(err.contains("Could not resolve margin CLI"));
         assert!(err.contains("$HOME/.local/bin/margin"));
+    }
+
+    #[test]
+    fn bundled_cli_is_found_beside_the_app_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("margin");
+        assert_eq!(bundled_cli_beside(&exe), None);
+
+        fs::write(dir.path().join("margin-cli"), "").unwrap();
+        assert_eq!(bundled_cli_beside(&exe), Some(dir.path().join("margin-cli")));
+    }
+
+    #[test]
+    fn agent_integration_is_off_for_a_new_user() {
+        let home = tempfile::tempdir().unwrap();
+        assert!(!agent_integration_enabled(home.path()));
+    }
+
+    #[test]
+    fn agent_integration_stays_on_for_users_with_an_existing_guard() {
+        let home = tempfile::tempdir().unwrap();
+        let hooks = home.path().join(".claude").join("hooks");
+        fs::create_dir_all(&hooks).unwrap();
+        fs::write(hooks.join("writing_guard.py"), "").unwrap();
+        assert!(agent_integration_enabled(home.path()));
+    }
+
+    #[test]
+    fn agent_integration_setting_overrides_the_existing_guard() {
+        let home = tempfile::tempdir().unwrap();
+        let hooks = home.path().join(".claude").join("hooks");
+        fs::create_dir_all(&hooks).unwrap();
+        fs::write(hooks.join("writing_guard.py"), "").unwrap();
+
+        write_agent_integration(home.path(), false).unwrap();
+        assert!(!agent_integration_enabled(home.path()));
+
+        write_agent_integration(home.path(), true).unwrap();
+        assert!(agent_integration_enabled(home.path()));
     }
 
     // --- update_rule tests ---

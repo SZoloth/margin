@@ -249,6 +249,8 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     },
   ],
   export_writing_rules: () => ({ markdownPath: "", hookPath: "", ruleCount: 0 }),
+  get_agent_integration: () => false,
+  set_agent_integration: () => undefined,
   update_writing_rule: () => undefined,
   delete_writing_rule: () => undefined,
   unarchive_writing_rule: () => undefined,

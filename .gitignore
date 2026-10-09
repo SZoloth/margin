@@ -29,3 +29,6 @@ mcp/scripts/autoresearch/autoresearch-results.tsv
 mcp/scripts/autoresearch/skill-results.tsv
 mcp/scripts/dspy/optimized_prompts/*.json
 mcp/scripts/regression/*-20*.json
+
+# Built by src-tauri/build.rs from ../cli
+src-tauri/binaries/

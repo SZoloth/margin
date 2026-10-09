@@ -447,12 +447,30 @@ if __name__ == "__main__":
 `, string(killWordsJSON), string(hardPatternsJSON), string(softPatternsJSON), string(headingPatternsJSON))
 }
 
+// AgentIntegrationEnabled reports whether exports may write Claude Code's guard
+// and Codex's AGENTS.md. It mirrors the app's Writing guard setting
+// (agent_integration_enabled in src-tauri/src/commands/writing_rules.rs):
+// ~/.margin/agent-integration holds "on" or "off"; without it, a guard written
+// by an earlier Margin means the user already opted in.
+func AgentIntegrationEnabled(home string) bool {
+	setting, err := os.ReadFile(filepath.Join(home, ".margin", "agent-integration"))
+	if err == nil {
+		return strings.TrimSpace(string(setting)) == "on"
+	}
+	_, err = os.Stat(filepath.Join(home, ".claude", "hooks", "writing_guard.py"))
+	return err == nil
+}
+
 // ExportProfile writes the unified writing profile and agent-specific artifacts.
+// With the default target, agent artifacts are written only when
+// AgentIntegrationEnabled; otherwise it behaves like target="markdown".
 //
 // target="" (default): writes ~/.margin/writing-rules.md and
 // ~/.claude/hooks/writing_guard.py. Also updates ~/.codex/AGENTS.md if
 // ~/.codex exists (opt-in by directory presence). Errors updating Codex are
 // non-fatal — they don't break the Claude pipeline if Codex isn't set up.
+//
+// target="markdown": writes only ~/.margin/writing-rules.md.
 //
 // target="codex": writes ~/.margin/writing-rules.md and ~/.codex/AGENTS.md.
 // Skips writing_guard.py — Codex uses prompt-level instructions instead of a hook.
@@ -484,12 +502,21 @@ func ExportProfile(dbPath string, target string) error {
 	}
 
 	home, _ := os.UserHomeDir()
+	if target == "" && !AgentIntegrationEnabled(home) {
+		target = "markdown"
+	}
 
 	// Always write writing-rules.md — the universal, LLM-agnostic artifact.
 	profileMD := FormatProfileMarkdown(rules, corrections)
 	rulesPath := filepath.Join(home, ".margin", "writing-rules.md")
 	if err := os.WriteFile(rulesPath, []byte(profileMD), 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", rulesPath, err)
+	}
+
+	if target == "markdown" {
+		// Markdown target: the profile only. The app uses this until the user
+		// opts in to changing Claude Code and Codex configuration.
+		return nil
 	}
 
 	if target == "codex" {

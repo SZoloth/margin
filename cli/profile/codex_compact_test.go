@@ -101,3 +101,87 @@ func TestProfilePreservesInstructionInsteadOfQuotingItAsAWord(t *testing.T) {
 		t.Fatal("profile must preserve the instruction, not wrap it as a banned word")
 	}
 }
+
+func TestExportProfileMarkdownTargetTouchesNoAgentConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, dir := range []string{".margin", ".codex"} {
+		if err := os.Mkdir(filepath.Join(home, dir), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d := setupCoachingDB(t)
+	defer d.Close()
+	insertTestRule(t, d, "approved", "general", "must-fix", 1, nil, nil)
+	dbPath := filepath.Join(home, "rules.db")
+	if _, err := d.Exec("VACUUM INTO ?", dbPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ExportProfile(dbPath, "markdown"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(home, ".margin", "writing-rules.md")); err != nil {
+		t.Fatal("markdown target must still write the profile")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude")); !os.IsNotExist(err) {
+		t.Fatal("markdown target must not create ~/.claude")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatal("markdown target must not write ~/.codex/AGENTS.md")
+	}
+}
+
+func exportDefaultTarget(t *testing.T, home string) {
+	t.Helper()
+	d := setupCoachingDB(t)
+	defer d.Close()
+	insertTestRule(t, d, "approved", "general", "must-fix", 1, nil, nil)
+	dbPath := filepath.Join(home, "rules.db")
+	if _, err := d.Exec("VACUUM INTO ?", dbPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := ExportProfile(dbPath, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExportProfileDefaultTargetFollowsAgentIntegrationSetting(t *testing.T) {
+	guard := func(home string) string { return filepath.Join(home, ".claude", "hooks", "writing_guard.py") }
+
+	t.Run("new user: off", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		os.Mkdir(filepath.Join(home, ".margin"), 0755)
+		exportDefaultTarget(t, home)
+		if _, err := os.Stat(filepath.Join(home, ".claude")); !os.IsNotExist(err) {
+			t.Fatal("a new user's export must not create ~/.claude")
+		}
+	})
+
+	t.Run("earlier guard: on", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		os.Mkdir(filepath.Join(home, ".margin"), 0755)
+		os.MkdirAll(filepath.Dir(guard(home)), 0755)
+		os.WriteFile(guard(home), []byte("old"), 0755)
+		exportDefaultTarget(t, home)
+		if got, _ := os.ReadFile(guard(home)); string(got) == "old" {
+			t.Fatal("an existing guard must keep being updated")
+		}
+	})
+
+	t.Run("setting off wins over earlier guard", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		os.Mkdir(filepath.Join(home, ".margin"), 0755)
+		os.WriteFile(filepath.Join(home, ".margin", "agent-integration"), []byte("off\n"), 0644)
+		os.MkdirAll(filepath.Dir(guard(home)), 0755)
+		os.WriteFile(guard(home), []byte("old"), 0755)
+		exportDefaultTarget(t, home)
+		if got, _ := os.ReadFile(guard(home)); string(got) != "old" {
+			t.Fatal("setting off must leave the guard alone")
+		}
+	})
+}

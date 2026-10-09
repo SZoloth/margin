@@ -63,7 +63,7 @@ import { DiffBanner } from "@/components/editor/DiffBanner";
 import { DiffNavChip } from "@/components/editor/DiffNavChip";
 import { DiffControls } from "@/components/editor/DiffControls";
 import { useOnboarding } from "@/hooks/useOnboarding";
-import { SAMPLE_DOCUMENT_CONTENT } from "@/lib/sample-document";
+import { SAMPLE_DOCUMENT_CONTENT, isShowingSample } from "@/lib/sample-document";
 import { WelcomeBar } from "@/components/onboarding/WelcomeBar";
 import { OnboardingToast } from "@/components/onboarding/OnboardingToast";
 
@@ -134,7 +134,7 @@ export default function App() {
   const [errorToast, setErrorToast] = useState<{ message: string; id: number } | null>(null);
   const errorIdRef = useRef(0);
   const undoIdRef = useRef(0);
-  const highlightThread = useAnimatedPresence(!!focusHighlightId, 200);
+  const highlightThread = useAnimatedPresence(!!focusHighlightId && !showSettings, 200);
   const lastHighlightRef = useRef<{ highlight: import("@/types/annotations").Highlight; notes: import("@/types/annotations").MarginNote[]; anchorRect: DOMRect | null } | null>(null);
   const diffReview = useDiffReview();
   const [diffControlState, setDiffControlState] = useState<{ changeId: string; top: number; right: number } | null>(null);
@@ -1696,7 +1696,7 @@ export default function App() {
           <WelcomeBar visible onDismiss={onboarding.dismissWelcome} />
         ) : undefined
       }
-      hasSampleContent={onboarding.step !== "complete" && !doc.currentDoc && doc.content.length > 0}
+      hasSampleContent={isShowingSample(doc.currentDoc, doc.content)}
       tocElement={
         doc.currentDoc && toc.headings.length > 0 ? (
           <TableOfContents

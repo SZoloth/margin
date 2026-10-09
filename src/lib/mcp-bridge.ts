@@ -4,7 +4,7 @@ import {
   mkdir,
   exists,
 } from "@tauri-apps/plugin-fs";
-import { homeDir, join, resourceDir } from "@tauri-apps/api/path";
+import { dirname, homeDir, join, resourceDir } from "@tauri-apps/api/path";
 
 const BRIDGE_URL = "http://127.0.0.1:24784";
 const STATUS_TIMEOUT_MS = 1500;
@@ -34,12 +34,13 @@ async function getConfigPath(): Promise<string> {
 
 declare const __MCP_DEV_PATH__: string;
 
-async function getMcpServerPath(): Promise<string> {
+/** How Claude should launch the server: Node on the repo's build in dev, the bundled binary in releases. */
+async function getMcpServerCommand(): Promise<{ command: string; args: string[] }> {
   if (import.meta.env.DEV) {
-    return import.meta.env.VITE_MCP_SERVER_PATH ?? __MCP_DEV_PATH__;
+    return { command: "node", args: [import.meta.env.VITE_MCP_SERVER_PATH ?? __MCP_DEV_PATH__] };
   }
-  const res = await resourceDir();
-  return join(res, "mcp", "dist", "index.js");
+  // externalBin sidecars sit in Contents/MacOS, next to the app binary.
+  return { command: await join(await dirname(await resourceDir()), "MacOS", "margin-mcp"), args: [] };
 }
 
 interface ClaudeConfig {
@@ -71,14 +72,11 @@ async function writeClaudeConfig(config: ClaudeConfig): Promise<void> {
 
 export async function enableMcpInClaude(): Promise<void> {
   const config = await readClaudeConfig();
-  const serverPath = await getMcpServerPath();
+  const server = await getMcpServerCommand();
   if (!config.mcpServers || typeof config.mcpServers !== "object" || Array.isArray(config.mcpServers)) {
     config.mcpServers = {};
   }
-  config.mcpServers.margin = {
-    command: "node",
-    args: [serverPath],
-  };
+  config.mcpServers.margin = server;
   await writeClaudeConfig(config);
 }
 

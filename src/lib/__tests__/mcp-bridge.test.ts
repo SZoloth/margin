@@ -17,6 +17,7 @@ vi.mock("@tauri-apps/api/path", () => ({
   homeDir: vi.fn().mockResolvedValue("/Users/test"),
   join: vi.fn((...parts: string[]) => Promise.resolve(parts.join("/"))),
   resourceDir: vi.fn().mockResolvedValue("/Applications/Margin.app/Contents/Resources"),
+  dirname: vi.fn((p: string) => Promise.resolve(p.replace(/\/[^/]+$/, ""))),
 }));
 
 // Must import after mocks are set up
@@ -70,6 +71,23 @@ describe("readClaudeConfig → enableMcpInClaude", () => {
     const written = JSON.parse(content);
     expect(written.mcpServers.margin).toBeDefined();
     expect(written.mcpServers.margin.command).toBe("node");
+  });
+
+  it("points a release build at the bundled margin-mcp binary, not node", async () => {
+    vi.stubEnv("DEV", false);
+    try {
+      mockExists.mockResolvedValue(false);
+
+      await enableMcpInClaude();
+
+      const [, content] = mockWriteTextFile.mock.calls[0]! as [string, string];
+      expect(JSON.parse(content).mcpServers.margin).toEqual({
+        command: "/Applications/Margin.app/Contents/MacOS/margin-mcp",
+        args: [],
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("preserves existing config keys when adding margin", async () => {
