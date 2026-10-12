@@ -1,5 +1,8 @@
+pub mod backup;
 pub mod commands;
 pub mod db;
+pub mod logging;
+pub mod report;
 pub mod watcher;
 
 use std::sync::Mutex;
@@ -17,8 +20,20 @@ fn drain_pending_open_files(state: tauri::State<'_, PendingOpenFiles>) -> Vec<St
     pending.drain(..).collect()
 }
 
+/// Re-checks hourly so an app left open for days still gets a snapshot per day.
+fn spawn_daily_backups(handle: tauri::AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(3600));
+        if let Some(pool) = handle.try_state::<db::migrations::DbPool>() {
+            let conn = pool.0.lock().unwrap_or_else(|e| e.into_inner());
+            backup::run_daily(&conn);
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    logging::install_panic_hook();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -101,6 +116,11 @@ pub fn run() {
             commands::dashboard::get_dashboard_summary,
             commands::dashboard::get_test_run_detail,
             commands::dashboard::export_dashboard_markdown,
+            commands::diagnostics::log_frontend_error,
+            commands::diagnostics::reveal_logs_dir,
+            commands::diagnostics::reveal_backups_dir,
+            commands::diagnostics::get_backup_status,
+            commands::diagnostics::get_diagnostics,
             commands::thesis::save_thesis_candidate,
             commands::thesis::get_thesis_candidates,
             commands::thesis::update_thesis_status,
@@ -111,6 +131,7 @@ pub fn run() {
         .setup(|app| {
             let pool = db::migrations::init_db()?;
             app.manage(pool);
+            spawn_daily_backups(app.handle().clone());
 
             // Clear native window title in debug builds (title is rendered in ChromeBar)
             #[cfg(debug_assertions)]

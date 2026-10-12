@@ -16,6 +16,9 @@
 - Rule metadata such as `writing_type`, `register`, and `signal_count` must survive round-trips across app, MCP, and exports.
 - One unsynthesized correction row represents the current editable signal for a highlight. Feedback after synthesis creates a new event.
 
+- Before any migration runs for a new app version, a snapshot of `margin.db` must exist in `~/.margin/backups`. Backup failures are logged and never block launch.
+- Diagnostics reports and logs must not contain document text, highlights, or rule content.
+
 ## Behavioral Invariants
 
 - Text anchoring must either preserve highlight position or surface a degraded state explicitly. Silent loss is not acceptable.

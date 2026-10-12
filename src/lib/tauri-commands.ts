@@ -433,3 +433,40 @@ export async function updateThesisStatus(
 ): Promise<boolean> {
   return invoke<boolean>("update_thesis_status", { id, status });
 }
+
+// --- Diagnostics and backups ---
+
+export interface BackupInfo {
+  name: string;
+  kind: "daily" | "pre-migration";
+  size_bytes: number;
+}
+
+export interface BackupStatus {
+  count: number;
+  latest: BackupInfo | null;
+}
+
+export async function logFrontendError(
+  source: string,
+  message: string,
+  stack?: string,
+): Promise<void> {
+  return invoke<void>("log_frontend_error", { source, message, stack });
+}
+
+export async function getDiagnostics(): Promise<string> {
+  return invoke<string>("get_diagnostics");
+}
+
+export async function revealLogsDir(): Promise<void> {
+  return invoke<void>("reveal_logs_dir");
+}
+
+export async function revealBackupsDir(): Promise<void> {
+  return invoke<void>("reveal_backups_dir");
+}
+
+export async function getBackupStatus(): Promise<BackupStatus> {
+  return invoke<BackupStatus>("get_backup_status");
+}

@@ -8,6 +8,8 @@ A local-first desktop app for reading, annotating, and learning from your own wr
 
 <!-- screenshot -->
 
+New to Margin? Read the [user guide](docs/user-guide.md).
+
 ## Features
 
 ### Reading and editing

@@ -1,6 +1,7 @@
 pub mod annotations;
 pub mod corrections;
 pub mod dashboard;
+pub mod diagnostics;
 pub mod documents;
 pub mod files;
 pub mod feedback;
