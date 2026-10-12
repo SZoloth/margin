@@ -205,7 +205,7 @@ describe("browser mock invoke", () => {
 
   it("returns the fixture writing rule for resurfacing exercises", async () => {
     const rules = (await mockInvoke("get_writing_rules")) as Record<string, unknown>[];
-    expect(rules).toHaveLength(1);
+    expect(rules).toHaveLength(3);
     expect(rules[0]).toMatchObject({ id: "stub-rule-1", ruleText: "leverage" });
     const exportResult = (await mockInvoke("export_writing_rules")) as Record<string, unknown>;
     expect(exportResult).toHaveProperty("markdownPath");
