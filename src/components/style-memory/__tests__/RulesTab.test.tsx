@@ -10,6 +10,8 @@ vi.mock("@/lib/tauri-commands", () => ({
   exportWritingRules: vi.fn(),
   markRulesReviewed: vi.fn().mockResolvedValue(1),
   markRulesUnreviewed: vi.fn().mockResolvedValue(1),
+  getArchivedWritingRules: vi.fn().mockResolvedValue([]),
+  unarchiveWritingRule: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { RulesTab } from "../RulesTab";
@@ -18,6 +20,7 @@ import {
   updateWritingRule,
   deleteWritingRule,
   exportWritingRules,
+  unarchiveWritingRule,
 } from "@/lib/tauri-commands";
 
 const baseRule = {
@@ -116,7 +119,6 @@ describe("RulesTab — SeverityBadge", () => {
     vi.mocked(exportWritingRules).mockClear();
 
     await user.click(screen.getByRole("button", { name: "Archive" }));
-    await user.click(screen.getByRole("button", { name: "Confirm — recoverable below" }));
 
     await waitFor(() => {
       expect(deleteWritingRule).toHaveBeenCalledWith("r1");
@@ -124,5 +126,86 @@ describe("RulesTab — SeverityBadge", () => {
     await waitFor(() => {
       expect(exportWritingRules).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("RulesTab — manager", () => {
+  const second = {
+    ...baseRule,
+    id: "r2",
+    ruleText: "Never open with a greeting",
+    why: "Wastes the reader's first line",
+    category: "openers",
+    writingType: "email" as const,
+    severity: "nice-to-fix" as const,
+    signalCount: 5,
+    detectionPattern: "^Hi ",
+  };
+
+  beforeEach(() => {
+    vi.mocked(getWritingRules).mockResolvedValue([baseRule, second]);
+  });
+
+  it("searches across rule text and reasons, spanning reviewed state", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+
+    await user.type(screen.getByRole("searchbox", { name: "Search rules" }), "first line");
+
+    expect(screen.queryByText("Test rule")).toBeNull();
+    expect(screen.getByText("Never open with a greeting")).toBeTruthy();
+  });
+
+  it("offers to clear filters when nothing matches", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+
+    await user.type(screen.getByRole("searchbox", { name: "Search rules" }), "zzzz");
+    expect(screen.getByText("No rules match these filters.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByText("Test rule")).toBeTruthy();
+  });
+
+  it("filters by writing type", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Writing type" }), "email");
+    expect(screen.queryByText("Test rule")).toBeNull();
+    expect(screen.getByText("Never open with a greeting")).toBeTruthy();
+  });
+
+  it("marks rules with a detection pattern as mechanically blocked", async () => {
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+    expect(screen.getByText("Blocked mechanically")).toBeTruthy();
+    expect(screen.getByText("Advisory")).toBeTruthy();
+  });
+
+  it("archives in one step and restores from the undo notice", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+
+    await user.click(screen.getAllByRole("button", { name: "Archive" })[0]!);
+    const undo = await screen.findByRole("button", { name: "Undo" });
+    await user.click(undo);
+
+    await waitFor(() => expect(unarchiveWritingRule).toHaveBeenCalled());
+  });
+
+  it("archives the selected rules in bulk", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+
+    await user.click(screen.getByRole("checkbox", { name: "Select rule: Test rule" }));
+    await user.click(screen.getByRole("button", { name: "Archive selected" }));
+
+    await waitFor(() => expect(deleteWritingRule).toHaveBeenCalledWith("r1"));
+    expect(deleteWritingRule).toHaveBeenCalledTimes(1);
   });
 });

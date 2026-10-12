@@ -353,7 +353,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
           role="tabpanel"
           id={rulesPanelId}
           aria-labelledby={rulesTabId}
-          className="flex flex-1 flex-col"
+          className="relative flex flex-1 flex-col"
           style={{ minHeight: 0 }}
         >
           <RulesTab

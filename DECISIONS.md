@@ -55,3 +55,20 @@ All hooks pass functional tests post-change:
 - `Bash(npm *)` catches all npm commands (including `npm --version`), not just install/add/etc. Wider than the previous subcommand filter, but acceptable — all npm use in pnpm projects should use pnpm.
 - Multiple `if` values on one handler are not supported; OR conditions require separate handler entries (hence two entries for pnpm_enforcer).
 - Glob brace expansion for Write/Edit (`Edit(*.{md,mdx})`) was not explored — deferred with writing hooks.
+
+## ADR-002: Writing rules manager lives in Settings → Writing rules, upgraded in place
+
+**Date:** 2026-10-12
+**Status:** Applied
+
+### Context
+
+Rules could already be browsed, edited, archived and restored from Settings → Writing rules → Active rules. What was missing for anyone with more than a handful of rules: search, a way to see which rules the writing guard actually blocks, and a lighter archive flow.
+
+### Decision
+
+Upgrade the existing tab instead of building a second surface. Added search (also on `/`), writing-type filter, sort, bulk archive, a "Blocked mechanically" vs "Advisory" tag (from `detectionPattern`), and one-step archive with an Undo notice in place of the confirm step. Archive stays non-destructive, so a confirm dialog protected nothing and cost a click every time.
+
+### Not done
+
+Creating a rule by hand needs a new Tauri command and a Rust migration-safe path; deferred. Rules still have no link back to the corrections that produced them.

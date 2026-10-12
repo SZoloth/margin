@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { cn } from "@/lib/cn";
+import { WRITING_TYPES } from "@/lib/writing-types";
 import type { WritingRule, WritingRuleSeverity } from "@/lib/tauri-commands";
 import { reportError } from "@/lib/error-bus";
 import {
@@ -87,6 +89,50 @@ function SignalBar({ count, max = 7 }: { count: number; max?: number }) {
   );
 }
 
+
+
+type SortKey = "signal" | "newest";
+
+const FOCUS_RING =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]";
+
+const FIELD_CLASS = cn(
+  "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-2 py-1 text-[length:var(--text-sm)] text-[var(--color-text-primary)]",
+  FOCUS_RING,
+);
+
+const LINK_BUTTON_CLASS = cn(
+  "cursor-pointer rounded-[var(--radius-xs)] text-[length:var(--text-xs)] text-[var(--color-text-secondary)] underline underline-offset-2 transition-colors duration-100 hover:text-[var(--color-text-primary)]",
+  FOCUS_RING,
+);
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "cursor-pointer rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2.5 py-[3px] text-[length:var(--text-xs)] transition-colors duration-100",
+        FOCUS_RING,
+        active
+          ? "bg-[var(--color-text-primary)] text-[var(--color-page)]"
+          : "bg-[var(--color-page)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ViewToggle({
   view,
   onChangeView,
@@ -98,40 +144,27 @@ function ViewToggle({
   unreviewedCount: number;
   allCount: number;
 }) {
-  const buttonBase: React.CSSProperties = {
-    padding: "3px 10px",
-    fontSize: "var(--text-sm)",
-    border: "1px solid var(--color-border)",
-    cursor: "pointer",
-    transition: "all 100ms",
-  };
-
+  const base = cn(
+    "cursor-pointer border border-[var(--color-border)] px-2.5 py-[3px] text-[length:var(--text-sm)] transition-colors duration-100",
+    FOCUS_RING,
+  );
+  const on = "bg-[var(--color-text-primary)] font-semibold text-[var(--color-page)]";
+  const off = "bg-[var(--color-page)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]";
   return (
-    <div style={{ display: "flex" }}>
+    <div className="flex" role="group" aria-label="Rule view">
       <button
         type="button"
+        aria-pressed={view === "unreviewed"}
         onClick={() => onChangeView("unreviewed")}
-        style={{
-          ...buttonBase,
-          borderRadius: "100px 0 0 100px",
-          borderRight: "none",
-          background: view === "unreviewed" ? "var(--color-text-primary)" : "var(--color-page)",
-          color: view === "unreviewed" ? "var(--color-page)" : "var(--color-text-secondary)",
-          fontWeight: view === "unreviewed" ? 600 : 400,
-        }}
+        className={cn(base, "rounded-l-[100px] border-r-0", view === "unreviewed" ? on : off)}
       >
         To review ({unreviewedCount})
       </button>
       <button
         type="button"
+        aria-pressed={view === "all"}
         onClick={() => onChangeView("all")}
-        style={{
-          ...buttonBase,
-          borderRadius: "0 100px 100px 0",
-          background: view === "all" ? "var(--color-text-primary)" : "var(--color-page)",
-          color: view === "all" ? "var(--color-page)" : "var(--color-text-secondary)",
-          fontWeight: view === "all" ? 600 : 400,
-        }}
+        className={cn(base, "rounded-r-[100px]", view === "all" ? on : off)}
       >
         All ({allCount})
       </button>
@@ -139,33 +172,89 @@ function ViewToggle({
   );
 }
 
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: (id: string) => React.ReactNode;
+  className?: string;
+}) {
+  const id = `rule-field-${label.toLowerCase().replace(/\W+/g, "-")}-${useRef(Math.random().toString(36).slice(2, 8)).current}`;
+  return (
+    <div className={className}>
+      <label
+        htmlFor={id}
+        className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px] text-[var(--color-text-secondary)]"
+      >
+        {label}
+      </label>
+      {children(id)}
+    </div>
+  );
+}
+
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function typeLabel(value: string): string {
+  return WRITING_TYPES.find((t) => t.value === value)?.label ?? value;
+}
+
+function matchesQuery(rule: WritingRule, q: string): boolean {
+  if (!q) return true;
+  const hay = [
+    rule.ruleText,
+    rule.whenToApply,
+    rule.why,
+    rule.category,
+    rule.notes,
+    rule.exampleBefore,
+    rule.exampleAfter,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
 function RuleCard({
   rule,
+  selected,
+  onToggleSelect,
   onUpdate,
-  onDelete,
+  onArchive,
   onMarkReviewed,
 }: {
   rule: WritingRule;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
   onUpdate: (id: string, updates: Partial<WritingRule>) => Promise<void>;
-  onDelete: (id: string) => void;
+  onArchive: (id: string) => void;
   onMarkReviewed: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [editFields, setEditFields] = useState({
-    ruleText: rule.ruleText,
-    severity: rule.severity,
-    whenToApply: rule.whenToApply ?? "",
-    why: rule.why ?? "",
-    exampleBefore: rule.exampleBefore ?? "",
-    exampleAfter: rule.exampleAfter ?? "",
-    notes: rule.notes ?? "",
-  });
+  const initialFields = useCallback(
+    () => ({
+      ruleText: rule.ruleText,
+      severity: rule.severity,
+      whenToApply: rule.whenToApply ?? "",
+      why: rule.why ?? "",
+      exampleBefore: rule.exampleBefore ?? "",
+      exampleAfter: rule.exampleAfter ?? "",
+      notes: rule.notes ?? "",
+    }),
+    [rule],
+  );
+  const [editFields, setEditFields] = useState(initialFields);
 
   const handleSave = useCallback(async () => {
+    if (!editFields.ruleText.trim()) return;
     try {
       await onUpdate(rule.id, {
-        ruleText: editFields.ruleText,
+        ruleText: editFields.ruleText.trim(),
         severity: editFields.severity as WritingRule["severity"],
         whenToApply: editFields.whenToApply || undefined,
         why: editFields.why || undefined,
@@ -180,76 +269,85 @@ function RuleCard({
   }, [rule.id, editFields, onUpdate]);
 
   const handleCancel = useCallback(() => {
-    setEditFields({
-      ruleText: rule.ruleText,
-      severity: rule.severity,
-      whenToApply: rule.whenToApply ?? "",
-      why: rule.why ?? "",
-      exampleBefore: rule.exampleBefore ?? "",
-      exampleAfter: rule.exampleAfter ?? "",
-      notes: rule.notes ?? "",
-    });
+    setEditFields(initialFields());
     setEditing(false);
-  }, [rule]);
+  }, [initialFields]);
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "4px 8px",
-    fontSize: "var(--text-xs)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-sm)",
-    background: "var(--color-page)",
-    color: "var(--color-text-primary)",
-    outline: "none",
-  };
+  const set = (key: keyof typeof editFields) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => setEditFields((f) => ({ ...f, [key]: e.target.value }));
 
   if (editing) {
     return (
-      <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div>
-            <label style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Rule text</label>
-            <input value={editFields.ruleText} onChange={(e) => setEditFields({ ...editFields, ruleText: e.target.value })} style={inputStyle} />
+      <div
+        className="border-b border-[var(--color-border)] py-3.5"
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            handleCancel();
+          } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            void handleSave();
+          }
+        }}
+      >
+        <div className="flex flex-col gap-2">
+          <Field label="Rule text">
+            {(id) => (
+              <textarea id={id} rows={2} value={editFields.ruleText} onChange={set("ruleText")} className={cn(FIELD_CLASS, "resize-y")} autoFocus />
+            )}
+          </Field>
+          <div className="flex gap-2">
+            <Field label="Severity" className="flex-1">
+              {(id) => (
+                <select id={id} value={editFields.severity} onChange={set("severity")} className={cn(FIELD_CLASS, "cursor-pointer")}>
+                  <option value="must-fix">Must-fix</option>
+                  <option value="should-fix">Should-fix</option>
+                  <option value="nice-to-fix">Nice-to-fix</option>
+                </select>
+              )}
+            </Field>
+            <Field label="When to apply" className="flex-[2]">
+              {(id) => <input id={id} value={editFields.whenToApply} onChange={set("whenToApply")} className={FIELD_CLASS} />}
+            </Field>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Severity</label>
-              <select
-                value={editFields.severity}
-                onChange={(e) => setEditFields({ ...editFields, severity: e.target.value as WritingRule["severity"] })}
-                style={{ ...inputStyle, cursor: "pointer" }}
-              >
-                <option value="must-fix">Must-fix</option>
-                <option value="should-fix">Should-fix</option>
-                <option value="nice-to-fix">Nice-to-fix</option>
-              </select>
-            </div>
-            <div style={{ flex: 2 }}>
-              <label style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>When to apply</label>
-              <input value={editFields.whenToApply} onChange={(e) => setEditFields({ ...editFields, whenToApply: e.target.value })} style={inputStyle} placeholder="When to apply..." />
-            </div>
+          <Field label="Why">
+            {(id) => <input id={id} value={editFields.why} onChange={set("why")} className={FIELD_CLASS} />}
+          </Field>
+          <div className="flex gap-2">
+            <Field label="Before" className="flex-1">
+              {(id) => <input id={id} value={editFields.exampleBefore} onChange={set("exampleBefore")} className={FIELD_CLASS} />}
+            </Field>
+            <Field label="After" className="flex-1">
+              {(id) => <input id={id} value={editFields.exampleAfter} onChange={set("exampleAfter")} className={FIELD_CLASS} />}
+            </Field>
           </div>
-          <div>
-            <label style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Why</label>
-            <input value={editFields.why} onChange={(e) => setEditFields({ ...editFields, why: e.target.value })} style={inputStyle} placeholder="Why this matters..." />
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>Before</label>
-              <input value={editFields.exampleBefore} onChange={(e) => setEditFields({ ...editFields, exampleBefore: e.target.value })} style={inputStyle} placeholder="Before example..." />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>After</label>
-              <input value={editFields.exampleAfter} onChange={(e) => setEditFields({ ...editFields, exampleAfter: e.target.value })} style={inputStyle} placeholder="After example..." />
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button type="button" onClick={handleSave} style={{ padding: "4px 12px", fontSize: "var(--text-sm)", background: "var(--color-text-primary)", color: "var(--color-page)", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+          <Field label="Notes">
+            {(id) => <textarea id={id} rows={2} value={editFields.notes} onChange={set("notes")} className={cn(FIELD_CLASS, "resize-y")} />}
+          </Field>
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={!editFields.ruleText.trim()}
+              className={cn(
+                "cursor-pointer rounded-[var(--radius-sm)] bg-[var(--color-text-primary)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-page)] disabled:cursor-default disabled:opacity-50",
+                FOCUS_RING,
+              )}
+            >
               Save
             </button>
-            <button type="button" onClick={handleCancel} style={{ padding: "4px 12px", fontSize: "var(--text-sm)", background: "var(--color-page)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={cn(
+                "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]",
+                FOCUS_RING,
+              )}
+            >
               Cancel
             </button>
+            <span className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">⌘↵ to save · Esc to cancel</span>
           </div>
         </div>
       </div>
@@ -257,149 +355,82 @@ function RuleCard({
   }
 
   const isUnreviewed = rule.reviewedAt == null;
+  const enforced = !!rule.detectionPattern;
 
   return (
-    <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-        <div style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--color-text-primary)", flex: 1, lineHeight: 1.4 }}>
-          {rule.ruleText}
+    <div className="flex items-start gap-2 border-b border-[var(--color-border)] py-3.5">
+      <input
+        type="checkbox"
+        aria-label={`Select rule: ${rule.ruleText}`}
+        checked={selected}
+        onChange={() => onToggleSelect(rule.id)}
+        className="mt-[3px] shrink-0 cursor-pointer"
+        style={{ accentColor: "var(--color-text-primary)" }}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="mb-1.5 flex items-start gap-2">
+          <div className="flex-1 text-[length:var(--text-sm)] font-medium leading-[1.4] text-[var(--color-text-primary)]">
+            {rule.ruleText}
+          </div>
+          <SourceBadge source={rule.source} />
+          <SeverityBadge severity={rule.severity} />
         </div>
-        <SourceBadge source={rule.source} />
-        <SeverityBadge severity={rule.severity} />
-      </div>
 
-      {rule.whenToApply && (
-        <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
-          <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: "var(--text-xs)", letterSpacing: "0.3px" }}>When </strong>
-          {rule.whenToApply}
-        </div>
-      )}
-      {rule.why && (
-        <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", lineHeight: 1.4, marginBottom: 4 }}>
-          <strong style={{ fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", fontSize: "var(--text-xs)", letterSpacing: "0.3px" }}>Why </strong>
-          {rule.why}
-        </div>
-      )}
-
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6 }}>
-        <SignalBar count={rule.signalCount} />
-      </div>
-
-      {(rule.exampleBefore || rule.exampleAfter) && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: "8px 12px",
-            background: "var(--color-sidebar, var(--hover-bg))",
-            borderRadius: "var(--radius-sm)",
-            fontSize: "var(--text-sm)",
-            lineHeight: 1.5,
-          }}
-        >
-          {rule.exampleBefore && (
-            <span style={{ color: "var(--color-danger, #c44b3f)", textDecoration: "line-through", textDecorationColor: "rgba(196,75,63,0.3)" }}>
-              {rule.exampleBefore}
-            </span>
-          )}
-          {rule.exampleBefore && rule.exampleAfter && (
-            <span style={{ color: "var(--color-text-secondary)", margin: "0 4px" }}>&rarr;</span>
-          )}
-          {rule.exampleAfter && (
-            <span style={{ color: "var(--color-success, #5a9a3e)" }}>
-              {rule.exampleAfter}
-            </span>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-        {isUnreviewed && (
-          <button
-            type="button"
-            onClick={() => onMarkReviewed(rule.id)}
-            style={{
-              fontSize: "var(--text-xs)",
-              color: "var(--color-accent)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              textDecoration: "underline",
-              textUnderlineOffset: 2,
-              padding: 0,
-            }}
-          >
-            Mark reviewed
-          </button>
+        {rule.whenToApply && (
+          <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
+            <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">When </strong>
+            {rule.whenToApply}
+          </div>
         )}
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          style={{
-            fontSize: "var(--text-xs)",
-            color: "var(--color-text-secondary)",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            textDecoration: "underline",
-            textUnderlineOffset: 2,
-            padding: 0,
-          }}
-        >
-          Edit
-        </button>
-        {!confirmDelete ? (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            style={{
-              fontSize: "var(--text-xs)",
-              color: "var(--color-text-secondary)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              textDecoration: "underline",
-              textUnderlineOffset: 2,
-              padding: 0,
-            }}
+        {rule.why && (
+          <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
+            <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">Why </strong>
+            {rule.why}
+          </div>
+        )}
+
+        {(rule.exampleBefore || rule.exampleAfter) && (
+          <div className="mt-2 rounded-[var(--radius-sm)] bg-[var(--color-sidebar)] px-3 py-2 text-[length:var(--text-sm)] leading-[1.5]">
+            {rule.exampleBefore && (
+              <span className="text-[var(--color-danger)] line-through decoration-[color-mix(in_srgb,var(--color-danger)_30%,transparent)]">
+                {rule.exampleBefore}
+              </span>
+            )}
+            {rule.exampleBefore && rule.exampleAfter && (
+              <span className="mx-1 text-[var(--color-text-secondary)]">&rarr;</span>
+            )}
+            {rule.exampleAfter && <span className="text-[var(--color-success)]">{rule.exampleAfter}</span>}
+          </div>
+        )}
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+          <SignalBar count={rule.signalCount} />
+          <span>{typeLabel(rule.writingType)}</span>
+          <span>Added {formatDate(rule.createdAt)}</span>
+          <span
+            title={
+              enforced
+                ? "Has a detection pattern: the writing guard blocks matching text mechanically."
+                : "No detection pattern: Claude is told this rule, but nothing blocks a violation."
+            }
           >
+            {enforced ? "Blocked mechanically" : "Advisory"}
+          </span>
+        </div>
+
+        <div className="mt-2 flex gap-3">
+          {isUnreviewed && (
+            <button type="button" onClick={() => onMarkReviewed(rule.id)} className={cn(LINK_BUTTON_CLASS, "text-[var(--color-accent)]")}>
+              Mark reviewed
+            </button>
+          )}
+          <button type="button" onClick={() => setEditing(true)} className={LINK_BUTTON_CLASS}>
+            Edit
+          </button>
+          <button type="button" onClick={() => onArchive(rule.id)} className={LINK_BUTTON_CLASS}>
             Archive
           </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                onDelete(rule.id);
-                setConfirmDelete(false);
-              }}
-              style={{
-                fontSize: "var(--text-xs)",
-                color: "var(--color-danger, #c44b3f)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 600,
-                padding: 0,
-              }}
-            >
-              Confirm — recoverable below
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              style={{
-                fontSize: "var(--text-xs)",
-                color: "var(--color-text-secondary)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              Cancel
-            </button>
-          </>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -428,19 +459,27 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
   const [rules, setRules] = useState<WritingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("signal");
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [archivedRules, setArchivedRules] = useState<WritingRule[] | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const [lastArchived, setLastArchived] = useState<{ id: string; ruleText: string } | null>(null);
   const exportTimeoutRef = useRef<number | null>(null);
+  const undoTimeoutRef = useRef<number | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const loadedRef = useRef(false);
 
   const unreviewedCount = useMemo(() => rules.filter((r) => r.reviewedAt == null).length, [rules]);
   const [view, setView] = useState<RulesView>("unreviewed");
 
-  // Smart default: show "all" if nothing to review
-  const effectiveView = view === "unreviewed" && unreviewedCount === 0 && rules.length > 0 ? "all" : view;
+  const q = query.trim().toLowerCase();
+  // Smart default: show "all" if nothing to review. A search always spans every rule.
+  const effectiveView: RulesView =
+    q || (view === "unreviewed" && unreviewedCount === 0 && rules.length > 0) ? "all" : view;
 
   const loadRules = useCallback(async () => {
     setLoading(true);
@@ -467,19 +506,47 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
 
   useEffect(() => {
     return () => {
-      if (exportTimeoutRef.current !== null) {
-        window.clearTimeout(exportTimeoutRef.current);
-      }
+      if (exportTimeoutRef.current !== null) window.clearTimeout(exportTimeoutRef.current);
+      if (undoTimeoutRef.current !== null) window.clearTimeout(undoTimeoutRef.current);
     };
   }, []);
 
-  const filtered = useMemo(() =>
-    rules.filter((r) => {
+  // "/" jumps to search, unless the user is already typing somewhere.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el as HTMLElement | null)?.isContentEditable) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const typesPresent = useMemo(
+    () => Array.from(new Set(rules.map((r) => r.writingType))).sort(),
+    [rules],
+  );
+
+  const filtered = useMemo(() => {
+    const list = rules.filter((r) => {
       if (effectiveView === "unreviewed" && r.reviewedAt != null) return false;
       if (severityFilter && r.severity !== severityFilter) return false;
-      return true;
-    }),
-    [rules, effectiveView, severityFilter],
+      if (typeFilter && r.writingType !== typeFilter) return false;
+      return matchesQuery(r, q);
+    });
+    return list.sort((a, b) =>
+      sort === "signal"
+        ? b.signalCount - a.signalCount || b.createdAt - a.createdAt
+        : b.createdAt - a.createdAt,
+    );
+  }, [rules, effectiveView, severityFilter, typeFilter, q, sort]);
+
+  const filteredArchived = useMemo(
+    () => (archivedRules ?? []).filter((r) => matchesQuery(r, q)),
+    [archivedRules, q],
   );
 
   const categoryGroups = useMemo(() => groupByCategory(filtered), [filtered]);
@@ -513,26 +580,50 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
     }
   }, [autoExportAfterRuleMutation]);
 
-  const handleDelete = useCallback(async (id: string) => {
+  // Archiving is recoverable, so it happens in one step with an Undo, not a confirm.
+  const archiveOne = useCallback(async (id: string): Promise<WritingRule | null> => {
+    const moved = rules.find((r) => r.id === id) ?? null;
     try {
       await deleteWritingRule(id);
-      setRules((prev) => prev.filter((r) => r.id !== id));
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      void autoExportAfterRuleMutation();
-      // Keep the archive list honest if it has been loaded.
-      setArchivedRules((prev) => {
-        if (prev === null) return prev;
-        const moved = rules.find((r) => r.id === id);
-        return moved ? [...prev, { ...moved, archivedAt: Date.now() }] : prev;
-      });
     } catch (err) {
       reportError("Could not archive rule", err);
+      return null;
     }
-  }, [autoExportAfterRuleMutation, rules]);
+    setRules((prev) => prev.filter((r) => r.id !== id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    // Keep the archive list honest if it has been loaded.
+    setArchivedRules((prev) =>
+      prev === null || !moved ? prev : [...prev, { ...moved, archivedAt: Date.now() }],
+    );
+    return moved;
+  }, [rules]);
+
+  const showUndo = useCallback((entry: { id: string; ruleText: string }) => {
+    setLastArchived(entry);
+    if (undoTimeoutRef.current !== null) window.clearTimeout(undoTimeoutRef.current);
+    undoTimeoutRef.current = window.setTimeout(() => setLastArchived(null), 8000);
+  }, []);
+
+  const handleArchive = useCallback(async (id: string) => {
+    const moved = await archiveOne(id);
+    if (!moved) return;
+    void autoExportAfterRuleMutation();
+    showUndo({ id, ruleText: moved.ruleText });
+  }, [archiveOne, autoExportAfterRuleMutation, showUndo]);
+
+  const handleBulkArchive = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    let done = 0;
+    for (const id of ids) {
+      if (await archiveOne(id)) done += 1;
+    }
+    if (done > 0) void autoExportAfterRuleMutation();
+  }, [selectedIds, archiveOne, autoExportAfterRuleMutation]);
 
   const handleToggleArchived = useCallback(async () => {
     const opening = !archivedOpen;
@@ -550,6 +641,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
     try {
       await unarchiveWritingRule(id);
       setArchivedRules((prev) => prev?.filter((r) => r.id !== id) ?? prev);
+      setLastArchived((prev) => (prev?.id === id ? null : prev));
       void loadRules();
       void autoExportAfterRuleMutation();
     } catch (err) {
@@ -625,12 +717,19 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
     });
   }, []);
 
-  const severityChips: WritingRuleSeverity[] = SEVERITY_VALUES;
+  const hasActiveFilter = !!(q || severityFilter || typeFilter);
+  const clearFilters = useCallback(() => {
+    setQuery("");
+    setSeverityFilter(null);
+    setTypeFilter("");
+  }, []);
 
-  // Empty state
   const emptyMessage = useMemo(() => {
     if (rules.length === 0) {
       return "No writing rules yet. Export corrections for synthesis to generate rules.";
+    }
+    if (filtered.length === 0 && hasActiveFilter) {
+      return "No rules match these filters.";
     }
     if (effectiveView === "unreviewed" && unreviewedCount === 0) {
       return "No new rules to review. Export corrections for synthesis to generate rules.";
@@ -639,258 +738,227 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       return "No rules match this filter.";
     }
     return null;
-  }, [rules.length, effectiveView, unreviewedCount, filtered.length]);
+  }, [rules.length, effectiveView, unreviewedCount, filtered.length, hasActiveFilter]);
+
+  const buttonSecondary = cn(
+    "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-2.5 py-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)] transition-colors duration-100 hover:bg-[var(--hover-bg)]",
+    FOCUS_RING,
+  );
 
   return (
     <>
       {/* Filter bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 32px",
-          borderBottom: "1px solid var(--color-border)",
-          flexShrink: 0,
-          background: "var(--color-page)",
-        }}
-      >
-        <ViewToggle
-          view={effectiveView}
-          onChangeView={(v) => {
-            setView(v);
-            setSelectedIds(new Set());
-          }}
-          unreviewedCount={unreviewedCount}
-          allCount={rules.length}
-        />
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setSeverityFilter(null)}
-            style={{
-              padding: "3px 10px",
-              fontSize: "var(--text-xs)",
-              border: "1px solid var(--color-border)",
-              borderRadius: 100,
-              background: !severityFilter ? "var(--color-text-primary)" : "var(--color-page)",
-              color: !severityFilter ? "var(--color-page)" : "var(--color-text-secondary)",
-              cursor: "pointer",
-            }}
-          >
-            All
-          </button>
-          {severityChips.map((sev) => (
-            <button
-              key={sev}
-              type="button"
-              onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}
-              style={{
-                padding: "3px 10px",
-                fontSize: "var(--text-xs)",
-                border: "1px solid var(--color-border)",
-                borderRadius: 100,
-                background: severityFilter === sev ? "var(--color-text-primary)" : "var(--color-page)",
-                color: severityFilter === sev ? "var(--color-page)" : "var(--color-text-secondary)",
-                cursor: "pointer",
+      <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--color-border)] bg-[var(--color-page)] px-8 py-2.5">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <input
+              ref={searchRef}
+              type="search"
+              aria-label="Search rules"
+              placeholder="Search rules, reasons, examples"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && query) {
+                  e.stopPropagation();
+                  setQuery("");
+                }
               }}
-            >
-              {sev.charAt(0).toUpperCase() + sev.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          {selectedIds.size > 0 && effectiveView === "unreviewed" && (
-            <>
-              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
-                {selectedIds.size} selected
-              </span>
-              <button
-                type="button"
-                onClick={handleBulkMarkReviewed}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "var(--text-xs)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--color-page)",
-                  color: "var(--color-text-secondary)",
-                  cursor: "pointer",
-                }}
+              className={cn(FIELD_CLASS, "py-1.5 pr-8 [&::-webkit-search-cancel-button]:appearance-none")}
+            />
+            {!query && (
+              <kbd
+                aria-hidden="true"
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]"
               >
-                Mark reviewed
-              </button>
-            </>
-          )}
-          {exportStatus && (
-            <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
-              {exportStatus}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleExport}
-            style={{
-              padding: "4px 12px",
-              fontSize: "var(--text-xs)",
-              fontWeight: 500,
-              background: "var(--color-text-primary)",
-              color: "var(--color-page)",
-              border: "1px solid var(--color-text-primary)",
-              borderRadius: "var(--radius-sm)",
-              cursor: "pointer",
+                /
+              </kbd>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {exportStatus && (
+              <span role="status" className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+                {exportStatus}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleExport}
+              className={cn(
+                "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-text-primary)] bg-[var(--color-text-primary)] px-3 py-1 text-[length:var(--text-xs)] font-medium text-[var(--color-page)]",
+                FOCUS_RING,
+              )}
+            >
+              Export rules + hook
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <ViewToggle
+            view={effectiveView}
+            onChangeView={(v) => {
+              setView(v);
+              setSelectedIds(new Set());
             }}
+            unreviewedCount={unreviewedCount}
+            allCount={rules.length}
+          />
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Severity">
+            <Chip active={!severityFilter} onClick={() => setSeverityFilter(null)}>All</Chip>
+            {SEVERITY_VALUES.map((sev) => (
+              <Chip key={sev} active={severityFilter === sev} onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}>
+                {sev.charAt(0).toUpperCase() + sev.slice(1)}
+              </Chip>
+            ))}
+          </div>
+          {typesPresent.length > 1 && (
+            <select
+              aria-label="Writing type"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
+            >
+              <option value="">All writing types</option>
+              {typesPresent.map((t) => (
+                <option key={t} value={t}>{typeLabel(t)}</option>
+              ))}
+            </select>
+          )}
+          <select
+            aria-label="Sort rules"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
           >
-            Export rules + hook
-          </button>
+            <option value="signal">Most signals first</option>
+            <option value="newest">Newest first</option>
+          </select>
+
+          <div className="ml-auto flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <>
+                <span className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+                  {selectedIds.size} selected
+                </span>
+                {effectiveView === "unreviewed" && (
+                  <button type="button" onClick={handleBulkMarkReviewed} className={buttonSecondary}>
+                    Mark reviewed
+                  </button>
+                )}
+                <button type="button" onClick={() => void handleBulkArchive()} className={buttonSecondary}>
+                  Archive selected
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 32px 64px" }}>
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[960px] px-8 pb-16 pt-4">
           {loading && rules.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px" }}>
+            <div className="px-8 py-16 text-center text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
               Loading...
             </div>
           ) : emptyMessage ? (
-            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px", lineHeight: 1.6 }}>
+            <div className="px-8 py-16 text-center text-[length:var(--text-sm)] leading-[1.6] text-[var(--color-text-secondary)]">
               {emptyMessage}
+              {hasActiveFilter && rules.length > 0 && (
+                <div className="mt-2">
+                  <button type="button" onClick={clearFilters} className={LINK_BUTTON_CLASS}>
+                    Clear filters
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
-            Array.from(categoryGroups.entries()).map(([category, categoryRules]) => (
-              <div key={category}>
-                <button
-                  type="button"
-                  onClick={() => toggleCategory(category)}
-                  style={{
-                    width: "100%",
-                    fontSize: "var(--text-base)",
-                    fontWeight: 600,
-                    color: "var(--color-text-primary)",
-                    padding: "20px 0 8px",
-                    borderBottom: "1px solid var(--color-border)",
-                    borderTop: "none",
-                    borderLeft: "none",
-                    borderRight: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    background: "none",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <span>{formatCategoryLabel(category)}</span>
-                  <span style={{ fontSize: "var(--text-xs)", fontWeight: 400, color: "var(--color-text-secondary)" }}>
-                    {categoryRules.length} rule{categoryRules.length === 1 ? "" : "s"}
-                    <span style={{
-                      display: "inline-block",
-                      marginLeft: 6,
-                      fontSize: "var(--text-xs)",
-                      transform: collapsedCategories.has(category) ? "rotate(-90deg)" : "rotate(0deg)",
-                      transition: "transform 150ms ease",
-                    }}>
-                      {"\u25BE"}
+            Array.from(categoryGroups.entries()).map(([category, categoryRules]) => {
+              const collapsed = collapsedCategories.has(category);
+              return (
+                <div key={category}>
+                  <button
+                    type="button"
+                    aria-expanded={!collapsed}
+                    onClick={() => toggleCategory(category)}
+                    className={cn(
+                      "flex w-full cursor-pointer items-center justify-between border-b border-[var(--color-border)] bg-transparent pb-2 pt-5 text-left text-[length:var(--text-base)] font-semibold text-[var(--color-text-primary)]",
+                      FOCUS_RING,
+                    )}
+                  >
+                    <span>{formatCategoryLabel(category)}</span>
+                    <span className="text-[length:var(--text-xs)] font-normal text-[var(--color-text-secondary)]">
+                      {categoryRules.length} rule{categoryRules.length === 1 ? "" : "s"}
+                      <span
+                        aria-hidden="true"
+                        className="ml-1.5 inline-block transition-transform duration-150"
+                        style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
+                      >
+                        {"▾"}
+                      </span>
                     </span>
-                  </span>
-                </button>
-                {!collapsedCategories.has(category) &&
-                  categoryRules.map((rule) => (
-                    <div key={rule.id} style={{ display: "flex", alignItems: "flex-start" }}>
-                      {effectiveView === "unreviewed" && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(rule.id)}
-                          onChange={() => handleToggleSelect(rule.id)}
-                          style={{ marginTop: 18, marginRight: 8, flexShrink: 0, accentColor: "var(--color-text-primary)" }}
-                        />
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <RuleCard
-                          rule={rule}
-                          onUpdate={handleUpdate}
-                          onDelete={handleDelete}
-                          onMarkReviewed={handleMarkReviewed}
-                        />
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            ))
+                  </button>
+                  {!collapsed &&
+                    categoryRules.map((rule) => (
+                      <RuleCard
+                        key={rule.id}
+                        rule={rule}
+                        selected={selectedIds.has(rule.id)}
+                        onToggleSelect={handleToggleSelect}
+                        onUpdate={handleUpdate}
+                        onArchive={(id) => void handleArchive(id)}
+                        onMarkReviewed={handleMarkReviewed}
+                      />
+                    ))}
+                </div>
+              );
+            })
           )}
 
-          {/* Archived — deleted rules keep their provenance and can return */}
-          <div style={{ marginTop: 32 }}>
+          {/* Archived — archived rules keep their provenance and can return */}
+          <div className="mt-8">
             <button
               type="button"
+              aria-expanded={archivedOpen}
               onClick={() => void handleToggleArchived()}
-              style={{
-                fontSize: "var(--text-xs)",
-                fontWeight: 600,
-                color: "var(--color-text-secondary)",
-                textTransform: "uppercase",
-                letterSpacing: "0.3px",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
+              className={cn(
+                "flex cursor-pointer items-center gap-1.5 text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px] text-[var(--color-text-secondary)]",
+                FOCUS_RING,
+              )}
             >
               <span
-                style={{
-                  display: "inline-block",
-                  transform: archivedOpen ? "rotate(0deg)" : "rotate(-90deg)",
-                  transition: "transform 150ms ease",
-                }}
+                aria-hidden="true"
+                className="inline-block transition-transform duration-150"
+                style={{ transform: archivedOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
               >
-                {"\u25BE"}
+                {"▾"}
               </span>
               Archived{archivedRules !== null ? ` (${archivedRules.length})` : ""}
             </button>
             {archivedOpen &&
               (archivedRules === null ? (
-                <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", padding: "12px 0" }}>
-                  Loading…
-                </div>
+                <div className="py-3 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">Loading…</div>
               ) : archivedRules.length === 0 ? (
-                <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", padding: "12px 0" }}>
-                  Nothing archived.
-                </div>
+                <div className="py-3 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">Nothing archived.</div>
+              ) : filteredArchived.length === 0 ? (
+                <div className="py-3 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">No archived rules match.</div>
               ) : (
-                archivedRules.map((rule) => (
+                filteredArchived.map((rule) => (
                   <div
                     key={rule.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      gap: 8,
-                      padding: "8px 0",
-                      borderBottom: "1px solid var(--color-border)",
-                      opacity: 0.7,
-                    }}
+                    className="flex items-baseline gap-2 border-b border-[var(--color-border)] py-2 opacity-70"
                   >
-                    <div style={{ flex: 1, minWidth: 0, fontSize: "var(--text-sm)", color: "var(--color-text-primary)" }}>
+                    <div className="min-w-0 flex-1 text-[length:var(--text-sm)] text-[var(--color-text-primary)]">
                       {rule.ruleText}
                     </div>
+                    {rule.archivedAt ? (
+                      <span className="shrink-0 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+                        {formatDate(rule.archivedAt)}
+                      </span>
+                    ) : null}
                     <SourceBadge source={rule.source} />
-                    <button
-                      type="button"
-                      onClick={() => void handleRestore(rule.id)}
-                      style={{
-                        fontSize: "var(--text-xs)",
-                        color: "var(--color-text-secondary)",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        textDecoration: "underline",
-                        textUnderlineOffset: 2,
-                        padding: 0,
-                      }}
-                    >
+                    <button type="button" onClick={() => void handleRestore(rule.id)} className={LINK_BUTTON_CLASS}>
                       Restore
                     </button>
                   </div>
@@ -899,6 +967,25 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
           </div>
         </div>
       </div>
+
+      {/* Undo — archiving is one step, so the way back is always one click */}
+      {lastArchived && (
+        <div
+          role="status"
+          className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-8"
+        >
+          <div className="pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-2 text-[length:var(--text-sm)] text-[var(--color-text-primary)] shadow-[var(--shadow-md)]">
+            <span className="truncate">Archived “{lastArchived.ruleText}”</span>
+            <button
+              type="button"
+              onClick={() => void handleRestore(lastArchived.id)}
+              className={cn(LINK_BUTTON_CLASS, "shrink-0 font-semibold text-[var(--color-text-primary)]")}
+            >
+              Undo
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
