@@ -35,6 +35,10 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
 
     apply_pragmas(&conn)?;
 
+    // Snapshot before any migration statement runs. Best effort: a backup
+    // problem is logged, never allowed to block launch.
+    crate::backup::run_before_migrations(&conn, env!("CARGO_PKG_VERSION"));
+
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS documents (
             id TEXT PRIMARY KEY,
@@ -197,6 +201,9 @@ pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
 
     // Seed: guard v2 detection patterns (prohibition regexes + soft AI-tell families)
     seed_guard_patterns_v2(&conn)?;
+
+    // Daily snapshot (the hourly thread in lib.rs covers long-running sessions).
+    crate::backup::run_daily(&conn);
 
     Ok(DbPool::new(conn))
 }

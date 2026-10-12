@@ -55,3 +55,20 @@ All hooks pass functional tests post-change:
 - `Bash(npm *)` catches all npm commands (including `npm --version`), not just install/add/etc. Wider than the previous subcommand filter, but acceptable — all npm use in pnpm projects should use pnpm.
 - Multiple `if` values on one handler are not supported; OR conditions require separate handler entries (hence two entries for pnpm_enforcer).
 - Glob brace expansion for Write/Edit (`Edit(*.{md,mdx})`) was not explored — deferred with writing hooks.
+
+---
+
+## ADR: Data-safety floor before first outside users
+
+**Date:** 2026-10-12
+**Status:** Applied
+**Why now:** Margin had no way to recover from a bad migration, no record of crashes, and no way for a user to tell us what went wrong. Anyone but Sam losing their library once would end the relationship.
+
+### Decisions
+
+- **Snapshots use `VACUUM INTO`, not a file copy.** The database runs in WAL mode, so copying `margin.db` can miss committed data sitting in the `-wal` file. `VACUUM INTO` produces one consistent standalone file.
+- **Two snapshot kinds, 7 of each.** One pre-migration snapshot per app version (the "an update broke my data" case), plus one daily snapshot (the "I deleted something last week" case). Separate retention so a run of daily snapshots can't push out the pre-migration one.
+- **Backups never block launch.** A failed snapshot is logged and the app starts anyway. A full disk should not brick Margin.
+- **Plain-text log with rotation, no third-party crash service.** Margin is local-first and its pitch is that nothing leaves the machine. A crash reporter that phones home would contradict that. Users send a diagnostics report by hand if they choose.
+- **Diagnostics hold counts, never content.** Document text, highlights and rules are the private data. The report carries versions, row counts, backup names and recent log lines, with the home directory redacted.
+- **Surfaces:** the error boundary replaces a blank window with a recovery screen; Settings → About gets backup and diagnostics rows without changing the Settings layout.
