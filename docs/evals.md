@@ -113,7 +113,11 @@ MARGIN_EVAL_CMD=poolside pnpm exec tsx scripts/autoresearch/loop.ts --max 3
 
 Scores accumulate in `autoresearch/results.tsv`; `experiment-log.md` holds
 the March 2026 architecture comparison (arch-c two-pass editor led at 88.9%
-pass rate — unconfirmed on non-Claude providers).
+pass rate). The 2026-09-13 muse-spark run did not reproduce that margin: c
+70.4% vs null 66.7% (a one-sample difference at n=27); see
+`regression/baseline-muse-spark-2026-09-13.json`.
+
+Comparison against an external rewriter: `docs/humanizer-baseline-eval.md`.
 
 ## Release Confidence
 
