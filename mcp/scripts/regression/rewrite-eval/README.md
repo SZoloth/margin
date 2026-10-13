@@ -32,7 +32,7 @@ before step 4 (and before step 1 so the manifest records it).
 - Resumable: `run-rewrite-eval.ts` skips drafts already generated and records failures
   as errors instead of output; scoring excludes failed generations and lists them.
 - Leakage: A3 and A4 see only rules last updated before the earliest held-out
-  correction (ADR-002 in DECISIONS.md).
+  correction (ADR-003 in DECISIONS.md).
 - Fewer than 30 held-out drafts: the verdict is labelled PILOT and is direction only.
 - F1 limits: number words ("three") are not extracted, units are ignored, names at the
   start of a sentence are skipped, and a mid-sentence capitalized heading counts as a name.

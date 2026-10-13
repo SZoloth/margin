@@ -58,7 +58,7 @@ All hooks pass functional tests post-change:
 
 ---
 
-## ADR-002: Humanizer comparison uses a time split, not a document split
+## ADR-003: Humanizer comparison uses a time split, not a document split
 
 **Date:** 2026-10-13
 **Status:** Applied (pilot runner)

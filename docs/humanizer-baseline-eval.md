@@ -111,7 +111,7 @@ signal moves its `updated_at` forward and is excluded, which errs against Margin
 Rules are read from the live DB read-only; nothing is written to `~/.margin`.
 Consequences: held-out types skew toward whatever Sam wrote recently, and early
 rules are the only ones tested. See `mcp/scripts/regression/rewrite-eval/README.md`
-for the commands and DECISIONS.md (ADR-002) for the reasoning.
+for the commands and DECISIONS.md (ADR-003) for the reasoning.
 
 Freeze the drafts to `mcp/scripts/regression/humanizer-drafts/` (text files plus a
 manifest of split, type, spans and notes). Real writing from the user's DB is
