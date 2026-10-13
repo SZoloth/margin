@@ -55,3 +55,26 @@ All hooks pass functional tests post-change:
 - `Bash(npm *)` catches all npm commands (including `npm --version`), not just install/add/etc. Wider than the previous subcommand filter, but acceptable — all npm use in pnpm projects should use pnpm.
 - Multiple `if` values on one handler are not supported; OR conditions require separate handler entries (hence two entries for pnpm_enforcer).
 - Glob brace expansion for Write/Edit (`Edit(*.{md,mdx})`) was not explored — deferred with writing hooks.
+
+---
+
+## ADR-003: Humanizer comparison uses a time split, not a document split
+
+**Date:** 2026-10-13
+**Status:** Applied (pilot runner)
+**Design doc:** `docs/humanizer-baseline-eval.md`
+
+### Context
+
+The claim under test is that Margin's rules beat a generic humanizer on Sam's own drafts. The rules were synthesized from the same corrections that flag problems in those drafts, so testing on them would measure memory, not generalization. Rule rows have no per-document provenance, and the synthesis path cannot be re-run on a subset without changing what "Margin's rules" means.
+
+### Decision
+
+Hold out the newest ~30% of drafts by first correction time. Arm A3 may use only rules whose `updated_at` is strictly before the earliest held-out correction. Rules read live from the DB, read-only.
+
+### Consequences
+
+- Real, production-filtered rules are tested, not an approximation rebuilt for the eval.
+- A rule that absorbed later signal is excluded, so leakage errs against Margin.
+- Held-out drafts skew recent and the rule set skews old; with 22 usable documents the first run is a pilot with no win/loss call.
+- If rules gain per-document provenance later, switch to a stratified document split.

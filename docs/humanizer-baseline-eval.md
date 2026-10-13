@@ -102,18 +102,38 @@ Fewer than 30 usable documents means the run is a **pilot**: report it, make no
 win/loss call. In a pilot, V3 (Sam's blind picks) and the F1 hard-fail counts are
 still worth collecting as direction, with the intervals shown.
 
-**Split (leakage control, the expensive part).** Split by *document*, about 70/30,
-stratified by writing type. Rules for A3 must be rebuilt from training-split
-corrections only, into a scratch DB, using the normal synthesis path. The live
-`~/.margin/writing-rules.md` has seen the held-out corrections and would let A3
-cheat. Never point the eval at Sam's real `~/.margin`; use `HOME=/tmp/margin-eval`
-as the CLAUDE.md QA recipe does. If rule provenance cannot be reconstructed per
-document, fall back to a time split (rules as of a cutoff date, drafts flagged
-after it).
+**Split (leakage control, the expensive part).** Rule rows carry no per-document
+provenance, so rebuilding rules per split is not possible and a document-only split
+would leak. The runner therefore uses a **time split**: the newest ~30% of drafts
+(by first correction) are held out, and A3 sees only rules whose `updated_at` is
+strictly before the earliest held-out correction. A rule that later absorbed more
+signal moves its `updated_at` forward and is excluded, which errs against Margin.
+Rules are read from the live DB read-only; nothing is written to `~/.margin`.
+Consequences: held-out types skew toward whatever Sam wrote recently, and early
+rules are the only ones tested. See `mcp/scripts/regression/rewrite-eval/README.md`
+for the commands and DECISIONS.md (ADR-003) for the reasoning.
 
 Freeze the drafts to `mcp/scripts/regression/humanizer-drafts/` (text files plus a
 manifest of split, type, spans and notes). Real writing from the user's DB is
 private: do not commit it. Commit only the manifest schema and the runner.
+
+### Passages mode (added after the first corpus build)
+
+The first build on Sam's Mac found 16 of 22 source documents missing on disk, leaving 3
+usable drafts. The runner can instead use the saved context around each flagged span
+(`corrections.extended_context`, about 60 words at the median; 114 of 156 rows have
+40 or more words, across 21 documents). Tradeoffs, stated up front:
+
+- Units are short passages, not whole drafts. The humanizer was trained on emails,
+  essays and reports, so 60-word units are off its home turf, and that is a point
+  against the comparison's fairness to it.
+- Several flagged spans share a passage, and passages from one document are not
+  independent. Comparisons therefore average within each document and bootstrap over
+  documents. With about 6 held-out documents the result is a PILOT whatever the
+  number of passages (the bar is 10 documents).
+- The corrections span only 2026-02-23 to 2026-03-22, so the time-split cutoff falls in
+  mid-March and A3 sees only rules last updated before it. The runner prints the
+  rule count per type; if it is small, A3 is handicapped and a "loss" says little.
 
 ## Metrics
 
@@ -185,9 +205,9 @@ Verdict for the claim (A3 vs A2), after gates:
 
 | Outcome | Condition |
 |---|---|
-| **Win (claim holds)** | V3: Sam prefers A3 in at least 60% of non-tie pairs with the binomial lower bound above 50%; **and** V1: A3 minus A2 at least +10pp with interval excluding 0; **and** facts: A3 F1 hard-fail rate lower than A2's, or within 5pp and A3 F2 not worse |
-| **Partial: voice only** | voice conditions met, facts within 5pp or worse. Claim is half true; say which half |
-| **Partial: facts only** | facts better, voice not. Margin is safe, not distinctive |
+| **Win (claim holds)** | V3: Sam prefers A3 in at least 60% of non-tie pairs with the binomial lower bound above 50%; **and** V1: A3 minus A2 at least +10pp with interval excluding 0; **and** facts: A3 F1 hard-fail rate strictly lower than A2's, interval excluding 0 |
+| **Partial: voice only** | voice conditions met, facts not strictly better (including non-inferior). Claim is half true; say which half |
+| **Partial: facts only** | facts strictly better, voice not. Margin is safe, not distinctive |
 | **Loss** | Sam prefers A2 in 50% or more of non-tie pairs, or A2 V1 at least A3 V1 |
 | **Inconclusive** | any interval spans 0 on the deciding metrics. Report the width and the n needed; do not call it a tie |
 
@@ -317,18 +337,15 @@ processing** on this machine, versus about 37 tokens/s on the card's M5 Max Q8_0
 run. Budget about 10 to 40 s per draft per sample; 3 samples x 22 drafts is on the
 order of 20 to 40 minutes of generation.
 
-## Implementation work this design needs (not in this PR)
+## Implementation
 
-1. `scripts/regression/build-draft-corpus.ts`: queries the DB (SQL above), applies
-   the document split, writes the private corpus and the manifest.
-2. Scratch-DB rule rebuild from the training split (reuses the synthesis path in
-   `mcp/scripts/autoresearch/rule-study/`).
-3. `run-rewrite-eval.ts` with the arms above. A1 and A3 reuse `editWithRules()`
-   from `autoresearch/generators/arch-c-editor.ts`, taking a fixed draft instead of
-   a pass-1 generation.
-4. `score-facts.ts` (F1) and judge prompts for V1 and F2.
-5. A small blind-pairing page or markdown sheet for V3.
-6. Tests for F1 first: it is deterministic and the whole fact claim leans on it.
+Built in `mcp/scripts/regression/rewrite-eval/` (see its README for commands):
+corpus builder with the time split, the five arms, F1/F3 scoring, V1 and F2 judge
+prompts, V2 when finals exist, the blind A/B sheet for V3, and the verdict rules from
+the table above as code (`verdict.ts`) so the call cannot drift after results are in.
+Unit tests cover the extractor, split, blind scoring, verdict table, judge parsing,
+arm wiring and the leakage filter. The pipeline was dry-run end to end against a
+synthetic database with stub generators; it has **not** been run on Sam's data.
 
 ## Decisions to make with Sam before building
 
