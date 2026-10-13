@@ -76,3 +76,27 @@ Upgrade the existing tab instead of building a second surface, and organise it b
 ### Not done
 
 Creating a rule by hand needs a new Tauri command and a Rust migration-safe path; deferred. Rules still have no link back to the corrections that produced them.
+
+### Revision (2026-10-13): one pipeline, three stages
+
+Sam's review of the first pass: the whole UX, information architecture and content strategy needed work, not only the rules list. The audit found the real problem was structural. The section had four tabs-and-tiles ("Corrections", "Active rules", stat tiles, an import bar) for what is one pipeline, used internal words (corrections, synthesis, polarity, signals, export), and listed unreviewed synthesis candidates under "Active rules" even though the CLI never exports them. That last one was a correctness problem: the page told Sam rules were in effect that Claude never saw.
+
+**IA.** The section is now three tabs in pipeline order, each with its count: **Notes → Suggested → Rules**. Notes are corrections from highlights; Suggested are rules Claude drafted from them (`source = synthesis-candidate`, not yet reviewed); Rules are what Claude actually follows. It opens on the stage that needs Sam: Suggested if anything waits, else Notes if notes are ready, else Rules. The stat tiles, the separate import bar and the filter-hint plumbing are gone; the style-guide import lives under Rules as "Add from style guide" and as the empty state.
+
+**Content.** Every label was rewritten in a writer's words, not the schema's:
+
+| Was | Now |
+|---|---|
+| Corrections / Inbox / Archive | Notes / Waiting / Done |
+| Active rules | Rules (in effect only) |
+| Synthesize N pending | Copy prompt for Claude |
+| Must-fix / Should-fix / Nice-to-fix | Must fix / Should fix / Nice to fix |
+| kill-words / ai-slop / voice-calibration | Words to cut / AI tells / Voice |
+| general | All writing |
+| Flagged N times / signals | From N notes |
+| Enforced automatically / Guidance only | Blocked automatically / Guidance for Claude |
+| Not feedback / Dismiss | Not about writing / Remove |
+| Accept → edit | Apply edit |
+| Sync now | Send again |
+
+**Interaction.** Suggestions get Accept and Decline on the row, plus bulk accept and decline. Accepting now re-exports, so an accepted rule reaches Claude immediately (before, it waited for the next unrelated edit). Notes gained the same search, Filter button and bulk bar as Rules, so the three stages share one grammar.

@@ -12,9 +12,17 @@ import {
 } from "@/lib/tauri-commands";
 import { WRITING_TYPES, type WritingType } from "@/lib/writing-types";
 import { reportError } from "@/lib/error-bus";
+import { cn } from "@/lib/cn";
+import {
+  BUTTON_SECONDARY_CLASS,
+  Chip,
+  EmptyState,
+  LINK_BUTTON_CLASS,
+  SEARCH_CLASS,
+  SlashHint,
+} from "./controls";
 
 const PAGE_SIZE = 500;
-const FILTER_CHIP_TYPES = WRITING_TYPES.slice(0, 6);
 
 type CorrectionView = "inbox" | "archive";
 
@@ -140,9 +148,11 @@ function ViewToggle({
   };
 
   return (
-    <div style={{ display: "flex" }}>
+    <div style={{ display: "flex" }} role="group" aria-label="Which notes">
       <button
         type="button"
+        aria-pressed={view === "inbox"}
+        title="Notes not yet turned into rules"
         onClick={() => onChangeView("inbox")}
         style={{
           ...buttonBase,
@@ -153,10 +163,12 @@ function ViewToggle({
           fontWeight: view === "inbox" ? 600 : 400,
         }}
       >
-        Inbox ({inboxCount})
+        Waiting ({inboxCount})
       </button>
       <button
         type="button"
+        aria-pressed={view === "archive"}
+        title="Notes already turned into rules, or marked not about writing"
         onClick={() => onChangeView("archive")}
         style={{
           ...buttonBase,
@@ -166,7 +178,7 @@ function ViewToggle({
           fontWeight: view === "archive" ? 600 : 400,
         }}
       >
-        Archive ({archiveCount})
+        Done ({archiveCount})
       </button>
     </div>
   );
@@ -283,7 +295,9 @@ function CorrectionCard({
               opacity: correction.writingType ? 1 : 0.6,
             }}
           >
-            {correction.writingType ?? "untagged"}
+            {correction.writingType
+              ? (WRITING_TYPES.find((t) => t.value === correction.writingType)?.label ?? correction.writingType)
+              : "Set type"}
           </button>
           {correction.documentTitle && (
             <span style={{ color: "var(--color-accent)" }}>
@@ -298,7 +312,7 @@ function CorrectionCard({
                 e.stopPropagation();
                 onTriage(correction.highlightId);
               }}
-              title="Keep the row but exclude it from synthesis"
+              title="Keep it here, but don't turn it into a rule"
               style={{
                 padding: 0,
                 fontSize: "var(--text-xs)",
@@ -311,7 +325,7 @@ function CorrectionCard({
                 opacity: 0.6,
               }}
             >
-              Not feedback
+              Not about writing
             </button>
           )}
           <button
@@ -320,6 +334,7 @@ function CorrectionCard({
               e.stopPropagation();
               onDelete(correction.highlightId);
             }}
+            title="Remove from Notes. The highlight stays in your document."
             style={{
               padding: 0,
               fontSize: "var(--text-xs)",
@@ -332,7 +347,7 @@ function CorrectionCard({
               opacity: 0.6,
             }}
           >
-            Dismiss
+            Remove
           </button>
           {correction.suggestedEdit != null && onAccept && (
             <button
@@ -352,7 +367,7 @@ function CorrectionCard({
                 fontWeight: 500,
               }}
             >
-              Accept → "{correction.suggestedEdit.length > 40
+              Apply edit → "{correction.suggestedEdit.length > 40
                 ? correction.suggestedEdit.slice(0, 40) + "…"
                 : correction.suggestedEdit}"
             </button>
@@ -385,7 +400,7 @@ function CorrectionCard({
             }}
           >
             <div style={{ marginBottom: 6, fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.3px" }}>
-              Extended context
+              In context
             </div>
             {highlightInContext(correction.extendedContext, correction.originalText)}
           </div>
@@ -425,6 +440,8 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
   const [view, setView] = useState<CorrectionView>("inbox");
   const [untaggedOnly, setUntaggedOnly] = useState(false);
   const [polarityFilter, setPolarityFilter] = useState<"positive" | "corrective" | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const loadedRef = useRef(false);
   const prevFilterHintRef = useRef(filterHint);
 
@@ -443,6 +460,20 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
       setUntaggedOnly(false);
     }
   }, [filterHint]);
+
+  // "/" jumps to search, unless the user is already typing somewhere.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el as HTMLElement | null)?.isContentEditable) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const loadCorrections = useCallback(async (pageLimit: number) => {
     setLoading(true);
@@ -617,219 +648,166 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
     void loadCorrections(newLimit);
   }, [limit, loadCorrections]);
 
-  const chipTypes = FILTER_CHIP_TYPES;
+  const activeFilterCount = (activeFilter ? 1 : 0) + (polarityFilter ? 1 : 0) + (untaggedOnly ? 1 : 0);
 
-  // Empty state messages
-  const emptyMessage = useMemo(() => {
+  // Empty states teach the next step instead of announcing absence.
+  const emptyState = useMemo((): { title: string; body: string } | null => {
     if (corrections.length === 0) {
-      return "No corrections yet. Highlight text and add margin notes, then export to start collecting feedback.";
+      return {
+        title: "No notes yet",
+        body: "While you read, highlight a passage and write what's wrong with it, or what's right. Those notes collect here and become your rules.",
+      };
     }
     if (view === "inbox" && inboxCount === 0 && archiveCount > 0) {
-      return "All caught up. Corrections have been exported for synthesis.";
+      return {
+        title: "All caught up",
+        body: "Every note has been turned into rules or set aside. New notes show up here as you read.",
+      };
     }
     if (filtered.length === 0) {
-      return "No corrections match your filters.";
+      return { title: "No notes match", body: "Try a different search, or clear the filters." };
     }
     return null;
   }, [corrections.length, view, inboxCount, archiveCount, filtered.length]);
 
   return (
     <>
-      {/* Filter bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 32px",
-          borderBottom: "1px solid var(--color-border)",
-          flexShrink: 0,
-          background: "var(--color-page)",
-        }}
-      >
-        <ViewToggle
-          view={view}
-          onChangeView={(v) => {
-            setView(v);
-            setSelectedIds(new Set());
-          }}
-          inboxCount={inboxCount}
-          archiveCount={archiveCount}
-        />
-        <div style={{ display: "flex", gap: 4 }}>
-          <button
-            type="button"
-            onClick={() => setPolarityFilter(polarityFilter === "positive" ? null : "positive")}
-            title="Show positive corrections only"
-            style={{
-              padding: "2px 8px",
-              fontSize: "var(--text-xs)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              cursor: "pointer",
-              background: polarityFilter === "positive" ? "var(--color-positive-bg, rgba(45, 138, 78, 0.1))" : "var(--color-page)",
-              color: polarityFilter === "positive" ? "var(--color-positive, #2d8a4e)" : "var(--color-text-secondary)",
-              fontWeight: polarityFilter === "positive" ? 600 : 400,
-            }}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => setPolarityFilter(polarityFilter === "corrective" ? null : "corrective")}
-            title="Show corrective corrections only"
-            style={{
-              padding: "2px 8px",
-              fontSize: "var(--text-xs)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              cursor: "pointer",
-              background: polarityFilter === "corrective" ? "var(--color-corrective-bg, rgba(217, 119, 6, 0.1))" : "var(--color-page)",
-              color: polarityFilter === "corrective" ? "var(--color-corrective, #d97706)" : "var(--color-text-secondary)",
-              fontWeight: polarityFilter === "corrective" ? 600 : 400,
-            }}
-          >
-            −
-          </button>
-        </div>
-        <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
-          <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 7, color: "var(--color-text-secondary)", fontSize: "var(--text-xs)", pointerEvents: "none" }}>
-            &#x1F50D;
-          </span>
-          <input
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Filter corrections..."
-            aria-label="Filter corrections"
-            style={{
-              width: "100%",
-              padding: "6px 10px 6px 28px",
-              fontSize: "var(--text-xs)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              background: "var(--color-page)",
-              color: "var(--color-text-primary)",
-              outline: "none",
-            }}
-          />
-        </div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setActiveFilter(null)}
-            aria-pressed={!activeFilter}
-            style={{
-              padding: "3px 10px",
-              fontSize: "var(--text-sm)",
-              border: "1px solid var(--color-border)",
-              borderRadius: 100,
-              background: !activeFilter ? "var(--color-text-primary)" : "var(--color-page)",
-              color: !activeFilter ? "var(--color-page)" : "var(--color-text-secondary)",
-              cursor: "pointer",
-              transition: "all 100ms",
-            }}
-          >
-            All
-          </button>
-          {chipTypes.map((wt) => (
+      {/* Same shape as Suggested and Rules: one search box, everything else behind Filter. */}
+      <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--color-border)] bg-[var(--color-page)] px-8 py-2.5">
+        {selectedIds.size > 0 ? (
+          <div className="flex h-[34px] items-center gap-3">
+            <span className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">
+              {selectedIds.size} selected
+            </span>
             <button
-              key={wt.value}
               type="button"
-              onClick={() => setActiveFilter(activeFilter === wt.value ? null : wt.value)}
-              aria-pressed={activeFilter === wt.value}
-              style={{
-                padding: "3px 10px",
-                fontSize: "var(--text-sm)",
-                border: "1px solid var(--color-border)",
-                borderRadius: 100,
-                background: activeFilter === wt.value ? "var(--color-text-primary)" : "var(--color-page)",
-                color: activeFilter === wt.value ? "var(--color-page)" : "var(--color-text-secondary)",
-                cursor: "pointer",
-                transition: "all 100ms",
-              }}
+              onClick={() => setShowBulkTypeChips(!showBulkTypeChips)}
+              aria-expanded={showBulkTypeChips}
+              aria-controls="corrections-bulk-tag-chips"
+              className={BUTTON_SECONDARY_CLASS}
             >
-              {wt.label}
+              Set writing type
             </button>
-          ))}
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-          {selectedIds.size > 0 && (
-            <>
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-                {selectedIds.size} selected
-              </span>
-              {view === "archive" && (
-                <button
-                  type="button"
-                  onClick={handleBulkRequeue}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: "var(--text-sm)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "var(--radius-sm)",
-                    background: "var(--color-page)",
-                    color: "var(--color-text-secondary)",
-                    cursor: "pointer",
-                  }}
+            {view === "archive" && (
+              <button
+                type="button"
+                onClick={handleBulkRequeue}
+                title="Send these notes back to Waiting so they're used again"
+                className={BUTTON_SECONDARY_CLASS}
+              >
+                Use again
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className={cn(BUTTON_SECONDARY_CLASS, "text-[var(--color-danger-text)]")}
+            >
+              Remove
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedIds(new Set());
+                setShowBulkTypeChips(false);
+              }}
+              className={cn(LINK_BUTTON_CLASS, "ml-auto")}
+            >
+              Clear
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <ViewToggle
+              view={view}
+              onChangeView={(v) => {
+                setView(v);
+                setSelectedIds(new Set());
+              }}
+              inboxCount={inboxCount}
+              archiveCount={archiveCount}
+            />
+            <div className="relative flex-1">
+              <input
+                ref={searchRef}
+                type="search"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && searchText) {
+                    e.stopPropagation();
+                    setSearchText("");
+                  }
+                }}
+                placeholder="Search notes"
+                aria-label="Search notes"
+                className={SEARCH_CLASS}
+              />
+              {!searchText && <SlashHint />}
+            </div>
+            <button
+              type="button"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((o) => !o)}
+              className={cn(BUTTON_SECONDARY_CLASS, "py-1.5 text-[length:var(--text-sm)]")}
+            >
+              Filter{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+            </button>
+          </div>
+        )}
+
+        {filtersOpen && selectedIds.size === 0 && (
+          <div className="rule-room flex flex-wrap items-center gap-3" data-room>
+            <div className="flex gap-1" role="group" aria-label="Kind of note">
+              <Chip
+                active={polarityFilter === "corrective"}
+                onClick={() => setPolarityFilter(polarityFilter === "corrective" ? null : "corrective")}
+                title="Notes about things to stop doing"
+              >
+                Avoid
+              </Chip>
+              <Chip
+                active={polarityFilter === "positive"}
+                onClick={() => setPolarityFilter(polarityFilter === "positive" ? null : "positive")}
+                title="Notes about things to keep doing"
+              >
+                Do more
+              </Chip>
+            </div>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Writing type">
+              {WRITING_TYPES.map((wt) => (
+                <Chip
+                  key={wt.value}
+                  active={activeFilter === wt.value}
+                  onClick={() => setActiveFilter(activeFilter === wt.value ? null : wt.value)}
                 >
-                  Requeue
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowBulkTypeChips(!showBulkTypeChips)}
-                aria-expanded={showBulkTypeChips}
-                aria-controls="corrections-bulk-tag-chips"
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "var(--text-sm)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--color-page)",
-                  color: "var(--color-text-secondary)",
-                  cursor: "pointer",
-                }}
-              >
-                Tag selected
-              </button>
-              <button
-                type="button"
-                onClick={handleBulkDelete}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: "var(--text-sm)",
-                  border: "1px solid var(--color-danger, #c44b3f)",
-                  borderRadius: "var(--radius-sm)",
-                  background: "var(--color-page)",
-                  color: "var(--color-danger, #c44b3f)",
-                  cursor: "pointer",
-                }}
-              >
-                Delete
-              </button>
-            </>
-          )}
-        </div>
+                  {wt.label}
+                </Chip>
+              ))}
+              <Chip active={untaggedOnly} onClick={() => setUntaggedOnly((u) => !u)}>
+                No type yet
+              </Chip>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bulk tag chips */}
       {showBulkTypeChips && selectedIds.size > 0 && (
-        <div id="corrections-bulk-tag-chips" style={{ padding: "8px 32px", borderBottom: "1px solid var(--color-border)", background: "var(--color-page)" }}>
+        <div id="corrections-bulk-tag-chips" className="border-b border-[var(--color-border)] bg-[var(--color-page)] px-8 py-2">
           <WritingTypeChips value={null} onChange={handleBulkTag} />
         </div>
       )}
 
       {/* Content area */}
       <div style={{ flex: 1, overflowY: "auto", padding: 0 }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 32px 64px" }}>
+        <div style={{ maxWidth: 960, padding: "16px 32px 64px" }}>
           {loading && corrections.length === 0 ? (
             <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px" }}>
               Loading...
             </div>
-          ) : emptyMessage || filtered.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", padding: "64px 32px", lineHeight: 1.6 }}>
-              {emptyMessage ?? "No corrections match your filters."}
-            </div>
+          ) : emptyState ? (
+            <EmptyState title={emptyState.title}>{emptyState.body}</EmptyState>
           ) : (
             <>
               {Array.from(dateGroups.entries()).map(([dateLabel, items]) => (

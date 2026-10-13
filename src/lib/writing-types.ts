@@ -1,5 +1,5 @@
 export const WRITING_TYPES = [
-  { value: "general", label: "General" },
+  { value: "general", label: "All writing" },
   { value: "email", label: "Email" },
   { value: "prd", label: "PRD" },
   { value: "blog", label: "Blog" },

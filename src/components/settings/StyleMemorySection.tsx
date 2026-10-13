@@ -1,128 +1,30 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { exportCorrectionsJson, seedRulesFromGuide, openStyleGuideDialog, getWritingRules } from "@/lib/tauri-commands";
-import type { SeedRulesResult } from "@/lib/tauri-commands";
+import { exportCorrectionsJson, getWritingRules, getCorrectionsFlat } from "@/lib/tauri-commands";
 import { reportError } from "@/lib/error-bus";
+import { cn } from "@/lib/cn";
 import { CorrectionsTab } from "@/components/style-memory/CorrectionsTab";
-import { RulesTab } from "@/components/style-memory/RulesTab";
-import { WRITING_TYPES } from "@/lib/writing-types";
-import { SettingsButton } from "./SettingsButton";
+import { RulesTab, countRules, type RuleCounts } from "@/components/style-memory/RulesTab";
+import { BUTTON_PRIMARY_CLASS, FOCUS_RING, plural } from "@/components/style-memory/controls";
+import type { CorrectionDetail } from "@/types/annotations";
 
-type ActiveTab = "corrections" | "rules";
-type StatFilter = "all-corrections" | "all-rules" | "to-process" | "to-review" | "needs-attention" | null;
+/**
+ * Writing rules is one pipeline, so it reads as one: your notes on writing,
+ * the rules Claude suggests from them, and the rules Claude follows. The three
+ * tabs are those three stages in order, each carrying its own count, so the
+ * page needs no separate stat row, import bar or jargon to explain itself.
+ */
+type Stage = "notes" | "suggested" | "rules";
 
-function SeedGuideSection({ onSeeded }: { onSeeded: () => void }) {
-  const [mode, setMode] = useState<"closed" | "paste">("closed");
-  const [pasteText, setPasteText] = useState("");
-  const [writingType, setWritingType] = useState("general");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<SeedRulesResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const STAGES: { id: Stage; label: string }[] = [
+  { id: "notes", label: "Notes" },
+  { id: "suggested", label: "Suggested" },
+  { id: "rules", label: "Rules" },
+];
 
-  const handleSeed = useCallback(async (text: string, name?: string) => {
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      const r = await seedRulesFromGuide(text, writingType, name);
-      setResult(r);
-      setMode("closed");
-      setPasteText("");
-      onSeeded();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [writingType, onSeeded]);
-
-  const handleUpload = useCallback(async () => {
-    try {
-      const content = await openStyleGuideDialog();
-      if (content) {
-        await handleSeed(content, "Uploaded file");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [handleSeed]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-8 py-4">
-        <div
-          className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-tertiary)] border-t-[var(--color-accent)]"
-        />
-        <span className="text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
-          Extracting rules...
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border-b border-[var(--color-border)] px-8 py-4">
-      <div className="flex items-center gap-3">
-        <div className="flex-1">
-          <span className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">
-            Import from style guide
-          </span>
-          {result && (
-            <span className="ml-3 text-[length:var(--text-xs)] text-[var(--color-accent)]">
-              Extracted {result.created} rule{result.created !== 1 ? "s" : ""}
-              {result.deduplicated > 0 && ` (${result.deduplicated} deduplicated)`}
-              {" "}&mdash; review below
-            </span>
-          )}
-          {error && (
-            <span className="ml-3 text-[length:var(--text-xs)] text-[var(--color-danger,#e53e3e)]">
-              {error}
-            </span>
-          )}
-        </div>
-        <select
-          value={writingType}
-          onChange={(e) => setWritingType(e.target.value)}
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[length:var(--text-xs)] text-[var(--color-text-primary)]"
-        >
-          {WRITING_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <SettingsButton onClick={handleUpload} disabled={loading}>
-          Upload
-        </SettingsButton>
-        <SettingsButton
-          onClick={() => setMode(mode === "paste" ? "closed" : "paste")}
-          disabled={loading}
-        >
-          {mode === "paste" ? "Cancel" : "Paste text"}
-        </SettingsButton>
-      </div>
-
-      {mode === "paste" && (
-        <div className="mt-3 flex flex-col gap-2">
-          <textarea
-            value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
-            placeholder="Paste your style guide content here..."
-            rows={6}
-            className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-[length:var(--text-sm)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
-          />
-          <div className="flex justify-end">
-            <SettingsButton
-              onClick={() => handleSeed(pasteText, "Pasted content")}
-              disabled={!pasteText.trim()}
-            >
-              Extract rules
-            </SettingsButton>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+/** Mirrors CORRECTION_FILTER: what synthesis will actually consume. */
+function readyForRules(c: CorrectionDetail): boolean {
+  return c.synthesizedAt == null && c.notes.length > 0 && c.category !== "non-feedback";
 }
 
 interface StyleMemorySectionProps {
@@ -134,317 +36,211 @@ interface StyleMemorySectionProps {
 }
 
 export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {}) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("corrections");
-  const [statFilter, setStatFilter] = useState<StatFilter>(null);
-  const [correctionStats, setCorrectionStats] = useState({
-    total: 0,
-    documentCount: 0,
-    untaggedCount: 0,
-    unsynthesizedCount: 0,
-  });
-  const [ruleStats, setRuleStats] = useState({ ruleCount: 0, unreviewedCount: 0 });
-  const [exportStatus, setExportStatus] = useState<string | null>(null);
-  const exportTimeoutRef = useRef<number | null>(null);
+  const [stage, setStage] = useState<Stage | null>(null);
+  const [readyCount, setReadyCount] = useState<number | null>(null);
+  const [ruleCounts, setRuleCounts] = useState<RuleCounts | null>(null);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<number | null>(null);
+  const tabRefs = useRef<Record<Stage, HTMLButtonElement | null>>({ notes: null, suggested: null, rules: null });
 
-  // The header stat is otherwise only populated by RulesTab's own load, which
-  // doesn't run until that tab is opened — the page showed "0 active rules"
-  // over a corpus of hundreds until the user clicked the Rules tab.
+  // Counts for every stage up front, so the tabs are honest before they're opened.
   useEffect(() => {
     let cancelled = false;
     getWritingRules()
       .then((rules) => {
-        if (cancelled) return;
-        setRuleStats({
-          ruleCount: rules.length,
-          unreviewedCount: rules.filter((r) => r.reviewedAt == null).length,
-        });
+        if (!cancelled) setRuleCounts(countRules(rules));
       })
-      .catch((err: unknown) => reportError("Could not load rule stats", err));
+      .catch((err: unknown) => {
+        reportError("Could not load rule counts", err);
+        if (!cancelled) setRuleCounts({ inEffect: 0, suggested: 0 });
+      });
+    getCorrectionsFlat()
+      .then((rows) => {
+        if (!cancelled) setReadyCount(rows.filter(readyForRules).length);
+      })
+      .catch((err: unknown) => {
+        reportError("Could not load note counts", err);
+        if (!cancelled) setReadyCount(0);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // Open on the stage that needs you: suggestions to decide on, then notes
+  // ready to turn into rules, otherwise the rules themselves.
+  const effectiveStage: Stage =
+    stage ??
+    (ruleCounts && ruleCounts.suggested > 0
+      ? "suggested"
+      : readyCount && readyCount > 0
+        ? "notes"
+        : "rules");
+
+  // Don't guess a stage and then jump: wait for both counts, then pin the
+  // opening stage so later count changes never move the user.
+  const settled = stage !== null || (ruleCounts !== null && readyCount !== null);
+  useEffect(() => {
+    if (stage === null && ruleCounts !== null && readyCount !== null) setStage(effectiveStage);
+  }, [stage, ruleCounts, readyCount, effectiveStage]);
+
   useEffect(() => {
     return () => {
-      if (exportTimeoutRef.current !== null) {
-        window.clearTimeout(exportTimeoutRef.current);
-      }
+      if (copyTimeoutRef.current !== null) window.clearTimeout(copyTimeoutRef.current);
     };
   }, []);
 
-  const correctionsTabId = "sm-tab-corrections";
-  const rulesTabId = "sm-tab-rules";
-  const correctionsPanelId = "sm-panel-corrections";
-  const rulesPanelId = "sm-panel-rules";
-
   const handleCorrectionStatsChange = useCallback(
     (stats: { total: number; documentCount: number; untaggedCount: number; unsynthesizedCount: number }) => {
-      setCorrectionStats(stats);
+      setReadyCount(stats.unsynthesizedCount);
     },
     [],
   );
 
-  const handleRuleStatsChange = useCallback((stats: { ruleCount: number; unreviewedCount: number }) => {
-    setRuleStats(stats);
+  const handleRuleStatsChange = useCallback((counts: RuleCounts) => {
+    setRuleCounts(counts);
   }, []);
 
-  const handleExportForSynthesis = useCallback(async () => {
+  const handleCopyPrompt = useCallback(async () => {
     try {
       const result = await exportCorrectionsJson();
       if (result.count === 0) {
-        setExportStatus("No corrections to export");
+        setCopyStatus("No notes are ready yet");
       } else {
-        setCorrectionStats((prev) => ({
-          ...prev,
-          unsynthesizedCount: Math.max(0, prev.unsynthesizedCount - result.count),
-        }));
+        setReadyCount((prev) => Math.max(0, (prev ?? 0) - result.count));
         const idsJson = JSON.stringify(result.highlightIds);
         const prompt = `Analyze ${result.count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Pay attention to polarity tags — separate patterns to reinforce (+positive) from patterns to fix (+corrective). Save each rule via the margin_create_writing_rule MCP tool, and ALWAYS pass synthesized_from with the highlight_ids of the corrections that motivated the rule (valid ids: ${idsJson}). Rules created this way enter as review candidates — accepting them in Margin automatically marks the source corrections synthesized, so do NOT call margin_mark_corrections_synthesized.`;
         await writeText(prompt);
-        setExportStatus("Prompt copied — paste into your coding agent");
+        setCopyStatus("Copied. Paste it into Claude; its suggestions will appear under Suggested.");
       }
-      if (exportTimeoutRef.current !== null) {
-        window.clearTimeout(exportTimeoutRef.current);
-      }
-      exportTimeoutRef.current = window.setTimeout(
-        () => setExportStatus(null),
-        6000,
-      );
+      if (copyTimeoutRef.current !== null) window.clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = window.setTimeout(() => setCopyStatus(null), 8000);
     } catch (err) {
-      reportError("Could not export corrections", err);
-      setExportStatus("Export failed");
+      reportError("Could not prepare your notes for Claude", err);
+      setCopyStatus("Couldn't copy the prompt");
     }
   }, []);
 
+  const counts: Record<Stage, number | null> = {
+    notes: readyCount,
+    suggested: ruleCounts?.suggested ?? null,
+    rules: ruleCounts?.inEffect ?? null,
+  };
+
+  const onTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const next = STAGES[(index + (e.key === "ArrowRight" ? 1 : STAGES.length - 1)) % STAGES.length]!;
+    setStage(next.id);
+    tabRefs.current[next.id]?.focus();
+  };
+
   return (
     <div className="flex flex-col" style={{ minHeight: "calc(100vh - 80px)" }}>
-      {/* Stats bar */}
-      <div className="flex items-center gap-12 border-b border-[var(--color-border)] px-8 py-6">
-        <Stat
-          value={correctionStats.total}
-          label="Flagged"
-          active={statFilter === "all-corrections"}
-          onClick={() => {
-            const next = statFilter === "all-corrections" ? null : ("all-corrections" as StatFilter);
-            setStatFilter(next);
-            if (next) setActiveTab("corrections");
-          }}
-        />
-        <Stat
-          value={ruleStats.ruleCount}
-          label="Active rules"
-          active={statFilter === "all-rules"}
-          onClick={() => {
-            const next = statFilter === "all-rules" ? null : ("all-rules" as StatFilter);
-            setStatFilter(next);
-            if (next) setActiveTab("rules");
-          }}
-        />
-        {correctionStats.unsynthesizedCount > 0 && (
-          <Stat
-            value={correctionStats.unsynthesizedCount}
-            label="Pending"
-            accent
-            active={statFilter === "to-process"}
-            onClick={() => {
-              const next = statFilter === "to-process" ? null : ("to-process" as StatFilter);
-              setStatFilter(next);
-              if (next) setActiveTab("corrections");
-            }}
-          />
-        )}
-        {ruleStats.unreviewedCount > 0 && (
-          <Stat
-            value={ruleStats.unreviewedCount}
-            label="To review"
-            accent
-            active={statFilter === "to-review"}
-            onClick={() => {
-              const next = statFilter === "to-review" ? null : ("to-review" as StatFilter);
-              setStatFilter(next);
-              if (next) setActiveTab("rules");
-            }}
-          />
-        )}
-        {correctionStats.untaggedCount > 0 && (
-          <Stat
-            value={correctionStats.untaggedCount}
-            label="Untagged"
-            active={statFilter === "needs-attention"}
-            onClick={() => {
-              const next = statFilter === "needs-attention" ? null : ("needs-attention" as StatFilter);
-              setStatFilter(next);
-              if (next) setActiveTab("corrections");
-            }}
-          />
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {exportStatus && (
-            <span
-              role="status"
-              aria-live="polite"
-              className="max-w-[300px] truncate text-[length:11px] text-[var(--color-text-secondary)]"
-            >
-              {exportStatus}
-            </span>
-          )}
-          {activeTab === "corrections" && correctionStats.unsynthesizedCount > 0 && (
-            <button
-              type="button"
-              onClick={handleExportForSynthesis}
-              className="shrink-0 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--hover-bg)] px-3 py-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-text-secondary)] transition-colors duration-150 hover:bg-[var(--color-surface-muted)]"
-            >
-              Synthesize {correctionStats.unsynthesizedCount} pending
-            </button>
-          )}
-        </div>
-      </div>
+      <header className="px-8 pb-5 pt-12">
+        <h2 className="text-[length:var(--text-2xl)] font-light text-[var(--color-text-primary)]">
+          Writing rules
+        </h2>
+        <p className="mt-2 max-w-[640px] text-[length:var(--text-sm)] leading-[1.6] text-[var(--color-text-secondary)]">
+          Your notes on what you read become rules. Claude follows the rules you accept, every time it writes for you.
+        </p>
+      </header>
 
-      {/* Seed from style guide */}
-      <SeedGuideSection onSeeded={() => setActiveTab("rules")} />
-
-      {/* Tab bar */}
       <div
         role="tablist"
-        aria-label="Writing rules sections"
-        className="flex gap-0 border-b border-[var(--color-border)] px-8"
+        aria-label="Writing rules"
+        className="flex gap-1 border-b border-[var(--color-border)] px-6"
       >
-        <TabButton
-          id={correctionsTabId}
-          controlsId={correctionsPanelId}
-          active={activeTab === "corrections"}
-          onClick={() => setActiveTab("corrections")}
-        >
-          Flagged patterns
-        </TabButton>
-        <TabButton
-          id={rulesTabId}
-          controlsId={rulesPanelId}
-          active={activeTab === "rules"}
-          onClick={() => setActiveTab("rules")}
-        >
-          Active rules
-        </TabButton>
+        {STAGES.map((s, i) => {
+          const active = effectiveStage === s.id;
+          const count = counts[s.id];
+          const wantsYou = s.id === "suggested" && (count ?? 0) > 0;
+          return (
+            <button
+              key={s.id}
+              ref={(el) => {
+                tabRefs.current[s.id] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`wr-tab-${s.id}`}
+              aria-selected={active}
+              aria-controls={`wr-panel-${s.id}`}
+              tabIndex={active ? 0 : -1}
+              onClick={() => setStage(s.id)}
+              onKeyDown={(e) => onTabKeyDown(e, i)}
+              className={cn(
+                "-mb-px flex cursor-pointer items-center gap-2 border-b-2 px-2 py-3 text-[length:var(--text-sm)] transition-colors duration-150",
+                FOCUS_RING,
+                active
+                  ? "border-[var(--color-accent)] font-medium text-[var(--color-text-primary)]"
+                  : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
+              )}
+            >
+              {s.label}
+              {count !== null && count > 0 && (
+                <span
+                  className={cn(
+                    "rounded-[var(--radius-pill)] px-1.5 text-[length:var(--text-xs)] tabular-nums",
+                    wantsYou
+                      ? "bg-[var(--color-accent)] text-[var(--color-page)]"
+                      : "bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
+                  )}
+                >
+                  {count}
+                </span>
+              )}
+              {i < STAGES.length - 1 && (
+                <span aria-hidden="true" className="pl-2 text-[var(--color-text-tertiary)]">
+                  →
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tab content */}
-      {activeTab === "corrections" ? (
-        <div
-          role="tabpanel"
-          id={correctionsPanelId}
-          aria-labelledby={correctionsTabId}
-          className="flex flex-1 flex-col"
-          style={{ minHeight: 0 }}
-        >
-          <CorrectionsTab
-            onStatsChange={handleCorrectionStatsChange}
-            filterHint={
-              statFilter === "to-process" ? "unsynthesized"
-                : statFilter === "needs-attention" ? "untagged"
-                : statFilter === "all-corrections" ? "all"
-                : null
-            }
-            onAcceptEdit={onAcceptEdit}
-          />
-        </div>
-      ) : (
-        <div
-          role="tabpanel"
-          id={rulesPanelId}
-          aria-labelledby={rulesTabId}
-          className="relative flex flex-1 flex-col"
-          style={{ minHeight: 0 }}
-        >
+      <div
+        role="tabpanel"
+        id={`wr-panel-${effectiveStage}`}
+        aria-labelledby={`wr-tab-${effectiveStage}`}
+        className="relative flex flex-1 flex-col"
+        style={{ minHeight: 0 }}
+      >
+        {!settled ? null : effectiveStage === "notes" ? (
+          <>
+            {(readyCount ?? 0) > 0 && (
+              <div className="flex items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-8 py-3">
+                <p className="flex-1 text-[length:var(--text-sm)] text-[var(--color-text-primary)]">
+                  {plural(readyCount ?? 0, "note is", "notes are")} ready to become rules.
+                  <span className="text-[var(--color-text-secondary)]">
+                    {" "}Claude reads them and suggests rules for you to accept.
+                  </span>
+                </p>
+                <button type="button" onClick={() => void handleCopyPrompt()} className={BUTTON_PRIMARY_CLASS}>
+                  Copy prompt for Claude
+                </button>
+              </div>
+            )}
+            {copyStatus && (
+              <p role="status" aria-live="polite" className="border-b border-[var(--color-border)] px-8 py-2 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+                {copyStatus}
+              </p>
+            )}
+            <CorrectionsTab
+              onStatsChange={handleCorrectionStatsChange}
+              filterHint={null}
+              onAcceptEdit={onAcceptEdit}
+            />
+          </>
+        ) : (
           <RulesTab
+            key={effectiveStage}
+            mode={effectiveStage}
             onStatsChange={handleRuleStatsChange}
-            filterHint={
-              statFilter === "to-review" ? "unreviewed"
-                : statFilter === "all-rules" ? "all"
-                : null
-            }
           />
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  );
-}
-
-function Stat({
-  value,
-  label,
-  accent,
-  active,
-  onClick,
-}: {
-  value: number | string;
-  label: string;
-  accent?: boolean;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex flex-col bg-transparent border-0 p-0 cursor-pointer text-left"
-    >
-      <span
-        className="font-serif text-4xl font-bold leading-none tracking-tight"
-        style={{
-          color: accent ? "var(--color-accent)" : "var(--color-text-primary)",
-        }}
-      >
-        {value}
-      </span>
-      <span
-        className="mt-0.5 text-[length:12px] font-medium uppercase tracking-wide"
-        style={{
-          color: active ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
-          borderBottom: active ? "2px solid var(--color-accent)" : "2px solid transparent",
-          paddingBottom: 2,
-        }}
-      >
-        {label}
-      </span>
-    </button>
-  );
-}
-
-function TabButton({
-  id,
-  controlsId,
-  active,
-  onClick,
-  children,
-}: {
-  id: string;
-  controlsId: string;
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      id={id}
-      aria-selected={active}
-      aria-controls={controlsId}
-      onClick={onClick}
-      tabIndex={active ? 0 : -1}
-      className="cursor-pointer border-b-2 border-l-0 border-r-0 border-t-0 bg-transparent px-4 py-3 text-[length:var(--text-sm)] transition-colors duration-150"
-      style={{
-        fontWeight: active ? 500 : 400,
-        color: active
-          ? "var(--color-text-primary)"
-          : "var(--color-text-secondary)",
-        borderBottomColor: active
-          ? "var(--color-accent)"
-          : "transparent",
-      }}
-    >
-      {children}
-    </button>
   );
 }

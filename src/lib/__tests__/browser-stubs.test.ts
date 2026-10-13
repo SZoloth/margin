@@ -200,7 +200,7 @@ describe("browser mock invoke", () => {
     expect(await mockInvoke("get_all_corrections")).toEqual([]);
     expect(await mockInvoke("get_corrections_count")).toBe(0);
     expect(await mockInvoke("get_corrections_by_document")).toEqual([]);
-    expect(await mockInvoke("get_corrections_flat")).toEqual([]);
+    expect(await mockInvoke("get_corrections_flat")).toHaveLength(2);
   });
 
   it("returns the fixture writing rule for resurfacing exercises", async () => {

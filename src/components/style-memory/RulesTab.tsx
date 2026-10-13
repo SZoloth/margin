@@ -12,34 +12,72 @@ import {
   getArchivedWritingRules,
   unarchiveWritingRule,
 } from "@/lib/tauri-commands";
+import {
+  BUTTON_PRIMARY_CLASS,
+  BUTTON_SECONDARY_CLASS,
+  Chevron,
+  Chip,
+  EmptyState,
+  FIELD_CLASS,
+  FOCUS_RING,
+  LINK_BUTTON_CLASS,
+  SEARCH_CLASS,
+  SlashHint,
+  plural,
+} from "./controls";
+import { StyleGuideImport } from "./StyleGuideImport";
 
-type RulesView = "unreviewed" | "all";
+/**
+ * "suggested": rules Claude proposed from your notes. They do nothing until
+ * accepted (the CLI excludes unreviewed synthesis candidates from every export).
+ * "rules": everything else. These are what Claude follows.
+ */
+export type RulesMode = "suggested" | "rules";
 
-type RulesFilterHint = "unreviewed" | "all" | null;
+export interface RuleCounts {
+  inEffect: number;
+  suggested: number;
+}
 
 interface RulesTabProps {
-  onStatsChange: (stats: { ruleCount: number; unreviewedCount: number }) => void;
-  filterHint?: RulesFilterHint;
+  mode?: RulesMode;
+  onStatsChange: (counts: RuleCounts) => void;
+}
+
+/** Mirrors the export gate in cli/db/rules.go (unreviewedCandidateFilter). */
+export function isSuggested(rule: Pick<WritingRule, "source" | "reviewedAt">): boolean {
+  return rule.source === "synthesis-candidate" && rule.reviewedAt == null;
+}
+
+export function countRules(rules: WritingRule[]): RuleCounts {
+  let suggested = 0;
+  for (const r of rules) if (isSuggested(r)) suggested += 1;
+  return { inEffect: rules.length - suggested, suggested };
 }
 
 const SEVERITY_VALUES: WritingRuleSeverity[] = ["must-fix", "should-fix", "nice-to-fix"];
 
+const SEVERITY_LABELS: Record<WritingRuleSeverity, string> = {
+  "must-fix": "Must fix",
+  "should-fix": "Should fix",
+  "nice-to-fix": "Nice to fix",
+};
+
 function SeverityBadge({ severity }: { severity: string }) {
-  const key = SEVERITY_VALUES.includes(severity as WritingRuleSeverity)
+  const key = (SEVERITY_VALUES.includes(severity as WritingRuleSeverity)
     ? severity
-    : "should-fix";
+    : "should-fix") as WritingRuleSeverity;
 
   return (
     <span
       data-severity-badge
       style={{
-        padding: "2px 8px",
+        padding: "1px 8px",
         fontSize: "var(--text-xs)",
-        fontWeight: 600,
+        fontWeight: 500,
         borderRadius: 100,
-        textTransform: "uppercase",
-        letterSpacing: "0.3px",
         flexShrink: 0,
+        whiteSpace: "nowrap",
         background: `var(--color-severity-${key}-bg)`,
         color: `var(--color-severity-${key}-text)`,
         borderColor: `var(--color-severity-${key}-border)`,
@@ -47,54 +85,12 @@ function SeverityBadge({ severity }: { severity: string }) {
         borderStyle: "solid",
       }}
     >
-      {severity}
+      {SEVERITY_LABELS[key]}
     </span>
   );
 }
 
-
-
 type SortKey = "signal" | "newest";
-
-const FOCUS_RING =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]";
-
-const FIELD_CLASS = cn(
-  "w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-2 py-1 text-[length:var(--text-sm)] text-[var(--color-text-primary)]",
-  FOCUS_RING,
-);
-
-const LINK_BUTTON_CLASS = cn(
-  "cursor-pointer rounded-[var(--radius-xs)] text-[length:var(--text-xs)] text-[var(--color-text-secondary)] underline underline-offset-2 transition-colors duration-100 hover:text-[var(--color-text-primary)]",
-  FOCUS_RING,
-);
-
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "cursor-pointer rounded-[var(--radius-pill)] border border-[var(--color-border)] px-2.5 py-[3px] text-[length:var(--text-xs)] transition-colors duration-100",
-        FOCUS_RING,
-        active
-          ? "bg-[var(--color-text-primary)] text-[var(--color-page)]"
-          : "bg-[var(--color-page)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 function Field({
   label,
@@ -105,13 +101,12 @@ function Field({
   children: (id: string) => React.ReactNode;
   className?: string;
 }) {
-  const uid = useId();
-  const id = `rule-field-${uid}`;
+  const id = `rule-field-${useId()}`;
   return (
     <div className={className}>
       <label
         htmlFor={id}
-        className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px] text-[var(--color-text-secondary)]"
+        className="text-[length:var(--text-xs)] font-medium text-[var(--color-text-secondary)]"
       >
         {label}
       </label>
@@ -125,11 +120,15 @@ function formatDate(ms: number): string {
 }
 
 function typeLabel(value: string): string {
+  if (value === "general") return "All writing";
   return WRITING_TYPES.find((t) => t.value === value)?.label ?? value;
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
+/** Where a rule came from, in the user's words rather than the source column. */
+function provenance(rule: WritingRule): string {
+  if (rule.source === "seed") return "From your style guide";
+  if (rule.source === "manual") return "Added by you";
+  return `From ${plural(rule.signalCount, "note", "notes")}`;
 }
 
 function matchesQuery(rule: WritingRule, q: string): boolean {
@@ -149,18 +148,6 @@ function matchesQuery(rule: WritingRule, q: string): boolean {
   return hay.includes(q);
 }
 
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="inline-block shrink-0 text-[length:var(--text-xs)] text-[var(--color-text-secondary)] transition-transform duration-150 ease-[var(--ease-micro)]"
-      style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}
-    >
-      {"▾"}
-    </span>
-  );
-}
-
 /**
  * One rule is one line until you ask for more. Opening it reveals the reason,
  * the example and the actions in place (gradual revelation); nothing else on
@@ -168,6 +155,7 @@ function Chevron({ open }: { open: boolean }) {
  */
 function RuleRow({
   rule,
+  suggested,
   open,
   instant,
   selected,
@@ -176,9 +164,10 @@ function RuleRow({
   onToggleSelect,
   onUpdate,
   onArchive,
-  onMarkReviewed,
+  onAccept,
 }: {
   rule: WritingRule;
+  suggested: boolean;
   open: boolean;
   /** Opened from the keyboard: the result should already be there. */
   instant: boolean;
@@ -188,7 +177,7 @@ function RuleRow({
   onToggleSelect: (id: string) => void;
   onUpdate: (id: string, updates: Partial<WritingRule>) => Promise<void>;
   onArchive: (id: string) => void;
-  onMarkReviewed: (id: string) => void;
+  onAccept: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const initialFields = useCallback(
@@ -232,7 +221,6 @@ function RuleRow({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => setEditFields((f) => ({ ...f, [key]: e.target.value }));
 
-  const isUnreviewed = rule.reviewedAt == null;
   const enforced = !!rule.detectionPattern;
   const expanded = open || editing;
 
@@ -261,13 +249,6 @@ function RuleRow({
             FOCUS_RING,
           )}
         >
-          {isUnreviewed && (
-            <span
-              role="img"
-              aria-label="New"
-              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]"
-            />
-          )}
           <span
             className={cn(
               "min-w-0 flex-1 text-[length:var(--text-sm)] font-medium leading-[1.4] text-[var(--color-text-primary)]",
@@ -279,21 +260,41 @@ function RuleRow({
           <SeverityBadge severity={rule.severity} />
           <Chevron open={expanded} />
         </button>
+        {suggested && !editing && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              aria-label={`Decline: ${rule.ruleText}`}
+              onClick={() => onArchive(rule.id)}
+              className={BUTTON_SECONDARY_CLASS}
+            >
+              Decline
+            </button>
+            <button
+              type="button"
+              aria-label={`Accept: ${rule.ruleText}`}
+              onClick={() => onAccept(rule.id)}
+              className={BUTTON_PRIMARY_CLASS}
+            >
+              Accept
+            </button>
+          </div>
+        )}
       </div>
 
       {expanded && !editing && (
         <div data-room data-instant={instant || undefined} className="rule-room pb-4 pl-6 pr-6">
           {rule.whenToApply && (
-            <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
-              <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">When </strong>
+            <p className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
+              <span className="font-medium text-[var(--color-text-primary)]">When: </span>
               {rule.whenToApply}
-            </div>
+            </p>
           )}
           {rule.why && (
-            <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
-              <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">Why </strong>
+            <p className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
+              <span className="font-medium text-[var(--color-text-primary)]">Why: </span>
               {rule.why}
-            </div>
+            </p>
           )}
 
           {(rule.exampleBefore || rule.exampleAfter) && (
@@ -310,32 +311,34 @@ function RuleRow({
             </div>
           )}
 
-          <div className="mt-2 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-            Flagged {plural(rule.signalCount, "time", "times")} · {typeLabel(rule.writingType)} · Added{" "}
-            {formatDate(rule.createdAt)} ·{" "}
-            <span
-              title={
-                enforced
-                  ? "The writing guard blocks text that matches this rule."
-                  : "Claude is told this rule, but nothing blocks a violation."
-              }
-            >
-              {enforced ? "Enforced automatically" : "Guidance only"}
-            </span>
-          </div>
+          <p className="mt-2 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+            {provenance(rule)} · {typeLabel(rule.writingType)} · Added{" "}
+            {formatDate(rule.createdAt)}
+            {!suggested && (
+              <>
+                {" · "}
+                <span
+                  title={
+                    enforced
+                      ? "Claude can't save text that breaks this rule."
+                      : "Claude is told this rule, but nothing stops a slip."
+                  }
+                >
+                  {enforced ? "Blocked automatically" : "Guidance for Claude"}
+                </span>
+              </>
+            )}
+          </p>
 
           <div className="mt-2 flex gap-3">
-            {isUnreviewed && (
-              <button type="button" onClick={() => onMarkReviewed(rule.id)} className={cn(LINK_BUTTON_CLASS, "text-[var(--color-accent)]")}>
-                Mark reviewed
-              </button>
-            )}
             <button type="button" onClick={() => setEditing(true)} className={LINK_BUTTON_CLASS}>
               Edit
             </button>
-            <button type="button" onClick={() => onArchive(rule.id)} className={LINK_BUTTON_CLASS}>
-              Archive
-            </button>
+            {!suggested && (
+              <button type="button" onClick={() => onArchive(rule.id)} className={LINK_BUTTON_CLASS}>
+                Archive
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -356,22 +359,22 @@ function RuleRow({
           }}
         >
           <div className="flex flex-col gap-2">
-            <Field label="Rule text">
+            <Field label="Rule">
               {(id) => (
                 <textarea id={id} rows={2} value={editFields.ruleText} onChange={set("ruleText")} className={cn(FIELD_CLASS, "resize-y")} autoFocus />
               )}
             </Field>
             <div className="flex gap-2">
-              <Field label="Severity" className="flex-1">
+              <Field label="How strict" className="flex-1">
                 {(id) => (
                   <select id={id} value={editFields.severity} onChange={set("severity")} className={cn(FIELD_CLASS, "cursor-pointer")}>
-                    <option value="must-fix">Must-fix</option>
-                    <option value="should-fix">Should-fix</option>
-                    <option value="nice-to-fix">Nice-to-fix</option>
+                    {SEVERITY_VALUES.map((s) => (
+                      <option key={s} value={s}>{SEVERITY_LABELS[s]}</option>
+                    ))}
                   </select>
                 )}
               </Field>
-              <Field label="When to apply" className="flex-[2]">
+              <Field label="When it applies" className="flex-[2]">
                 {(id) => <input id={id} value={editFields.whenToApply} onChange={set("whenToApply")} className={FIELD_CLASS} />}
               </Field>
             </div>
@@ -379,14 +382,14 @@ function RuleRow({
               {(id) => <input id={id} value={editFields.why} onChange={set("why")} className={FIELD_CLASS} />}
             </Field>
             <div className="flex gap-2">
-              <Field label="Before" className="flex-1">
+              <Field label="Instead of" className="flex-1">
                 {(id) => <input id={id} value={editFields.exampleBefore} onChange={set("exampleBefore")} className={FIELD_CLASS} />}
               </Field>
-              <Field label="After" className="flex-1">
+              <Field label="Write" className="flex-1">
                 {(id) => <input id={id} value={editFields.exampleAfter} onChange={set("exampleAfter")} className={FIELD_CLASS} />}
               </Field>
             </div>
-            <Field label="Notes">
+            <Field label="Private notes">
               {(id) => <textarea id={id} rows={2} value={editFields.notes} onChange={set("notes")} className={cn(FIELD_CLASS, "resize-y")} />}
             </Field>
             <div className="mt-1 flex items-center gap-2">
@@ -394,20 +397,14 @@ function RuleRow({
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={!editFields.ruleText.trim()}
-                className={cn(
-                  "cursor-pointer rounded-[var(--radius-sm)] bg-[var(--color-text-primary)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-page)] disabled:cursor-default disabled:opacity-50",
-                  FOCUS_RING,
-                )}
+                className={cn(BUTTON_PRIMARY_CLASS, "px-3 text-[length:var(--text-sm)]")}
               >
                 Save
               </button>
               <button
                 type="button"
                 onClick={handleCancel}
-                className={cn(
-                  "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]",
-                  FOCUS_RING,
-                )}
+                className={cn(BUTTON_SECONDARY_CLASS, "px-3 text-[length:var(--text-sm)]")}
               >
                 Cancel
               </button>
@@ -433,13 +430,22 @@ function groupByCategory(rules: WritingRule[]): Map<string, WritingRule[]> {
   return groups;
 }
 
+/** Category ids are pipeline vocabulary; these are the names a writer would use. */
+const CATEGORY_LABELS: Record<string, string> = {
+  "kill-words": "Words to cut",
+  "ai-slop": "AI tells",
+  "voice-calibration": "Voice",
+};
+
 function formatCategoryLabel(category: string): string {
-  return category
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const known = CATEGORY_LABELS[category];
+  if (known) return known;
+  const s = category.replace(/-/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
+export function RulesTab({ mode = "rules", onStatsChange }: RulesTabProps) {
+  const suggestedMode = mode === "suggested";
   const [rules, setRules] = useState<WritingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
@@ -447,6 +453,7 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("signal");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openInstant, setOpenInstant] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -454,30 +461,20 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [archivedRules, setArchivedRules] = useState<WritingRule[] | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
-  const [lastArchived, setLastArchived] = useState<{ id: string; ruleText: string } | null>(null);
+  const [undo, setUndo] = useState<{ id: string; message: string } | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
   const undoTimeoutRef = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const loadedRef = useRef(false);
 
-  const unreviewedCount = useMemo(() => rules.filter((r) => r.reviewedAt == null).length, [rules]);
-  const [view, setView] = useState<RulesView>("unreviewed");
-
-  // The stat tiles above the tabs can ask for a specific view.
-  useEffect(() => {
-    if (filterHint === "unreviewed" || filterHint === "all") setView(filterHint);
-  }, [filterHint]);
-
   const q = query.trim().toLowerCase();
-  // Smart default: show "all" if nothing to review. A search always spans every rule.
-  const effectiveView: RulesView =
-    q || (view === "unreviewed" && unreviewedCount === 0 && rules.length > 0) ? "all" : view;
 
   const loadRules = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getWritingRules();
       setRules(data);
+      setHasLoaded(true);
     } catch (err) {
       reportError("Could not load writing rules", err);
     } finally {
@@ -492,9 +489,11 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
     }
   }, [loadRules]);
 
+  // Report only real counts: the empty array before the first load is not "zero rules".
+  const [hasLoaded, setHasLoaded] = useState(false);
   useEffect(() => {
-    onStatsChange({ ruleCount: rules.length, unreviewedCount });
-  }, [rules, onStatsChange, unreviewedCount]);
+    if (hasLoaded) onStatsChange(countRules(rules));
+  }, [rules, onStatsChange, hasLoaded]);
 
   useEffect(() => {
     return () => {
@@ -517,14 +516,18 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  const inMode = useMemo(
+    () => rules.filter((r) => isSuggested(r) === suggestedMode),
+    [rules, suggestedMode],
+  );
+
   const typesPresent = useMemo(
-    () => Array.from(new Set(rules.map((r) => r.writingType))).sort(),
-    [rules],
+    () => Array.from(new Set(inMode.map((r) => r.writingType))).sort(),
+    [inMode],
   );
 
   const filtered = useMemo(() => {
-    const list = rules.filter((r) => {
-      if (effectiveView === "unreviewed" && r.reviewedAt != null) return false;
+    const list = inMode.filter((r) => {
       if (severityFilter && r.severity !== severityFilter) return false;
       if (typeFilter && r.writingType !== typeFilter) return false;
       return matchesQuery(r, q);
@@ -534,7 +537,7 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
         ? b.signalCount - a.signalCount || b.createdAt - a.createdAt
         : b.createdAt - a.createdAt,
     );
-  }, [rules, effectiveView, severityFilter, typeFilter, q, sort]);
+  }, [inMode, severityFilter, typeFilter, q, sort]);
 
   const filteredArchived = useMemo(
     () => (archivedRules ?? []).filter((r) => matchesQuery(r, q)),
@@ -550,20 +553,34 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
     try {
       const result = await exportWritingRules();
       if (explicit) {
-        setSyncStatus(`Synced ${plural(result.ruleCount, "rule", "rules")}`);
+        setSyncStatus(`Sent ${plural(result.ruleCount, "rule", "rules")} to Claude`);
         if (syncTimeoutRef.current !== null) window.clearTimeout(syncTimeoutRef.current);
         syncTimeoutRef.current = window.setTimeout(() => setSyncStatus(null), 5000);
       }
     } catch (err) {
       reportError(
-        explicit ? "Could not sync rules" : "Rule saved, but the writing profile export failed",
+        explicit ? "Could not send rules to Claude" : "Rule saved, but Claude's copy didn't update",
         err,
       );
-      if (explicit) setSyncStatus("Sync failed");
+      if (explicit) setSyncStatus("Couldn't send rules");
     }
   }, []);
 
   const autoExportAfterRuleMutation = useCallback(() => syncRules(false), [syncRules]);
+
+  const showUndo = useCallback((entry: { id: string; message: string }) => {
+    setUndo(entry);
+    if (undoTimeoutRef.current !== null) window.clearTimeout(undoTimeoutRef.current);
+    undoTimeoutRef.current = window.setTimeout(() => setUndo(null), 8000);
+  }, []);
+
+  const dropSelection = useCallback((ids: string[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
 
   const handleUpdate = useCallback(async (id: string, updates: Partial<WritingRule>) => {
     try {
@@ -592,35 +609,25 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
     try {
       await deleteWritingRule(id);
     } catch (err) {
-      reportError("Could not archive rule", err);
+      reportError(suggestedMode ? "Could not decline rule" : "Could not archive rule", err);
       return null;
     }
     setRules((prev) => prev.filter((r) => r.id !== id));
     setOpenId((prev) => (prev === id ? null : prev));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    dropSelection([id]);
     // Keep the archive list honest if it has been loaded.
     setArchivedRules((prev) =>
       prev === null || !moved ? prev : [...prev, { ...moved, archivedAt: Date.now() }],
     );
     return moved;
-  }, [rules]);
-
-  const showUndo = useCallback((entry: { id: string; ruleText: string }) => {
-    setLastArchived(entry);
-    if (undoTimeoutRef.current !== null) window.clearTimeout(undoTimeoutRef.current);
-    undoTimeoutRef.current = window.setTimeout(() => setLastArchived(null), 8000);
-  }, []);
+  }, [rules, suggestedMode, dropSelection]);
 
   const handleArchive = useCallback(async (id: string) => {
     const moved = await archiveOne(id);
     if (!moved) return;
     void autoExportAfterRuleMutation();
-    showUndo({ id, ruleText: moved.ruleText });
-  }, [archiveOne, autoExportAfterRuleMutation, showUndo]);
+    showUndo({ id, message: `${suggestedMode ? "Declined" : "Archived"} “${moved.ruleText}”` });
+  }, [archiveOne, autoExportAfterRuleMutation, showUndo, suggestedMode]);
 
   const handleBulkArchive = useCallback(async () => {
     const ids = Array.from(selectedIds);
@@ -631,6 +638,25 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
     }
     if (done > 0) void autoExportAfterRuleMutation();
   }, [selectedIds, archiveOne, autoExportAfterRuleMutation]);
+
+  // Accepting is what lets a suggestion reach Claude, so it re-sends the rules.
+  const accept = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      await markRulesReviewed(ids);
+    } catch (err) {
+      reportError("Could not accept rule", err);
+      return;
+    }
+    const now = Date.now();
+    const accepted = new Set(ids);
+    setRules((prev) =>
+      prev.map((r) => (accepted.has(r.id) ? { ...r, reviewedAt: now, source: "synthesis" } : r)),
+    );
+    dropSelection(ids);
+    setOpenId((prev) => (prev && accepted.has(prev) ? null : prev));
+    void autoExportAfterRuleMutation();
+  }, [autoExportAfterRuleMutation, dropSelection]);
 
   const handleToggleArchived = useCallback(async () => {
     const opening = !archivedOpen;
@@ -648,43 +674,13 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
     try {
       await unarchiveWritingRule(id);
       setArchivedRules((prev) => prev?.filter((r) => r.id !== id) ?? prev);
-      setLastArchived((prev) => (prev?.id === id ? null : prev));
+      setUndo((prev) => (prev?.id === id ? null : prev));
       void loadRules();
       void autoExportAfterRuleMutation();
     } catch (err) {
       reportError("Could not restore rule", err);
     }
   }, [autoExportAfterRuleMutation, loadRules]);
-
-  const handleMarkReviewed = useCallback(async (id: string) => {
-    try {
-      await markRulesReviewed([id]);
-      setRules((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, reviewedAt: Date.now() } : r)),
-      );
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    } catch (err) {
-      reportError("Could not mark rule reviewed", err);
-    }
-  }, []);
-
-  const handleBulkMarkReviewed = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    try {
-      await markRulesReviewed(Array.from(selectedIds));
-      const now = Date.now();
-      setRules((prev) =>
-        prev.map((r) => (selectedIds.has(r.id) ? { ...r, reviewedAt: now } : r)),
-      );
-      setSelectedIds(new Set());
-    } catch (err) {
-      reportError("Bulk review failed", err);
-    }
-  }, [selectedIds]);
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -715,206 +711,213 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
     });
   }, []);
 
-  const hasActiveFilter = !!(q || severityFilter || typeFilter);
   const clearFilters = useCallback(() => {
     setQuery("");
     setSeverityFilter(null);
     setTypeFilter("");
   }, []);
 
-  const emptyMessage = useMemo(() => {
-    if (rules.length === 0) {
-      return "No writing rules yet. Export corrections for synthesis to generate rules.";
-    }
-    if (filtered.length === 0 && hasActiveFilter) {
-      return "No rules match these filters.";
-    }
-    if (effectiveView === "unreviewed" && unreviewedCount === 0) {
-      return "No new rules to review. Export corrections for synthesis to generate rules.";
-    }
-    if (filtered.length === 0) {
-      return "No rules match this filter.";
-    }
-    return null;
-  }, [rules.length, effectiveView, unreviewedCount, filtered.length, hasActiveFilter]);
+  const handleImported = useCallback(() => {
+    void loadRules();
+  }, [loadRules]);
 
-  const buttonSecondary = cn(
-    "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-2.5 py-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)] transition-colors duration-100 hover:bg-[var(--hover-bg)]",
-    FOCUS_RING,
-  );
   const selecting = selectedIds.size > 0;
+  const noun = suggestedMode ? "suggestions" : "rules";
+
+  let body: React.ReactNode;
+  if (loading && rules.length === 0) {
+    body = (
+      <div className="px-8 py-16 text-center text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
+        Loading…
+      </div>
+    );
+  } else if (inMode.length === 0) {
+    body = suggestedMode ? (
+      <EmptyState title="Nothing to review">
+        When Claude turns your notes into rules, they wait here for your yes. Nothing reaches Claude until you accept it.
+      </EmptyState>
+    ) : (
+      <>
+        <EmptyState title="No rules yet">
+          Rules are what Claude follows when it writes for you. Accept a suggestion made from your notes, or start from a style guide you already have.
+        </EmptyState>
+        {!importOpen && (
+          <div className="max-w-[640px]">
+            <StyleGuideImport onImported={handleImported} />
+          </div>
+        )}
+      </>
+    );
+  } else if (filtered.length === 0) {
+    body = (
+      <EmptyState title={`No ${noun} match`}>
+        <button type="button" onClick={clearFilters} className={LINK_BUTTON_CLASS}>
+          Clear search and filters
+        </button>
+      </EmptyState>
+    );
+  } else {
+    body = Array.from(categoryGroups.entries()).map(([category, categoryRules]) => {
+      const collapsed = collapsedCategories.has(category);
+      return (
+        <section key={category} aria-label={formatCategoryLabel(category)}>
+          <button
+            type="button"
+            aria-expanded={!collapsed}
+            onClick={() => toggleCategory(category)}
+            className={cn(
+              "flex w-full cursor-pointer items-center justify-between bg-transparent pb-1.5 pt-5 text-left text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]",
+              FOCUS_RING,
+            )}
+          >
+            <span>{formatCategoryLabel(category)}</span>
+            <span className="flex items-center gap-1.5 font-normal normal-case tracking-normal">
+              {categoryRules.length}
+              <Chevron open={!collapsed} />
+            </span>
+          </button>
+          {!collapsed &&
+            categoryRules.map((rule) => (
+              <RuleRow
+                key={rule.id}
+                rule={rule}
+                suggested={suggestedMode}
+                open={openId === rule.id}
+                instant={openInstant}
+                selected={selectedIds.has(rule.id)}
+                selecting={selecting}
+                onToggle={handleToggleRow}
+                onToggleSelect={handleToggleSelect}
+                onUpdate={handleUpdate}
+                onArchive={(id) => void handleArchive(id)}
+                onAccept={(id) => void accept([id])}
+              />
+            ))}
+        </section>
+      );
+    });
+  }
 
   return (
     <>
       {/* One search box. Everything else is one click away, not on screen. */}
-      <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--color-border)] bg-[var(--color-page)] px-8 py-2.5">
-        {selecting ? (
-          <div className="flex h-[34px] items-center gap-3">
-            <span className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">
-              {selectedIds.size} selected
-            </span>
-            <button type="button" onClick={handleBulkMarkReviewed} className={buttonSecondary}>
-              Mark reviewed
-            </button>
-            <button type="button" onClick={() => void handleBulkArchive()} className={buttonSecondary}>
-              Archive selected
-            </button>
-            <button type="button" onClick={() => setSelectedIds(new Set())} className={cn(LINK_BUTTON_CLASS, "ml-auto")}>
-              Clear
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <input
-                ref={searchRef}
-                type="search"
-                aria-label="Search rules"
-                placeholder="Search rules"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape" && query) {
-                    e.stopPropagation();
-                    setQuery("");
-                  }
-                }}
-                className={cn(FIELD_CLASS, "py-1.5 pr-8 [&::-webkit-search-cancel-button]:appearance-none")}
-              />
-              {!query && (
-                <kbd
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]"
+      {inMode.length > 0 && (
+        <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--color-border)] bg-[var(--color-page)] px-8 py-2.5">
+          {selecting ? (
+            <div className="flex h-[34px] items-center gap-3">
+              <span className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">
+                {selectedIds.size} selected
+              </span>
+              {suggestedMode ? (
+                <>
+                  <button type="button" onClick={() => void accept(Array.from(selectedIds))} className={BUTTON_PRIMARY_CLASS}>
+                    Accept selected
+                  </button>
+                  <button type="button" onClick={() => void handleBulkArchive()} className={BUTTON_SECONDARY_CLASS}>
+                    Decline selected
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => void handleBulkArchive()} className={BUTTON_SECONDARY_CLASS}>
+                  Archive selected
+                </button>
+              )}
+              <button type="button" onClick={() => setSelectedIds(new Set())} className={cn(LINK_BUTTON_CLASS, "ml-auto")}>
+                Clear
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  ref={searchRef}
+                  type="search"
+                  aria-label={suggestedMode ? "Search suggestions" : "Search rules"}
+                  placeholder={suggestedMode ? "Search suggestions" : "Search rules"}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape" && query) {
+                      e.stopPropagation();
+                      setQuery("");
+                    }
+                  }}
+                  className={SEARCH_CLASS}
+                />
+                {!query && <SlashHint />}
+              </div>
+              <button
+                type="button"
+                aria-expanded={filtersOpen}
+                onClick={() => setFiltersOpen((o) => !o)}
+                className={cn(BUTTON_SECONDARY_CLASS, "py-1.5 text-[length:var(--text-sm)]")}
+              >
+                Filter{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+              </button>
+              {!suggestedMode && (
+                <button
+                  type="button"
+                  aria-expanded={importOpen}
+                  onClick={() => setImportOpen((o) => !o)}
+                  className={cn(BUTTON_SECONDARY_CLASS, "py-1.5 text-[length:var(--text-sm)]")}
                 >
-                  /
-                </kbd>
+                  Add from style guide
+                </button>
               )}
             </div>
-            <button
-              type="button"
-              aria-expanded={filtersOpen}
-              onClick={() => setFiltersOpen((o) => !o)}
-              className={cn(buttonSecondary, "py-1.5 text-[length:var(--text-sm)]")}
-            >
-              Filter{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-            </button>
-          </div>
-        )}
+          )}
 
-        {filtersOpen && !selecting && (
-          <div className="rule-room flex flex-wrap items-center gap-2" data-room>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Severity">
-              {SEVERITY_VALUES.map((sev) => (
-                <Chip key={sev} active={severityFilter === sev} onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}>
-                  {sev.charAt(0).toUpperCase() + sev.slice(1)}
-                </Chip>
-              ))}
-            </div>
-            {typesPresent.length > 1 && (
+          {filtersOpen && !selecting && (
+            <div className="rule-room flex flex-wrap items-center gap-2" data-room>
+              <div className="flex flex-wrap gap-1" role="group" aria-label="How strict">
+                {SEVERITY_VALUES.map((sev) => (
+                  <Chip key={sev} active={severityFilter === sev} onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}>
+                    {SEVERITY_LABELS[sev]}
+                  </Chip>
+                ))}
+              </div>
+              {typesPresent.length > 1 && (
+                <select
+                  aria-label="Writing type"
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
+                >
+                  <option value="">Every writing type</option>
+                  {typesPresent.map((t) => (
+                    <option key={t} value={t}>{typeLabel(t)}</option>
+                  ))}
+                </select>
+              )}
               <select
-                aria-label="Writing type"
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                aria-label="Sort"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
                 className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
               >
-                <option value="">All writing types</option>
-                {typesPresent.map((t) => (
-                  <option key={t} value={t}>{typeLabel(t)}</option>
-                ))}
+                <option value="signal">Most notes first</option>
+                <option value="newest">Newest first</option>
               </select>
-            )}
-            <select
-              aria-label="Sort rules"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
-            >
-              <option value="signal">Most flagged first</option>
-              <option value="newest">Newest first</option>
-            </select>
-          </div>
-        )}
-
-        {/* The review queue is a sentence, not a second set of tabs. */}
-        {!q && rules.length > 0 && (effectiveView === "unreviewed" || unreviewedCount > 0) && (
-          <div className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-            {effectiveView === "unreviewed" ? (
-              <>
-                Showing {plural(unreviewedCount, "new rule", "new rules")}.{" "}
-                <button type="button" onClick={() => { setView("all"); setSelectedIds(new Set()); }} className={LINK_BUTTON_CLASS}>
-                  Show all {rules.length}
-                </button>
-              </>
-            ) : (
-              <>
-                {plural(unreviewedCount, "new rule", "new rules")} to review.{" "}
-                <button type="button" onClick={() => { setView("unreviewed"); setSelectedIds(new Set()); }} className={LINK_BUTTON_CLASS}>
-                  Review them
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[960px] px-8 pb-16 pt-2">
-          {loading && rules.length === 0 ? (
-            <div className="px-8 py-16 text-center text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
-              Loading...
-            </div>
-          ) : emptyMessage ? (
-            <div className="px-8 py-16 text-center text-[length:var(--text-sm)] leading-[1.6] text-[var(--color-text-secondary)]">
-              {emptyMessage}
-              {hasActiveFilter && rules.length > 0 && (
-                <div className="mt-2">
-                  <button type="button" onClick={clearFilters} className={LINK_BUTTON_CLASS}>
-                    Clear filters
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            Array.from(categoryGroups.entries()).map(([category, categoryRules]) => {
-              const collapsed = collapsedCategories.has(category);
-              return (
-                <div key={category}>
-                  <button
-                    type="button"
-                    aria-expanded={!collapsed}
-                    onClick={() => toggleCategory(category)}
-                    className={cn(
-                      "flex w-full cursor-pointer items-center justify-between bg-transparent pb-1.5 pt-5 text-left text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]",
-                      FOCUS_RING,
-                    )}
-                  >
-                    <span>{formatCategoryLabel(category)}</span>
-                    <span className="flex items-center gap-1.5 font-normal normal-case tracking-normal">
-                      {categoryRules.length}
-                      <Chevron open={!collapsed} />
-                    </span>
-                  </button>
-                  {!collapsed &&
-                    categoryRules.map((rule) => (
-                      <RuleRow
-                        key={rule.id}
-                        rule={rule}
-                        open={openId === rule.id}
-                        instant={openInstant}
-                        selected={selectedIds.has(rule.id)}
-                        selecting={selecting}
-                        onToggle={handleToggleRow}
-                        onToggleSelect={handleToggleSelect}
-                        onUpdate={handleUpdate}
-                        onArchive={(id) => void handleArchive(id)}
-                        onMarkReviewed={handleMarkReviewed}
-                      />
-                    ))}
-                </div>
-              );
-            })
+        <div className="max-w-[960px] px-8 pb-16 pt-2">
+          {suggestedMode && inMode.length > 0 && (
+            <p className="pt-3 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
+              Claude suggested these from your notes. Nothing here reaches Claude until you accept it.
+            </p>
           )}
+          {importOpen && !suggestedMode && inMode.length > 0 && (
+            <div className="pt-4">
+              <StyleGuideImport onImported={handleImported} onClose={() => setImportOpen(false)} />
+            </div>
+          )}
+
+          {body}
 
           {/* Archived — archived rules keep their provenance and can return */}
           <div className="mt-8">
@@ -928,7 +931,8 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
               )}
             >
               <Chevron open={archivedOpen} />
-              Archived{archivedRules !== null ? ` (${archivedRules.length})` : ""}
+              {suggestedMode ? "Declined and archived" : "Archived"}
+              {archivedRules !== null ? ` (${archivedRules.length})` : ""}
             </button>
             {archivedOpen &&
               (archivedRules === null ? (
@@ -941,9 +945,9 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
                 filteredArchived.map((rule) => (
                   <div
                     key={rule.id}
-                    className="flex items-baseline gap-2 border-b border-[var(--color-border)] py-2 opacity-70"
+                    className="flex items-baseline gap-2 border-b border-[var(--color-border)] py-2"
                   >
-                    <div className="min-w-0 flex-1 text-[length:var(--text-sm)] text-[var(--color-text-primary)]">
+                    <div className="min-w-0 flex-1 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
                       {rule.ruleText}
                     </div>
                     {rule.archivedAt ? (
@@ -959,31 +963,33 @@ export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
               ))}
           </div>
 
-          <p className="mt-8 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-            Changes reach Claude automatically.{" "}
-            <button type="button" onClick={() => void syncRules(true)} className={LINK_BUTTON_CLASS}>
-              Sync now
-            </button>
-            {syncStatus && (
-              <span role="status" className="ml-2">
-                {syncStatus}
-              </span>
-            )}
-          </p>
+          {!suggestedMode && (
+            <p className="mt-8 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+              Claude gets every change here automatically.{" "}
+              <button type="button" onClick={() => void syncRules(true)} className={LINK_BUTTON_CLASS}>
+                Send again
+              </button>
+              {syncStatus && (
+                <span role="status" className="ml-2">
+                  {syncStatus}
+                </span>
+              )}
+            </p>
+          )}
         </div>
       </div>
 
       {/* Undo — archiving is one step, so the way back is always one click */}
-      {lastArchived && (
+      {undo && (
         <div
           role="status"
           className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-8"
         >
           <div className="rule-toast pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-2 text-[length:var(--text-sm)] text-[var(--color-text-primary)] shadow-[var(--shadow-md)]">
-            <span className="truncate">Archived “{lastArchived.ruleText}”</span>
+            <span className="truncate">{undo.message}</span>
             <button
               type="button"
-              onClick={() => void handleRestore(lastArchived.id)}
+              onClick={() => void handleRestore(undo.id)}
               className={cn(LINK_BUTTON_CLASS, "shrink-0 font-semibold text-[var(--color-text-primary)]")}
             >
               Undo

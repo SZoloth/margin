@@ -71,7 +71,7 @@ describe("CorrectionsTab accept flow", () => {
       />,
     );
 
-    const acceptButton = await screen.findByRole("button", { name: /Accept/ });
+    const acceptButton = await screen.findByRole("button", { name: /Apply edit/ });
     await user.click(acceptButton);
 
     await waitFor(() => {
