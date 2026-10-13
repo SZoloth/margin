@@ -8,7 +8,10 @@ All commands run from `mcp/`.
 
 ```bash
 # 1. Freeze the corpus (read-only on ~/.margin/margin.db). Prints skipped documents and why.
-pnpm exec tsx scripts/regression/rewrite-eval/build-draft-corpus.ts
+#    Default uses the document files the database points at. If most are gone, use the
+#    saved context around each flagged span instead:
+pnpm exec tsx scripts/regression/rewrite-eval/build-draft-corpus.ts            # --source files
+pnpm exec tsx scripts/regression/rewrite-eval/build-draft-corpus.ts --source passages
 
 # 2. Start llama-server for the humanizer (see the design doc), then generate.
 #    a2 samples at temperature 1.0, so run it three times.
@@ -33,7 +36,11 @@ before step 4 (and before step 1 so the manifest records it).
   as errors instead of output; scoring excludes failed generations and lists them.
 - Leakage: A3 and A4 see only rules last updated before the earliest held-out
   correction (ADR-003 in DECISIONS.md).
-- Fewer than 30 held-out drafts: the verdict is labelled PILOT and is direction only.
+- Fewer than 30 held-out units OR fewer than 10 held-out documents: the verdict is labelled PILOT and is direction only.
+- Passages mode: units from one document are not independent, so comparisons average
+  within each document and bootstrap over documents (the n in the report).
+- `run-rewrite-eval.ts` prints how many rules A3 can see per writing type. If that is
+  single digits, A3 is handicapped by the leakage filter; read results accordingly.
 - F1 limits: number words ("three") are not extracted, units are ignored, names at the
   start of a sentence are skipped, and a mid-sentence capitalized heading counts as a name.
 - A1's prompt matches the humanizer's intent but not its verbatim text.

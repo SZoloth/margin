@@ -3,7 +3,7 @@ import { createRequire } from "module";
 import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { buildCandidates, formatRules, loadRulesAsOf, parseNotes, toMs, type RawCorrection, type RawDocument } from "../corpus.ts";
+import { buildCandidates, buildPassageCandidates, formatRules, loadRulesAsOf, parseNotes, toMs, type RawCorrection, type RawDocument } from "../corpus.ts";
 
 const require = createRequire(import.meta.url);
 const longText = Array.from({ length: 80 }, (_, i) => `word${i}`).join(" ") + " We leverage synergy daily.";
@@ -64,6 +64,59 @@ describe("buildCandidates", () => {
       expect.stringMatching(/word count/),
       expect.stringMatching(/edited since/),
     ]);
+  });
+});
+
+describe("buildPassageCandidates", () => {
+  const words = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`).join(" ");
+  const long = `${words("a", 30)} We leverage synergy daily. ${words("b", 30)} Utilize the pipeline. ${words("c", 5)}`;
+  const withCtx = (id: string, doc: string, text: string, ctx: string | null, at = 1_700_000_000_000): RawCorrection => ({
+    ...corr(id, doc, text, ["too corporate"], at),
+    extended_context: ctx,
+  });
+
+  it("makes one unit from a long context and attaches every flagged row inside it", () => {
+    const { candidates, unplacedRows } = buildPassageCandidates([
+      withCtx("c1", "d1", "We leverage synergy daily.", long),
+      withCtx("c2", "d1", "Utilize the pipeline.", long),
+    ]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].id).toBe("d1#1");
+    expect(candidates[0].documentId).toBe("d1");
+    expect(candidates[0].spans.map((x) => x.id).sort()).toEqual(["c1", "c2"]);
+    expect(unplacedRows).toBe(0);
+  });
+
+  it("folds a passage that sits inside a longer one into the longer one", () => {
+    const inner = `${words("b", 30)} Utilize the pipeline. ${words("c", 5)}`;
+    const { candidates } = buildPassageCandidates([
+      withCtx("c1", "d1", "We leverage synergy daily.", long),
+      withCtx("c2", "d1", "Utilize the pipeline.", inner),
+    ]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].spans).toHaveLength(2);
+  });
+
+  it("counts rows whose text is in no kept passage instead of dropping them silently", () => {
+    const { candidates, unplacedRows, skipped } = buildPassageCandidates([
+      withCtx("c1", "d1", "We leverage synergy daily.", long),
+      withCtx("c2", "d1", "text from somewhere else", "too short"),
+      withCtx("c3", "d2", "anything", null),
+    ]);
+    expect(candidates).toHaveLength(1);
+    expect(unplacedRows).toBe(2);
+    expect(skipped.map((x) => x.id)).toEqual(["d2"]);
+  });
+
+  it("keeps different documents apart and uses the majority writing type", () => {
+    const rows = [
+      { ...withCtx("c1", "d1", "We leverage synergy daily.", long), writing_type: "email" },
+      { ...withCtx("c2", "d1", "Utilize the pipeline.", long), writing_type: "email" },
+      { ...withCtx("c3", "d1", "a0 a1", long), writing_type: "blog" },
+      { ...withCtx("c4", "d2", "We leverage synergy daily.", long), writing_type: "blog" },
+    ];
+    const { candidates } = buildPassageCandidates(rows);
+    expect(candidates.map((c) => [c.documentId, c.type])).toEqual([["d1", "email"], ["d2", "blog"]]);
   });
 });
 

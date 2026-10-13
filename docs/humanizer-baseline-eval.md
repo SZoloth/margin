@@ -117,6 +117,24 @@ Freeze the drafts to `mcp/scripts/regression/humanizer-drafts/` (text files plus
 manifest of split, type, spans and notes). Real writing from the user's DB is
 private: do not commit it. Commit only the manifest schema and the runner.
 
+### Passages mode (added after the first corpus build)
+
+The first build on Sam's Mac found 16 of 22 source documents missing on disk, leaving 3
+usable drafts. The runner can instead use the saved context around each flagged span
+(`corrections.extended_context`, about 60 words at the median; 114 of 156 rows have
+40 or more words, across 21 documents). Tradeoffs, stated up front:
+
+- Units are short passages, not whole drafts. The humanizer was trained on emails,
+  essays and reports, so 60-word units are off its home turf, and that is a point
+  against the comparison's fairness to it.
+- Several flagged spans share a passage, and passages from one document are not
+  independent. Comparisons therefore average within each document and bootstrap over
+  documents. With about 6 held-out documents the result is a PILOT whatever the
+  number of passages (the bar is 10 documents).
+- The corrections span only 2026-02-23 to 2026-03-22, so the time-split cutoff falls in
+  mid-March and A3 sees only rules last updated before it. The runner prints the
+  rule count per type; if it is small, A3 is handicapped and a "loss" says little.
+
 ## Metrics
 
 ### Voice fidelity (primary)

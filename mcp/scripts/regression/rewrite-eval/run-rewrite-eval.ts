@@ -17,7 +17,7 @@ import { join } from "path";
 import { parseArgs } from "util";
 import { REGISTER_MAP } from "../../shared.ts";
 import { ARMS, isArm, runArm, type Arm } from "./arms.ts";
-import { loadRulesAsOf, type Manifest } from "./corpus.ts";
+import { loadRulesAsOf, selectRulesAsOf, type Manifest } from "./corpus.ts";
 import type { RewriteFile } from "./types.ts";
 
 const { values } = parseArgs({
@@ -40,6 +40,14 @@ mkdirSync(outDir, { recursive: true });
 let docs = manifest.docs.filter((d) => values.split === "all" || d.split === values.split);
 if (values.limit) docs = docs.slice(0, Number(values.limit));
 console.error(`${docs.length} drafts (${values.split}), arms ${arms.join(",")}, run ${values.run}`);
+
+if (arms.includes("a3") || arms.includes("a4")) {
+  // A3 is only as strong as the rules that predate the cutoff; show how many that is.
+  for (const t of [...new Set(docs.map((d) => d.type))]) {
+    const n = selectRulesAsOf(values.db!, manifest.cutoff, t, REGISTER_MAP[t] ?? "casual").length;
+    console.error(`  rules visible to A3 for type ${t}: ${n}${n < 10 ? "  (FEW: A3 is handicapped, read results with that in mind)" : ""}`);
+  }
+}
 
 const loadOut = (arm: Arm): RewriteFile => {
   const p = join(outDir, `${arm}-run${values.run}.json`);

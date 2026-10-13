@@ -16,7 +16,10 @@ export interface CorpusSpan {
 }
 
 export interface CorpusDoc {
+  /** unit id: the document id in files mode, "<document id>#<n>" in passages mode */
   id: string;
+  /** the document this unit came from; resampling and splitting happen at this level */
+  documentId: string;
   type: string;
   title: string | null;
   words: number;
@@ -64,6 +67,7 @@ export interface RawCorrection {
   notes_json: string;
   writing_type: string | null;
   created_at: number;
+  extended_context?: string | null;
 }
 
 export interface RawDocument {
@@ -79,7 +83,7 @@ export function readCorrectionRows(dbPath: string): { corrections: RawCorrection
   try {
     const corrections = db
       .prepare(
-        `SELECT id, document_id, original_text, notes_json, writing_type, created_at
+        `SELECT id, document_id, original_text, notes_json, writing_type, created_at, extended_context
          FROM corrections WHERE ${CORRECTION_FILTER} ORDER BY created_at`,
       )
       .all() as RawCorrection[];
@@ -92,6 +96,7 @@ export function readCorrectionRows(dbPath: string): { corrections: RawCorrection
 
 export interface DraftCandidate {
   id: string;
+  documentId: string;
   type: string;
   title: string | null;
   text: string;
@@ -146,6 +151,7 @@ export function buildCandidates(
     const type = [...typeCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
     candidates.push({
       id: docId,
+      documentId: docId,
       type,
       title: doc.title,
       text,
@@ -154,6 +160,69 @@ export function buildCandidates(
     });
   }
   return { candidates, skipped };
+}
+
+export const MIN_PASSAGE_WORDS = 40;
+export const MAX_PASSAGE_WORDS = 300;
+
+function majorityType(rows: RawCorrection[]): string {
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.writing_type ?? "general", (counts.get(r.writing_type ?? "general") ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+}
+
+/**
+ * Passages mode, for when the source files are gone: use the saved context
+ * around each flagged span (extended_context) as the unit to rewrite. Passages
+ * that sit inside a longer passage of the same document are folded into it, and
+ * every flagged row whose text lies inside a kept passage becomes a span of it.
+ * Rows that fit no passage are counted, not silently dropped.
+ */
+export function buildPassageCandidates(corrections: RawCorrection[]): {
+  candidates: DraftCandidate[];
+  skipped: Array<{ id: string; reason: string }>;
+  unplacedRows: number;
+} {
+  const byDoc = new Map<string, RawCorrection[]>();
+  for (const c of corrections) byDoc.set(c.document_id, [...(byDoc.get(c.document_id) ?? []), c]);
+  const candidates: DraftCandidate[] = [];
+  const skipped: Array<{ id: string; reason: string }> = [];
+  let unplacedRows = 0;
+  for (const [docId, rows] of byDoc) {
+    const texts = [
+      ...new Set(
+        rows
+          .map((r) => normWs(r.extended_context ?? ""))
+          .filter((t) => wordCount(t) >= MIN_PASSAGE_WORDS && wordCount(t) <= MAX_PASSAGE_WORDS),
+      ),
+    ].sort((a, b) => b.length - a.length || a.localeCompare(b));
+    const kept: Array<{ text: string; rows: RawCorrection[] }> = [];
+    for (const t of texts) if (!kept.some((k) => k.text.includes(t))) kept.push({ text: t, rows: [] });
+    for (const r of rows) {
+      const needle = normWs(r.original_text);
+      const home = needle ? kept.find((k) => k.text.includes(needle)) : undefined;
+      if (home) home.rows.push(r);
+      else unplacedRows++;
+    }
+    let n = 0;
+    for (const k of kept) {
+      const spans: CorpusSpan[] = k.rows
+        .map((r) => ({ id: r.id, text: normWs(r.original_text), notes: parseNotes(r.notes_json), createdAt: toMs(r.created_at) }))
+        .filter((s) => s.notes.length > 0);
+      if (spans.length === 0) continue;
+      candidates.push({
+        id: `${docId}#${++n}`,
+        documentId: docId,
+        type: majorityType(k.rows),
+        title: null,
+        text: k.text,
+        spans,
+        firstCorrectionAt: Math.min(...spans.map((s) => s.createdAt)),
+      });
+    }
+    if (n === 0) skipped.push({ id: docId, reason: `no saved context of ${MIN_PASSAGE_WORDS}-${MAX_PASSAGE_WORDS} words around a flagged span` });
+  }
+  return { candidates, skipped, unplacedRows };
 }
 
 export interface RuleRow {
@@ -171,13 +240,13 @@ export interface RuleRow {
  * Rules visible to A3: production filters, plus updated_at strictly before the
  * cutoff so nothing built from held-out corrections can leak in.
  */
-export function loadRulesAsOf(dbPath: string, cutoffMs: number, type: string, register: string): string {
+export function selectRulesAsOf(dbPath: string, cutoffMs: number, type: string, register: string): RuleRow[] {
   const Database = require("better-sqlite3");
   const db = new Database(dbPath, { readonly: true, fileMustExist: true });
   try {
     const cols = (db.prepare("PRAGMA table_info(writing_rules)").all() as Array<{ name: string }>).map((c) => c.name);
     const archived = cols.includes("archived_at") ? "AND archived_at IS NULL" : "";
-    const rows = (db
+    return (db
       .prepare(
         `SELECT writing_type, category, rule_text, severity, example_before, example_after, register, updated_at
          FROM writing_rules
@@ -188,10 +257,13 @@ export function loadRulesAsOf(dbPath: string, cutoffMs: number, type: string, re
          ORDER BY signal_count DESC, created_at DESC`,
       )
       .all(type, register) as RuleRow[]).filter((r) => toMs(r.updated_at) < cutoffMs);
-    return formatRules(rows, type, register);
   } finally {
     db.close();
   }
+}
+
+export function loadRulesAsOf(dbPath: string, cutoffMs: number, type: string, register: string): string {
+  return formatRules(selectRulesAsOf(dbPath, cutoffMs, type, register), type, register);
 }
 
 export function formatRules(rows: RuleRow[], type: string, register: string): string {

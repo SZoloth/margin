@@ -8,6 +8,7 @@ import type { BlindScore } from "./blind.ts";
 
 export const THRESHOLDS = {
   minDrafts: 30,
+  minDocs: 10,
   v1MarginPp: 0.1,
   v3Share: 0.6,
   maxArmHardFail: 0.1,
@@ -15,6 +16,8 @@ export const THRESHOLDS = {
 
 export interface VerdictInput {
   nDrafts: number;
+  /** distinct source documents; units from one document are not independent */
+  nDocs: number;
   /** A3 minus A2, per-draft V1 recovery rate */
   v1: Interval | null;
   /** blind picks with A3 as the first arm */
@@ -38,8 +41,8 @@ export interface Verdict {
 
 export function decide(i: VerdictInput): Verdict {
   const reasons: string[] = [];
-  const pilot = i.nDrafts < THRESHOLDS.minDrafts;
-  if (pilot) reasons.push(`pilot: ${i.nDrafts} drafts < ${THRESHOLDS.minDrafts}, direction only`);
+  const pilot = i.nDrafts < THRESHOLDS.minDrafts || i.nDocs < THRESHOLDS.minDocs;
+  if (pilot) reasons.push(`pilot: ${i.nDrafts} units from ${i.nDocs} documents (bars: ${THRESHOLDS.minDrafts} units, ${THRESHOLDS.minDocs} documents), direction only`);
 
   // G2: if the rules add nothing over a generic editor, the claim is dead whatever A2 does
   if (i.rulesVsGeneric && !(i.rulesVsGeneric.lo > 0)) {

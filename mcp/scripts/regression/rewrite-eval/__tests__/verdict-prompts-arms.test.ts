@@ -16,6 +16,7 @@ const blind = (share: number, lower: number, decided = 20): BlindScore => ({
 });
 const base = {
   nDrafts: 32,
+  nDocs: 12,
   v1: iv(0.15, 0.05, 0.25),
   v3: blind(0.75, 0.55),
   factsAdvantage: iv(0.1, 0.02, 0.18),
@@ -56,6 +57,12 @@ describe("decide", () => {
     const v = decide({ ...base, nDrafts: THRESHOLDS.minDrafts - 1 });
     expect(v.pilot).toBe(true);
     expect(v.reasons[0]).toMatch(/pilot/);
+  });
+
+  it("is still a pilot when many units come from too few documents", () => {
+    const v = decide({ ...base, nDrafts: 40, nDocs: 6 });
+    expect(v.pilot).toBe(true);
+    expect(v.reasons[0]).toMatch(/6 documents/);
   });
 
   it("cannot call voice without blind picks", () => {

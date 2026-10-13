@@ -116,14 +116,21 @@ for (const arm of ARMS) {
   lines.push(`| ${arm} ${ARM_LABELS[arm]} | ${rows.length} | ${pct(mean("hardFail"))} | ${pct(mean("recall"))} | ${mean("lengthRatio").toFixed(2)} | ${pct(mean("v1"))} | ${pct(mean("v2"))} | ${Number.isFinite(mean("f2Problems")) ? mean("f2Problems").toFixed(2) : "n/a"} |`);
 }
 
+const docOf = new Map(manifest.docs.map((d) => [d.id, d.documentId ?? d.id]));
+
+/** Paired differences averaged within each source document, then bootstrapped over documents. */
 function paired(a: Arm, b: Arm, key: keyof DraftMetrics): Interval | null {
   const ma = metrics[a], mb = metrics[b];
   if (!ma || !mb) return null;
-  const diffs: number[] = [];
+  const perDoc = new Map<string, number[]>();
   for (const id of Object.keys(ma)) {
     const x = ma[id]?.[key], y = mb[id]?.[key];
-    if (typeof x === "number" && typeof y === "number") diffs.push(x - y);
+    if (typeof x === "number" && typeof y === "number") {
+      const doc = docOf.get(id) ?? id;
+      perDoc.set(doc, [...(perDoc.get(doc) ?? []), x - y]);
+    }
   }
+  const diffs = [...perDoc.values()].map(avg);
   return diffs.length ? pairedBootstrap(diffs) : null;
 }
 const fmt = (i: Interval | null) => (i ? `${i.mean.toFixed(3)} [${i.lo.toFixed(3)}, ${i.hi.toFixed(3)}] n=${i.n}` : "n/a");
@@ -131,7 +138,7 @@ const fmt = (i: Interval | null) => (i ? `${i.mean.toFixed(3)} [${i.lo.toFixed(3
 const v1 = paired("a3", "a2", "v1");
 const rulesVsGeneric = paired("a3", "a1", "v1");
 const factsAdv = paired("a2", "a3", "hardFail"); // positive = A3 safer
-lines.push("", "## Paired comparisons (mean diff [95% bootstrap interval])", "");
+lines.push("", "## Paired comparisons (mean diff [95% bootstrap interval]; n = source documents)", "");
 lines.push(`- V1 A3 minus A2: ${fmt(v1)}`, `- V1 A3 minus A1 (gate G2): ${fmt(rulesVsGeneric)}`, `- F1 hard-fail, A2 minus A3 (positive = A3 safer): ${fmt(factsAdv)}`);
 
 let v3: BlindScore | null = null;
@@ -145,6 +152,7 @@ if (values["blind-picks"]) {
 const a3Rows = Object.values(metrics["a3"] ?? {});
 const verdict = decide({
   nDrafts: a3Rows.length,
+  nDocs: new Set(Object.keys(metrics["a3"] ?? {}).map((id) => docOf.get(id) ?? id)).size,
   v1,
   v3,
   factsAdvantage: factsAdv,
