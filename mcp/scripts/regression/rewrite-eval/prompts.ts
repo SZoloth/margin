@@ -72,18 +72,42 @@ ${output.trim()}
 Respond with ONLY JSON: {"dropped":["..."],"altered":["..."],"invented":["..."]}. Use empty arrays when there are none.`;
 }
 
-function firstJson(text: string, open: "[" | "{"): unknown {
+// Judges sometimes follow the JSON with prose (even a self-correction), so scan for
+// balanced, parseable values instead of slicing first-open to last-close. When several
+// parse, the last one wins: a self-correction supersedes what came before it.
+export function lastJson(text: string, open: "[" | "{", accept: (v: unknown) => boolean = () => true): unknown {
   const close = open === "[" ? "]" : "}";
-  const a = text.indexOf(open);
-  const b = text.lastIndexOf(close);
-  if (a < 0 || b <= a) throw new Error("no JSON found in judge output");
-  return JSON.parse(text.slice(a, b + 1));
+  const found: unknown[] = [];
+  for (let a = text.indexOf(open); a >= 0; a = text.indexOf(open, a + 1)) {
+    let depth = 0;
+    let inStr = false;
+    for (let i = a; i < text.length; i++) {
+      const c = text[i];
+      if (inStr) {
+        if (c === "\\") i++;
+        else if (c === '"') inStr = false;
+      } else if (c === '"') inStr = true;
+      else if (c === open) depth++;
+      else if (c === close && --depth === 0) {
+        try {
+          const v = JSON.parse(text.slice(a, i + 1));
+          if (accept(v)) found.push(v);
+          a = i; // skip past this value so nested brackets are not re-read
+        } catch {
+          /* not JSON; try the next opener */
+        }
+        break;
+      }
+    }
+  }
+  if (!found.length) throw new Error("no JSON found in judge output");
+  return found[found.length - 1];
 }
 
 export type SpanVerdict = "fixed" | "unchanged" | "worse" | "removed";
 
 export function parseSpanVerdicts(text: string, expectedIds: string[]): Record<string, SpanVerdict> {
-  const arr = firstJson(text, "[") as Array<{ id?: string; verdict?: string }>;
+  const arr = lastJson(text, "[", Array.isArray) as Array<{ id?: string; verdict?: string }>;
   const ok = new Set<string>(["fixed", "unchanged", "worse", "removed"]);
   const out: Record<string, SpanVerdict> = {};
   for (const row of arr) {
@@ -103,7 +127,7 @@ export interface FactJudgement {
 }
 
 export function parseFactJudgement(text: string): FactJudgement {
-  const o = firstJson(text, "{") as Partial<FactJudgement>;
+  const o = lastJson(text, "{", (v) => !!v && typeof v === "object" && !Array.isArray(v)) as Partial<FactJudgement>;
   const arr = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
   return { dropped: arr(o.dropped), altered: arr(o.altered), invented: arr(o.invented) };
 }

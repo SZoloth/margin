@@ -86,6 +86,10 @@ describe("judge parsing", () => {
   it("parses fact judgement and tolerates missing keys", () => {
     expect(parseFactJudgement('{"dropped":["x"],"invented":["y"]}')).toEqual({ dropped: ["x"], altered: [], invented: ["y"] });
     expect(() => parseFactJudgement("no json here")).toThrow();
+    // trailing prose, including braces and a self-correction, must not break parsing
+    const noisy = '{"dropped":["a"],"altered":[],"invented":[]}\n\nWait, I mis-stated {that}. Corrected: {"dropped":[],"altered":["b {x}"],"invented":[]}\nDone.';
+    expect(parseFactJudgement(noisy)).toEqual({ dropped: [], altered: ["b {x}"], invented: [] });
+    expect(parseFactJudgement('{"dropped":["a"]} then some prose [1]')).toEqual({ dropped: ["a"], altered: [], invented: [] });
   });
 });
 
