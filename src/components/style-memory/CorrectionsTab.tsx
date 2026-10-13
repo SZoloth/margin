@@ -19,7 +19,6 @@ import {
   EmptyState,
   LINK_BUTTON_CLASS,
   SEARCH_CLASS,
-  SlashHint,
 } from "./controls";
 
 const PAGE_SIZE = 500;
@@ -163,7 +162,7 @@ function ViewToggle({
           fontWeight: view === "inbox" ? 600 : 400,
         }}
       >
-        Waiting ({inboxCount})
+        Not used yet ({inboxCount})
       </button>
       <button
         type="button"
@@ -178,7 +177,7 @@ function ViewToggle({
           fontWeight: view === "archive" ? 600 : 400,
         }}
       >
-        Done ({archiveCount})
+        Already used ({archiveCount})
       </button>
     </div>
   );
@@ -220,8 +219,6 @@ function CorrectionCard({
       style={{
         padding: "14px 0",
         borderBottom: "1px solid var(--color-border)",
-        borderLeft: polarityAccentColor ? `3px solid ${polarityAccentColor}` : undefined,
-        paddingLeft: polarityAccentColor ? 10 : 0,
         display: "flex",
         gap: 10,
         alignItems: "flex-start",
@@ -239,16 +236,6 @@ function CorrectionCard({
         }}
         onClick={(e) => e.stopPropagation()}
         style={{ marginTop: 3, flexShrink: 0, accentColor: "var(--color-text-primary)" }}
-      />
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          backgroundColor: `var(--color-highlight-${correction.highlightColor}, var(--color-highlight-yellow))`,
-          flexShrink: 0,
-          marginTop: 5,
-        }}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
@@ -274,6 +261,11 @@ function CorrectionCard({
           </div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-xs)", color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
+          {polarityAccentColor && (
+            <span style={{ color: polarityAccentColor, fontWeight: 500 }}>
+              {isPositive ? "Do more of this" : "Avoid this"}
+            </span>
+          )}
           <button
             type="button"
             aria-expanded={showTypeChips}
@@ -296,12 +288,12 @@ function CorrectionCard({
             }}
           >
             {correction.writingType
-              ? (WRITING_TYPES.find((t) => t.value === correction.writingType)?.label ?? correction.writingType)
-              : "Set type"}
+              ? `For: ${WRITING_TYPES.find((t) => t.value === correction.writingType)?.label ?? correction.writingType}`
+              : "Choose writing type"}
           </button>
           {correction.documentTitle && (
-            <span style={{ color: "var(--color-accent)" }}>
-              {correction.documentTitle}
+            <span>
+              in <span style={{ color: "var(--color-accent)" }}>{correction.documentTitle}</span>
             </span>
           )}
           <span>{formatRelativeTime(correction.createdAt)}</span>
@@ -692,7 +684,7 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
               <button
                 type="button"
                 onClick={handleBulkRequeue}
-                title="Send these notes back to Waiting so they're used again"
+                title="Move these back to Not used yet, so Claude reads them again"
                 className={BUTTON_SECONDARY_CLASS}
               >
                 Use again
@@ -743,7 +735,6 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
                 aria-label="Search notes"
                 className={SEARCH_CLASS}
               />
-              {!searchText && <SlashHint />}
             </div>
             <button
               type="button"
@@ -764,14 +755,14 @@ export function CorrectionsTab({ onStatsChange, filterHint, onAcceptEdit }: Corr
                 onClick={() => setPolarityFilter(polarityFilter === "corrective" ? null : "corrective")}
                 title="Notes about things to stop doing"
               >
-                Avoid
+                Avoid this
               </Chip>
               <Chip
                 active={polarityFilter === "positive"}
                 onClick={() => setPolarityFilter(polarityFilter === "positive" ? null : "positive")}
                 title="Notes about things to keep doing"
               >
-                Do more
+                Do more of this
               </Chip>
             </div>
             <div className="flex flex-wrap gap-1" role="group" aria-label="Writing type">

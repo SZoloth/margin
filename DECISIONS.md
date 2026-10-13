@@ -87,16 +87,20 @@ Sam's review of the first pass: the whole UX, information architecture and conte
 
 | Was | Now |
 |---|---|
-| Corrections / Inbox / Archive | Notes / Waiting / Done |
-| Active rules | Rules (in effect only) |
+| Corrections / Inbox / Archive | Your notes / Not used yet / Already used |
+| Active rules | Rules in use (in effect only) |
 | Synthesize N pending | Copy prompt for Claude |
 | Must-fix / Should-fix / Nice-to-fix | Must fix / Should fix / Nice to fix |
 | kill-words / ai-slop / voice-calibration | Words to cut / AI tells / Voice |
 | general | All writing |
 | Flagged N times / signals | From N notes |
-| Enforced automatically / Guidance only | Blocked automatically / Guidance for Claude |
+| Enforced automatically / Guidance only | "Checked automatically: Margin scans Claude's drafts for this" / "Claude is told this rule; nothing checks for it" |
 | Not feedback / Dismiss | Not about writing / Remove |
 | Accept → edit | Apply edit |
-| Sync now | Send again |
+| Sync now | Resend all rules |
+| Colored border and highlight-color dot | "Avoid this" / "Do more of this" in words |
+| Set type | Choose writing type / For: Email |
+
+**No unexplained labels (second pass, same day).** Sam: "it's unclear what labels mean." Rule adopted: no label relies on color, position or prior knowledge. Tab names say what they hold (Your notes, Suggested rules, Rules in use); each tab opens with one sentence saying what is there and what to do; colour-coded polarity became words; counts carry their noun ("1 rule"); the unexplained `/` shortcut hint was removed. "Blocked automatically" was also inaccurate: the guard checks detection patterns, must-fix kill words and must-fix heading patterns, and soft patterns only block in clusters on published files. `isChecked` now mirrors `GenerateWritingGuardPy` and the label says "Checked".
 
 **Interaction.** Suggestions get Accept and Decline on the row, plus bulk accept and decline. Accepting now re-exports, so an accepted rule reaches Claude immediately (before, it waited for the next unrelated edit). Notes gained the same search, Filter button and bulk bar as Rules, so the three stages share one grammar.

@@ -22,7 +22,6 @@ import {
   FOCUS_RING,
   LINK_BUTTON_CLASS,
   SEARCH_CLASS,
-  SlashHint,
   plural,
 } from "./controls";
 import { StyleGuideImport } from "./StyleGuideImport";
@@ -47,6 +46,18 @@ interface RulesTabProps {
 /** Mirrors the export gate in cli/db/rules.go (unreviewedCandidateFilter). */
 export function isSuggested(rule: Pick<WritingRule, "source" | "reviewedAt">): boolean {
   return rule.source === "synthesis-candidate" && rule.reviewedAt == null;
+}
+
+/**
+ * Mirrors GenerateWritingGuardPy in cli/profile/export.go: which rules the
+ * writing guard scans for, as opposed to rules Claude is only told about.
+ */
+export function isChecked(
+  rule: Pick<WritingRule, "detectionPattern" | "severity" | "category" | "exampleBefore">,
+): boolean {
+  if (rule.detectionPattern) return true;
+  if (rule.severity !== "must-fix") return false;
+  return rule.category === "kill-words" || (rule.category === "heading-patterns" && rule.exampleBefore != null);
 }
 
 export function countRules(rules: WritingRule[]): RuleCounts {
@@ -221,7 +232,7 @@ function RuleRow({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => setEditFields((f) => ({ ...f, [key]: e.target.value }));
 
-  const enforced = !!rule.detectionPattern;
+  const enforced = isChecked(rule);
   const expanded = open || editing;
 
   return (
@@ -312,20 +323,14 @@ function RuleRow({
           )}
 
           <p className="mt-2 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-            {provenance(rule)} · {typeLabel(rule.writingType)} · Added{" "}
+            {provenance(rule)} · For {typeLabel(rule.writingType).toLowerCase()} · Added{" "}
             {formatDate(rule.createdAt)}
             {!suggested && (
               <>
                 {" · "}
-                <span
-                  title={
-                    enforced
-                      ? "Claude can't save text that breaks this rule."
-                      : "Claude is told this rule, but nothing stops a slip."
-                  }
-                >
-                  {enforced ? "Blocked automatically" : "Guidance for Claude"}
-                </span>
+                {enforced
+                  ? "Checked automatically: Margin scans Claude's drafts for this"
+                  : "Claude is told this rule; nothing checks for it"}
               </>
             )}
           </p>
@@ -772,7 +777,7 @@ export function RulesTab({ mode = "rules", onStatsChange }: RulesTabProps) {
           >
             <span>{formatCategoryLabel(category)}</span>
             <span className="flex items-center gap-1.5 font-normal normal-case tracking-normal">
-              {categoryRules.length}
+              {plural(categoryRules.length, "rule", "rules")}
               <Chevron open={!collapsed} />
             </span>
           </button>
@@ -844,7 +849,6 @@ export function RulesTab({ mode = "rules", onStatsChange }: RulesTabProps) {
                   }}
                   className={SEARCH_CLASS}
                 />
-                {!query && <SlashHint />}
               </div>
               <button
                 type="button"
@@ -906,9 +910,11 @@ export function RulesTab({ mode = "rules", onStatsChange }: RulesTabProps) {
       {/* Content area */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[960px] px-8 pb-16 pt-2">
-          {suggestedMode && inMode.length > 0 && (
+          {inMode.length > 0 && (
             <p className="pt-3 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
-              Claude suggested these from your notes. Nothing here reaches Claude until you accept it.
+              {suggestedMode
+                ? "Claude drafted these from your notes. Nothing here reaches Claude until you accept it."
+                : "Claude follows these whenever it writes for you. Open a rule to see why it exists, edit it, or archive it."}
             </p>
           )}
           {importOpen && !suggestedMode && inMode.length > 0 && (
@@ -931,7 +937,7 @@ export function RulesTab({ mode = "rules", onStatsChange }: RulesTabProps) {
               )}
             >
               <Chevron open={archivedOpen} />
-              {suggestedMode ? "Declined and archived" : "Archived"}
+              {suggestedMode ? "Declined suggestions" : "Archived rules"}
               {archivedRules !== null ? ` (${archivedRules.length})` : ""}
             </button>
             {archivedOpen &&
@@ -965,9 +971,9 @@ export function RulesTab({ mode = "rules", onStatsChange }: RulesTabProps) {
 
           {!suggestedMode && (
             <p className="mt-8 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-              Claude gets every change here automatically.{" "}
+              Changes reach Claude as soon as you make them.{" "}
               <button type="button" onClick={() => void syncRules(true)} className={LINK_BUTTON_CLASS}>
-                Send again
+                Resend all rules
               </button>
               {syncStatus && (
                 <span role="status" className="ml-2">

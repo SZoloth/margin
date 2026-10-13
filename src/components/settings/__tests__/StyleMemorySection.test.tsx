@@ -61,12 +61,12 @@ describe("StyleMemorySection", () => {
 
   it("opens on Notes when notes are waiting, and lays the stages out in order", async () => {
     render(<StyleMemorySection />);
-    const notes = await screen.findByRole("tab", { name: /Notes/ });
+    const notes = await screen.findByRole("tab", { name: /Your notes/ });
     await waitFor(() => expect(notes).toHaveAttribute("aria-selected", "true"));
     expect(screen.getAllByRole("tab").map((t) => t.textContent?.replace(/[\d→]/g, "").trim())).toEqual([
-      "Notes",
-      "Suggested",
-      "Rules",
+      "Your notes",
+      "Suggested rules",
+      "Rules in use",
     ]);
   });
 

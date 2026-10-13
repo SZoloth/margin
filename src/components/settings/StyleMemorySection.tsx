@@ -17,9 +17,9 @@ import type { CorrectionDetail } from "@/types/annotations";
 type Stage = "notes" | "suggested" | "rules";
 
 const STAGES: { id: Stage; label: string }[] = [
-  { id: "notes", label: "Notes" },
-  { id: "suggested", label: "Suggested" },
-  { id: "rules", label: "Rules" },
+  { id: "notes", label: "Your notes" },
+  { id: "suggested", label: "Suggested rules" },
+  { id: "rules", label: "Rules in use" },
 ];
 
 /** Mirrors CORRECTION_FILTER: what synthesis will actually consume. */
@@ -111,7 +111,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
         const idsJson = JSON.stringify(result.highlightIds);
         const prompt = `Analyze ${result.count} writing corrections from ~/.margin/corrections-export.json. Synthesize into actionable writing rules grouped by theme. For each rule: state the rule, when to apply, why it matters, signal count, and a before/after example grounded in actual corrections. Pay attention to polarity tags — separate patterns to reinforce (+positive) from patterns to fix (+corrective). Save each rule via the margin_create_writing_rule MCP tool, and ALWAYS pass synthesized_from with the highlight_ids of the corrections that motivated the rule (valid ids: ${idsJson}). Rules created this way enter as review candidates — accepting them in Margin automatically marks the source corrections synthesized, so do NOT call margin_mark_corrections_synthesized.`;
         await writeText(prompt);
-        setCopyStatus("Copied. Paste it into Claude; its suggestions will appear under Suggested.");
+        setCopyStatus("Copied. Paste it into Claude; its drafts will appear under Suggested rules.");
       }
       if (copyTimeoutRef.current !== null) window.clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = window.setTimeout(() => setCopyStatus(null), 8000);
@@ -209,12 +209,15 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
       >
         {!settled ? null : effectiveStage === "notes" ? (
           <>
+            <p className="px-8 pt-4 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
+              Every comment you leave on a highlight about how something is written lands here.
+            </p>
             {(readyCount ?? 0) > 0 && (
               <div className="flex items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-sidebar)] px-8 py-3">
                 <p className="flex-1 text-[length:var(--text-sm)] text-[var(--color-text-primary)]">
                   {plural(readyCount ?? 0, "note is", "notes are")} ready to become rules.
                   <span className="text-[var(--color-text-secondary)]">
-                    {" "}Claude reads them and suggests rules for you to accept.
+                    {" "}Claude reads them and drafts rules for you to accept or decline.
                   </span>
                 </p>
                 <button type="button" onClick={() => void handleCopyPrompt()} className={BUTTON_PRIMARY_CLASS}>

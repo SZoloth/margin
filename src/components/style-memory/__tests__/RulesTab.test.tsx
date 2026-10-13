@@ -16,7 +16,7 @@ vi.mock("@/lib/tauri-commands", () => ({
   openStyleGuideDialog: vi.fn(),
 }));
 
-import { RulesTab, isSuggested } from "../RulesTab";
+import { RulesTab, isSuggested, isChecked } from "../RulesTab";
 import {
   getWritingRules,
   updateWritingRule,
@@ -104,6 +104,17 @@ describe("isSuggested", () => {
   });
 });
 
+describe("isChecked", () => {
+  const rule = { detectionPattern: null, severity: "must-fix" as const, category: "grammar", exampleBefore: null };
+  it("matches what the writing guard scans for", () => {
+    expect(isChecked(rule)).toBe(false);
+    expect(isChecked({ ...rule, detectionPattern: "x" })).toBe(true);
+    expect(isChecked({ ...rule, category: "kill-words" })).toBe(true);
+    expect(isChecked({ ...rule, category: "kill-words", severity: "should-fix" })).toBe(false);
+    expect(isChecked({ ...rule, category: "heading-patterns", exampleBefore: "## Intro" })).toBe(true);
+  });
+});
+
 describe("RulesTab — rules in effect", () => {
   it("uses CSS var syntax for severity instead of hardcoded hex colors", async () => {
     const { container } = render(<RulesTab onStatsChange={vi.fn()} />);
@@ -173,13 +184,13 @@ describe("RulesTab — rules in effect", () => {
     expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
   });
 
-  it("says whether Claude is blocked or only guided", async () => {
+  it("says in words whether Margin checks a rule or Claude is only told it", async () => {
     const user = userEvent.setup();
     render(<RulesTab onStatsChange={vi.fn()} />);
     await openRule(user, "Test rule");
-    expect(screen.getByText("Guidance for Claude")).toBeTruthy();
+    expect(screen.getByText(/Claude is told this rule; nothing checks for it/)).toBeTruthy();
     await openRule(user, "Never open with a greeting");
-    expect(screen.getByText("Blocked automatically")).toBeTruthy();
+    expect(screen.getByText(/Checked automatically/)).toBeTruthy();
   });
 
   it("searches rule text and reasons", async () => {
