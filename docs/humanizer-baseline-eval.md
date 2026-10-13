@@ -79,10 +79,13 @@ non-feedback rows, no positive polarity, no `__backfilled__`). `corrections.orig
 is the flagged span and `notes_json` is what Sam said about it. Where Sam also saved
 a revised version of the document, that is the **final** and enables metric V2.
 
-**Size:** target 30 to 40 drafts, spread across at least 5 writing types, 100 to 400
-words each (the model's 8192-token window covers instruction, draft and rewrite).
-I could not inspect the database from the cloud container, so the actual count is
-unknown. Step 0 on the Mac:
+**Size:** target 30 to 40 drafts, 100 to 400 words each (the model's 8192-token
+window covers instruction, draft and rewrite). **Measured 2026-10-13 on Sam's Mac:
+22 documents have usable corrections** (15 with at least 3 flagged spans, 10 with at
+least 5). By writing type: general 10, cover-letter 6, blog 3, outreach 2, pitch 1.
+That is below the 30-draft bar and three of five types have 3 or fewer documents, so
+**the first run is a pilot by this doc's own rule**: no win/loss call, and no
+per-type claims. Re-run the count as corrections accumulate:
 
 ```bash
 sqlite3 ~/.margin/margin.db "
@@ -96,7 +99,8 @@ sqlite3 ~/.margin/margin.db "
 ```
 
 Fewer than 30 usable documents means the run is a **pilot**: report it, make no
-win/loss call.
+win/loss call. In a pilot, V3 (Sam's blind picks) and the F1 hard-fail counts are
+still worth collecting as direction, with the intervals shown.
 
 **Split (leakage control, the expensive part).** Split by *document*, about 70/30,
 stratified by writing type. Rules for A3 must be rebuilt from training-split
@@ -245,9 +249,9 @@ llama-server -m ~/humanizer-model/humanizer-12b-Q4_K_M.gguf \
 
 ### 4. Wrapper that fits the harness contract (stdin draft, stdout rewrite)
 
-Save as `mcp/scripts/regression/humanizer-cmd.py`. Written from the card; **not yet
-run against the real `prompt_format.json`**, so the checksum self-test is the first
-thing to run.
+Saved as `mcp/scripts/regression/humanizer-cmd.py` (this PR). `--selftest` was run
+against the real `prompt_format.json` on 2026-10-13 and printed
+`cc51d66b4c593fbe OK`. Re-run it after any model or prompt-file update.
 
 ```python
 #!/usr/bin/env python3
@@ -301,6 +305,17 @@ pkill llama-server
 rm -rf ~/humanizer-model /tmp/margin-eval
 brew cleanup -s
 ```
+
+### Smoke test result (2026-10-13, Q4_K_M, Sam's MacBook Air)
+
+One made-up paragraph (not Sam's writing) with six figures went through the wrapper:
+all figures survived and the output was not truncated. Observations that matter for
+the eval: the model is **terse and drops connective wording** (a risk for V1/V2 and
+F3 length ratio, and a reason A3's "minimal changes" editor prompt may look better
+on fidelity), and it ran at **10.5 tokens/s generation, 89 tokens/s prompt
+processing** on this machine, versus about 37 tokens/s on the card's M5 Max Q8_0
+run. Budget about 10 to 40 s per draft per sample; 3 samples x 22 drafts is on the
+order of 20 to 40 minutes of generation.
 
 ## Implementation work this design needs (not in this PR)
 
