@@ -28,9 +28,8 @@ vi.mock("@/components/style-memory/CorrectionsTab", () => {
   };
 });
 
-vi.mock("@/components/style-memory/RulesTab", () => ({
-  RulesTab: () => null,
-  countRules: () => ({ inEffect: 0, suggested: 0 }),
+vi.mock("@/components/style-memory/StyleGuide", () => ({
+  StyleGuide: () => null,
 }));
 
 vi.mock("@/lib/tauri-commands", () => ({
@@ -59,15 +58,10 @@ describe("StyleMemorySection", () => {
     vi.clearAllMocks();
   });
 
-  it("opens on Notes when notes are waiting, and lays the stages out in order", async () => {
+  it("opens on the style guide and counts notes not yet used", async () => {
     render(<StyleMemorySection />);
-    const notes = await screen.findByRole("tab", { name: /Your notes/ });
-    await waitFor(() => expect(notes).toHaveAttribute("aria-selected", "true"));
-    expect(screen.getAllByRole("tab").map((t) => t.textContent?.replace(/[\d→]/g, "").trim())).toEqual([
-      "Your notes",
-      "Suggested rules",
-      "Rules in use",
-    ]);
+    expect(screen.getByRole("tab", { name: "Style guide" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByLabelText("3 not used yet")).toBeInTheDocument();
   });
 
   it("hides the copy-prompt call to action once every waiting note is sent", async () => {
@@ -80,6 +74,7 @@ describe("StyleMemorySection", () => {
     const user = userEvent.setup();
 
     render(<StyleMemorySection />);
+    await user.click(screen.getByRole("tab", { name: /Notes/ }));
 
     const exportButton = await screen.findByRole("button", { name: "Copy prompt for Claude" }, { timeout: 5000 });
     await user.click(exportButton);

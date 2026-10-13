@@ -2,6 +2,9 @@ import { cn } from "@/lib/cn";
 
 /** Shared look for the Writing rules section: Notes, Suggested and Rules. */
 
+/** Margin's reading face, for rule and note text. */
+export const SERIF = "font-['Newsreader',Georgia,serif]";
+
 export const FOCUS_RING =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]";
 
@@ -98,7 +101,7 @@ export function EmptyState({
 }) {
   return (
     <div className="max-w-[480px] py-12">
-      <p className="font-serif text-[length:var(--text-lg)] text-[var(--color-text-primary)]">{title}</p>
+      <p className={cn(SERIF, "text-[length:var(--text-lg)] text-[var(--color-text-primary)]")}>{title}</p>
       {children && (
         <div className="mt-2 text-[length:var(--text-sm)] leading-[1.6] text-[var(--color-text-secondary)]">
           {children}

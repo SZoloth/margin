@@ -273,7 +273,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       exampleAfter: "use",
       source: "synthesis",
       signalCount: 4,
-      notes: null,
+      notes: "synthesized-from:stub-note-1",
       reviewedAt: 1,
       detectionPattern: null,
       createdAt: 1,

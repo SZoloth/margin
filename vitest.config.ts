@@ -66,7 +66,7 @@ class HookFirstSequencer extends BaseSequencer {
       } else if (rel.includes("StyleMemorySection.test")) {
         mustRunFirst.unshift(f); // force before CorrectionsTab/RulesTab regardless of duration
       } else if (
-        rel.includes("RulesTab.test") ||
+        rel.includes("StyleGuide.test") ||
         rel.includes("CorrectionsTab.test")
       ) {
         mustRunFirst.push(f);
