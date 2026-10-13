@@ -200,12 +200,12 @@ describe("browser mock invoke", () => {
     expect(await mockInvoke("get_all_corrections")).toEqual([]);
     expect(await mockInvoke("get_corrections_count")).toBe(0);
     expect(await mockInvoke("get_corrections_by_document")).toEqual([]);
-    expect(await mockInvoke("get_corrections_flat")).toEqual([]);
+    expect(await mockInvoke("get_corrections_flat")).toHaveLength(2);
   });
 
   it("returns the fixture writing rule for resurfacing exercises", async () => {
     const rules = (await mockInvoke("get_writing_rules")) as Record<string, unknown>[];
-    expect(rules).toHaveLength(1);
+    expect(rules).toHaveLength(3);
     expect(rules[0]).toMatchObject({ id: "stub-rule-1", ruleText: "leverage" });
     const exportResult = (await mockInvoke("export_writing_rules")) as Record<string, unknown>;
     expect(exportResult).toHaveProperty("markdownPath");

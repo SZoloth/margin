@@ -28,8 +28,8 @@ vi.mock("@/components/style-memory/CorrectionsTab", () => {
   };
 });
 
-vi.mock("@/components/style-memory/RulesTab", () => ({
-  RulesTab: () => null,
+vi.mock("@/components/style-memory/StyleGuide", () => ({
+  StyleGuide: () => null,
 }));
 
 vi.mock("@/lib/tauri-commands", () => ({
@@ -38,6 +38,11 @@ vi.mock("@/lib/tauri-commands", () => ({
   seedRulesFromGuide: vi.fn(),
   openStyleGuideDialog: vi.fn(),
   getWritingRules: vi.fn().mockResolvedValue([]),
+  getCorrectionsFlat: vi.fn().mockResolvedValue([
+    { highlightId: "h1", notes: ["n"], synthesizedAt: null, category: null },
+    { highlightId: "h2", notes: ["n"], synthesizedAt: null, category: null },
+    { highlightId: "h3", notes: ["n"], synthesizedAt: null, category: null },
+  ]),
 }));
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
@@ -53,7 +58,13 @@ describe("StyleMemorySection", () => {
     vi.clearAllMocks();
   });
 
-  it("hides export CTA after successful synthesis export of all pending corrections", async () => {
+  it("opens on the style guide and counts notes not yet used", async () => {
+    render(<StyleMemorySection />);
+    expect(screen.getByRole("tab", { name: "Style guide" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByLabelText("3 not used yet")).toBeInTheDocument();
+  });
+
+  it("hides the copy-prompt call to action once every waiting note is sent", async () => {
     // This test runs ~9s in isolation (handleExportForSynthesis sets window.setTimeout(6000) for
     // a toast, and React 19's act() drains pending work before resolving). Under system load
     // (multiple background agent processes) the test has been observed to exceed the 30s global
@@ -63,8 +74,9 @@ describe("StyleMemorySection", () => {
     const user = userEvent.setup();
 
     render(<StyleMemorySection />);
+    await user.click(screen.getByRole("tab", { name: /Notes/ }));
 
-    const exportButton = await screen.findByRole("button", { name: "Synthesize 3 pending" }, { timeout: 5000 });
+    const exportButton = await screen.findByRole("button", { name: "Copy prompt for Claude" }, { timeout: 5000 });
     await user.click(exportButton);
 
     await waitFor(() => {
@@ -73,7 +85,7 @@ describe("StyleMemorySection", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /Synthesize .* pending/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Copy prompt for Claude" })).not.toBeInTheDocument();
     });
   }, 60000);
 });

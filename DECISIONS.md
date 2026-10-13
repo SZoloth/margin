@@ -55,3 +55,64 @@ All hooks pass functional tests post-change:
 - `Bash(npm *)` catches all npm commands (including `npm --version`), not just install/add/etc. Wider than the previous subcommand filter, but acceptable — all npm use in pnpm projects should use pnpm.
 - Multiple `if` values on one handler are not supported; OR conditions require separate handler entries (hence two entries for pnpm_enforcer).
 - Glob brace expansion for Write/Edit (`Edit(*.{md,mdx})`) was not explored — deferred with writing hooks.
+
+## ADR-002: Writing rules manager lives in Settings → Writing rules, upgraded in place
+
+**Date:** 2026-10-12
+**Status:** Applied
+
+### Context
+
+Rules could already be browsed, edited, archived and restored from Settings → Writing rules → Active rules. What was missing for anyone with more than a handful of rules: search, a way to see which rules the writing guard actually blocks, and a lighter archive flow.
+
+### Decision
+
+Upgrade the existing tab instead of building a second surface, and organise it by Benji Taylor's Family Values (simplicity, then fluidity, then delight; each depends on the one before) and the motion discipline of Josh Puckett's Interface Craft. Only their public summaries were read; the paid kit itself was not.
+
+- **Simplicity (gradual revelation).** The first version put a search box, view toggle, three severity chips, two selects, checkboxes, badges and an Export button on screen at once, and the screen read as confusing. Now: one search box and a Filter button; each rule is one line (text, severity, chevron); opening a rule reveals why, example, metadata and actions in place, one at a time; checkboxes appear on hover and a bulk bar replaces the search row once something is selected; the review queue is a sentence ("Showing 2 new rules. Show all 3"). Jargon dropped: "signals" became "Flagged N times", "Blocked mechanically/Advisory" became "Enforced automatically/Guidance only". The Export button became a quiet "Changes reach Claude automatically. Sync now" line, since every edit already exports.
+- **Fluidity.** A rule opens with a 200 ms blur/fade/4px rise (`--ease-entrance`), keyboard-initiated opens do not animate, and `prefers-reduced-motion` removes it (`annotations.css`, per `docs/motion-spec.md`). Archive is one step with an Undo notice, since archive is recoverable and a confirm step cost a click every time.
+- **Delight.** Deliberately restrained: this is a settings-adjacent surface used rarely, so the frequency rule gives it a small budget.
+
+### Not done
+
+Creating a rule by hand needs a new Tauri command and a Rust migration-safe path; deferred. Rules still have no link back to the corrections that produced them.
+
+### Revision (2026-10-13): one pipeline, three stages
+
+Sam's review of the first pass: the whole UX, information architecture and content strategy needed work, not only the rules list. The audit found the real problem was structural. The section had four tabs-and-tiles ("Corrections", "Active rules", stat tiles, an import bar) for what is one pipeline, used internal words (corrections, synthesis, polarity, signals, export), and listed unreviewed synthesis candidates under "Active rules" even though the CLI never exports them. That last one was a correctness problem: the page told Sam rules were in effect that Claude never saw.
+
+**IA.** The section is now three tabs in pipeline order, each with its count: **Notes → Suggested → Rules**. Notes are corrections from highlights; Suggested are rules Claude drafted from them (`source = synthesis-candidate`, not yet reviewed); Rules are what Claude actually follows. It opens on the stage that needs Sam: Suggested if anything waits, else Notes if notes are ready, else Rules. The stat tiles, the separate import bar and the filter-hint plumbing are gone; the style-guide import lives under Rules as "Add from style guide" and as the empty state.
+
+**Content.** Every label was rewritten in a writer's words, not the schema's:
+
+| Was | Now |
+|---|---|
+| Corrections / Inbox / Archive | Your notes / Not used yet / Already used |
+| Active rules | Rules in use (in effect only) |
+| Synthesize N pending | Copy prompt for Claude |
+| Must-fix / Should-fix / Nice-to-fix | Must fix / Should fix / Nice to fix |
+| kill-words / ai-slop / voice-calibration | Words to cut / AI tells / Voice |
+| general | All writing |
+| Flagged N times / signals | From N notes |
+| Enforced automatically / Guidance only | "Checked automatically: Margin scans Claude's drafts for this" / "Claude is told this rule; nothing checks for it" |
+| Not feedback / Dismiss | Not about writing / Remove |
+| Accept → edit | Apply edit |
+| Sync now | Resend all rules |
+| Colored border and highlight-color dot | "Avoid this" / "Do more of this" in words |
+| Set type | Choose writing type / For: Email |
+
+**No unexplained labels (second pass, same day).** Sam: "it's unclear what labels mean." Rule adopted: no label relies on color, position or prior knowledge. Tab names say what they hold (Your notes, Suggested rules, Rules in use); each tab opens with one sentence saying what is there and what to do; colour-coded polarity became words; counts carry their noun ("1 rule"); the unexplained `/` shortcut hint was removed. "Blocked automatically" was also inaccurate: the guard checks detection patterns, must-fix kill words and must-fix heading patterns, and soft patterns only block in clusters on published files. `isChecked` now mirrors `GenerateWritingGuardPy` and the label says "Checked".
+
+**Interaction.** Suggestions get Accept and Decline on the row, plus bulk accept and decline. Accepting now re-exports, so an accepted rule reaches Claude immediately (before, it waited for the next unrelated edit). Notes gained the same search, Filter button and bulk bar as Rules, so the three stages share one grammar.
+
+### Revision 3 (2026-10-13): the style guide
+
+Sam: "you didn't explore different designs at all", and Must fix vs Nice to fix was unclear. Four directions were mocked up and compared (a readable style guide, a review queue, a test bench, rules suggested in the reading margin). Sam chose the recommendation: the style guide as the screen, the queue's keyboard decisions, and the bench as a tool inside it. The margin direction stays a later project because it needs Margin to draft rules without the copy-paste trip through Claude.
+
+**Strictness is two levels in the UI.** Tracing severity through the CLI showed only must-fix changes behaviour (the guard checks must-fix word bans and heading patterns; the review prompt always includes must-fix rules and marks must-fix prohibitions BLOCK). Should-fix and nice-to-fix differ only in the tag Claude reads. The app shows **Hard rule** (must-fix) and **Preference** (the other two); the database keeps all three values, and switching a preference to and from hard rule keeps its old value where it can.
+
+**IA.** Two views: **Style guide** (home) and **Notes**. The guide reads as sentences grouped by writing type, then category, each led by "Hard rule", "Prefer" or "Suggested". Suggestions sit inline, underlined like a suggested edit, with Accept and Decline. A margin pane explains both strictness levels when nothing is selected; with a rule selected it shows the notes the rule came from (parsed from `synthesized-from:` in the rule's notes, the same format the backend uses), its strictness control, whether the guard checks it, and its actions. Keys: arrows or j/k move, A/D accept or decline a suggestion, H flips strictness, E edits, / searches.
+
+**Try your rules.** `rules-bench.ts` is a browser copy of the guard's matching (kill words, prohibition patterns, heading patterns, soft pattern families, the two-family block rule). It says plainly that blocking only happens on published paths.
+
+Dropped: checkbox bulk selection for rules in use (Accept all covers the common bulk action), and the per-category collapse.
