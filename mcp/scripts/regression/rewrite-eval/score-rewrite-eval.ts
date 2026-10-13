@@ -10,7 +10,8 @@
  * --judge makes LLM calls through MARGIN_EVAL_CMD (V1 per draft per arm, plus F2).
  * Without it only the deterministic metrics are computed.
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from "fs";
+import { createHash } from "crypto";
 import { homedir } from "os";
 import { join } from "path";
 import { parseArgs } from "util";
@@ -35,6 +36,32 @@ const dir = values.corpus!;
 const manifest: Manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf-8"));
 const heldout = manifest.docs.filter((d) => d.split === "heldout");
 const outDir = join(dir, "outputs");
+
+/**
+ * Judge calls are slow and can return junk (refusals, rate-limit text). Cache parsed results by
+ * prompt hash so a rerun resumes instead of repeating ~20 minutes of calls, and record unparseable
+ * replies as failed judgements (raw reply goes to a private log in the corpus dir, never the report).
+ */
+const cachePath = join(dir, "judge-cache.json");
+const failLog = join(dir, "judge-failures.log");
+const cache: Record<string, unknown> = existsSync(cachePath) ? JSON.parse(readFileSync(cachePath, "utf-8")) : {};
+let judgeFailures = 0;
+function judged<T>(kind: string, prompt: string, parse: (raw: string) => T): T | undefined {
+  const key = createHash("sha256").update(kind + "\0" + prompt).digest("hex");
+  if (key in cache) return cache[key] as T;
+  let raw = "";
+  try {
+    raw = runCmd(evalCmd(), prompt, 180_000);
+    const out = parse(raw);
+    cache[key] = out;
+    writeFileSync(cachePath, JSON.stringify(cache));
+    return out;
+  } catch (e) {
+    judgeFailures++;
+    appendFileSync(failLog, `--- ${kind} ${new Date().toISOString()} ${(e as Error).message}\n${raw}\n`);
+    return undefined;
+  }
+}
 
 /** per-arm, per-draft metrics averaged over available runs (humanizer samples at T=1.0) */
 interface DraftMetrics {
@@ -77,20 +104,24 @@ for (const arm of ARMS) {
       const v1 = values.judge && arm !== "a0"
         ? (() => {
             const spans = doc.spans.map((sp) => ({ id: sp.id, text: sp.text, notes: sp.notes }));
-            const verdicts = parseSpanVerdicts(runCmd(evalCmd(), spanJudgePrompt(spans, s.text), 180_000), spans.map((x) => x.id));
-            return spans.filter((sp) => verdicts[sp.id] === "fixed").length / spans.length;
+            const ids = spans.map((x) => x.id);
+            const verdicts = judged("v1", spanJudgePrompt(spans, s.text), (raw) => parseSpanVerdicts(raw, ids));
+            return verdicts ? spans.filter((sp) => verdicts[sp.id] === "fixed").length / spans.length : undefined;
           })()
         : arm === "a0" ? 0 : undefined;
       const f2 = values.judge && arm !== "a0"
         ? (() => {
-            const j = parseFactJudgement(runCmd(evalCmd(), factJudgePrompt(draft, s.text), 180_000));
-            return j.dropped.length + j.altered.length + j.invented.length;
+            const j = judged("f2", factJudgePrompt(draft, s.text), parseFactJudgement);
+            return j ? j.dropped.length + j.altered.length + j.invented.length : undefined;
           })()
         : undefined;
       const v2 = final ? 1 - editDistance(s.text, final) / Math.max(editDistance(draft, final), 1e-9) : undefined;
       return { hardFail: c.hardFail ? 1 : 0, recall: c.recall, lengthRatio: words(s.text) / Math.max(words(draft), 1), v1, v2, f2 };
     });
-    const opt = (k: "v1" | "v2" | "f2") => (per.every((p) => p[k] !== undefined) ? avg(per.map((p) => p[k] as number)) : undefined);
+    const opt = (k: "v1" | "v2" | "f2") => {
+      const xs = per.map((p) => p[k]).filter((v): v is number => v !== undefined);
+      return xs.length ? avg(xs) : undefined; // failed judgements drop out of the average
+    };
     metrics[arm][doc.id] = {
       hardFail: avg(per.map((p) => p.hardFail)),
       recall: avg(per.map((p) => p.recall)),
@@ -161,6 +192,8 @@ const verdict = decide({
 });
 lines.push("", `## Verdict: ${verdict.outcome}${verdict.pilot ? " (PILOT: direction only, not a call)" : ""}`, "", ...verdict.reasons.map((r) => `- ${r}`));
 if (!values.judge) lines.push("", "_V1 and F2 judges were not run (no --judge); V1-based comparisons are n/a._");
+
+if (judgeFailures) lines.push("", `Judge replies that could not be parsed (excluded from V1/F2 averages): ${judgeFailures}. Raw replies are in judge-failures.log in the corpus folder; rerun to retry them.`);
 
 const failed = files.flatMap((f) => {
   const r = JSON.parse(readFileSync(join(outDir, f), "utf-8")) as RewriteFile;
