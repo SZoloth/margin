@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, useId } from "react";
 import { cn } from "@/lib/cn";
 import { WRITING_TYPES } from "@/lib/writing-types";
 import type { WritingRule, WritingRuleSeverity } from "@/lib/tauri-commands";
@@ -52,43 +52,6 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
-function SourceBadge({ source }: { source: string }) {
-  const label = source === "synthesis" ? "synthesized" : source;
-  return (
-    <span
-      style={{
-        fontSize: "var(--text-xs)",
-        color: "var(--color-text-secondary)",
-        opacity: 0.7,
-        flexShrink: 0,
-      }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function SignalBar({ count, max = 7 }: { count: number; max?: number }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
-      <div style={{ display: "flex", gap: 1 }}>
-        {Array.from({ length: max }, (_, i) => (
-          <div
-            key={i}
-            style={{
-              width: 4,
-              height: 10,
-              borderRadius: 1,
-              background: i < count ? "var(--color-text-primary)" : "var(--color-border)",
-            }}
-          />
-        ))}
-      </div>
-      {count} signal{count === 1 ? "" : "s"}
-    </div>
-  );
-}
-
 
 
 type SortKey = "signal" | "newest";
@@ -133,45 +96,6 @@ function Chip({
   );
 }
 
-function ViewToggle({
-  view,
-  onChangeView,
-  unreviewedCount,
-  allCount,
-}: {
-  view: RulesView;
-  onChangeView: (v: RulesView) => void;
-  unreviewedCount: number;
-  allCount: number;
-}) {
-  const base = cn(
-    "cursor-pointer border border-[var(--color-border)] px-2.5 py-[3px] text-[length:var(--text-sm)] transition-colors duration-100",
-    FOCUS_RING,
-  );
-  const on = "bg-[var(--color-text-primary)] font-semibold text-[var(--color-page)]";
-  const off = "bg-[var(--color-page)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]";
-  return (
-    <div className="flex" role="group" aria-label="Rule view">
-      <button
-        type="button"
-        aria-pressed={view === "unreviewed"}
-        onClick={() => onChangeView("unreviewed")}
-        className={cn(base, "rounded-l-[100px] border-r-0", view === "unreviewed" ? on : off)}
-      >
-        To review ({unreviewedCount})
-      </button>
-      <button
-        type="button"
-        aria-pressed={view === "all"}
-        onClick={() => onChangeView("all")}
-        className={cn(base, "rounded-r-[100px]", view === "all" ? on : off)}
-      >
-        All ({allCount})
-      </button>
-    </div>
-  );
-}
-
 function Field({
   label,
   children,
@@ -181,7 +105,8 @@ function Field({
   children: (id: string) => React.ReactNode;
   className?: string;
 }) {
-  const id = `rule-field-${label.toLowerCase().replace(/\W+/g, "-")}-${useRef(Math.random().toString(36).slice(2, 8)).current}`;
+  const uid = useId();
+  const id = `rule-field-${uid}`;
   return (
     <div className={className}>
       <label
@@ -203,6 +128,10 @@ function typeLabel(value: string): string {
   return WRITING_TYPES.find((t) => t.value === value)?.label ?? value;
 }
 
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 function matchesQuery(rule: WritingRule, q: string): boolean {
   if (!q) return true;
   const hay = [
@@ -220,16 +149,42 @@ function matchesQuery(rule: WritingRule, q: string): boolean {
   return hay.includes(q);
 }
 
-function RuleCard({
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block shrink-0 text-[length:var(--text-xs)] text-[var(--color-text-secondary)] transition-transform duration-150 ease-[var(--ease-micro)]"
+      style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}
+    >
+      {"▾"}
+    </span>
+  );
+}
+
+/**
+ * One rule is one line until you ask for more. Opening it reveals the reason,
+ * the example and the actions in place (gradual revelation); nothing else on
+ * the page moves. Only one rule is open at a time.
+ */
+function RuleRow({
   rule,
+  open,
+  instant,
   selected,
+  selecting,
+  onToggle,
   onToggleSelect,
   onUpdate,
   onArchive,
   onMarkReviewed,
 }: {
   rule: WritingRule;
+  open: boolean;
+  /** Opened from the keyboard: the result should already be there. */
+  instant: boolean;
   selected: boolean;
+  selecting: boolean;
+  onToggle: (id: string, viaKeyboard: boolean) => void;
   onToggleSelect: (id: string) => void;
   onUpdate: (id: string, updates: Partial<WritingRule>) => Promise<void>;
   onArchive: (id: string) => void;
@@ -277,161 +232,190 @@ function RuleCard({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => setEditFields((f) => ({ ...f, [key]: e.target.value }));
 
-  if (editing) {
-    return (
-      <div
-        className="border-b border-[var(--color-border)] py-3.5"
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.stopPropagation();
-            handleCancel();
-          } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            void handleSave();
-          }
-        }}
-      >
-        <div className="flex flex-col gap-2">
-          <Field label="Rule text">
-            {(id) => (
-              <textarea id={id} rows={2} value={editFields.ruleText} onChange={set("ruleText")} className={cn(FIELD_CLASS, "resize-y")} autoFocus />
-            )}
-          </Field>
-          <div className="flex gap-2">
-            <Field label="Severity" className="flex-1">
-              {(id) => (
-                <select id={id} value={editFields.severity} onChange={set("severity")} className={cn(FIELD_CLASS, "cursor-pointer")}>
-                  <option value="must-fix">Must-fix</option>
-                  <option value="should-fix">Should-fix</option>
-                  <option value="nice-to-fix">Nice-to-fix</option>
-                </select>
-              )}
-            </Field>
-            <Field label="When to apply" className="flex-[2]">
-              {(id) => <input id={id} value={editFields.whenToApply} onChange={set("whenToApply")} className={FIELD_CLASS} />}
-            </Field>
-          </div>
-          <Field label="Why">
-            {(id) => <input id={id} value={editFields.why} onChange={set("why")} className={FIELD_CLASS} />}
-          </Field>
-          <div className="flex gap-2">
-            <Field label="Before" className="flex-1">
-              {(id) => <input id={id} value={editFields.exampleBefore} onChange={set("exampleBefore")} className={FIELD_CLASS} />}
-            </Field>
-            <Field label="After" className="flex-1">
-              {(id) => <input id={id} value={editFields.exampleAfter} onChange={set("exampleAfter")} className={FIELD_CLASS} />}
-            </Field>
-          </div>
-          <Field label="Notes">
-            {(id) => <textarea id={id} rows={2} value={editFields.notes} onChange={set("notes")} className={cn(FIELD_CLASS, "resize-y")} />}
-          </Field>
-          <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={!editFields.ruleText.trim()}
-              className={cn(
-                "cursor-pointer rounded-[var(--radius-sm)] bg-[var(--color-text-primary)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-page)] disabled:cursor-default disabled:opacity-50",
-                FOCUS_RING,
-              )}
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className={cn(
-                "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]",
-                FOCUS_RING,
-              )}
-            >
-              Cancel
-            </button>
-            <span className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">⌘↵ to save · Esc to cancel</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const isUnreviewed = rule.reviewedAt == null;
   const enforced = !!rule.detectionPattern;
+  const expanded = open || editing;
 
   return (
-    <div className="flex items-start gap-2 border-b border-[var(--color-border)] py-3.5">
-      <input
-        type="checkbox"
-        aria-label={`Select rule: ${rule.ruleText}`}
-        checked={selected}
-        onChange={() => onToggleSelect(rule.id)}
-        className="mt-[3px] shrink-0 cursor-pointer"
-        style={{ accentColor: "var(--color-text-primary)" }}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="mb-1.5 flex items-start gap-2">
-          <div className="flex-1 text-[length:var(--text-sm)] font-medium leading-[1.4] text-[var(--color-text-primary)]">
-            {rule.ruleText}
-          </div>
-          <SourceBadge source={rule.source} />
-          <SeverityBadge severity={rule.severity} />
-        </div>
-
-        {rule.whenToApply && (
-          <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
-            <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">When </strong>
-            {rule.whenToApply}
-          </div>
-        )}
-        {rule.why && (
-          <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
-            <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">Why </strong>
-            {rule.why}
-          </div>
-        )}
-
-        {(rule.exampleBefore || rule.exampleAfter) && (
-          <div className="mt-2 rounded-[var(--radius-sm)] bg-[var(--color-sidebar)] px-3 py-2 text-[length:var(--text-sm)] leading-[1.5]">
-            {rule.exampleBefore && (
-              <span className="text-[var(--color-danger)] line-through decoration-[color-mix(in_srgb,var(--color-danger)_30%,transparent)]">
-                {rule.exampleBefore}
-              </span>
-            )}
-            {rule.exampleBefore && rule.exampleAfter && (
-              <span className="mx-1 text-[var(--color-text-secondary)]">&rarr;</span>
-            )}
-            {rule.exampleAfter && <span className="text-[var(--color-success)]">{rule.exampleAfter}</span>}
-          </div>
-        )}
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-          <SignalBar count={rule.signalCount} />
-          <span>{typeLabel(rule.writingType)}</span>
-          <span>Added {formatDate(rule.createdAt)}</span>
-          <span
-            title={
-              enforced
-                ? "Has a detection pattern: the writing guard blocks matching text mechanically."
-                : "No detection pattern: Claude is told this rule, but nothing blocks a violation."
-            }
-          >
-            {enforced ? "Blocked mechanically" : "Advisory"}
-          </span>
-        </div>
-
-        <div className="mt-2 flex gap-3">
-          {isUnreviewed && (
-            <button type="button" onClick={() => onMarkReviewed(rule.id)} className={cn(LINK_BUTTON_CLASS, "text-[var(--color-accent)]")}>
-              Mark reviewed
-            </button>
+    <div className="group border-b border-[var(--color-border)]">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          aria-label={`Select rule: ${rule.ruleText}`}
+          checked={selected}
+          onChange={() => onToggleSelect(rule.id)}
+          className={cn(
+            "shrink-0 cursor-pointer transition-opacity duration-100",
+            selected || selecting
+              ? "opacity-100"
+              : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
           )}
-          <button type="button" onClick={() => setEditing(true)} className={LINK_BUTTON_CLASS}>
-            Edit
-          </button>
-          <button type="button" onClick={() => onArchive(rule.id)} className={LINK_BUTTON_CLASS}>
-            Archive
-          </button>
-        </div>
+          style={{ accentColor: "var(--color-text-primary)" }}
+        />
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={(e) => onToggle(rule.id, e.detail === 0)}
+          className={cn(
+            "flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-[var(--radius-xs)] py-3 text-left",
+            FOCUS_RING,
+          )}
+        >
+          {isUnreviewed && (
+            <span
+              role="img"
+              aria-label="New"
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]"
+            />
+          )}
+          <span
+            className={cn(
+              "min-w-0 flex-1 text-[length:var(--text-sm)] font-medium leading-[1.4] text-[var(--color-text-primary)]",
+              !expanded && "truncate",
+            )}
+          >
+            {rule.ruleText}
+          </span>
+          <SeverityBadge severity={rule.severity} />
+          <Chevron open={expanded} />
+        </button>
       </div>
+
+      {expanded && !editing && (
+        <div data-room data-instant={instant || undefined} className="rule-room pb-4 pl-6 pr-6">
+          {rule.whenToApply && (
+            <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
+              <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">When </strong>
+              {rule.whenToApply}
+            </div>
+          )}
+          {rule.why && (
+            <div className="mb-1 text-[length:var(--text-sm)] leading-[1.4] text-[var(--color-text-secondary)]">
+              <strong className="text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px]">Why </strong>
+              {rule.why}
+            </div>
+          )}
+
+          {(rule.exampleBefore || rule.exampleAfter) && (
+            <div className="mt-2 rounded-[var(--radius-sm)] bg-[var(--color-sidebar)] px-3 py-2 text-[length:var(--text-sm)] leading-[1.5]">
+              {rule.exampleBefore && (
+                <span className="text-[var(--color-danger)] line-through decoration-[color-mix(in_srgb,var(--color-danger)_30%,transparent)]">
+                  {rule.exampleBefore}
+                </span>
+              )}
+              {rule.exampleBefore && rule.exampleAfter && (
+                <span className="mx-1 text-[var(--color-text-secondary)]">&rarr;</span>
+              )}
+              {rule.exampleAfter && <span className="text-[var(--color-success)]">{rule.exampleAfter}</span>}
+            </div>
+          )}
+
+          <div className="mt-2 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+            Flagged {plural(rule.signalCount, "time", "times")} · {typeLabel(rule.writingType)} · Added{" "}
+            {formatDate(rule.createdAt)} ·{" "}
+            <span
+              title={
+                enforced
+                  ? "The writing guard blocks text that matches this rule."
+                  : "Claude is told this rule, but nothing blocks a violation."
+              }
+            >
+              {enforced ? "Enforced automatically" : "Guidance only"}
+            </span>
+          </div>
+
+          <div className="mt-2 flex gap-3">
+            {isUnreviewed && (
+              <button type="button" onClick={() => onMarkReviewed(rule.id)} className={cn(LINK_BUTTON_CLASS, "text-[var(--color-accent)]")}>
+                Mark reviewed
+              </button>
+            )}
+            <button type="button" onClick={() => setEditing(true)} className={LINK_BUTTON_CLASS}>
+              Edit
+            </button>
+            <button type="button" onClick={() => onArchive(rule.id)} className={LINK_BUTTON_CLASS}>
+              Archive
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div
+          data-room
+          data-instant={instant || undefined}
+          className="rule-room pb-4 pl-6 pr-6"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              handleCancel();
+            } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void handleSave();
+            }
+          }}
+        >
+          <div className="flex flex-col gap-2">
+            <Field label="Rule text">
+              {(id) => (
+                <textarea id={id} rows={2} value={editFields.ruleText} onChange={set("ruleText")} className={cn(FIELD_CLASS, "resize-y")} autoFocus />
+              )}
+            </Field>
+            <div className="flex gap-2">
+              <Field label="Severity" className="flex-1">
+                {(id) => (
+                  <select id={id} value={editFields.severity} onChange={set("severity")} className={cn(FIELD_CLASS, "cursor-pointer")}>
+                    <option value="must-fix">Must-fix</option>
+                    <option value="should-fix">Should-fix</option>
+                    <option value="nice-to-fix">Nice-to-fix</option>
+                  </select>
+                )}
+              </Field>
+              <Field label="When to apply" className="flex-[2]">
+                {(id) => <input id={id} value={editFields.whenToApply} onChange={set("whenToApply")} className={FIELD_CLASS} />}
+              </Field>
+            </div>
+            <Field label="Why">
+              {(id) => <input id={id} value={editFields.why} onChange={set("why")} className={FIELD_CLASS} />}
+            </Field>
+            <div className="flex gap-2">
+              <Field label="Before" className="flex-1">
+                {(id) => <input id={id} value={editFields.exampleBefore} onChange={set("exampleBefore")} className={FIELD_CLASS} />}
+              </Field>
+              <Field label="After" className="flex-1">
+                {(id) => <input id={id} value={editFields.exampleAfter} onChange={set("exampleAfter")} className={FIELD_CLASS} />}
+              </Field>
+            </div>
+            <Field label="Notes">
+              {(id) => <textarea id={id} rows={2} value={editFields.notes} onChange={set("notes")} className={cn(FIELD_CLASS, "resize-y")} />}
+            </Field>
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={!editFields.ruleText.trim()}
+                className={cn(
+                  "cursor-pointer rounded-[var(--radius-sm)] bg-[var(--color-text-primary)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-page)] disabled:cursor-default disabled:opacity-50",
+                  FOCUS_RING,
+                )}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className={cn(
+                  "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-1 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--hover-bg)]",
+                  FOCUS_RING,
+                )}
+              >
+                Cancel
+              </button>
+              <span className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">⌘↵ to save · Esc to cancel</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -455,26 +439,34 @@ function formatCategoryLabel(category: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function RulesTab({ onStatsChange }: RulesTabProps) {
+export function RulesTab({ onStatsChange, filterHint }: RulesTabProps) {
   const [rules, setRules] = useState<WritingRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("signal");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [openInstant, setOpenInstant] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
-  const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [archivedRules, setArchivedRules] = useState<WritingRule[] | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [lastArchived, setLastArchived] = useState<{ id: string; ruleText: string } | null>(null);
-  const exportTimeoutRef = useRef<number | null>(null);
+  const syncTimeoutRef = useRef<number | null>(null);
   const undoTimeoutRef = useRef<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const loadedRef = useRef(false);
 
   const unreviewedCount = useMemo(() => rules.filter((r) => r.reviewedAt == null).length, [rules]);
   const [view, setView] = useState<RulesView>("unreviewed");
+
+  // The stat tiles above the tabs can ask for a specific view.
+  useEffect(() => {
+    if (filterHint === "unreviewed" || filterHint === "all") setView(filterHint);
+  }, [filterHint]);
 
   const q = query.trim().toLowerCase();
   // Smart default: show "all" if nothing to review. A search always spans every rule.
@@ -506,7 +498,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
 
   useEffect(() => {
     return () => {
-      if (exportTimeoutRef.current !== null) window.clearTimeout(exportTimeoutRef.current);
+      if (syncTimeoutRef.current !== null) window.clearTimeout(syncTimeoutRef.current);
       if (undoTimeoutRef.current !== null) window.clearTimeout(undoTimeoutRef.current);
     };
   }, []);
@@ -551,13 +543,27 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
 
   const categoryGroups = useMemo(() => groupByCategory(filtered), [filtered]);
 
-  const autoExportAfterRuleMutation = useCallback(async () => {
+  const activeFilterCount = (severityFilter ? 1 : 0) + (typeFilter ? 1 : 0) + (sort !== "signal" ? 1 : 0);
+
+  // Every change is mirrored to Claude's rules file automatically; say so once, quietly.
+  const syncRules = useCallback(async (explicit: boolean) => {
     try {
-      await exportWritingRules();
+      const result = await exportWritingRules();
+      if (explicit) {
+        setSyncStatus(`Synced ${plural(result.ruleCount, "rule", "rules")}`);
+        if (syncTimeoutRef.current !== null) window.clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = window.setTimeout(() => setSyncStatus(null), 5000);
+      }
     } catch (err) {
-      reportError("Rule saved, but the writing profile export failed", err);
+      reportError(
+        explicit ? "Could not sync rules" : "Rule saved, but the writing profile export failed",
+        err,
+      );
+      if (explicit) setSyncStatus("Sync failed");
     }
   }, []);
+
+  const autoExportAfterRuleMutation = useCallback(() => syncRules(false), [syncRules]);
 
   const handleUpdate = useCallback(async (id: string, updates: Partial<WritingRule>) => {
     try {
@@ -590,6 +596,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
       return null;
     }
     setRules((prev) => prev.filter((r) => r.id !== id));
+    setOpenId((prev) => (prev === id ? null : prev));
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -691,18 +698,9 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
     });
   }, []);
 
-  const handleExport = useCallback(async () => {
-    try {
-      const result = await exportWritingRules();
-      setExportStatus(`Exported ${result.ruleCount} rules to ${result.markdownPath}`);
-      if (exportTimeoutRef.current !== null) {
-        window.clearTimeout(exportTimeoutRef.current);
-      }
-      exportTimeoutRef.current = window.setTimeout(() => setExportStatus(null), 5000);
-    } catch (err) {
-      reportError("Could not export rules", err);
-      setExportStatus("Export failed");
-    }
+  const handleToggleRow = useCallback((id: string, viaKeyboard: boolean) => {
+    setOpenInstant(viaKeyboard);
+    setOpenId((prev) => (prev === id ? null : id));
   }, []);
 
   const toggleCategory = useCallback((category: string) => {
@@ -744,120 +742,124 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
     "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-2.5 py-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)] transition-colors duration-100 hover:bg-[var(--hover-bg)]",
     FOCUS_RING,
   );
+  const selecting = selectedIds.size > 0;
 
   return (
     <>
-      {/* Filter bar */}
+      {/* One search box. Everything else is one click away, not on screen. */}
       <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--color-border)] bg-[var(--color-page)] px-8 py-2.5">
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <input
-              ref={searchRef}
-              type="search"
-              aria-label="Search rules"
-              placeholder="Search rules, reasons, examples"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape" && query) {
-                  e.stopPropagation();
-                  setQuery("");
-                }
-              }}
-              className={cn(FIELD_CLASS, "py-1.5 pr-8 [&::-webkit-search-cancel-button]:appearance-none")}
-            />
-            {!query && (
-              <kbd
-                aria-hidden="true"
-                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]"
-              >
-                /
-              </kbd>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {exportStatus && (
-              <span role="status" className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-                {exportStatus}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={handleExport}
-              className={cn(
-                "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-text-primary)] bg-[var(--color-text-primary)] px-3 py-1 text-[length:var(--text-xs)] font-medium text-[var(--color-page)]",
-                FOCUS_RING,
-              )}
-            >
-              Export rules + hook
+        {selecting ? (
+          <div className="flex h-[34px] items-center gap-3">
+            <span className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">
+              {selectedIds.size} selected
+            </span>
+            <button type="button" onClick={handleBulkMarkReviewed} className={buttonSecondary}>
+              Mark reviewed
+            </button>
+            <button type="button" onClick={() => void handleBulkArchive()} className={buttonSecondary}>
+              Archive selected
+            </button>
+            <button type="button" onClick={() => setSelectedIds(new Set())} className={cn(LINK_BUTTON_CLASS, "ml-auto")}>
+              Clear
             </button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <ViewToggle
-            view={effectiveView}
-            onChangeView={(v) => {
-              setView(v);
-              setSelectedIds(new Set());
-            }}
-            unreviewedCount={unreviewedCount}
-            allCount={rules.length}
-          />
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Severity">
-            <Chip active={!severityFilter} onClick={() => setSeverityFilter(null)}>All</Chip>
-            {SEVERITY_VALUES.map((sev) => (
-              <Chip key={sev} active={severityFilter === sev} onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}>
-                {sev.charAt(0).toUpperCase() + sev.slice(1)}
-              </Chip>
-            ))}
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                ref={searchRef}
+                type="search"
+                aria-label="Search rules"
+                placeholder="Search rules"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && query) {
+                    e.stopPropagation();
+                    setQuery("");
+                  }
+                }}
+                className={cn(FIELD_CLASS, "py-1.5 pr-8 [&::-webkit-search-cancel-button]:appearance-none")}
+              />
+              {!query && (
+                <kbd
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]"
+                >
+                  /
+                </kbd>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((o) => !o)}
+              className={cn(buttonSecondary, "py-1.5 text-[length:var(--text-sm)]")}
+            >
+              Filter{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+            </button>
           </div>
-          {typesPresent.length > 1 && (
+        )}
+
+        {filtersOpen && !selecting && (
+          <div className="rule-room flex flex-wrap items-center gap-2" data-room>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Severity">
+              {SEVERITY_VALUES.map((sev) => (
+                <Chip key={sev} active={severityFilter === sev} onClick={() => setSeverityFilter(severityFilter === sev ? null : sev)}>
+                  {sev.charAt(0).toUpperCase() + sev.slice(1)}
+                </Chip>
+              ))}
+            </div>
+            {typesPresent.length > 1 && (
+              <select
+                aria-label="Writing type"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
+              >
+                <option value="">All writing types</option>
+                {typesPresent.map((t) => (
+                  <option key={t} value={t}>{typeLabel(t)}</option>
+                ))}
+              </select>
+            )}
             <select
-              aria-label="Writing type"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              aria-label="Sort rules"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
               className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
             >
-              <option value="">All writing types</option>
-              {typesPresent.map((t) => (
-                <option key={t} value={t}>{typeLabel(t)}</option>
-              ))}
+              <option value="signal">Most flagged first</option>
+              <option value="newest">Newest first</option>
             </select>
-          )}
-          <select
-            aria-label="Sort rules"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className={cn(FIELD_CLASS, "w-auto cursor-pointer py-[3px] text-[length:var(--text-xs)]")}
-          >
-            <option value="signal">Most signals first</option>
-            <option value="newest">Newest first</option>
-          </select>
+          </div>
+        )}
 
-          <div className="ml-auto flex items-center gap-2">
-            {selectedIds.size > 0 && (
+        {/* The review queue is a sentence, not a second set of tabs. */}
+        {!q && rules.length > 0 && (effectiveView === "unreviewed" || unreviewedCount > 0) && (
+          <div className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+            {effectiveView === "unreviewed" ? (
               <>
-                <span className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-                  {selectedIds.size} selected
-                </span>
-                {effectiveView === "unreviewed" && (
-                  <button type="button" onClick={handleBulkMarkReviewed} className={buttonSecondary}>
-                    Mark reviewed
-                  </button>
-                )}
-                <button type="button" onClick={() => void handleBulkArchive()} className={buttonSecondary}>
-                  Archive selected
+                Showing {plural(unreviewedCount, "new rule", "new rules")}.{" "}
+                <button type="button" onClick={() => { setView("all"); setSelectedIds(new Set()); }} className={LINK_BUTTON_CLASS}>
+                  Show all {rules.length}
+                </button>
+              </>
+            ) : (
+              <>
+                {plural(unreviewedCount, "new rule", "new rules")} to review.{" "}
+                <button type="button" onClick={() => { setView("unreviewed"); setSelectedIds(new Set()); }} className={LINK_BUTTON_CLASS}>
+                  Review them
                 </button>
               </>
             )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[960px] px-8 pb-16 pt-4">
+        <div className="mx-auto max-w-[960px] px-8 pb-16 pt-2">
           {loading && rules.length === 0 ? (
             <div className="px-8 py-16 text-center text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
               Loading...
@@ -883,28 +885,26 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                     aria-expanded={!collapsed}
                     onClick={() => toggleCategory(category)}
                     className={cn(
-                      "flex w-full cursor-pointer items-center justify-between border-b border-[var(--color-border)] bg-transparent pb-2 pt-5 text-left text-[length:var(--text-base)] font-semibold text-[var(--color-text-primary)]",
+                      "flex w-full cursor-pointer items-center justify-between bg-transparent pb-1.5 pt-5 text-left text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]",
                       FOCUS_RING,
                     )}
                   >
                     <span>{formatCategoryLabel(category)}</span>
-                    <span className="text-[length:var(--text-xs)] font-normal text-[var(--color-text-secondary)]">
-                      {categoryRules.length} rule{categoryRules.length === 1 ? "" : "s"}
-                      <span
-                        aria-hidden="true"
-                        className="ml-1.5 inline-block transition-transform duration-150"
-                        style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
-                      >
-                        {"▾"}
-                      </span>
+                    <span className="flex items-center gap-1.5 font-normal normal-case tracking-normal">
+                      {categoryRules.length}
+                      <Chevron open={!collapsed} />
                     </span>
                   </button>
                   {!collapsed &&
                     categoryRules.map((rule) => (
-                      <RuleCard
+                      <RuleRow
                         key={rule.id}
                         rule={rule}
+                        open={openId === rule.id}
+                        instant={openInstant}
                         selected={selectedIds.has(rule.id)}
+                        selecting={selecting}
+                        onToggle={handleToggleRow}
                         onToggleSelect={handleToggleSelect}
                         onUpdate={handleUpdate}
                         onArchive={(id) => void handleArchive(id)}
@@ -923,17 +923,11 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
               aria-expanded={archivedOpen}
               onClick={() => void handleToggleArchived()}
               className={cn(
-                "flex cursor-pointer items-center gap-1.5 text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.3px] text-[var(--color-text-secondary)]",
+                "flex cursor-pointer items-center gap-1.5 text-[length:var(--text-xs)] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]",
                 FOCUS_RING,
               )}
             >
-              <span
-                aria-hidden="true"
-                className="inline-block transition-transform duration-150"
-                style={{ transform: archivedOpen ? "rotate(0deg)" : "rotate(-90deg)" }}
-              >
-                {"▾"}
-              </span>
+              <Chevron open={archivedOpen} />
               Archived{archivedRules !== null ? ` (${archivedRules.length})` : ""}
             </button>
             {archivedOpen &&
@@ -957,7 +951,6 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                         {formatDate(rule.archivedAt)}
                       </span>
                     ) : null}
-                    <SourceBadge source={rule.source} />
                     <button type="button" onClick={() => void handleRestore(rule.id)} className={LINK_BUTTON_CLASS}>
                       Restore
                     </button>
@@ -965,6 +958,18 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
                 ))
               ))}
           </div>
+
+          <p className="mt-8 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+            Changes reach Claude automatically.{" "}
+            <button type="button" onClick={() => void syncRules(true)} className={LINK_BUTTON_CLASS}>
+              Sync now
+            </button>
+            {syncStatus && (
+              <span role="status" className="ml-2">
+                {syncStatus}
+              </span>
+            )}
+          </p>
         </div>
       </div>
 
@@ -974,7 +979,7 @@ export function RulesTab({ onStatsChange }: RulesTabProps) {
           role="status"
           className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-8"
         >
-          <div className="pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-2 text-[length:var(--text-sm)] text-[var(--color-text-primary)] shadow-[var(--shadow-md)]">
+          <div className="rule-toast pointer-events-auto flex max-w-[560px] items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-2 text-[length:var(--text-sm)] text-[var(--color-text-primary)] shadow-[var(--shadow-md)]">
             <span className="truncate">Archived “{lastArchived.ruleText}”</span>
             <button
               type="button"

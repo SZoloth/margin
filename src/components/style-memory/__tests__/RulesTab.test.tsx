@@ -54,6 +54,12 @@ afterAll(async () => {
   }
 });
 
+/** A rule is one line until opened; open it before reaching for its actions. */
+async function openRule(user: ReturnType<typeof userEvent.setup>, text: string) {
+  const row = await screen.findByRole("button", { name: new RegExp(text) });
+  if (row.getAttribute("aria-expanded") !== "true") await user.click(row);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getWritingRules).mockResolvedValue([baseRule]);
@@ -91,7 +97,7 @@ describe("RulesTab — SeverityBadge", () => {
     const user = userEvent.setup();
     render(<RulesTab onStatsChange={vi.fn()} />);
 
-    await screen.findByText("Test rule");
+    await openRule(user, "Test rule");
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const input = screen.getByDisplayValue("Test rule");
@@ -113,7 +119,7 @@ describe("RulesTab — SeverityBadge", () => {
     const user = userEvent.setup();
     render(<RulesTab onStatsChange={vi.fn()} />);
 
-    await screen.findByText("Test rule");
+    await openRule(user, "Test rule");
 
     // Reset call count in case previous test's fire-and-forget leaked
     vi.mocked(exportWritingRules).mockClear();
@@ -173,24 +179,27 @@ describe("RulesTab — manager", () => {
     render(<RulesTab onStatsChange={vi.fn()} />);
     await screen.findByText("Test rule");
 
+    await user.click(screen.getByRole("button", { name: /^Filter/ }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Writing type" }), "email");
     expect(screen.queryByText("Test rule")).toBeNull();
     expect(screen.getByText("Never open with a greeting")).toBeTruthy();
   });
 
   it("marks rules with a detection pattern as mechanically blocked", async () => {
+    const user = userEvent.setup();
     render(<RulesTab onStatsChange={vi.fn()} />);
-    await screen.findByText("Test rule");
-    expect(screen.getByText("Blocked mechanically")).toBeTruthy();
-    expect(screen.getByText("Advisory")).toBeTruthy();
+    await openRule(user, "Test rule");
+    expect(screen.getByText("Guidance only")).toBeTruthy();
+    await openRule(user, "Never open with a greeting");
+    expect(screen.getByText("Enforced automatically")).toBeTruthy();
   });
 
   it("archives in one step and restores from the undo notice", async () => {
     const user = userEvent.setup();
     render(<RulesTab onStatsChange={vi.fn()} />);
-    await screen.findByText("Test rule");
+    await openRule(user, "Test rule");
 
-    await user.click(screen.getAllByRole("button", { name: "Archive" })[0]!);
+    await user.click(screen.getByRole("button", { name: "Archive" }));
     const undo = await screen.findByRole("button", { name: "Undo" });
     await user.click(undo);
 
@@ -207,5 +216,39 @@ describe("RulesTab — manager", () => {
 
     await waitFor(() => expect(deleteWritingRule).toHaveBeenCalledWith("r1"));
     expect(deleteWritingRule).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps each rule to one line until opened", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+
+    await openRule(user, "Test rule");
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+
+    // Opening another rule closes the first: one room at a time.
+    await openRule(user, "Never open with a greeting");
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
+  });
+
+  it("hides filters until asked, and counts the active ones", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+    expect(screen.queryByRole("group", { name: "Severity" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Filter" }));
+    await user.click(screen.getByRole("button", { name: "Must-fix" }));
+    expect(screen.getByRole("button", { name: "Filter · 1" })).toBeTruthy();
+  });
+
+  it("moves the review queue into a sentence you can act on", async () => {
+    const user = userEvent.setup();
+    render(<RulesTab onStatsChange={vi.fn()} />);
+    await screen.findByText("Test rule");
+    expect(screen.getByText(/Showing 2 new rules/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Show all 2" }));
+    expect(screen.getByRole("button", { name: "Review them" })).toBeTruthy();
   });
 });

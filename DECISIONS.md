@@ -67,7 +67,11 @@ Rules could already be browsed, edited, archived and restored from Settings → 
 
 ### Decision
 
-Upgrade the existing tab instead of building a second surface. Added search (also on `/`), writing-type filter, sort, bulk archive, a "Blocked mechanically" vs "Advisory" tag (from `detectionPattern`), and one-step archive with an Undo notice in place of the confirm step. Archive stays non-destructive, so a confirm dialog protected nothing and cost a click every time.
+Upgrade the existing tab instead of building a second surface, and organise it by Benji Taylor's Family Values (simplicity, then fluidity, then delight; each depends on the one before) and the motion discipline of Josh Puckett's Interface Craft. Only their public summaries were read; the paid kit itself was not.
+
+- **Simplicity (gradual revelation).** The first version put a search box, view toggle, three severity chips, two selects, checkboxes, badges and an Export button on screen at once, and the screen read as confusing. Now: one search box and a Filter button; each rule is one line (text, severity, chevron); opening a rule reveals why, example, metadata and actions in place, one at a time; checkboxes appear on hover and a bulk bar replaces the search row once something is selected; the review queue is a sentence ("Showing 2 new rules. Show all 3"). Jargon dropped: "signals" became "Flagged N times", "Blocked mechanically/Advisory" became "Enforced automatically/Guidance only". The Export button became a quiet "Changes reach Claude automatically. Sync now" line, since every edit already exports.
+- **Fluidity.** A rule opens with a 200 ms blur/fade/4px rise (`--ease-entrance`), keyboard-initiated opens do not animate, and `prefers-reduced-motion` removes it (`annotations.css`, per `docs/motion-spec.md`). Archive is one step with an Undo notice, since archive is recoverable and a confirm step cost a click every time.
+- **Delight.** Deliberately restrained: this is a settings-adjacent surface used rarely, so the frequency rule gives it a small budget.
 
 ### Not done
 
