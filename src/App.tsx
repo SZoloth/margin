@@ -1125,10 +1125,10 @@ export default function App() {
         }
         if (onboarding.step === "welcome") {
           onboarding.advanceToHighlighted();
-          setOnboardingToast("Highlight saved \u2014 the note panel opens automatically once you open a file (\u2318O).");
+          setOnboardingToast("Open a file (\u2318O) to keep highlights and add notes.");
         } else if (onboarding.step === "highlighted") {
           onboarding.advanceToNoted();
-          setOnboardingToast("Annotations saved. Open more files with \u2318O.");
+          setOnboardingToast("Open a file with \u2318O to keep your highlights.");
         }
         return;
       }

@@ -151,6 +151,10 @@ fn insert_seed_rules(
     }
 }
 
+fn error_preview(text: &str) -> String {
+    text.chars().take(500).collect()
+}
+
 fn extract_json_array(text: &str) -> Option<&str> {
     // Find the first '[' and last ']' to extract JSON array, handling markdown fences
     let start = text.find('[')?;
@@ -234,10 +238,10 @@ pub async fn seed_rules_from_guide(
     let prompt = format!("{}{}", EXTRACTION_PROMPT, guide_text);
     let stdout = llm_generate(&prompt)?;
     let json_str = extract_json_array(&stdout)
-        .ok_or_else(|| format!("No JSON array found in LLM response. Raw output: {}", &stdout[..stdout.len().min(500)]))?;
+        .ok_or_else(|| format!("No JSON array found in LLM response. Raw output: {}", error_preview(&stdout)))?;
 
     let rules: Vec<ExtractedRule> = serde_json::from_str(json_str)
-        .map_err(|e| format!("Failed to parse extracted rules: {}. JSON: {}", e, &json_str[..json_str.len().min(500)]))?;
+        .map_err(|e| format!("Failed to parse extracted rules: {}. JSON: {}", e, error_preview(json_str)))?;
 
     if rules.is_empty() {
         return Ok(SeedRulesResult {
@@ -487,6 +491,13 @@ mod tests {
             extract_json_array(input),
             Some("[{\"ruleText\": \"test\"}]")
         );
+    }
+
+    #[test]
+    fn error_preview_does_not_split_multibyte_chars() {
+        let input = format!("{}é tail", "a".repeat(499));
+        assert_eq!(error_preview(&input), format!("{}é", "a".repeat(499)));
+        assert_eq!(error_preview("short"), "short");
     }
 
     #[test]
