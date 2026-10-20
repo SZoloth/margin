@@ -193,7 +193,7 @@ describe("getWritingRulesMarkdown", () => {
     expect(genPos).toBeLessThan(blogPos);
   });
 
-  it("includes rule details with severity badge", () => {
+  it("renders hard rules as a checklist with details", () => {
     insertRule("r1", "general", "ai-slop", "No negative parallelism", "must-fix", {
       whenToApply: "Any sentence with isn't X, it's Y",
       why: "AI slop marker",
@@ -205,23 +205,30 @@ describe("getWritingRulesMarkdown", () => {
     const rules = getWritingRules(db);
     const md = getWritingRulesMarkdown(rules);
 
-    expect(md).toContain("**Rule: No negative parallelism** [must-fix]");
-    expect(md).toContain("- When to apply: Any sentence with isn't X, it's Y");
-    expect(md).toContain("- Why: AI slop marker");
-    expect(md).toContain("- Signal: seen 3 time(s)");
+    expect(md).toContain("### Hard rules");
+    expect(md).toContain("- [ ] **No negative parallelism** _(Ai Slop)_");
+    expect(md).toContain("  - When: Any sentence with isn't X, it's Y");
+    expect(md).toContain("  - Why: AI slop marker");
+    expect(md).toContain("  - Seen 3 time(s)");
+    expect(md).not.toContain("[must-fix]");
     expect(md).toContain('Before: "The issue isn\'t X. It\'s Y."');
     expect(md).toContain('After: "State directly: Y is the real issue."');
   });
 
-  it("sub-groups by category with title-cased headers", () => {
+  it("splits hard rules from preferences and labels categories in words", () => {
     insertRule("r1", "general", "ai-slop", "Rule 1", "must-fix");
     insertRule("r2", "general", "argument-rigor", "Rule 2", "should-fix");
+    insertRule("r3", "general", "editorial", "Rule 3", "nice-to-fix");
 
     const rules = getWritingRules(db);
     const md = getWritingRulesMarkdown(rules);
 
-    expect(md).toContain("### Ai Slop");
-    expect(md).toContain("### Argument Rigor");
+    expect(md).toContain("- [ ] **Rule 1** _(Ai Slop)_");
+    expect(md).toContain("### Preferences");
+    expect(md).toContain("- **Rule 2** _(Argument Rigor)_");
+    expect(md).toContain("- **Rule 3** _(Editorial)_");
+    expect(md.indexOf("### Hard rules")).toBeLessThan(md.indexOf("### Preferences"));
+    expect(md).not.toMatch(/\[(should|nice-to)-fix\]/);
   });
 
   it("returns minimal markdown for empty rules", () => {

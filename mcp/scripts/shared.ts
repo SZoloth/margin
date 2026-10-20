@@ -3,7 +3,7 @@
  * Extracted from adversarial-test.ts to avoid duplication.
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, readdirSync } from "fs";
 import { execSync } from "child_process";
 import { homedir } from "os";
 import { join } from "path";
@@ -67,13 +67,31 @@ export interface WritingRuleRow {
 
 // ── Shared utilities ───────────────────────────────────────────────────
 
+/**
+ * The whole writing profile as one string: the entry file
+ * (~/.margin/writing-rules.md) followed by every per-type file in
+ * ~/.margin/writing-rules/. Agents load these selectively; audits need all of it.
+ */
+export function loadFullWritingProfile(home: string = homedir()): string {
+  const entryPath = join(home, ".margin", "writing-rules.md");
+  const typeDir = join(home, ".margin", "writing-rules");
+  const parts: string[] = [];
+  if (existsSync(entryPath)) parts.push(readFileSync(entryPath, "utf-8"));
+  if (existsSync(typeDir)) {
+    for (const name of readdirSync(typeDir).filter((n) => n.endsWith(".md")).sort()) {
+      parts.push(readFileSync(join(typeDir, name), "utf-8"));
+    }
+  }
+  return parts.join("\n");
+}
+
 function loadWritingRules(): string {
-  const rulesPath = join(homedir(), ".margin/writing-rules.md");
-  if (!existsSync(rulesPath)) {
-    console.error(`Writing rules not found at ${rulesPath}`);
+  const profile = loadFullWritingProfile();
+  if (!profile) {
+    console.error(`Writing rules not found at ${join(homedir(), ".margin/writing-rules.md")}`);
     process.exit(1);
   }
-  return readFileSync(rulesPath, "utf-8");
+  return profile;
 }
 
 export function loadWritingRulesForType(type: string): string {

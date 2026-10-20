@@ -82,13 +82,13 @@ margin rules update <id> [--text T] [--severity S] [--type T] [--signal-count N]
 margin rules delete <id>
 ` + "```" + `
 
-**Valid severities:** must-fix, should-fix, nice-to-fix
+**Valid severities:** must-fix, should-fix, nice-to-fix (the app and the exported profile show must-fix as Hard rule and the other two as Preference)
 
 ### Export
 
 ` + "```bash" + `
 margin export wait [--timeout N]       # Start HTTP bridge, wait for Margin app export
-margin export profile                  # Regenerate ~/.margin/writing-rules.md + guard hook
+margin export profile                  # Regenerate ~/.margin/writing-rules.md (+ writing-rules/<type>.md) + guard hook
 margin export profile --target codex   # Regenerate writing-rules.md + Codex AGENTS.md (no hook)
 margin export codex                    # Regenerate ~/.codex/AGENTS.md with writing rules only
 ` + "```" + `

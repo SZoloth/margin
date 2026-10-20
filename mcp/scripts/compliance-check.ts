@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from "fs";
 import { homedir } from "os";
 import { join, resolve } from "path";
 import { fileURLToPath } from "url";
-import { evalGenerate } from "./shared.ts";
+import { evalGenerate, loadFullWritingProfile } from "./shared.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -660,12 +660,7 @@ export function scoreDimensions(
 function runLlmAudit(
   text: string
 ): { score: number; violations: LlmViolation[] } | null {
-  const rulesPath = join(homedir(), ".margin/writing-rules.md");
-  let rulesContext = "";
-
-  if (existsSync(rulesPath)) {
-    rulesContext = readFileSync(rulesPath, "utf-8");
-  }
+  const rulesContext = loadFullWritingProfile();
 
   const prompt = `You are a writing quality auditor. Score this prose against the writing rules below.
 

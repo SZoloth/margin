@@ -9,7 +9,7 @@ Margin is a writing quality system disguised as a reading app. The surface is a 
 **The loop:** Read → Annotate → Correct → Synthesize rules → Enforce on AI writing → Read AI output → Annotate again. Each iteration makes the system more precisely yours.
 
 **Key artifacts the system produces:**
-- `~/.margin/writing-rules.md` — voice profile consumed by Claude via MCP or clipboard
+- `~/.margin/writing-rules.md` — voice profile entry file (how-to, voice, rules for all writing, router) consumed by Claude via MCP or clipboard; `~/.margin/writing-rules/<type>.md` holds each writing type's rules and examples, loaded only for that type
 - `~/.claude/hooks/writing_guard.py` — pre-tool hook that intercepts Write/Edit on prose files, auto-rejecting kill-words and AI slop patterns
 
 **The product thesis:** Every correction you give should immediately improve the current document, propagate to all future documents of the same type, and never need to be given again.

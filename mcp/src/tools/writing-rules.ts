@@ -451,6 +451,47 @@ export function getWritingProfileMarkdown(
   return lines.join("\n");
 }
 
+/** Title-case a kebab category slug ("ai-slop" -> "Ai Slop"). */
+function categoryLabel(category: string): string {
+  return category
+    .replace(/-/g, " ")
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
+    .join(" ");
+}
+
+/**
+ * One rule. Hard rules (must-fix) are checklist items; preferences are plain
+ * bullets. The database's three severities never reach the agent.
+ * Mirrors formatRule in cli/profile/export.go.
+ */
+function formatRule(rule: WritingRule): string[] {
+  const marker = rule.severity === "must-fix" ? "- [ ] " : "- ";
+  const lines = [`${marker}**${rule.ruleText}** _(${categoryLabel(rule.category)})_`];
+  if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+  if (rule.why) lines.push(`  - Why: ${rule.why}`);
+  if (rule.exampleBefore && rule.category !== "heading-patterns") lines.push(`  - Before: "${rule.exampleBefore}"`);
+  if (rule.exampleAfter) lines.push(`  - After: "${rule.exampleAfter}"`);
+  if (rule.notes) lines.push(`  - Notes: ${rule.notes.replace(/\n/g, "; ")}`);
+  lines.push(`  - Seen ${rule.signalCount} time(s)`);
+  return lines;
+}
+
+function formatStrictnessSections(rules: WritingRule[], heading: string): string[] {
+  const hard = rules.filter((r) => r.severity === "must-fix");
+  const prefs = rules.filter((r) => r.severity !== "must-fix");
+  const lines: string[] = [];
+  if (hard.length > 0) {
+    lines.push("", `${heading} Hard rules`, "", "_Breaking one is always a mistake. Check every item before handing work over._", "");
+    for (const r of hard) lines.push(...formatRule(r));
+  }
+  if (prefs.length > 0) {
+    lines.push("", `${heading} Preferences`, "", "_Follow these by default. The request, the reader, or the source can override them._", "");
+    for (const r of prefs) lines.push(...formatRule(r));
+  }
+  return lines;
+}
+
 /** Shared rules section formatter (extracted from getWritingRulesMarkdown). */
 function formatRulesSection(rules: WritingRule[]): string[] {
   const lines: string[] = [];
@@ -473,39 +514,7 @@ function formatRulesSection(rules: WritingRule[]): string[] {
     lines.push("");
     lines.push(`## ${TYPE_LABELS[writingType] ?? writingType}`);
 
-    const catGroups = new Map<string, WritingRule[]>();
-    for (const rule of groupRules) {
-      const existing = catGroups.get(rule.category);
-      if (existing) existing.push(rule);
-      else catGroups.set(rule.category, [rule]);
-    }
-
-    for (const [category, catRules] of catGroups) {
-      lines.push("");
-      const catLabel = category
-        .replace(/-/g, " ")
-        .split(/\s+/)
-        .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
-        .join(" ");
-      lines.push(`### ${catLabel}`);
-
-      for (const rule of catRules) {
-        lines.push("");
-        lines.push(`**Rule: ${rule.ruleText}** [${rule.severity}]`);
-        if (rule.whenToApply) lines.push(`- When to apply: ${rule.whenToApply}`);
-        if (rule.why) lines.push(`- Why: ${rule.why}`);
-        lines.push(`- Signal: seen ${rule.signalCount} time(s)`);
-        if (rule.exampleBefore || rule.exampleAfter) {
-          const showBefore = rule.exampleBefore && rule.category !== "heading-patterns";
-          if (showBefore || rule.exampleAfter) {
-            lines.push("- Before -> After:");
-            if (showBefore) lines.push(`  - Before: "${rule.exampleBefore}"`);
-            if (rule.exampleAfter) lines.push(`  - After: "${rule.exampleAfter}"`);
-          }
-        }
-        if (rule.notes) lines.push(`- Notes: ${rule.notes}`);
-      }
-    }
+    lines.push(...formatStrictnessSections(groupRules, "###"));
   }
 
   return lines;
