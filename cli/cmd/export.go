@@ -32,13 +32,16 @@ var exportProfileCmd = &cobra.Command{
 	Short: "Regenerate writing profile and guard hook",
 	Long: `Regenerate the unified writing profile and agent-specific artifacts.
 
-Default (no --target flag): writes ~/.margin/writing-rules.md and
+Every target writes the profile: ~/.margin/writing-rules.md (the entry file
+agents read first) and ~/.margin/writing-rules/<type>.md (one per writing type).
+
+Default (no --target flag): writes the profile and
 ~/.claude/hooks/writing_guard.py. Also updates ~/.codex/AGENTS.md if
 ~/.codex exists (Codex CLI is installed).
 
---target markdown: writes only ~/.margin/writing-rules.md.
+--target markdown: writes only the profile.
 
---target codex: writes ~/.margin/writing-rules.md and ~/.codex/AGENTS.md.
+--target codex: writes the profile and ~/.codex/AGENTS.md.
 Skips writing_guard.py — Codex uses prompt-level rules instead of a hook.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		dbPath := resolveDBPath()
@@ -53,7 +56,7 @@ Skips writing_guard.py — Codex uses prompt-level rules instead of a hook.`,
 var exportCodexCmd = &cobra.Command{
 	Use:   "codex",
 	Short: "Export the writing profile and compact Codex instructions",
-	Long: `Writes the full profile to ~/.margin/writing-rules.md and a compact router to
+	Long: `Writes the profile to ~/.margin/writing-rules.md (plus per-type files) and a compact router to
 ~/.codex/AGENTS.md. Codex loads the router globally and reads the full profile
 for writing tasks. Safe to run repeatedly — only the managed
 section is replaced; any existing user content in AGENTS.md is preserved.

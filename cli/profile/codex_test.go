@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
@@ -59,12 +60,12 @@ func TestProfileForCodex_EditorialRules(t *testing.T) {
 		},
 	}
 
-	md := FormatProfileMarkdown(rules, nil)
+	md := joinedProfile(rules, nil)
 
 	checks := []string{
 		"Keep sentences short",
 		"Be direct",
-		"General",
+		"Rules for all writing",
 		"Email",
 	}
 	for _, check := range checks {
@@ -100,7 +101,7 @@ func TestProfileForCodex_CorrectiveExamples(t *testing.T) {
 		},
 	}
 
-	md := FormatProfileMarkdown(nil, corrections)
+	md := joinedProfile(nil, corrections)
 
 	if !strings.Contains(md, "In today's fast-paced world") {
 		t.Errorf("FormatProfileMarkdown: corrective example missing\n\nFull output:\n%s", md)
@@ -211,4 +212,20 @@ func TestMergeCodexAgentsMD_EmptyExisting(t *testing.T) {
 	if result != managed {
 		t.Errorf("mergeCodexAgentsMD empty existing: got %q, want %q", result, managed)
 	}
+}
+
+// joinedProfile concatenates the entry file and every type file, for checks
+// that a rule or example reaches the profile somewhere.
+func joinedProfile(rules []db.WritingRule, corrections []db.CorrectionRecord) string {
+	files := FormatProfileFiles(rules, corrections)
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	for _, name := range names {
+		b.WriteString(files[name])
+	}
+	return b.String()
 }

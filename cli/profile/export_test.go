@@ -30,13 +30,13 @@ func TestFormatRulesMarkdown(t *testing.T) {
 	checks := []string{
 		"# Writing Rules",
 		"## General",
-		"### Editorial",
-		"**Rule: Keep it short** [must-fix]",
-		"Signal: seen 5 time(s)",
+		"### Hard rules",
+		"- [ ] **Keep it short** _(Editorial)_",
+		"Seen 5 time(s)",
 		"## Email",
-		"### Tone",
-		"**Rule: Be direct** [should-fix]",
-		"When to apply: Cold outreach",
+		"### Preferences",
+		"- **Be direct** _(Tone)_",
+		"When: Cold outreach",
 		"Why: Saves reader time",
 		`Before: "I was wondering if..."`,
 		`After: "Can you..."`,
@@ -76,15 +76,8 @@ func TestFormatProfileMarkdown(t *testing.T) {
 		"# Writing Profile",
 		"## Voice Calibration",
 		"**Short sentences**",
-		"## Writing Samples",
-		"> Good example here",
-		"— natural tone",
-		"## Corrections",
-		"**Bad example here** → too formal",
-		"## Unclassified",
-		"Untagged example → flagged",
-		"# Writing Rules",
-		"**Rule: No filler** [should-fix]",
+		"# Rules for all writing",
+		"- **No filler** _(Editorial)_",
 	}
 	for _, check := range checks {
 		if !strings.Contains(md, check) {
@@ -92,8 +85,24 @@ func TestFormatProfileMarkdown(t *testing.T) {
 		}
 	}
 
+	// Untyped samples and corrections live in general.md, not the entry file.
+	examples := FormatProfileFiles(rules, corrections)["writing-rules/general.md"]
+	for _, check := range []string{
+		"## Writing Samples",
+		"> Good example here",
+		"— natural tone",
+		"## Corrections",
+		"**Bad example here** → too formal",
+		"## Unclassified",
+		"Untagged example → flagged",
+	} {
+		if !strings.Contains(examples, check) {
+			t.Errorf("general.md missing %q\n\nFull output:\n%s", check, examples)
+		}
+	}
+
 	// Voice calibration rules should NOT appear in the rules section
-	rulesSection := md[strings.LastIndex(md, "# Writing Rules"):]
+	rulesSection := md[strings.LastIndex(md, "# Rules for all writing"):]
 	if strings.Contains(rulesSection, "Short sentences") {
 		t.Error("voice-calibration rule appeared in Writing Rules section")
 	}

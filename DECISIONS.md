@@ -116,3 +116,29 @@ Sam: "you didn't explore different designs at all", and Must fix vs Nice to fix 
 **Try your rules.** `rules-bench.ts` is a browser copy of the guard's matching (kill words, prohibition patterns, heading patterns, soft pattern families, the two-family block rule). It says plainly that blocking only happens on published paths.
 
 Dropped: checkbox bulk selection for rules in use (Accept all covers the common bulk action), and the per-category collapse.
+
+## ADR-004: The writing profile loads in layers
+
+**Date:** 2026-10-20 · **Status:** Accepted
+
+### Context
+
+Sam pointed at Antoine van der Lee's SwiftUI agent skill as a reference. Its content doesn't apply, but its shape does. Its entry file is about 150 lines: always-on rules, then a table routing to roughly 30 topic files the agent opens only when the task needs them. It uses "always/never" only for real mistakes and "consider" for everything else. It tells the agent to apply guidance only to the code it is changing. It gives separate steps for reviewing and for writing new code.
+
+Margin's export did the opposite on all four. `~/.margin/writing-rules.md` held every rule, sample and correction for every writing type, so a Slack reply loaded the cover-letter rules. Each rule went out tagged `[must-fix]`, `[should-fix]` or `[nice-to-fix]` even though the app had already collapsed strictness to Hard rule and Preference (ADR-002, revision 3), so Claude read three levels where Sam sees two. Nothing told Claude to leave untouched passages of Sam's own drafts alone, and drafting and reviewing got the same flat list.
+
+### Decision
+
+The CLI (still the only writer) now writes the profile in two layers:
+
+- `~/.margin/writing-rules.md`, the entry file: how to use the profile, voice calibration, rules for all writing, and a table of writing types with counts and file paths.
+- `~/.margin/writing-rules/<type>.md`: that type's rules plus its samples and corrections. Samples and corrections with no type go to `general.md`. Files for types that no longer have rules or examples are removed; nothing else in the folder is touched.
+
+Hard rules render as a checklist ("breaking one is always a mistake"); preferences render as plain bullets ("the request, the reader, or the source can override them"). The severity tags no longer reach the agent, in the files or through the MCP server's rules tool, resource and feedback prompt. The entry file's how-to gives separate instructions for drafting, reviewing, and editing someone else's text, and the last one says to apply rules only to the passages being changed.
+
+The entry file keeps its path, so the Codex router, Sam's skills and the guard's "see writing-rules.md" message keep working. The compliance checker's LLM audit now reads the entry file plus every type file, since it needs the whole rule set.
+
+### Not done
+
+- Packaging the profile as an installable agent plugin (the skill's multi-client manifest). Margin has no outside users yet, and `margin skill-install` already covers Claude Code and Codex.
+- The Rust and MCP whole-profile formatters (`generate_writing_profile_markdown`, `getWritingProfileMarkdown`) still produce one file. They write nothing and no agent reads them as the profile. The Rust one still prints severity tags; it was left alone rather than changing Rust that can't be built in the cloud.
