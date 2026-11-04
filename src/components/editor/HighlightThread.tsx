@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import type { Highlight, MarginNote } from "@/types/annotations";
 import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
+import { canNeverWrite } from "@/lib/sample-document";
 
 interface HighlightThreadProps {
   highlight: Highlight;
@@ -13,6 +14,8 @@ interface HighlightThreadProps {
   onDeleteNote: (noteId: string) => void;
   onDeleteHighlight: (id: string) => void;
   onRecolor?: (highlightId: string, color: string) => void;
+  /** Ban the highlighted phrase as a Hard rule. Rejects with the reason it failed. */
+  onNeverWrite?: (highlight: Highlight) => Promise<void>;
   onClose: () => void;
   anchorRect: DOMRect | null;
   autoFocusNew?: boolean;
@@ -144,11 +147,30 @@ export function HighlightThread({
   onDeleteNote,
   onDeleteHighlight,
   onRecolor,
+  onNeverWrite,
   onClose,
   anchorRect,
   autoFocusNew,
   isVisible,
 }: HighlightThreadProps) {
+  // "Never write this": idle → saving → done | error. Reset per highlight.
+  const [never, setNever] = useState<
+    { state: "idle" | "saving" | "done" } | { state: "error"; message: string }
+  >({ state: "idle" });
+  useEffect(() => {
+    setNever({ state: "idle" });
+  }, [highlight.id]);
+  const phrase = highlight.text_content.trim().replace(/\s+/g, " ");
+  const handleNeverWrite = async () => {
+    if (!onNeverWrite || never.state === "saving") return;
+    setNever({ state: "saving" });
+    try {
+      await onNeverWrite(highlight);
+      setNever({ state: "done" });
+    } catch (err) {
+      setNever({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  };
   // Drafts survive dismissal — closing a thread must never eat a half-typed
   // note. Persisted per-highlight in sessionStorage.
   const draftKey = `margin:draft:${highlight.id}`;
@@ -499,6 +521,30 @@ export function HighlightThread({
             >
               Save
             </button>
+          </div>
+        )}
+        {onNeverWrite && canNeverWrite(phrase) && (
+          <div className="thread-never">
+            {never.state === "done" ? (
+              <p className="thread-never-done" role="status">
+                Hard rule: never write “{phrase.toLowerCase()}”. It’s underlined wherever it appears.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleNeverWrite()}
+                disabled={never.state === "saving"}
+                className="thread-never-btn note-action-btn"
+                title="Make this phrase a Hard rule: Margin underlines it everywhere, and the Writing guard stops Claude writing it"
+              >
+                Never write this
+              </button>
+            )}
+            {never.state === "error" && (
+              <p className="thread-never-error" role="alert">
+                Couldn’t make the rule: {never.message}
+              </p>
+            )}
           </div>
         )}
         {/* Meta row: recolor swatches left, save hint right */}

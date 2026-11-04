@@ -18,6 +18,12 @@
 
 /* Light theme (default) — Tufte-inspired warm cream */
 :root {
+  /* Type: one stack per role. Newsreader is the variable build so the
+     browser picks its optical size (6–72) from the rendered size. */
+  --font-serif: 'Newsreader Variable', Georgia, serif;
+  --font-sans: 'Instrument Sans', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+
   --color-page: #fffff8;
   --color-sidebar: #F5F2EA;
   --color-text-primary: #1a1714;
@@ -151,7 +157,8 @@
 body {
   background-color: var(--color-page);
   color: var(--color-text-primary);
-  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
   margin: 0;
   padding: 0;
   height: 100vh;

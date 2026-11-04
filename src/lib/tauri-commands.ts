@@ -183,6 +183,16 @@ export async function setAgentIntegration(enabled: boolean): Promise<void> {
   return invoke<void>("set_agent_integration", { enabled });
 }
 
+/** Writes the first-run sample to ~/.margin/samples (once) and returns its path. Null outside the app. */
+export async function writeFirstRunSample(content: string): Promise<string | null> {
+  return (await invoke<string | null>("write_first_run_sample", { content })) ?? null;
+}
+
+/** "Never write this": a must-fix kill word for all writing, made without Claude. */
+export async function createNeverWriteRule(phrase: string, why?: string): Promise<WritingRule> {
+  return invoke<WritingRule>("create_never_write_rule", { phrase, why });
+}
+
 export async function getCorrectionsFlat(limit?: number): Promise<CorrectionDetail[]> {
   return invoke<CorrectionDetail[]>(
     "get_corrections_flat",

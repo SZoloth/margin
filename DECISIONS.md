@@ -142,3 +142,26 @@ The entry file keeps its path, so the Codex router, Sam's skills and the guard's
 
 - Packaging the profile as an installable agent plugin (the skill's multi-client manifest). Margin has no outside users yet, and `margin skill-install` already covers Claude Code and Codex.
 - The Rust and MCP whole-profile formatters (`generate_writing_profile_markdown`, `getWritingProfileMarkdown`) still produce one file. They write nothing and no agent reads them as the profile. The Rust one still prints severity tags; it was left alone rather than changing Rust that can't be built in the cloud.
+
+## ADR-005: First run makes a rule, and type is set by role
+
+**Date:** 2026-11-04 · **Status:** Accepted
+
+### Context
+
+Sam pointed at *If This Finds You* (ifthisfindsyou.app) as a reference: every visit opens on something to read, and every claim on the page says how it is known. Margin's first run did neither. It opened on a human-voiced essay about reading with a pencil. Highlights on it were drawn but never saved, while the toasts said "Highlight saved" and "Annotations saved". The note card can't open without a saved highlight, so a new user couldn't leave a note. Making a rule took a real file, a note, Settings, a copied prompt, the Claude switch and a round trip through Claude. New installs start with no rules (fresh-user QA, Oct 9), so a stranger's first session never reached the product's payoff.
+
+Type had drifted too. Newsreader shipped as the static build, which fixes its optical size at 18, so headings and small text used the text cut. Four places asked for Inter, which was never bundled, and `--font-sans` was used but never defined, so note threads fell back to the system face. The Reading › Font setting wrote `--reader-font-family`, but no rule read it.
+
+### Decision
+
+- **The sample is an AI draft with planted tells.** It's a short work email with five tells ("I hope this finds you well", "delve into", "leverage", "it's not just…", "explore this further"), followed by a second draft repeating them. It says plainly that an AI wrote it. On first launch it is written to `~/.margin/samples/first-draft.md` (once; later edits survive) and opened like any file, so highlights save and the note card works.
+- **"Never write this" makes a Hard rule on the spot.** For any highlight up to 60 characters, the note card offers it. The new `create_never_write_rule` command stores a must-fix kill word for all writing types, lowercased because the guard matches kill words with `word in text.lower()`. Its `why` records where it came from ("From your mark on first-draft.md, Nov 4."). No Claude is involved. The editor's existing rule scan then underlines the phrase in both drafts, which proves the rule worked. Marking the same phrase again adds a signal and brings back an archived rule. The highlight is kept as the rule's evidence even without a note.
+- **The Writing guard is offered at the moment it means something.** After the first rule, if the guard is off, a card names the phrase and the file the guard adds to `~/.claude/hooks`. It stays until answered. The default is still off.
+- **Onboarding ends on the first rule or on opening your own file, never on a timer.** The 8-second welcome dismissal and the 30-second auto-complete are gone. Text with no file behind it says its highlights aren't saved.
+- **Type: one stack per role.** `--font-serif` (Newsreader, variable build with `font-optical-sizing: auto`), `--font-sans` (Instrument Sans) and `--font-mono` (the system's) are defined once in `globals.css`. A test fails if a family is named anywhere else. JetBrains Mono is no longer bundled. The existing voice split stays: notes in your own voice are sans roman, and quoted authorial text is serif.
+
+### Not done
+
+- Measuring time to first rule with people who aren't Sam. The target is 4 of 5 strangers reaching a Hard rule within two minutes, on the QA build with a scratch `HOME`.
+- Phrase rules match as literal substrings, like every kill word, so "leverage" also catches "leveraged". Word-boundary matching would have to change in the guard, the bench and the editor scan together.

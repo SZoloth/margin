@@ -60,7 +60,7 @@ const RULES_SELECT: &str =
             reviewed_at, register, polarity, detection_pattern, archived_at
      FROM writing_rules";
 
-fn fetch_writing_rules(
+pub(crate) fn fetch_writing_rules(
     conn: &Connection,
     writing_type: Option<&str>,
 ) -> rusqlite::Result<Vec<WritingRule>> {

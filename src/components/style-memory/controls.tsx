@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 /** Shared look for the Writing rules section: Notes, Suggested and Rules. */
 
 /** Margin's reading face, for rule and note text. */
-export const SERIF = "font-['Newsreader',Georgia,serif]";
+export const SERIF = "font-[family-name:var(--font-serif)]";
 
 export const FOCUS_RING =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]";

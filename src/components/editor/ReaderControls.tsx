@@ -21,7 +21,7 @@ const rowLabel: React.CSSProperties = {
   letterSpacing: "0.04em",
   textTransform: "uppercase",
   color: "var(--color-text-tertiary)",
-  fontFamily: "'Instrument Sans', system-ui, sans-serif",
+  fontFamily: "var(--font-sans)",
 };
 
 // Practical Typography–faithful combo: serif, ~18px, tighter leading
@@ -120,7 +120,7 @@ export function ReaderControls({ settings, setSetting }: ReaderControlsProps) {
           cursor: "pointer",
           flexShrink: 0,
           fontSize: 13,
-          fontFamily: "'Newsreader', Georgia, serif",
+          fontFamily: "var(--font-serif)",
           lineHeight: 1,
         }}
       >

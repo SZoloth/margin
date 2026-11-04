@@ -99,6 +99,9 @@ function uid(): string {
 // Command dispatcher
 // ---------------------------------------------------------------------------
 
+const BROWSER_SAMPLE_PATH = "/browser/.margin/samples/first-draft.md";
+let firstRunSample: string | null = null;
+
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   // --- Mount-time (must return correct shape or app crashes) ----------------
   get_recent_documents: () => [sampleDocument],
@@ -107,7 +110,8 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   drain_pending_open_files: () => [],
 
   // --- File ops -------------------------------------------------------------
-  read_file: () => sampleMarkdown,
+  read_file: (a) =>
+    a.path === BROWSER_SAMPLE_PATH && firstRunSample !== null ? firstRunSample : sampleMarkdown,
   open_file_dialog: () => null,
   save_file: () => undefined,
   list_markdown_files: () => [],
@@ -321,6 +325,34 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   export_writing_rules: () => ({ markdownPath: "", hookPath: "", ruleCount: 0 }),
   get_agent_integration: () => false,
   set_agent_integration: () => undefined,
+  // Kept in memory so browser dev mode runs the same first-run path as the app.
+  write_first_run_sample: (a) => {
+    if (firstRunSample === null && typeof a.content === "string") firstRunSample = a.content;
+    return BROWSER_SAMPLE_PATH;
+  },
+  create_never_write_rule: (args) => {
+    const now = Date.now();
+    const phrase = typeof args.phrase === "string" ? args.phrase : "";
+    const why = typeof args.why === "string" ? args.why : null;
+    return {
+      id: `stub-never-${now}`,
+      writingType: "general",
+      category: "kill-words",
+      ruleText: phrase.trim().replace(/\s+/g, " ").toLowerCase(),
+      whenToApply: null,
+      why,
+      severity: "must-fix",
+      exampleBefore: phrase || null,
+      exampleAfter: null,
+      source: "highlight",
+      signalCount: 1,
+      notes: null,
+      reviewedAt: now,
+      detectionPattern: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+  },
   update_writing_rule: () => undefined,
   delete_writing_rule: () => undefined,
   unarchive_writing_rule: () => undefined,

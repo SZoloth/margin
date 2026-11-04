@@ -281,7 +281,7 @@
 }
 
 .thread-hint {
-  font-family: var(--font-sans, system-ui, sans-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   white-space: nowrap;
@@ -334,7 +334,7 @@
 /* Your voice, not the document's — sans roman. Italic serif is reserved
    for quoted authorial text. */
 .thread-message-content {
-  font-family: var(--font-sans, system-ui, sans-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--color-text-primary);
@@ -366,7 +366,7 @@
   resize: none;
   border: none;
   background: transparent;
-  font-family: var(--font-sans, system-ui, sans-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--color-text-primary);
@@ -587,7 +587,7 @@
 /* The echoed match is document quotation — serif italic, same convention
    as blockquotes and thread excerpts. */
 .rule-violation-popover-text {
-  font-family: "Newsreader", Georgia, serif;
+  font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--text-base);
   color: var(--color-text-primary);
@@ -599,7 +599,7 @@
 }
 
 .rule-violation-popover-pattern {
-  font-family: "Newsreader", Georgia, serif;
+  font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
@@ -703,4 +703,76 @@
   .rule-toast {
     animation: none;
   }
+}
+
+/* "Never write this": a Hard rule from the highlighted phrase. The result is
+   the machine reporting back, so it speaks in the UI sans. */
+.thread-never {
+  margin-top: 6px;
+}
+
+.thread-never-btn {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-danger-text);
+}
+
+.thread-never-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.thread-never-done,
+.thread-never-error {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.thread-never-done {
+  color: var(--color-text-secondary);
+}
+
+.thread-never-error {
+  color: var(--color-danger-text);
+}
+
+/* Writing guard offer after the first Hard rule. Stays until answered. */
+.guard-offer {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 800;
+  width: min(440px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-page);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.guard-offer-text,
+.guard-offer-error {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.guard-offer-text code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.guard-offer-error {
+  color: var(--color-danger-text);
+}
+
+.guard-offer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }

@@ -117,7 +117,7 @@ export function ChromeBar({
             fontSize: 12,
             fontWeight: 500,
             color: "var(--color-text-secondary)",
-            fontFamily: "'Instrument Sans', system-ui, sans-serif",
+            fontFamily: "var(--font-sans)",
             userSelect: "none",
             pointerEvents: "none",
           }}
@@ -154,7 +154,7 @@ export function ChromeBar({
                 color: "var(--color-text-primary)",
                 fontSize: "var(--text-base)",
                 fontWeight: 500,
-                fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                fontFamily: "var(--font-sans)",
                 maxWidth: 220,
                 overflow: "hidden",
               }}
@@ -250,7 +250,7 @@ export function ChromeBar({
                       color: isActive ? "var(--color-text-primary)" : "var(--color-text-secondary)",
                       fontSize: "var(--text-base)",
                       fontWeight: 500,
-                      fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                      fontFamily: "var(--font-sans)",
                       backgroundColor: isActive ? "rgba(0,0,0,0.07)" : "transparent",
                       border: isActive ? "1px solid var(--color-border)" : "1px solid transparent",
                       opacity: isDragging ? 0.4 : 1,

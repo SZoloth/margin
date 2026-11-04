@@ -20,9 +20,8 @@
     "version:sync": "bash scripts/sync-version.sh"
   },
   "dependencies": {
+    "@fontsource-variable/newsreader": "5.3.0",
     "@fontsource/instrument-sans": "5.3.0",
-    "@fontsource/jetbrains-mono": "5.3.0",
-    "@fontsource/newsreader": "5.3.0",
     "@hugeicons/core-free-icons": "^3.1.1",
     "@hugeicons/react": "^1.1.5",
     "@tauri-apps/api": "^2",

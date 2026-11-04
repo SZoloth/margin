@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 
 interface WelcomeBarProps {
@@ -7,17 +7,7 @@ interface WelcomeBarProps {
 }
 
 export function WelcomeBar({ visible, onDismiss }: WelcomeBarProps) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const presence = useAnimatedPresence(visible, 300);
-
-  // Auto-dismiss after 8s
-  useEffect(() => {
-    if (!visible) return;
-    timerRef.current = setTimeout(onDismiss, 8_000);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [visible, onDismiss]);
 
   // Dismiss on first text selection
   useEffect(() => {
@@ -40,7 +30,7 @@ export function WelcomeBar({ visible, onDismiss }: WelcomeBarProps) {
         textAlign: "center",
         padding: "8px 16px",
         fontSize: "var(--text-sm)",
-        fontFamily: "'Instrument Sans', system-ui, sans-serif",
+        fontFamily: "var(--font-sans)",
         color: "var(--color-text-secondary)",
         opacity: presence.isVisible ? 1 : 0,
         transition: presence.isVisible
@@ -48,7 +38,7 @@ export function WelcomeBar({ visible, onDismiss }: WelcomeBarProps) {
           : "opacity 300ms var(--ease-exit)",
       }}
     >
-      Welcome to Margin. Select any text to highlight it.
+      Select a phrase in this draft that you’d never write.
     </div>
   );
 }

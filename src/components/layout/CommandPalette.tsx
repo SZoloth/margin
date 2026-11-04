@@ -73,7 +73,7 @@ function ShortcutBadge({ keys }: { keys: string[] }) {
         <kbd
           key={i}
           style={{
-            fontFamily: "ui-monospace, 'SF Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: 11,
             padding: "1px 5px",
             borderRadius: 4,
@@ -336,7 +336,7 @@ export function CommandPalette({
     letterSpacing: "0.07em",
     textTransform: "uppercase",
     color: "var(--color-text-tertiary)",
-    fontFamily: "'Instrument Sans', system-ui, sans-serif",
+    fontFamily: "var(--font-sans)",
   };
 
   return (
@@ -409,14 +409,14 @@ export function CommandPalette({
               background: "transparent",
               fontSize: 15,
               color: "var(--color-text-primary)",
-              fontFamily: "'Instrument Sans', system-ui, sans-serif",
+              fontFamily: "var(--font-sans)",
             }}
             autoComplete="off"
             spellCheck={false}
           />
           <kbd
             style={{
-              fontFamily: "ui-monospace, 'SF Mono', monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: 11,
               padding: "1px 5px",
               borderRadius: 4,
@@ -454,7 +454,7 @@ export function CommandPalette({
                   padding: "32px 16px",
                   color: "var(--color-text-tertiary)",
                   fontSize: 13,
-                  fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                  fontFamily: "var(--font-sans)",
                   textAlign: "center",
                   lineHeight: 1.5,
                 }}
@@ -495,7 +495,7 @@ export function CommandPalette({
                         style={{
                           fontSize: 13,
                           color: "var(--color-text-primary)",
-                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontFamily: "var(--font-sans)",
                           fontWeight: 500,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -510,7 +510,7 @@ export function CommandPalette({
                           style={{
                             fontSize: 11,
                             color: "var(--color-text-secondary)",
-                            fontFamily: "ui-monospace, 'SF Mono', monospace",
+                            fontFamily: "var(--font-mono)",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
@@ -559,7 +559,7 @@ export function CommandPalette({
                         style={{
                           fontSize: 13,
                           color: "var(--color-text-primary)",
-                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontFamily: "var(--font-sans)",
                           fontWeight: 500,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -573,7 +573,7 @@ export function CommandPalette({
                         style={{
                           fontSize: 11,
                           color: "var(--color-text-secondary)",
-                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontFamily: "var(--font-sans)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -620,7 +620,7 @@ export function CommandPalette({
                         style={{
                           fontSize: 13,
                           color: "var(--color-text-primary)",
-                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontFamily: "var(--font-sans)",
                           fontWeight: 500,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -634,7 +634,7 @@ export function CommandPalette({
                         style={{
                           fontSize: 11,
                           color: "var(--color-text-secondary)",
-                          fontFamily: "ui-monospace, 'SF Mono', monospace",
+                          fontFamily: "var(--font-mono)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -648,7 +648,7 @@ export function CommandPalette({
                           style={{
                             fontSize: 11,
                             color: "var(--color-text-secondary)",
-                            fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                            fontFamily: "var(--font-sans)",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
@@ -708,7 +708,7 @@ export function CommandPalette({
                         style={{
                           fontSize: 13,
                           color: "var(--color-text-primary)",
-                          fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                          fontFamily: "var(--font-sans)",
                           fontWeight: 500,
                           textAlign: "left",
                         }}
@@ -730,7 +730,7 @@ export function CommandPalette({
                   padding: "32px 16px",
                   color: "var(--color-text-tertiary)",
                   fontSize: 13,
-                  fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                  fontFamily: "var(--font-sans)",
                   textAlign: "center",
                 }}
               >
@@ -754,7 +754,7 @@ export function CommandPalette({
             style={{
               fontSize: 11,
               color: "var(--color-text-tertiary)",
-              fontFamily: "'Instrument Sans', system-ui, sans-serif",
+              fontFamily: "var(--font-sans)",
             }}
           >
             {(openForNewTab || isNewTabMode) ? "Opening in new tab" : query ? "Fuzzy search across all .md files" : "Type to search all .md files"}
@@ -763,7 +763,7 @@ export function CommandPalette({
             style={{
               fontSize: 11,
               color: "var(--color-text-tertiary)",
-              fontFamily: "'Instrument Sans', system-ui, sans-serif",
+              fontFamily: "var(--font-sans)",
               display: "flex",
               gap: 10,
             }}

@@ -53,8 +53,8 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
           className="text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-secondary)]"
           style={{
             fontFamily: settings.fontFamily === "sans"
-              ? "'Instrument Sans', system-ui, sans-serif"
-              : "'Newsreader', Georgia, serif",
+              ? "var(--font-sans)"
+              : "var(--font-serif)",
             fontStyle: "italic",
           }}
         >

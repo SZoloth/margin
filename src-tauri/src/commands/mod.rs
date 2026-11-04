@@ -3,6 +3,7 @@ pub mod corrections;
 pub mod dashboard;
 pub mod documents;
 pub mod files;
+pub mod onboarding;
 pub mod feedback;
 pub mod keep_local;
 pub mod search;

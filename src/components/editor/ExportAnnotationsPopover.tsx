@@ -270,7 +270,7 @@ export function ExportAnnotationsPopover({
                     style={{
                       padding: "2px 8px",
                       fontSize: "var(--text-xs)",
-                      fontFamily: "'Inter', system-ui, sans-serif",
+                      fontFamily: "var(--font-sans)",
                       fontWeight: writingType === wt.value ? 600 : 400,
                       color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
                       backgroundColor: writingType === wt.value ? "var(--hover-bg)" : "transparent",
@@ -371,7 +371,7 @@ export function ExportAnnotationsPopover({
                   style={{
                     padding: "2px 8px",
                     fontSize: "var(--text-xs)",
-                    fontFamily: "'Inter', system-ui, sans-serif",
+                    fontFamily: "var(--font-sans)",
                     fontWeight: writingType === wt.value ? 600 : 400,
                     color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
                     backgroundColor: writingType === wt.value ? "var(--hover-bg)" : "transparent",
