@@ -281,7 +281,7 @@
 }
 
 .thread-hint {
-  font-family: var(--font-sans, system-ui, sans-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   white-space: nowrap;
@@ -334,7 +334,7 @@
 /* Your voice, not the document's — sans roman. Italic serif is reserved
    for quoted authorial text. */
 .thread-message-content {
-  font-family: var(--font-sans, system-ui, sans-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--color-text-primary);
@@ -366,7 +366,7 @@
   resize: none;
   border: none;
   background: transparent;
-  font-family: var(--font-sans, system-ui, sans-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.5;
   color: var(--color-text-primary);
@@ -587,7 +587,7 @@
 /* The echoed match is document quotation — serif italic, same convention
    as blockquotes and thread excerpts. */
 .rule-violation-popover-text {
-  font-family: "Newsreader", Georgia, serif;
+  font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--text-base);
   color: var(--color-text-primary);
@@ -599,7 +599,7 @@
 }
 
 .rule-violation-popover-pattern {
-  font-family: "Newsreader", Georgia, serif;
+  font-family: var(--font-serif);
   font-style: italic;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);

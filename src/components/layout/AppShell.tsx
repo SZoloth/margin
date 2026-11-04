@@ -199,7 +199,7 @@ export function AppShell({
             <div className="text-center" style={{ maxWidth: 480 }}>
               <p
                 style={{
-                  fontFamily: "'Newsreader', Georgia, serif",
+                  fontFamily: "var(--font-serif)",
                   fontStyle: "italic",
                   fontSize: "var(--text-2xl)",
                   letterSpacing: "-0.01em",
@@ -230,7 +230,7 @@ export function AppShell({
               />
               <p
                 style={{
-                  fontFamily: "'Instrument Sans', system-ui, sans-serif",
+                  fontFamily: "var(--font-sans)",
                   fontSize: "var(--text-lg)",
                   color: "var(--color-text-secondary)",
                 }}
@@ -238,7 +238,7 @@ export function AppShell({
                 Open a file with ⌘O to start reading.
               </p>
               <div style={{ marginTop: 12 }}>
-                <kbd style={{ fontFamily: "ui-monospace, 'SF Mono', monospace", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd>
+                <kbd style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", padding: "1px 5px", borderRadius: 4, border: "1px solid var(--color-border)", backgroundColor: "var(--hover-bg)" }}>⌘O</kbd>
               </div>
             </div>
           </div>
@@ -287,7 +287,7 @@ export function AppShell({
             right: 10,
             fontSize: "var(--text-xs)",
             fontWeight: 700,
-            fontFamily: "ui-monospace, 'SF Mono', SFMono-Regular, monospace",
+            fontFamily: "var(--font-mono)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             color: "#FF5722", /* ds-lint-disable */

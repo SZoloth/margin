@@ -40,7 +40,7 @@ export function WelcomeBar({ visible, onDismiss }: WelcomeBarProps) {
         textAlign: "center",
         padding: "8px 16px",
         fontSize: "var(--text-sm)",
-        fontFamily: "'Instrument Sans', system-ui, sans-serif",
+        fontFamily: "var(--font-sans)",
         color: "var(--color-text-secondary)",
         opacity: presence.isVisible ? 1 : 0,
         transition: presence.isVisible

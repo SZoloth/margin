@@ -23,8 +23,8 @@ export const DEFAULT_SETTINGS: Settings = {
 const STORAGE_KEY = "margin-settings";
 
 const FONT_FAMILY_MAP: Record<Settings["fontFamily"], string> = {
-  serif: "'Newsreader', Georgia, serif",
-  sans: "'Instrument Sans', system-ui, sans-serif",
+  serif: "var(--font-serif)",
+  sans: "var(--font-sans)",
 };
 
 const FONT_SIZE_MAP: Record<Settings["fontSize"], string> = {

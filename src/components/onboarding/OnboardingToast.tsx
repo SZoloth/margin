@@ -46,7 +46,7 @@ export function OnboardingToast({ message, duration = 5000, onDismiss }: Onboard
         border: "1px solid var(--color-border)",
         boxShadow: "var(--shadow-md)",
         fontSize: "var(--text-sm)",
-        fontFamily: "'Instrument Sans', system-ui, sans-serif",
+        fontFamily: "var(--font-sans)",
         color: "var(--color-text-secondary)",
         whiteSpace: "nowrap",
         opacity: presence.isVisible ? 1 : 0,

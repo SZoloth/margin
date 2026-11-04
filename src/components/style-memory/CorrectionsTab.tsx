@@ -240,7 +240,7 @@ function CorrectionCard({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontFamily: "'Newsreader', Georgia, serif",
+            fontFamily: "var(--font-serif)",
             fontSize: "var(--text-lg)",
             fontStyle: "italic",
             color: "var(--color-text-secondary)",
@@ -251,7 +251,7 @@ function CorrectionCard({
           &ldquo;{correction.originalText}&rdquo;
         </div>
         {correction.notes.length > 0 && (
-          <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: "var(--text-base)", color: "var(--color-text-primary)", lineHeight: 1.4, marginBottom: 6 }}>
+          <div style={{ fontFamily: "var(--font-serif)", fontSize: "var(--text-base)", color: "var(--color-text-primary)", lineHeight: 1.4, marginBottom: 6 }}>
             {correction.notes.join("; ")}
           </div>
         )}
