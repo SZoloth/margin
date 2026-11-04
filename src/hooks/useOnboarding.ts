@@ -1,57 +1,37 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 
-export type OnboardingStep = "welcome" | "highlighted" | "noted" | "complete";
+export type OnboardingStep = "welcome" | "complete";
 
 const STORAGE_KEY = "margin-onboarding-complete";
 
+function readComplete(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * First run lasts until the user makes their first Hard rule or opens a file
+ * of their own. It never times out: a timer that ends onboarding mid-task
+ * leaves a stranger with no guidance and no explanation.
+ */
 export function useOnboarding() {
-  const [isFirstRun] = useState(() => localStorage.getItem(STORAGE_KEY) === null);
-  const [step, setStep] = useState<OnboardingStep>(() =>
-    localStorage.getItem(STORAGE_KEY) === null ? "welcome" : "complete",
-  );
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isFirstRun] = useState(() => !readComplete());
+  const [step, setStep] = useState<OnboardingStep>(() => (readComplete() ? "complete" : "welcome"));
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
 
   const complete = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, String(Date.now()));
-    setStep("complete");
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = null;
+    try {
+      localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    } catch {
+      /* storage unavailable: onboarding shows again next launch */
     }
+    setStep("complete");
   }, []);
 
-  const advanceToHighlighted = useCallback(() => {
-    setStep((prev) => (prev === "welcome" ? "highlighted" : prev));
-  }, []);
+  const dismissWelcome = useCallback(() => setWelcomeDismissed(true), []);
 
-  const advanceToNoted = useCallback(() => {
-    setStep((prev) => {
-      if (prev === "welcome" || prev === "highlighted") {
-        localStorage.setItem(STORAGE_KEY, String(Date.now()));
-        if (fallbackTimerRef.current) {
-          clearTimeout(fallbackTimerRef.current);
-          fallbackTimerRef.current = null;
-        }
-        return "complete";
-      }
-      return prev;
-    });
-  }, []);
-
-  const dismissWelcome = useCallback(() => {
-    setStep((prev) => (prev === "welcome" ? "highlighted" : prev));
-  }, []);
-
-  // Fallback: if welcome bar shows but user never highlights, complete after 30s
-  useEffect(() => {
-    if (step !== "welcome") return;
-    fallbackTimerRef.current = setTimeout(() => {
-      complete();
-    }, 30_000);
-    return () => {
-      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-    };
-  }, [step, complete]);
-
-  return { isFirstRun, step, advanceToHighlighted, advanceToNoted, complete, dismissWelcome };
+  return { isFirstRun, step, welcomeDismissed, complete, dismissWelcome };
 }

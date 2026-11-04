@@ -3,19 +3,60 @@ export function isShowingSample(currentDoc: unknown, content: string): boolean {
   return currentDoc === null && content.length > 0;
 }
 
-export const SAMPLE_DOCUMENT_CONTENT = `# The Pencil in the Margins
+/** On first launch the sample is written here and opened like any other file. */
+export const SAMPLE_FILE_NAME = "first-draft.md";
 
-Most people read passively. Words wash over them, leaving behind a vague impression — a feeling that something was good or important, but nothing precise enough to act on. The book gets shelved. The article gets bookmarked. Whatever sparked recognition in the moment dissolves before it can become anything useful.
+export function isSampleFilePath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  return /[\\/]\.margin[\\/]samples[\\/]first-draft\.md$/.test(path);
+}
 
-But there's another way to read: with a pencil. Not to take notes in the academic sense — not summarizing, not outlining, not extracting key takeaways for a flashcard deck. Just marking the moments where language does something that catches your attention: a phrase that lands, a sentence that doesn't quite work, a word choice that reveals the writer's assumptions.
+/**
+ * The tells planted in the sample. Each appears in both drafts, so a phrase
+ * banned in the first draft is visibly caught again in the second.
+ */
+export const SAMPLE_PLANTED_TELLS = [
+  "I hope this finds you well",
+  "delve into",
+  "leverage",
+  "it's not just",
+  "explore this further",
+] as const;
 
-This kind of reading is editorial. You're not asking "what does this mean?" but "how is this built?" You notice that a paragraph opens with a strong claim and then retreats into qualifications. You notice that the same metaphor appears three times, each time losing a bit of its force and becoming more diluted. You notice that a transition feels jarring because the writer assumed you had context that was never actually provided.
+/** Mirrors MAX_NEVER_PHRASE_CHARS in src-tauri/src/commands/onboarding.rs. */
+export const MAX_NEVER_PHRASE_CHARS = 60;
 
-These observations are small. Individually, they're barely worth mentioning. But collectively, they form something valuable: a sense of craft. The more you read with a pencil in hand, the more precisely you can articulate why some writing works and other writing merely fills space.
+/** Whether a selection is short enough to ban word for word. */
+export function canNeverWrite(text: string): boolean {
+  const t = text.trim().replace(/\s+/g, " ");
+  return t.length > 0 && t.length <= MAX_NEVER_PHRASE_CHARS;
+}
 
-The interesting part is what happens when you start applying this editorial instinct to your own work. You begin to recognize your own patterns — the filler phrases you lean on when you're not sure what to say, the paragraph structures you default to, the moments where you tell the reader what to think instead of trusting the evidence to speak for itself. Reading well and writing well turn out to be the same skill, viewed from different angles.
+export const SAMPLE_DOCUMENT_CONTENT = `# A draft from an AI assistant
 
-There is an old typographic tradition behind this. The margin — the white space alongside the text — was never empty by accident. It was an invitation. Medieval scribes used it for commentary, corrections, and cross-references. They understood something that we have largely forgotten: that reading is not consumption. It is a conversation between the reader and the text.
+*An AI wrote the email below. Select a phrase you'd never write and choose **Never write this**. Margin will catch it from then on, here and in anything else you open.*
 
-The pencil in the margin is the simplest tool for that conversation. It requires no system, no methodology, no second app running alongside the first. Just a mark that says: *I was here, and I noticed something.*
+Hi Jordan,
+
+I hope this finds you well! I wanted to reach out and delve into how our team can leverage the new reporting dashboard. It's not just a tool, it's a whole new way of working together.
+
+The dashboard is fast, flexible, and, most importantly, built for the way you actually work. In today's fast-paced landscape, real-time insight isn't a luxury anymore. It's a necessity.
+
+Happy to set up a quick call if you'd like to explore this further!
+
+Best,
+Alex
+
+## Another AI draft
+
+*Rules you make above are underlined here too.*
+
+Hi Priya,
+
+I hope this finds you well. Before Thursday's sync, I'd love to delve into the Q3 numbers and leverage what we learned from the pilot. It's not just a report, it's a roadmap for next year.
+
+Let me know if you'd like to explore this further.
+
+Thanks,
+Alex
 `;

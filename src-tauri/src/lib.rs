@@ -95,6 +95,8 @@ pub fn run() {
             commands::writing_rules::export_voice_profile,
             commands::writing_rules::mark_rules_reviewed,
             commands::writing_rules::mark_rules_unreviewed,
+            commands::onboarding::write_first_run_sample,
+            commands::onboarding::create_never_write_rule,
             commands::seed_rules::seed_rules_from_guide,
             commands::seed_rules::open_style_guide_dialog,
             commands::dashboard::start_test_run,

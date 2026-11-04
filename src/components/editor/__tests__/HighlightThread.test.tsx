@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { HighlightThread } from "../HighlightThread";
 import type { Highlight, MarginNote } from "@/types/annotations";
 
@@ -152,5 +152,55 @@ describe("HighlightThread", () => {
     expect(line.style.left).toBe("300px");
     expect(line.style.top).toBe("123px"); // inter-line leading below the mark — underlines no text
     expect(parseFloat(line.style.width)).toBeGreaterThanOrEqual(8);
+  });
+
+  describe("Never write this", () => {
+    const renderWith = (props: Partial<React.ComponentProps<typeof HighlightThread>>) =>
+      render(
+        <HighlightThread
+          highlight={mockHighlight}
+          notes={mockNotes}
+          onAddNote={vi.fn()}
+          onUpdateNote={vi.fn()}
+          onDeleteNote={vi.fn()}
+          onDeleteHighlight={vi.fn()}
+          onClose={vi.fn()}
+          anchorRect={new DOMRect(100, 100, 200, 20)}
+          isVisible={true}
+          {...props}
+        />,
+      );
+
+    it("makes a Hard rule from the highlighted phrase and says so", async () => {
+      const onNeverWrite = vi.fn().mockResolvedValue(undefined);
+      renderWith({ onNeverWrite });
+      const button = document.body.querySelector(".thread-never-btn") as HTMLButtonElement;
+      expect(button.textContent).toBe("Never write this");
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(onNeverWrite).toHaveBeenCalledWith(mockHighlight);
+      expect(document.body.querySelector(".thread-never-done")?.textContent).toContain(
+        "Hard rule: never write “test excerpt”",
+      );
+    });
+
+    it("says nothing was saved when the rule fails", async () => {
+      const onNeverWrite = vi.fn().mockRejectedValue(new Error("disk full"));
+      renderWith({ onNeverWrite });
+      await act(async () => {
+        fireEvent.click(document.body.querySelector(".thread-never-btn")!);
+      });
+      expect(document.body.querySelector(".thread-never-done")).toBeNull();
+      expect(document.body.querySelector(".thread-never-error")?.textContent).toContain("disk full");
+    });
+
+    it("isn't offered for a selection too long to ban word for word", () => {
+      renderWith({
+        onNeverWrite: vi.fn(),
+        highlight: { ...mockHighlight, text_content: "a whole sentence ".repeat(6) },
+      });
+      expect(document.body.querySelector(".thread-never-btn")).toBeNull();
+    });
   });
 });

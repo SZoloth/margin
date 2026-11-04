@@ -41,7 +41,7 @@ import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
 import { shouldClearAnnotationsAfterExport } from "@/lib/export-clear-policy";
-import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, getWritingRules, bulkTagCorrections } from "@/lib/tauri-commands";
+import { readFile, drainPendingOpenFiles, persistCorrections, exportWritingRules, markHighlightsExported, getWritingRules, bulkTagCorrections, writeFirstRunSample, createNeverWriteRule, getAgentIntegration, setAgentIntegration } from "@/lib/tauri-commands";
 import type { WritingRule } from "@/lib/tauri-commands";
 import { subscribeErrors, reportError } from "@/lib/error-bus";
 import { listen } from "@tauri-apps/api/event";
@@ -49,7 +49,7 @@ import { stat } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import type { Document } from "@/types/document";
-import type { CorrectionInput } from "@/types/annotations";
+import type { CorrectionInput, Highlight } from "@/types/annotations";
 import type { ExportResult } from "@/types/export";
 import { UndoToast } from "@/components/ui/UndoToast";
 import { ErrorToast } from "@/components/ui/ErrorToast";
@@ -63,9 +63,10 @@ import { DiffBanner } from "@/components/editor/DiffBanner";
 import { DiffNavChip } from "@/components/editor/DiffNavChip";
 import { DiffControls } from "@/components/editor/DiffControls";
 import { useOnboarding } from "@/hooks/useOnboarding";
-import { SAMPLE_DOCUMENT_CONTENT, isShowingSample } from "@/lib/sample-document";
+import { SAMPLE_DOCUMENT_CONTENT, isShowingSample, isSampleFilePath } from "@/lib/sample-document";
 import { WelcomeBar } from "@/components/onboarding/WelcomeBar";
 import { OnboardingToast } from "@/components/onboarding/OnboardingToast";
+import { GuardOffer } from "@/components/onboarding/GuardOffer";
 
 const showUIFork = import.meta.env.MODE !== "production";
 
@@ -321,10 +322,14 @@ export default function App() {
     }
   }, [tabsHook.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load sample document on first run
+  // First run: write the sample to ~/.margin/samples and open it like any
+  // file, so highlights save and the note card (with "Never write this")
+  // works. Outside the app there is no disk, so it shows unsaved.
   useEffect(() => {
     if (onboarding.isFirstRun && onboarding.step !== "complete" && !doc.currentDoc && tabsHook.isReady && tabsHook.tabs.length === 0) {
-      doc.setContentExternal(SAMPLE_DOCUMENT_CONTENT);
+      writeFirstRunSample(SAMPLE_DOCUMENT_CONTENT)
+        .then((path) => (path ? doc.openFilePath(path) : doc.setContentExternal(SAMPLE_DOCUMENT_CONTENT)))
+        .catch(() => doc.setContentExternal(SAMPLE_DOCUMENT_CONTENT));
     }
   }, [tabsHook.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1123,13 +1128,8 @@ export default function App() {
           tr.setMeta("addToHistory", false);
           dispatchPreservingScroll(editor, tr);
         }
-        if (onboarding.step === "welcome") {
-          onboarding.advanceToHighlighted();
-          setOnboardingToast("Highlight saved \u2014 the note panel opens automatically once you open a file (\u2318O).");
-        } else if (onboarding.step === "highlighted") {
-          onboarding.advanceToNoted();
-          setOnboardingToast("Annotations saved. Open more files with \u2318O.");
-        }
+        // Nothing is saved without a file behind the text; say so.
+        setOnboardingToast("Highlights here aren\u2019t saved. Open a file (\u2318O) to keep them.");
         return;
       }
 
@@ -1155,6 +1155,28 @@ export default function App() {
   // Recolor from the thread's swatch row: update the row in place (notes and
   // anchors survive) and retint the mark. PM marks are immutable, so the mark
   // is removed and re-added with the new color attr.
+  // "Never write this": the highlighted phrase becomes a Hard rule now, with
+  // no Claude in the loop. Its highlight is the rule's evidence, so it stays
+  // when the card closes even without a note.
+  const neverRuleHighlightsRef = useRef(new Set<string>());
+  const [guardOfferPhrase, setGuardOfferPhrase] = useState<string | null>(null);
+  const handleNeverWrite = useCallback(
+    async (h: Highlight) => {
+      const title = doc.currentDoc?.title ?? "a document";
+      const day = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const rule = await createNeverWriteRule(h.text_content, `From your mark on ${title}, ${day}.`);
+      neverRuleHighlightsRef.current.add(h.id);
+      setWritingRules((prev) => [...prev.filter((r) => r.id !== rule.id), rule]);
+      if (onboarding.step !== "complete") {
+        onboarding.complete();
+        setOnboardingToast(null);
+        const guardOn = await getAgentIntegration().catch(() => true);
+        if (!guardOn) setGuardOfferPhrase(rule.ruleText);
+      }
+    },
+    [doc.currentDoc?.title, onboarding],
+  );
+
   const handleRecolor = useCallback(
     async (highlightId: string, color: string) => {
       const h = annotationsRef.current.highlights.find((x) => x.id === highlightId);
@@ -1350,9 +1372,10 @@ export default function App() {
 
   useHighlightShortcut(handleHighlightChord);
 
-  // Complete onboarding when a real file is opened
+  // Complete onboarding when a file of the user's own is opened (the
+  // first-run sample is a real file too, so it doesn't count).
   useEffect(() => {
-    if (doc.currentDoc && onboarding.step !== "complete") {
+    if (doc.currentDoc && !isSampleFilePath(doc.currentDoc.file_path) && onboarding.step !== "complete") {
       onboarding.complete();
       setOnboardingToast(null);
     }
@@ -1692,7 +1715,7 @@ export default function App() {
       onCloseFindBar={() => setFindBarOpen(false)}
       onOpenFind={() => setFindBarOpen(true)}
       welcomeBar={
-        onboarding.step === "welcome" ? (
+        onboarding.step === "welcome" && !onboarding.welcomeDismissed ? (
           <WelcomeBar visible onDismiss={onboarding.dismissWelcome} />
         ) : undefined
       }
@@ -1825,6 +1848,7 @@ export default function App() {
             }}
             onDeleteHighlight={handleDeleteHighlight}
             onRecolor={handleRecolor}
+            onNeverWrite={doc.currentDoc ? handleNeverWrite : undefined}
             onClose={() => {
               // Highlights are provisional until they carry a note — a mark
               // with no judgment is noise, so closing noteless removes it
@@ -1833,7 +1857,8 @@ export default function App() {
                 const hasNotes = annotationsRef.current.marginNotes.some(
                   (n) => n.highlight_id === focusHighlightId,
                 );
-                if (!hasNotes) void handleDeleteHighlight(focusHighlightId);
+                const isRuleEvidence = neverRuleHighlightsRef.current.has(focusHighlightId);
+                if (!hasNotes && !isRuleEvidence) void handleDeleteHighlight(focusHighlightId);
               }
               setFocusHighlightId(null);
               setAnchorRect(null);
@@ -1927,8 +1952,15 @@ export default function App() {
 
       <UndoToast action={undoAction} />
       <ErrorToast key={errorToast?.id} message={errorToast?.message ?? null} />
+      {guardOfferPhrase && (
+        <GuardOffer
+          phrase={guardOfferPhrase}
+          onEnable={() => setAgentIntegration(true)}
+          onDismiss={() => setGuardOfferPhrase(null)}
+        />
+      )}
       <OnboardingToast
-        message={onboardingToast}
+        message={guardOfferPhrase ? null : onboardingToast}
         duration={onboardingToast?.includes("⌘O") ? 6000 : 5000}
         onDismiss={() => setOnboardingToast(null)}
       />
