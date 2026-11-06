@@ -186,6 +186,8 @@ Sam asked for a polish pass so Margin can be shown off, then chose to polish the
 - **A new rule visibly lands.** Three directions were mocked live (ink draws, wash then settle, and ink draws plus a count of catches outside the view). Built the third, pending Sam's pick: right after "Never write this", the rule's underlines draw in under every match in reading order (180ms apart), and if any match is outside the view a "Caught N more below" chip scrolls to it and washes it. In a full 1440×900 window the second draft's match is just on screen, so the chip mostly matters in smaller windows; the draw-in carries the moment either way. Reduced motion skips both animations.
 - **Dark-mode yellow highlight is paler** (250,214,90 at 20% instead of 245,200,40 at 30%), which read as mustard. Chosen over a lower-half "marker" style that would have changed the highlight's shape.
 
+- **WebKit check (Safari's engine on Sam's Mac, from a throwaway worktree):** Newsreader's optical sizing works and both faces load. It found that highlighted text went black in dark mode: the mark rules set only a background, so the text took the browser's default highlight color. Marks now inherit the text color; that, more than the yellow's tint, was the "muddy" dark highlight. The first-run hint moved to the bottom left, off the text column. The rule underline is written as separate properties after Playwright's WebKit build dropped the shorthand mid-animation (the Mac's own WebKit didn't).
+
 ### Not done yet
 
-Nothing here was seen in WebKit. That, the recording, and the rest of the app come next.
+At narrow windows (1280×720) the note card covers the paragraph beside the selection, and React logs a set-state-during-render warning on load. Both predate this work.

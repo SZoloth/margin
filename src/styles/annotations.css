@@ -458,7 +458,9 @@
 .rule-violation {
   --rv-color: var(--color-warning);
   position: relative;
-  text-decoration: underline solid var(--rv-color);
+  text-decoration-line: underline;
+  text-decoration-style: solid;
+  text-decoration-color: var(--rv-color);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   cursor: pointer;

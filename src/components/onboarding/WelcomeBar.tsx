@@ -29,10 +29,10 @@ export function WelcomeBar({ visible, onDismiss }: WelcomeBarProps) {
       // Fixed, not in the layout: the first selection dismisses it, and if it
       // took space the page would jump mid-drag and select the wrong words.
       style={{
+        // Bottom left, in the contents column, so it doesn't sit on the text.
         position: "fixed",
-        left: "50%",
-        bottom: 28,
-        transform: "translateX(-50%)",
+        left: 24,
+        bottom: 24,
         zIndex: 40,
         pointerEvents: "none",
         whiteSpace: "nowrap",
