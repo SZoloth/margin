@@ -1,96 +1,70 @@
 import { SectionHeader } from "./SectionHeader";
 import { SettingsCard } from "./SettingsCard";
 
+const STEPS: { title: string; body: string }[] = [
+  {
+    title: "Mark what bothers you",
+    body: "Highlight a phrase in anything you read and say what's wrong with it. A word you never want to see again can become a Hard rule on the spot.",
+  },
+  {
+    title: "Turn notes into rules",
+    body: "Margin groups your notes into suggested rules under Writing rules. Accept the ones that sound like you.",
+  },
+  {
+    title: "Claude follows them",
+    body: "With the writing guard on, Claude Code can't save writing that breaks a Hard rule, and it reads your Preferences before it writes.",
+  },
+];
+
 const PROMPTS = [
   "Summarize my highlights from [document title]",
-  "Add a margin note to this passage: \"…\"",
+  "Add a margin note to the second paragraph of [document]",
   "Search my library for articles about [topic]",
-  "Show me my writing corrections",
+  "What have I been correcting lately?",
   "Highlight every mention of [concept] in [document]",
 ];
+
+const BODY = "text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-secondary)]";
 
 export function HelpSection() {
   return (
     <div className="flex flex-col gap-4">
       <SettingsCard>
-        <SectionHeader title="Using Margin with Claude" />
-
-        <p className="mt-3 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] leading-relaxed">
-          Margin's MCP server lets Claude read your library, create highlights,
-          add margin notes, and work with your writing corrections — all from
-          a conversation.
-        </p>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div>
-            <p className="text-[length:var(--text-sm)] font-semibold text-[var(--color-text-primary)]">
-              Agent name
-            </p>
-            <code className="mt-1 inline-block rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] px-2 py-0.5 text-[length:var(--text-sm)] font-mono text-[var(--color-text-primary)]">
-              margin
-            </code>
-          </div>
-
-          <div>
-            <p className="text-[length:var(--text-sm)] font-semibold text-[var(--color-text-primary)]">
-              Claude Desktop
-            </p>
-            <p className="mt-0.5 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
-              Go to <span className="font-medium">Settings → Integrations</span> and
-              toggle on Claude Desktop. Restart Claude if it was already running.
-            </p>
-          </div>
-
-          <div>
-            <p className="text-[length:var(--text-sm)] font-semibold text-[var(--color-text-primary)]">
-              Claude Code
-            </p>
-            <p className="mt-0.5 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
-              Copy the config from{" "}
-              <span className="font-medium">Settings → Integrations</span> and
-              paste it into{" "}
-              <code className="rounded bg-[var(--color-surface-subtle)] px-1 py-px font-mono text-[length:11px]">
-                ~/.claude.json
-              </code>
-              , then restart Claude Code.
-            </p>
-          </div>
-        </div>
+        <SectionHeader title="How Margin learns your style" />
+        <ol className="mt-4 flex flex-col gap-4">
+          {STEPS.map((step, i) => (
+            <li key={step.title} className="flex gap-3">
+              <span className="mt-px w-4 shrink-0 text-[length:var(--text-sm)] tabular-nums text-[var(--color-text-tertiary)]">
+                {i + 1}
+              </span>
+              <div>
+                <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-primary)]">{step.title}</p>
+                <p className={`mt-0.5 ${BODY}`}>{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
       </SettingsCard>
 
       <SettingsCard>
-        <SectionHeader title="Writing agent" />
-
-        <p className="mt-3 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] leading-relaxed">
-          The Margin Editor is a multi-round writing assistant. You read and
-          annotate in Margin, export to Claude Code, and the agent applies your
-          corrections to the file. Re-annotate, export again, and it refines
-          until your writing converges.
+        <SectionHeader title="Connect Claude" />
+        <p className={`mt-3 ${BODY}`}>
+          Turn on Claude Desktop or copy the Claude Code config under{" "}
+          <span className="font-medium text-[var(--color-text-primary)]">Integrations</span>, then restart
+          Claude. After that, Claude can read your library, add highlights and notes, and see your rules
+          when you ask it to.
         </p>
-
-        <div className="mt-4 flex flex-col gap-2">
-          <p className="text-[length:var(--text-sm)] font-semibold text-[var(--color-text-primary)]">
-            Launch from Claude Code
-          </p>
-          <code className="inline-block rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] px-2.5 py-1.5 text-[length:var(--text-sm)] font-mono text-[var(--color-text-primary)]">
-            claude --agent margin-editor
-          </code>
-          <p className="text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
-            Requires the MCP server to be configured (see above).
-          </p>
-        </div>
       </SettingsCard>
 
       <SettingsCard>
-        <SectionHeader title="Example prompts" />
-
+        <SectionHeader title="Things to ask Claude" />
         <ul className="mt-3 flex flex-col gap-2">
           {PROMPTS.map((prompt) => (
             <li
               key={prompt}
-              className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] px-3 py-2 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] leading-relaxed"
+              className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] px-3 py-2 text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-secondary)]"
             >
-              "{prompt}"
+              “{prompt}”
             </li>
           ))}
         </ul>

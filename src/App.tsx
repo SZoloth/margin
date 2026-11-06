@@ -1475,7 +1475,7 @@ export default function App() {
         );
         if (!personal) {
           setOnboardingToast(
-            "Teach Margin your style — Settings → Writing rules → Add from style guide"
+            "Teach Margin your style — Settings → Writing rules → Import a style guide"
           );
         }
       })

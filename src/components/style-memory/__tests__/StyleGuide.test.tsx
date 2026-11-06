@@ -181,6 +181,18 @@ describe("StyleGuide", () => {
     expect(screen.getByRole("button", { name: /Cut leverage/ })).toBeTruthy();
   });
 
+  it("links to the rule tests once there are rules", async () => {
+    const onOpenRuleTests = vi.fn();
+    render(<StyleGuide onStatsChange={vi.fn()} onOpenRuleTests={onOpenRuleTests} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Test your rules against Claude" }));
+    expect(onOpenRuleTests).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the import for what it does", async () => {
+    render(<StyleGuide onStatsChange={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: "Import a style guide" })).toBeTruthy();
+  });
+
   it("starts empty with a way to add a style guide", async () => {
     vi.mocked(getWritingRules).mockResolvedValue([]);
     render(<StyleGuide onStatsChange={vi.fn()} />);

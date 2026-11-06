@@ -52,7 +52,6 @@ describe("SettingsPage", () => {
 
     // Nav section links should be present (text may appear in both nav and section)
     expect(screen.getAllByText("Reading").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Writing").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Integrations").length).toBeGreaterThanOrEqual(1);
   });
 
@@ -66,12 +65,15 @@ describe("SettingsPage", () => {
   it("switching sections shows correct content", () => {
     renderWithProvider(<SettingsPage {...defaultProps} />);
 
-    // Click "Writing" nav item — fireEvent (sync) avoids async act() hang from
-    // TestRunProvider's listen() resolved-Promise effects in React 19.
-    fireEvent.click(screen.getByText("Writing"));
+    // fireEvent (sync) avoids async act() hang from TestRunProvider's listen()
+    // resolved-Promise effects in React 19.
+    fireEvent.click(screen.getByText("Help"));
+    expect(screen.getByRole("heading", { level: 2, name: "Help" })).toBeInTheDocument();
+  });
 
-    // Writing section content should now be visible
-    expect(screen.getByText("Learn from feedback")).toBeInTheDocument();
+  it("keeps the notes toggle on the Reading page", () => {
+    renderWithProvider(<SettingsPage {...defaultProps} />);
+    expect(screen.getByText("Keep notes for rules")).toBeInTheDocument();
   });
 
   it("escape key closes settings", () => {
@@ -86,10 +88,10 @@ describe("SettingsPage", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("page title 'Settings' renders as h2", () => {
+  it("titles each page with its section name", () => {
     renderWithProvider(<SettingsPage {...defaultProps} />);
 
-    const heading = screen.getByRole("heading", { level: 2, name: "Settings" });
+    const heading = screen.getByRole("heading", { level: 2, name: "Reading" });
     expect(heading).toBeInTheDocument();
   });
 

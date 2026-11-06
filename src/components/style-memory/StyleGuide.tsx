@@ -86,8 +86,11 @@ export function StyleGuide({
   onStatsChange,
   readyNotes = 0,
   onShowNotes,
+  onOpenRuleTests,
 }: {
   onStatsChange: (counts: RuleCounts) => void;
+  /** Opens the saved tests that run real prompts through Claude against these rules. */
+  onOpenRuleTests?: () => void;
   /** Notes that haven't become rules yet; shown as a nudge toward the Notes view. */
   readyNotes?: number;
   onShowNotes?: () => void;
@@ -420,7 +423,7 @@ export function StyleGuide({
         </button>
         {rules.length > 0 && (
           <button type="button" aria-expanded={importOpen} onClick={() => setImportOpen((o) => !o)} className={BUTTON_SECONDARY_CLASS}>
-            Add from style guide
+            Import a style guide
           </button>
         )}
         {filtersOpen && (
@@ -564,6 +567,13 @@ export function StyleGuide({
                   </span>
                 )}
               </p>
+              {onOpenRuleTests && rules.length > 0 && (
+                <p className="mt-2 text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
+                  <button type="button" onClick={onOpenRuleTests} className={LINK_BUTTON_CLASS}>
+                    Test your rules against Claude
+                  </button>
+                </p>
+              )}
             </div>
           )}
         </div>
