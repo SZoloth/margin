@@ -488,6 +488,102 @@
   --rv-color: var(--color-text-tertiary);
 }
 
+/* A rule that was just made: the underline draws in under each match, in
+   reading order (--rv-d staggers them), so the payoff is visible. */
+.rule-violation--fresh {
+  text-decoration-color: transparent;
+  background-image: linear-gradient(var(--rv-color), var(--rv-color));
+  background-repeat: no-repeat;
+  background-position: 0 calc(100% - 1px);
+  background-size: 0 1px;
+  animation: rv-draw 520ms var(--ease-entrance) var(--rv-d, 0ms) forwards;
+}
+
+.rule-violation--fresh::before {
+  opacity: 0;
+  animation: rv-tick 160ms var(--ease-entrance) calc(var(--rv-d, 0ms) + 420ms) forwards;
+}
+
+@keyframes rv-draw {
+  to { background-size: 100% 1px; }
+}
+
+@keyframes rv-tick {
+  to { opacity: 1; }
+}
+
+/* "Caught N more" scrolled here: a brief wash that settles to the underline. */
+.rule-violation[data-flash] {
+  animation: rv-flash 1500ms var(--ease-entrance) forwards;
+}
+
+@keyframes rv-flash {
+  15% { background-color: color-mix(in srgb, var(--rv-color) 22%, transparent); }
+  100% { background-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rule-violation--fresh {
+    animation: none;
+    background-image: none;
+    text-decoration-color: var(--rv-color);
+  }
+  .rule-violation--fresh::before {
+    animation: none;
+    opacity: 1;
+  }
+  .rule-violation[data-flash] {
+    animation: none;
+  }
+}
+
+/* Count of a new rule's catches outside the view; click scrolls to one. */
+.rule-caught-chip {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-page);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  animation: rv-chip-in 220ms var(--ease-entrance);
+}
+
+.rule-caught-chip:hover {
+  background-color: var(--hover-bg);
+}
+
+.rule-caught-chip:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
+}
+
+.rule-caught-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-danger);
+}
+
+@keyframes rv-chip-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rule-caught-chip { animation: none; }
+}
+
 .rule-violation:hover,
 .rule-violation[data-open] {
   background-color: color-mix(in srgb, var(--rv-color) 10%, transparent);

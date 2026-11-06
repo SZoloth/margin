@@ -100,3 +100,33 @@ describe("scanDocForRules", () => {
     expect(matches).toHaveLength(0);
   });
 });
+
+describe("RuleScan fresh and flash", () => {
+  it("marks a just-made rule's matches fresh, in reading order, and can flash one", async () => {
+    const { Editor } = await import("@tiptap/core");
+    const { RuleScan, setRuleScanMatches, setRuleScanFresh, setRuleScanFlash } = await import(
+      "../extensions/rule-scan"
+    );
+    const editor = new Editor({
+      extensions: [StarterKit, RuleScan],
+      content: "<p>leverage once</p><p>and leverage twice</p>",
+    });
+    const rules = [rule({ id: "new" })];
+    const matches = scanDocForRules(editor.state.doc, rules);
+    let tr = setRuleScanMatches(editor.state.tr, matches);
+    tr = setRuleScanFresh(tr, "new");
+    editor.view.dispatch(tr);
+
+    const spans = [...editor.view.dom.querySelectorAll(".rule-violation")] as HTMLElement[];
+    expect(spans).toHaveLength(2);
+    expect(spans.every((s) => s.classList.contains("rule-violation--fresh"))).toBe(true);
+    expect(spans[1]!.style.getPropertyValue("--rv-d")).toBe("180ms");
+
+    editor.view.dispatch(setRuleScanFlash(setRuleScanFresh(editor.state.tr, null), matches[1]!));
+    const after = [...editor.view.dom.querySelectorAll(".rule-violation")] as HTMLElement[];
+    expect(after.some((s) => s.classList.contains("rule-violation--fresh"))).toBe(false);
+    expect(after[1]!.hasAttribute("data-flash")).toBe(true);
+    expect(after[0]!.hasAttribute("data-flash")).toBe(false);
+    editor.destroy();
+  });
+});

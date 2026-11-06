@@ -183,6 +183,9 @@ Sam asked for a polish pass so Margin can be shown off, then chose to polish the
 - **"Never write this" is a button,** not red text that read as an error or a delete. "Esc removes" became "Esc discards".
 - **Dev:** the browser stub keeps rules in memory and `?fresh` starts with none, so the first run can be checked without the Mac.
 
+- **A new rule visibly lands.** Three directions were mocked live (ink draws, wash then settle, and ink draws plus a count of catches outside the view). Built the third, pending Sam's pick: right after "Never write this", the rule's underlines draw in under every match in reading order (180ms apart), and if any match is outside the view a "Caught N more below" chip scrolls to it and washes it. In a full 1440×900 window the second draft's match is just on screen, so the chip mostly matters in smaller windows; the draw-in carries the moment either way. Reduced motion skips both animations.
+- **Dark-mode yellow highlight is paler** (250,214,90 at 20% instead of 245,200,40 at 30%), which read as mustard. Chosen over a lower-half "marker" style that would have changed the highlight's shape.
+
 ### Not done yet
 
-The rule-landing moment is still quiet (a hairline underline), dark-mode highlights are muddy, and nothing here was seen in WebKit. Those, the recording, and the rest of the app come next.
+Nothing here was seen in WebKit. That, the recording, and the rest of the app come next.
