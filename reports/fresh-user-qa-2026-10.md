@@ -32,3 +32,27 @@ Verified working on screen: the onboarding sample loads on first launch; highlig
 - Bundle: `pnpm tauri build --bundles app` produces `Contents/MacOS/margin` and `margin-cli`.
 - Fresh install, launched with an empty `HOME`: no voice-calibration rules; `margin-cli export profile --target markdown` writes the profile; no `~/.claude` folder is created.
 - Clippy (`-D warnings`) reports 12 findings, all in older code (`corrections.rs`, `dashboard.rs`, older functions in `writing_rules.rs` and `migrations.rs`). None are in lines this branch adds. CI's clippy step pipes through `tee`, which hides its exit code.
+
+## Public install check: v1.17.1 (2026-10-12)
+
+Scope: verify what a stranger downloading the public release would get. Run on Sam's Mac with a scratch `HOME`, not a separate macOS user account (that needs Sam at the login window). The GUI could not be driven because computer-use access to Margin was declined, so the on-screen steps below are marked **Not tested**.
+
+| Check | Result |
+| --- | --- |
+| `release.yml` run for tag v1.17.1 | **Pass.** Run 37969311842 succeeded. Log shows "Notarizing Finished with status Accepted". |
+| Release assets | **Pass.** `Margin_1.17.1_aarch64.dmg`, `Margin_aarch64.app.tar.gz`, `.sig`, `latest.json`. Apple Silicon only. |
+| `spctl -a -vv` on the app inside the DMG | **Pass.** `accepted`, `source=Notarized Developer ID`, Samuel Zoloth (R2N63SHFK7). |
+| `xcrun stapler validate` on the app | **Pass.** The ticket is stapled to the app. |
+| `codesign --verify --deep --strict` | **Pass.** Includes `margin-cli` and `margin-mcp`. |
+| `spctl` / `stapler` on the DMG file itself | **Note.** The DMG is signed but not notarized or stapled (`Unnotarized Developer ID`). Only the app inside is. Gatekeeper accepts the app after you drag it out, but a fresh download with the quarantine flag has not been tried, because `gh` downloads carry none. Worth one real browser download on a second Mac or account. |
+| Launch with empty `HOME` | **Pass.** Creates `~/.margin/margin.db`. Seeds 30 generic rules (AI-slop, editorial, prohibitions), none of Sam's personal voice rules. Creates no `~/.claude` or `~/.codex`. |
+| `margin-cli version`, `export profile` from the bundle | **Pass.** Reports 1.17.1; writes `~/.margin/writing-rules.md` only. |
+| Open the sample, highlight, add a note, export, Claude Desktop toggle | **Not tested** (GUI access declined). The sample document is created by the GUI, not by launch: the CLI saw an empty document list. |
+| Update endpoint | **Pass.** `releases/latest/download/latest.json` redirects and returns version 1.17.1. |
+| Update package signature | **Pass.** Verified the `.sig` against the public key in `tauri.conf.json` (ed25519 over blake2b, key IDs match). Package unpacks to an app that is notarized and reports 1.17.1. |
+| 1.16.2 can accept this update | **Pass on config.** The v1.16.2 tag has the same endpoint and public key. |
+| 1.16.2 actually updating itself on screen | **Not tested** (needs the GUI). |
+
+Open blockers for Sam: (1) run the on-screen loop and the 1.16.2 to 1.17.1 update once by hand; (2) try one quarantined browser download of the DMG.
+
+Follow-up found: the CI clippy step hid its exit code. PR 65 fixes that, but the 12 existing clippy findings noted above will make CI red until they are fixed.
