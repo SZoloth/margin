@@ -65,7 +65,7 @@ export function ReadingSection({ settings, setSetting }: ReadingSectionProps) {
 
       {/* Controls card */}
       <SettingsCard>
-        <SectionHeader title="Reading" />
+        <SectionHeader title="Display" />
 
         <SettingRow label="Theme">
           <SegmentedControl

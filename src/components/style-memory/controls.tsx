@@ -19,12 +19,12 @@ export const LINK_BUTTON_CLASS = cn(
 );
 
 export const BUTTON_SECONDARY_CLASS = cn(
-  "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-2.5 py-1 text-[length:var(--text-xs)] text-[var(--color-text-secondary)] transition-colors duration-100 hover:bg-[var(--hover-bg)] disabled:cursor-default disabled:opacity-50",
+  "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-page)] px-3 py-1.5 text-[length:var(--text-sm)] text-[var(--color-text-secondary)] transition-colors duration-100 hover:bg-[var(--hover-bg)] disabled:cursor-default disabled:opacity-50",
   FOCUS_RING,
 );
 
 export const BUTTON_PRIMARY_CLASS = cn(
-  "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-text-primary)] bg-[var(--color-text-primary)] px-2.5 py-1 text-[length:var(--text-xs)] font-medium text-[var(--color-page)] transition-opacity duration-100 hover:opacity-90 disabled:cursor-default disabled:opacity-50",
+  "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-text-primary)] bg-[var(--color-text-primary)] px-3 py-1.5 text-[length:var(--text-sm)] font-medium text-[var(--color-page)] transition-opacity duration-100 hover:opacity-90 disabled:cursor-default disabled:opacity-50",
   FOCUS_RING,
 );
 

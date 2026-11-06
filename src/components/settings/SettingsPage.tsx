@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Settings } from "@/hooks/useSettings";
 import type { useUpdater } from "@/hooks/useUpdater";
-import { SettingsNav, type Section } from "./SettingsNav";
+import { SettingsNav, SECTIONS, type Section } from "./SettingsNav";
 import { ReadingSection } from "./ReadingSection";
 import { WritingSection } from "./WritingSection";
 import { StyleMemorySection } from "./StyleMemorySection";
@@ -45,25 +45,43 @@ export function SettingsPage({
 
       <div className="flex-1 overflow-y-auto">
         {activeSection === "style-memory" ? (
-          <StyleMemorySection onAcceptEdit={onAcceptEdit} />
+          <StyleMemorySection
+            onAcceptEdit={onAcceptEdit}
+            onOpenRuleTests={() => setActiveSection("dashboard")}
+          />
         ) : activeSection === "dashboard" ? (
-          <DashboardSection />
+          <div className="flex flex-col">
+            <div className="px-8 pt-6">
+              <button
+                type="button"
+                onClick={() => setActiveSection("style-memory")}
+                className="text-[length:var(--text-sm)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              >
+                <span aria-hidden="true">&larr;</span> Writing rules
+              </button>
+              <h2 className="mt-6 text-[length:var(--text-2xl)] font-light text-[var(--color-text-primary)]">
+                Test your rules against Claude
+              </h2>
+              <p className="mt-2 max-w-[560px] text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
+                Claude writes the same pieces with and without your rules, and Margin scores each
+                version against them.
+              </p>
+            </div>
+            <DashboardSection />
+          </div>
         ) : (
-          <div className="mx-auto max-w-[560px] px-8 pt-12 pb-16">
-            <h2
-              className="mb-12 text-[length:var(--text-2xl)] font-light text-[var(--color-text-primary)]"
-            >
-              Settings
+          // Same column and title as Writing rules, so every page reads as
+          // one app: the section's own name, left-aligned.
+          <div className="max-w-[640px] px-8 pt-12 pb-16">
+            <h2 className="mb-8 text-[length:var(--text-2xl)] font-light text-[var(--color-text-primary)]">
+              {SECTIONS.find((s) => s.id === (activeSection === "writing" ? "reading" : activeSection))?.label}
             </h2>
 
-            {activeSection === "reading" && (
-              <ReadingSection settings={settings} setSetting={setSetting} />
-            )}
-            {activeSection === "writing" && (
-              <WritingSection
-                settings={settings}
-                setSetting={setSetting}
-              />
+            {(activeSection === "reading" || activeSection === "writing") && (
+              <div className="flex flex-col gap-4">
+                <ReadingSection settings={settings} setSetting={setSetting} />
+                <WritingSection settings={settings} setSetting={setSetting} />
+              </div>
             )}
             {activeSection === "integrations" && <IntegrationsSection />}
             {activeSection === "help" && <HelpSection />}

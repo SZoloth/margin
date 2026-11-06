@@ -16,11 +16,11 @@ export function WritingSection({
   return (
     <div className="flex flex-col gap-2">
       <SettingsCard>
-        <SectionHeader title="Writing" />
+        <SectionHeader title="Notes" />
 
         <SettingRow
-          label="Learn from feedback"
-          description="Save correction feedback to Margin's local learning system as you write"
+          label="Keep notes for rules"
+          description="When you export notes, Margin keeps them so they can become writing rules. Off, an export leaves nothing behind."
         >
           <ToggleSwitch
             checked={settings.persistCorrections}
