@@ -215,6 +215,17 @@ describe("browser mock invoke", () => {
   });
 });
 
+describe("browser mock never-write rules", () => {
+  it("adds the new rule to the list, so dev mode shows it in Writing rules", async () => {
+    await mockInvoke("create_never_write_rule", { phrase: "I hope this finds you well", why: null });
+    const rules = (await mockInvoke("get_writing_rules")) as Record<string, unknown>[];
+    expect(rules.find((r) => r.ruleText === "i hope this finds you well")).toMatchObject({
+      exampleBefore: "I hope this finds you well",
+      severity: "must-fix",
+    });
+  });
+});
+
 describe("browser mock listen", () => {
   it("returns Promise<() => void>", async () => {
     const unlisten = await mockListen("file-changed", () => {});

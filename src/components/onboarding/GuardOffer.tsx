@@ -6,13 +6,15 @@ interface GuardOfferProps {
   /** Turns the Writing guard on. Rejects with the reason it failed. */
   onEnable: () => Promise<void>;
   onDismiss: () => void;
+  /** Opens Writing rules, so the new rule can be seen where it lives. */
+  onOpenRules?: () => void;
 }
 
 /**
  * Asked once, right after the first Hard rule, because that's when the
  * guard's job is concrete. It stays until answered: consent shouldn't time out.
  */
-export function GuardOffer({ phrase, onEnable, onDismiss }: GuardOfferProps) {
+export function GuardOffer({ phrase, onEnable, onDismiss, onOpenRules }: GuardOfferProps) {
   const [state, setState] = useState<
     { kind: "ask" | "saving" | "on" } | { kind: "error"; message: string }
   >({ kind: "ask" });
@@ -35,6 +37,11 @@ export function GuardOffer({ phrase, onEnable, onDismiss }: GuardOfferProps) {
             Writing guard is on. Claude Code will be stopped from writing “{phrase}”.
           </p>
           <div className="guard-offer-actions">
+            {onOpenRules && (
+              <button type="button" className="note-action-btn" onClick={onOpenRules}>
+                See your rules
+              </button>
+            )}
             <button type="button" className="note-action-btn note-action-btn--primary" onClick={onDismiss}>
               Done
             </button>

@@ -711,10 +711,11 @@
   margin-top: 6px;
 }
 
+/* The one action the first run is about: a real button, not red link text
+   (red read as "error" or "delete"). */
 .thread-never-btn {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
-  color: var(--color-danger-text);
 }
 
 .thread-never-btn:disabled {
@@ -739,13 +740,14 @@
 }
 
 /* Writing guard offer after the first Hard rule. Stays until answered. */
+/* Docked bottom right, clear of the reading column, and under the palette
+   and other overlays (z 500+) rather than floating above their scrim. */
 .guard-offer {
   position: fixed;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 800;
-  width: min(440px, calc(100vw - 32px));
+  bottom: 24px;
+  right: 24px;
+  z-index: 40;
+  width: min(380px, calc(100vw - 32px));
   padding: 12px 14px;
   border-radius: var(--radius-md);
   background-color: var(--color-page);

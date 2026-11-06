@@ -38,4 +38,16 @@ describe("GuardOffer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
     expect(onDismiss).toHaveBeenCalled();
   });
+
+  it("links to the rules once the guard is on", async () => {
+    const onOpenRules = vi.fn();
+    render(
+      <GuardOffer phrase="leverage" onEnable={vi.fn().mockResolvedValue(undefined)} onDismiss={vi.fn()} onOpenRules={onOpenRules} />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Turn on Writing guard" }));
+    });
+    fireEvent.click(screen.getByRole("button", { name: "See your rules" }));
+    expect(onOpenRules).toHaveBeenCalled();
+  });
 });

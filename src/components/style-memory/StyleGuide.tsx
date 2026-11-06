@@ -34,6 +34,7 @@ import {
   categoryLabel,
   compareRules,
   countRules,
+  displayRuleText,
   formatDate,
   isSuggested,
   matchesQuery,
@@ -250,7 +251,7 @@ export function StyleGuide({
       setRules((prev) => prev.filter((r) => r.id !== id));
       setArchived((prev) => (prev === null ? prev : [...prev, { ...rule, archivedAt: Date.now() }]));
       void syncRules(false);
-      showUndo({ id, message: `${declining ? "Declined" : "Archived"} “${rule.ruleText}”` });
+      showUndo({ id, message: `${declining ? "Declined" : "Archived"} “${displayRuleText(rule)}”` });
     },
     [rules, selectedId, moveSelection, syncRules, showUndo],
   );
@@ -539,7 +540,7 @@ export function StyleGuide({
                       .map((r) => (
                         <li key={r.id} className="flex items-baseline gap-3 border-b border-[var(--color-border)] py-2 text-[length:var(--text-sm)]">
                           <span className={cn(SERIF, "flex-1 text-[length:var(--text-base)] text-[var(--color-text-secondary)] line-through decoration-[var(--color-border)]")}>
-                            {r.ruleText}
+                            {displayRuleText(r)}
                           </span>
                           {r.archivedAt ? (
                             <span className="text-[length:var(--text-xs)] text-[var(--color-text-tertiary)]">{formatDate(r.archivedAt)}</span>
@@ -641,7 +642,7 @@ function GuideLine({
               : "text-[var(--color-text-primary)]",
           )}
         >
-          {rule.ruleText}
+          {displayRuleText(rule)}
         </span>
       </button>
       {suggested && (

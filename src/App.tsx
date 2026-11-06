@@ -112,6 +112,10 @@ export default function App() {
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section | undefined>();
+  const openWritingRules = useCallback(() => {
+    setSettingsSection("style-memory");
+    setShowSettings(true);
+  }, []);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [findBarOpen, setFindBarOpen] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
@@ -1171,7 +1175,9 @@ export default function App() {
         onboarding.complete();
         setOnboardingToast(null);
         const guardOn = await getAgentIntegration().catch(() => true);
-        if (!guardOn) setGuardOfferPhrase(rule.ruleText);
+        // Echo the phrase as the reader marked it; the stored rule is
+        // lowercased only because the guard matches against lowercased text.
+        if (!guardOn) setGuardOfferPhrase(h.text_content.trim().replace(/\s+/g, " "));
       }
     },
     [doc.currentDoc?.title, onboarding],
@@ -1696,6 +1702,7 @@ export default function App() {
         setSettingsSection(undefined);
         setShowSettings(true);
       }}
+      onOpenRules={openWritingRules}
       currentDoc={doc.currentDoc}
       recentDocs={doc.recentDocs}
       onSelectRecentDoc={handleSelectRecentDoc}
@@ -1952,11 +1959,15 @@ export default function App() {
 
       <UndoToast action={undoAction} />
       <ErrorToast key={errorToast?.id} message={errorToast?.message ?? null} />
-      {guardOfferPhrase && (
+      {guardOfferPhrase && !showSettings && (
         <GuardOffer
           phrase={guardOfferPhrase}
           onEnable={() => setAgentIntegration(true)}
           onDismiss={() => setGuardOfferPhrase(null)}
+          onOpenRules={() => {
+            setGuardOfferPhrase(null);
+            openWritingRules();
+          }}
         />
       )}
       <OnboardingToast

@@ -165,3 +165,24 @@ Type had drifted too. Newsreader shipped as the static build, which fixes its op
 
 - Measuring time to first rule with people who aren't Sam. The target is 4 of 5 strangers reaching a Hard rule within two minutes, on the QA build with a scratch `HOME`.
 - Phrase rules match as literal substrings, like every kill word, so "leverage" also catches "leveraged". Word-boundary matching would have to change in the guard, the bench and the editor scan together.
+
+## ADR-006: Polish the demo path first
+
+**Date:** 2026-11-06 · **Status:** Accepted
+
+### Context
+
+Sam asked for a polish pass so Margin can be shown off, then chose to polish the path of a 90-second recorded demo first and the rest of the app after. Margin's payoff (Claude being stopped from writing what you flagged) happens outside the app, so a screen-by-screen pass can't show it; the demo has to show the whole loop in one sitting. The path was walked in the browser build (the repo's Tauri stubs, Playwright, light and dark) and ranked by how visible each problem is times how long it's on screen.
+
+### Decision
+
+- **The first-run hint no longer takes space in the layout.** It was in the page flow and disappeared on the first selection, so the document jumped ~34px mid-drag and the reader's first highlight landed on the wrong words. It's now a fixed pill at the bottom that ignores the pointer.
+- **Phrase rules are shown as the reader marked them.** The stored rule stays lowercase because the guard matches lowercased text; the UI shows the marked phrase (kept in `exampleBefore`) when it's the same phrase. Applies to the note card, the guard offer, the style guide, the rule margin, the bench and the rule card.
+- **The guard offer docks bottom right, under overlays,** instead of floating over the reading column and above the ⌘K dimmer, and it hides while Settings is open. Once the guard is on it links to the rules.
+- **Writing rules is a ⌘K action** (⌘⇧M). Typing "rules" found nothing before; the product's main artifact was two levels down in Settings.
+- **"Never write this" is a button,** not red text that read as an error or a delete. "Esc removes" became "Esc discards".
+- **Dev:** the browser stub keeps rules in memory and `?fresh` starts with none, so the first run can be checked without the Mac.
+
+### Not done yet
+
+The rule-landing moment is still quiet (a hairline underline), dark-mode highlights are muddy, and nothing here was seen in WebKit. Those, the recording, and the rest of the app come next.

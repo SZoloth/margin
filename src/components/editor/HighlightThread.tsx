@@ -527,14 +527,14 @@ export function HighlightThread({
           <div className="thread-never">
             {never.state === "done" ? (
               <p className="thread-never-done" role="status">
-                Hard rule: never write “{phrase.toLowerCase()}”. It’s underlined wherever it appears.
+                Hard rule: never write “{phrase}”. It’s underlined wherever it appears.
               </p>
             ) : (
               <button
                 type="button"
                 onClick={() => void handleNeverWrite()}
                 disabled={never.state === "saving"}
-                className="thread-never-btn note-action-btn"
+                className="thread-never-btn note-action-btn note-action-btn--primary"
                 title="Make this phrase a Hard rule: Margin underlines it everywhere, and the Writing guard stops Claude writing it"
               >
                 Never write this
@@ -577,7 +577,7 @@ export function HighlightThread({
             <span />
           )}
           <span className="thread-hint">
-            ⌘↵ save{notes.length === 0 ? " · Esc removes" : ""}
+            ⌘↵ save{notes.length === 0 ? " · Esc discards" : ""}
           </span>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isChecked, isSuggested, severityFor, sourceNoteIds, strictnessOf } from "../rules-model";
+import { displayRuleText, isChecked, isSuggested, severityFor, sourceNoteIds, strictnessOf } from "../rules-model";
 import { scanDraft, toRegExp } from "../rules-bench";
 import type { WritingRule } from "@/lib/tauri-commands";
 
@@ -75,5 +75,18 @@ describe("scanDraft", () => {
   it("translates Python inline flags", () => {
     expect(toRegExp("(?i)abc")?.flags).toContain("i");
     expect(toRegExp("(")).toBeNull();
+  });
+});
+
+describe("displayRuleText", () => {
+  it("shows a phrase rule as the reader marked it, not the guard's lowercase", () => {
+    expect(
+      displayRuleText(rule({ category: "kill-words", ruleText: "i hope this finds you well", exampleBefore: "I hope this finds you well!" })),
+    ).toBe("I hope this finds you well");
+  });
+
+  it("falls back to the stored text when the example isn't the same phrase", () => {
+    expect(displayRuleText(rule({ category: "kill-words", ruleText: "leverage", exampleBefore: "We leverage it" }))).toBe("leverage");
+    expect(displayRuleText(rule({ ruleText: "State the claim first", exampleBefore: null }))).toBe("State the claim first");
   });
 });
