@@ -15,6 +15,7 @@ import {
   STRICTNESS_HELP,
   STRICTNESS_LABEL,
   type Strictness,
+  displayRuleText,
   formatDate,
   isChecked,
   isSuggested,
@@ -248,7 +249,7 @@ export function RuleMargin({
       <div>
         <div className={KIND_LABEL}>{suggested ? "Suggested by Claude" : "Rule"}</div>
         <p className={cn(SERIF, "mt-1 text-[length:var(--text-lg)] leading-[1.4] text-[var(--color-text-primary)]")}>
-          {rule.ruleText}
+          {displayRuleText(rule)}
         </p>
       </div>
 

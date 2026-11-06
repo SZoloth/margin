@@ -165,3 +165,29 @@ Type had drifted too. Newsreader shipped as the static build, which fixes its op
 
 - Measuring time to first rule with people who aren't Sam. The target is 4 of 5 strangers reaching a Hard rule within two minutes, on the QA build with a scratch `HOME`.
 - Phrase rules match as literal substrings, like every kill word, so "leverage" also catches "leveraged". Word-boundary matching would have to change in the guard, the bench and the editor scan together.
+
+## ADR-006: Polish the demo path first
+
+**Date:** 2026-11-06 · **Status:** Accepted
+
+### Context
+
+Sam asked for a polish pass so Margin can be shown off, then chose to polish the path of a 90-second recorded demo first and the rest of the app after. Margin's payoff (Claude being stopped from writing what you flagged) happens outside the app, so a screen-by-screen pass can't show it; the demo has to show the whole loop in one sitting. The path was walked in the browser build (the repo's Tauri stubs, Playwright, light and dark) and ranked by how visible each problem is times how long it's on screen.
+
+### Decision
+
+- **The first-run hint no longer takes space in the layout.** It was in the page flow and disappeared on the first selection, so the document jumped ~34px mid-drag and the reader's first highlight landed on the wrong words. It's now a fixed pill at the bottom that ignores the pointer.
+- **Phrase rules are shown as the reader marked them.** The stored rule stays lowercase because the guard matches lowercased text; the UI shows the marked phrase (kept in `exampleBefore`) when it's the same phrase. Applies to the note card, the guard offer, the style guide, the rule margin, the bench and the rule card.
+- **The guard offer docks bottom right, under overlays,** instead of floating over the reading column and above the ⌘K dimmer, and it hides while Settings is open. Once the guard is on it links to the rules.
+- **Writing rules is a ⌘K action** (⌘⇧M). Typing "rules" found nothing before; the product's main artifact was two levels down in Settings.
+- **"Never write this" is a button,** not red text that read as an error or a delete. "Esc removes" became "Esc discards".
+- **Dev:** the browser stub keeps rules in memory and `?fresh` starts with none, so the first run can be checked without the Mac.
+
+- **A new rule visibly lands.** Three directions were mocked live (ink draws, wash then settle, and ink draws plus a count of catches outside the view). Sam picked the third: right after "Never write this", the rule's underlines draw in under every match in reading order (180ms apart), and if any match is outside the view a "Caught N more below" chip scrolls to it and washes it. In a full 1440×900 window the second draft's match is just on screen, so the chip mostly matters in smaller windows; the draw-in carries the moment either way. Reduced motion skips both animations.
+- **Dark-mode yellow highlight is paler** (250,214,90 at 20% instead of 245,200,40 at 30%), which read as mustard. Chosen over a lower-half "marker" style that would have changed the highlight's shape.
+
+- **WebKit check (Safari's engine on Sam's Mac, from a throwaway worktree):** Newsreader's optical sizing works and both faces load. It found that highlighted text went black in dark mode: the mark rules set only a background, so the text took the browser's default highlight color. Marks now inherit the text color; that, more than the yellow's tint, was the "muddy" dark highlight. The first-run hint moved to the bottom left, off the text column. The rule underline is written as separate properties after Playwright's WebKit build dropped the shorthand mid-animation (the Mac's own WebKit didn't).
+
+### Not done yet
+
+At narrow windows (1280×720) the note card covers the paragraph beside the selection, and React logs a set-state-during-render warning on load. Both predate this work.

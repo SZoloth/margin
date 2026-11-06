@@ -106,6 +106,19 @@ export function sourceNoteIds(notes: string | null): string[] {
     .filter(Boolean);
 }
 
+/**
+ * The rule as the reader should read it. Phrase rules are stored lowercased
+ * because the guard matches against lowercased text; the phrase as marked is
+ * kept in exampleBefore, so show that when it's the same phrase.
+ */
+export function displayRuleText(rule: WritingRule): string {
+  const marked = rule.exampleBefore
+    ?.replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+  return marked && marked.toLowerCase() === rule.ruleText ? marked : rule.ruleText;
+}
+
 export function matchesQuery(rule: WritingRule, q: string): boolean {
   if (!q) return true;
   return [rule.ruleText, rule.whenToApply, rule.why, rule.category, rule.exampleBefore, rule.exampleAfter]

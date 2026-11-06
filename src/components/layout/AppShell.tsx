@@ -12,6 +12,7 @@ import { startWindowDrag } from "@/lib/tauri-commands";
 interface AppShellProps {
   children: React.ReactNode;
   onOpenSettings: () => void;
+  onOpenRules?: () => void;
   currentDoc: Document | null;
   recentDocs: Document[];
   onSelectRecentDoc: (doc: Document, newTab: boolean) => void;
@@ -41,6 +42,7 @@ interface AppShellProps {
 export function AppShell({
   children,
   onOpenSettings,
+  onOpenRules,
   currentDoc,
   recentDocs,
   onSelectRecentDoc,
@@ -274,6 +276,7 @@ export function AppShell({
         onOpenFilePath={onOpenFilePath}
         onExport={onExport}
         onOpenSettings={onOpenSettings}
+        onOpenRules={onOpenRules}
         onCloseTab={tabs.length > 0 && activeTabId ? () => onCloseTab(activeTabId) : undefined}
         onOpenFind={onOpenFind}
       />

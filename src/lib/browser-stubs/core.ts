@@ -102,6 +102,73 @@ function uid(): string {
 const BROWSER_SAMPLE_PATH = "/browser/.margin/samples/first-draft.md";
 let firstRunSample: string | null = null;
 
+// Writing rules live in memory so a rule made with "Never write this" shows up
+// in Writing rules. `?fresh` starts with none, like a new install.
+type StubRule = Record<string, unknown> & { id: string; ruleText: string };
+const FIXTURE_RULES: StubRule[] = [
+    // One fixture rule so rule-resurfacing underlines are exercisable in
+    // browser dev mode — "leverage" gets the dotted underline.
+    {
+      id: "stub-rule-1",
+      writingType: "general",
+      category: "kill-words",
+      ruleText: "leverage",
+      whenToApply: null,
+      why: "Empty corporate verb — say what you actually mean.",
+      severity: "must-fix",
+      exampleBefore: "leverage",
+      exampleAfter: "use",
+      source: "synthesis",
+      signalCount: 4,
+      notes: "synthesized-from:stub-note-1",
+      reviewedAt: 1,
+      detectionPattern: null,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    // Extra dev fixtures so the Writing rules manager (search, filters,
+    // review queue, enforcement tag) has something to exercise.
+    {
+      id: "stub-rule-2",
+      writingType: "email",
+      category: "openers",
+      ruleText: "Never open with a greeting line",
+      whenToApply: "Cold outreach and replies",
+      why: "It spends the reader's first line on nothing.",
+      severity: "should-fix",
+      exampleBefore: "Hope you're well!",
+      exampleAfter: "Your Q3 numbers changed my mind about pricing.",
+      source: "synthesis-candidate",
+      signalCount: 6,
+      notes: null,
+      reviewedAt: null,
+      detectionPattern: "^(Hi|Hello|Hope you)",
+      createdAt: 1_760_000_000_000,
+      updatedAt: 1_760_000_000_000,
+    },
+    {
+      id: "stub-rule-3",
+      writingType: "blog",
+      category: "structure",
+      ruleText: "State the claim before the evidence",
+      whenToApply: null,
+      why: null,
+      severity: "nice-to-fix",
+      exampleBefore: null,
+      exampleAfter: null,
+      source: "manual",
+      signalCount: 2,
+      notes: null,
+      reviewedAt: null,
+      detectionPattern: null,
+      createdAt: 1_760_500_000_000,
+      updatedAt: 1_760_500_000_000,
+    },
+];
+const isFresh = () =>
+  typeof location !== "undefined" && new URLSearchParams(location.search).has("fresh");
+const writingRules: StubRule[] = isFresh() ? [] : FIXTURE_RULES.map((r) => ({ ...r }));
+
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   // --- Mount-time (must return correct shape or app crashes) ----------------
   get_recent_documents: () => [sampleDocument],
@@ -262,66 +329,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     ruleCount: 0,
   }),
 
-  get_writing_rules: () => [
-    // One fixture rule so rule-resurfacing underlines are exercisable in
-    // browser dev mode — "leverage" gets the dotted underline.
-    {
-      id: "stub-rule-1",
-      writingType: "general",
-      category: "kill-words",
-      ruleText: "leverage",
-      whenToApply: null,
-      why: "Empty corporate verb — say what you actually mean.",
-      severity: "must-fix",
-      exampleBefore: "leverage",
-      exampleAfter: "use",
-      source: "synthesis",
-      signalCount: 4,
-      notes: "synthesized-from:stub-note-1",
-      reviewedAt: 1,
-      detectionPattern: null,
-      createdAt: 1,
-      updatedAt: 1,
-    },
-    // Extra dev fixtures so the Writing rules manager (search, filters,
-    // review queue, enforcement tag) has something to exercise.
-    {
-      id: "stub-rule-2",
-      writingType: "email",
-      category: "openers",
-      ruleText: "Never open with a greeting line",
-      whenToApply: "Cold outreach and replies",
-      why: "It spends the reader's first line on nothing.",
-      severity: "should-fix",
-      exampleBefore: "Hope you're well!",
-      exampleAfter: "Your Q3 numbers changed my mind about pricing.",
-      source: "synthesis-candidate",
-      signalCount: 6,
-      notes: null,
-      reviewedAt: null,
-      detectionPattern: "^(Hi|Hello|Hope you)",
-      createdAt: 1_760_000_000_000,
-      updatedAt: 1_760_000_000_000,
-    },
-    {
-      id: "stub-rule-3",
-      writingType: "blog",
-      category: "structure",
-      ruleText: "State the claim before the evidence",
-      whenToApply: null,
-      why: null,
-      severity: "nice-to-fix",
-      exampleBefore: null,
-      exampleAfter: null,
-      source: "manual",
-      signalCount: 2,
-      notes: null,
-      reviewedAt: null,
-      detectionPattern: null,
-      createdAt: 1_760_500_000_000,
-      updatedAt: 1_760_500_000_000,
-    },
-  ],
+  get_writing_rules: () => writingRules.slice(),
   export_writing_rules: () => ({ markdownPath: "", hookPath: "", ruleCount: 0 }),
   get_agent_integration: () => false,
   set_agent_integration: () => undefined,
@@ -334,15 +342,27 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     const now = Date.now();
     const phrase = typeof args.phrase === "string" ? args.phrase : "";
     const why = typeof args.why === "string" ? args.why : null;
-    return {
+    // Same normalizing as the backend's create_never_rule.
+    const ruleText = phrase
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    const existing = writingRules.find((r) => r.category === "kill-words" && r.ruleText === ruleText);
+    if (existing) {
+      existing.signalCount = (existing.signalCount as number) + 1;
+      existing.updatedAt = now;
+      return { ...existing };
+    }
+    const rule: StubRule = {
       id: `stub-never-${now}`,
       writingType: "general",
       category: "kill-words",
-      ruleText: phrase.trim().replace(/\s+/g, " ").toLowerCase(),
+      ruleText,
       whenToApply: null,
       why,
       severity: "must-fix",
-      exampleBefore: phrase || null,
+      exampleBefore: phrase.trim() || null,
       exampleAfter: null,
       source: "highlight",
       signalCount: 1,
@@ -352,6 +372,8 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       createdAt: now,
       updatedAt: now,
     };
+    writingRules.push(rule);
+    return { ...rule };
   },
   update_writing_rule: () => undefined,
   delete_writing_rule: () => undefined,

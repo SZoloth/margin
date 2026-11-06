@@ -185,6 +185,17 @@ describe("HighlightThread", () => {
       );
     });
 
+    it("echoes the rule in the reader's own casing, not the guard's lowercase", async () => {
+      const onNeverWrite = vi.fn().mockResolvedValue(undefined);
+      renderWith({ onNeverWrite, highlight: { ...mockHighlight, text_content: "I hope this finds you well" } });
+      await act(async () => {
+        fireEvent.click(document.body.querySelector(".thread-never-btn")!);
+      });
+      expect(document.body.querySelector(".thread-never-done")?.textContent).toContain(
+        "never write “I hope this finds you well”",
+      );
+    });
+
     it("says nothing was saved when the rule fails", async () => {
       const onNeverWrite = vi.fn().mockRejectedValue(new Error("disk full"));
       renderWith({ onNeverWrite });

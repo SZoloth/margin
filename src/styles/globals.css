@@ -111,7 +111,7 @@
   --color-overlay: rgba(0, 0, 0, 0.5);
 
   /* Wire dark highlight colors into base tokens — increased separation */
-  --color-highlight-yellow: rgba(245, 200, 40, 0.30);
+  --color-highlight-yellow: rgba(250, 214, 90, 0.20); /* paler and lighter than 245,200,40 @ 30%, which read as mustard */
   --color-highlight-green: rgba(72, 190, 90, 0.24);
   --color-highlight-blue: rgba(80, 140, 220, 0.24);
   --color-highlight-pink: rgba(220, 80, 150, 0.24);

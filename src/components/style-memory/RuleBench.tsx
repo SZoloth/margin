@@ -3,6 +3,7 @@ import { cn } from "@/lib/cn";
 import type { WritingRule } from "@/lib/tauri-commands";
 import { FIELD_CLASS, LINK_BUTTON_CLASS, SERIF, plural } from "./controls";
 import { scanDraft } from "./rules-bench";
+import { displayRuleText } from "./rules-model";
 
 const SAMPLE =
   "Hope you're doing well! I just wanted to share how teams leverage Margin to build a writing profile. It isn't just a reading app, it's a coach that really learns your taste.";
@@ -25,7 +26,7 @@ export function RuleBench({ rules, onClose }: { rules: WritingRule[]; onClose: (
     pieces.push(
       <mark
         key={i}
-        title={byId.get(h.ruleId)?.ruleText}
+        title={(() => { const r = byId.get(h.ruleId); return r ? displayRuleText(r) : undefined; })()}
         className={cn(
           "bg-transparent text-inherit underline underline-offset-4",
           h.kind === "hard"
@@ -99,7 +100,7 @@ export function RuleBench({ rules, onClose }: { rules: WritingRule[]; onClose: (
                 <span className="text-[var(--color-severity-nice-to-fix-text)]">Warns Claude</span>
               )}
               {" · "}
-              {r.ruleText}
+              {displayRuleText(r)}
             </li>
           ))}
         </ul>

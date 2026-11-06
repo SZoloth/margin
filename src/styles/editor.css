@@ -63,6 +63,7 @@
 .tiptap mark[data-color="yellow"],
 .tiptap mark.highlight--yellow {
   background-color: var(--color-highlight-yellow);
+  color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }
@@ -70,6 +71,7 @@
 .tiptap mark[data-color="green"],
 .tiptap mark.highlight--green {
   background-color: var(--color-highlight-green);
+  color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }
@@ -77,6 +79,7 @@
 .tiptap mark[data-color="blue"],
 .tiptap mark.highlight--blue {
   background-color: var(--color-highlight-blue);
+  color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }
@@ -84,6 +87,7 @@
 .tiptap mark[data-color="pink"],
 .tiptap mark.highlight--pink {
   background-color: var(--color-highlight-pink);
+  color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }
@@ -91,6 +95,7 @@
 .tiptap mark[data-color="orange"],
 .tiptap mark.highlight--orange {
   background-color: var(--color-highlight-orange);
+  color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }

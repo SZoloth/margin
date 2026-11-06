@@ -13,6 +13,8 @@ import { HighlightThread } from "@/components/editor/HighlightThread";
 import { RuleViolationPopover } from "@/components/editor/RuleViolationPopover";
 import {
   scanDocForRules,
+  setRuleScanFlash,
+  setRuleScanFresh,
   setRuleScanMatches,
   setRuleScanOpen,
 } from "@/components/editor/extensions/rule-scan";
@@ -67,6 +69,7 @@ import { SAMPLE_DOCUMENT_CONTENT, isShowingSample, isSampleFilePath } from "@/li
 import { WelcomeBar } from "@/components/onboarding/WelcomeBar";
 import { OnboardingToast } from "@/components/onboarding/OnboardingToast";
 import { GuardOffer } from "@/components/onboarding/GuardOffer";
+import { RuleCaughtChip } from "@/components/editor/RuleCaughtChip";
 
 const showUIFork = import.meta.env.MODE !== "production";
 
@@ -112,6 +115,10 @@ export default function App() {
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section | undefined>();
+  const openWritingRules = useCallback(() => {
+    setSettingsSection("style-memory");
+    setShowSettings(true);
+  }, []);
   const [showExportPopover, setShowExportPopover] = useState(false);
   const [findBarOpen, setFindBarOpen] = useState(false);
   const [focusHighlightId, setFocusHighlightId] = useState<string | null>(null);
@@ -899,13 +906,82 @@ export default function App() {
     return () => { cancelled = true; };
   }, [doc.currentDoc?.id]);
 
+  // A rule just made with "Never write this": its matches draw in, and if it
+  // caught text outside the view, a chip says so and scrolls there.
+  const freshRuleIdRef = useRef<string | null>(null);
+  const [caught, setCaught] = useState<{ ruleId: string; count: number; direction: "above" | "below" } | null>(null);
+  const offscreenMatches = useCallback((ruleId: string) => {
+    const ed = editorRef.current;
+    const scroller = document.querySelector("[data-scroll-container]");
+    if (!ed || ed.isDestroyed || !scroller) return { above: [] as HTMLElement[], below: [] as HTMLElement[] };
+    const box = scroller.getBoundingClientRect();
+    const els = [...ed.view.dom.querySelectorAll<HTMLElement>(`.rule-violation[data-rule-id="${CSS.escape(ruleId)}"]`)];
+    return {
+      above: els.filter((el) => el.getBoundingClientRect().bottom < box.top).reverse(),
+      below: els.filter((el) => el.getBoundingClientRect().top > box.bottom),
+    };
+  }, []);
+  const refreshCaught = useCallback(
+    (ruleId: string) => {
+      const { above, below } = offscreenMatches(ruleId);
+      if (below.length > 0) setCaught({ ruleId, count: below.length, direction: "below" });
+      else if (above.length > 0) setCaught({ ruleId, count: above.length, direction: "above" });
+      else setCaught(null);
+    },
+    [offscreenMatches],
+  );
+  const goToCaught = useCallback(() => {
+    const ed = editorRef.current;
+    if (!caught || !ed || ed.isDestroyed) return;
+    const { above, below } = offscreenMatches(caught.ruleId);
+    const el = (caught.direction === "below" ? below : above)[0];
+    setCaught(null);
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    const from = ed.view.posAtDOM(el, 0);
+    const to = from + (el.textContent?.length ?? 0);
+    const tr = setRuleScanFlash(ed.state.tr, { from, to });
+    tr.setMeta("addToHistory", false);
+    ed.view.dispatch(tr);
+    window.setTimeout(() => {
+      const e2 = editorRef.current;
+      if (!e2 || e2.isDestroyed) return;
+      const clear = setRuleScanFlash(e2.state.tr, null);
+      clear.setMeta("addToHistory", false);
+      e2.view.dispatch(clear);
+    }, 1600);
+  }, [caught, offscreenMatches]);
+  // Hide the chip once its catches are in view, or the document changes.
+  useEffect(() => {
+    if (!caught) return;
+    const scroller = document.querySelector("[data-scroll-container]");
+    const onScroll = () => refreshCaught(caught.ruleId);
+    scroller?.addEventListener("scroll", onScroll, { passive: true });
+    return () => scroller?.removeEventListener("scroll", onScroll);
+  }, [caught, refreshCaught]);
+  useEffect(() => setCaught(null), [doc.currentDoc?.id]);
+
   useEffect(() => {
     if (!editor) return;
     let timer: number | null = null;
     const runScan = () => {
       if (editor.isDestroyed) return;
       const matches = scanDocForRules(editor.state.doc, writingRulesRef.current);
-      const tr = setRuleScanMatches(editor.state.tr, matches);
+      let tr = setRuleScanMatches(editor.state.tr, matches);
+      const fresh = freshRuleIdRef.current;
+      if (fresh) {
+        freshRuleIdRef.current = null;
+        tr = setRuleScanFresh(tr, fresh);
+        const n = matches.filter((m) => m.ruleId === fresh).length;
+        window.setTimeout(() => {
+          if (editor.isDestroyed) return;
+          const clear = setRuleScanFresh(editor.state.tr, null);
+          clear.setMeta("addToHistory", false);
+          editor.view.dispatch(clear);
+        }, 700 + n * 180);
+        requestAnimationFrame(() => refreshCaught(fresh));
+      }
       tr.setMeta("addToHistory", false);
       editor.view.dispatch(tr);
     };
@@ -920,7 +996,7 @@ export default function App() {
       editor.off("transaction", onTransaction);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [editor, writingRules]);
+  }, [editor, writingRules, refreshCaught]);
 
   useEffect(() => {
     const onRuleViolation = (e: Event) => {
@@ -1166,12 +1242,15 @@ export default function App() {
       const day = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
       const rule = await createNeverWriteRule(h.text_content, `From your mark on ${title}, ${day}.`);
       neverRuleHighlightsRef.current.add(h.id);
+      freshRuleIdRef.current = rule.id;
       setWritingRules((prev) => [...prev.filter((r) => r.id !== rule.id), rule]);
       if (onboarding.step !== "complete") {
         onboarding.complete();
         setOnboardingToast(null);
         const guardOn = await getAgentIntegration().catch(() => true);
-        if (!guardOn) setGuardOfferPhrase(rule.ruleText);
+        // Echo the phrase as the reader marked it; the stored rule is
+        // lowercased only because the guard matches against lowercased text.
+        if (!guardOn) setGuardOfferPhrase(h.text_content.trim().replace(/\s+/g, " "));
       }
     },
     [doc.currentDoc?.title, onboarding],
@@ -1696,6 +1775,7 @@ export default function App() {
         setSettingsSection(undefined);
         setShowSettings(true);
       }}
+      onOpenRules={openWritingRules}
       currentDoc={doc.currentDoc}
       recentDocs={doc.recentDocs}
       onSelectRecentDoc={handleSelectRecentDoc}
@@ -1951,12 +2031,19 @@ export default function App() {
       />
 
       <UndoToast action={undoAction} />
+      {caught && !showSettings && (
+        <RuleCaughtChip count={caught.count} direction={caught.direction} onGo={goToCaught} />
+      )}
       <ErrorToast key={errorToast?.id} message={errorToast?.message ?? null} />
-      {guardOfferPhrase && (
+      {guardOfferPhrase && !showSettings && (
         <GuardOffer
           phrase={guardOfferPhrase}
           onEnable={() => setAgentIntegration(true)}
           onDismiss={() => setGuardOfferPhrase(null)}
+          onOpenRules={() => {
+            setGuardOfferPhrase(null);
+            openWritingRules();
+          }}
         />
       )}
       <OnboardingToast

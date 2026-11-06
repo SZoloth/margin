@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import type { WritingRule } from "@/lib/tauri-commands";
+import { displayRuleText } from "@/components/style-memory/rules-model";
 
 interface Props {
   rule: WritingRule;
@@ -399,7 +400,7 @@ function RuleCardBody({
       </div>
       <div className="rule-violation-popover-text">“{matched}”</div>
       {!isLiteralEcho && (
-        <div className="rule-violation-popover-pattern">{rule.ruleText}</div>
+        <div className="rule-violation-popover-pattern">{displayRuleText(rule)}</div>
       )}
       {rule.why && <div className="rule-violation-popover-why">{rule.why}</div>}
       {rule.exampleAfter && (

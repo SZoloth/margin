@@ -19,12 +19,20 @@ interface RuleScanMeta {
   matches?: RuleMatch[];
   /** Mark one match as open — renders data-open on its decoration span. */
   open?: { from: number; to: number } | null;
+  /** A rule that was just made: its matches draw in, in reading order. */
+  fresh?: string | null;
+  /** One match to wash briefly, after "Caught N more" scrolls to it. */
+  flash?: { from: number; to: number } | null;
 }
+
+type Range = { from: number; to: number };
 
 interface RuleScanState {
   set: DecorationSet;
   matches: RuleMatch[];
-  open: { from: number; to: number } | null;
+  open: Range | null;
+  fresh: string | null;
+  flash: Range | null;
 }
 
 const ruleScanKey = new PluginKey<RuleScanState>("ruleScan");
@@ -111,26 +119,52 @@ export function scanDocForRules(doc: PMNode, rules: WritingRule[]): RuleMatch[] 
   return matches;
 }
 
-function buildDecorations(
-  state: EditorState,
-  matches: RuleMatch[],
-  open: { from: number; to: number } | null,
-): DecorationSet {
+interface DecoState {
+  open: Range | null;
+  fresh: string | null;
+  flash: Range | null;
+}
+
+const FRESH_STAGGER_MS = 180;
+
+function sameRange(m: Range, r: Range | null): boolean {
+  return !!r && m.from === r.from && m.to === r.to;
+}
+
+function buildDecorations(state: EditorState, matches: RuleMatch[], s: DecoState): DecorationSet {
+  let freshIndex = 0;
   const decos = matches
     .filter((m) => m.from < m.to && m.to <= state.doc.content.size)
-    .map((m) =>
-      Decoration.inline(m.from, m.to, {
-        class: `rule-violation rule-violation--${m.severity}`,
+    .map((m) => {
+      const isFresh = s.fresh !== null && m.ruleId === s.fresh;
+      const delay = isFresh ? freshIndex++ * FRESH_STAGGER_MS : 0;
+      return Decoration.inline(m.from, m.to, {
+        class: `rule-violation rule-violation--${m.severity}${isFresh ? " rule-violation--fresh" : ""}`,
         "data-rule-id": m.ruleId,
-        ...(open && m.from === open.from && m.to === open.to ? { "data-open": "" } : {}),
-      }),
-    );
+        ...(isFresh ? { style: `--rv-d: ${delay}ms` } : {}),
+        ...(sameRange(m, s.open) ? { "data-open": "" } : {}),
+        ...(sameRange(m, s.flash) ? { "data-flash": "" } : {}),
+      });
+    });
   return DecorationSet.create(state.doc, decos);
 }
 
 /** Dispatch updated matches into the scan plugin. */
 export function setRuleScanMatches(tr: Transaction, matches: RuleMatch[]): Transaction {
-  return tr.setMeta(ruleScanKey, { matches } satisfies RuleScanMeta);
+  return tr.setMeta(ruleScanKey, { ...(tr.getMeta(ruleScanKey) ?? {}), matches } satisfies RuleScanMeta);
+}
+
+/** Mark a just-made rule so its matches draw in; null clears it. */
+export function setRuleScanFresh(tr: Transaction, ruleId: string | null): Transaction {
+  return tr.setMeta(ruleScanKey, { ...(tr.getMeta(ruleScanKey) ?? {}), fresh: ruleId } satisfies RuleScanMeta);
+}
+
+/** Wash one match briefly (data-flash); null clears it. */
+export function setRuleScanFlash(tr: Transaction, range: Range | null): Transaction {
+  return tr.setMeta(ruleScanKey, {
+    ...(tr.getMeta(ruleScanKey) ?? {}),
+    flash: range ? { from: range.from, to: range.to } : null,
+  } satisfies RuleScanMeta);
 }
 
 /** Mark/unmark the match whose card is open — drives the data-open wash. */
@@ -138,7 +172,7 @@ export function setRuleScanOpen(
   tr: Transaction,
   open: { from: number; to: number } | null,
 ): Transaction {
-  return tr.setMeta(ruleScanKey, { open } satisfies RuleScanMeta);
+  return tr.setMeta(ruleScanKey, { ...(tr.getMeta(ruleScanKey) ?? {}), open } satisfies RuleScanMeta);
 }
 
 /**
@@ -155,34 +189,33 @@ export const RuleScan = Extension.create({
         key: ruleScanKey,
         state: {
           init: (_config, state) => ({
-            set: buildDecorations(state, [], null),
+            set: buildDecorations(state, [], { open: null, fresh: null, flash: null }),
             matches: [],
             open: null,
+            fresh: null,
+            flash: null,
           }),
           apply(tr, old, _oldState, newState) {
             const meta = tr.getMeta(ruleScanKey) as RuleScanMeta | undefined;
-            if (meta?.matches !== undefined) {
-              return {
-                set: buildDecorations(newState, meta.matches, old.open),
-                matches: meta.matches,
-                open: old.open,
+            if (meta) {
+              const next = {
+                matches: meta.matches !== undefined ? meta.matches : old.matches,
+                open: "open" in meta ? (meta.open ?? null) : old.open,
+                fresh: "fresh" in meta ? (meta.fresh ?? null) : old.fresh,
+                flash: "flash" in meta ? (meta.flash ?? null) : old.flash,
               };
-            }
-            if (meta && "open" in meta) {
-              return {
-                set: buildDecorations(newState, old.matches, meta.open ?? null),
-                matches: old.matches,
-                open: meta.open ?? null,
-              };
+              return { ...next, set: buildDecorations(newState, next.matches, next) };
             }
             if (!tr.docChanged) return old;
-            const open = old.open
-              ? {
-                  from: tr.mapping.map(old.open.from),
-                  to: tr.mapping.map(old.open.to),
-                }
-              : null;
-            return { set: old.set.map(tr.mapping, tr.doc), matches: old.matches, open };
+            const mapRange = (r: Range | null) =>
+              r ? { from: tr.mapping.map(r.from), to: tr.mapping.map(r.to) } : null;
+            return {
+              set: old.set.map(tr.mapping, tr.doc),
+              matches: old.matches,
+              open: mapRange(old.open),
+              fresh: old.fresh,
+              flash: mapRange(old.flash),
+            };
           },
         },
         props: {

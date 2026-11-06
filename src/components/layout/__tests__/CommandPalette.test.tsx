@@ -31,6 +31,25 @@ describe("CommandPalette browse action", () => {
   });
 });
 
+describe("CommandPalette Writing rules action", () => {
+  it("opens Writing rules from the palette", async () => {
+    const onOpenRules = vi.fn();
+    render(
+      <CommandPalette
+        isOpen
+        onClose={vi.fn()}
+        recentDocs={[]}
+        onSelectRecentDoc={vi.fn()}
+        onOpenFilePath={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenRules={onOpenRules}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("option", { name: /Writing rules/ }));
+    expect(onOpenRules).toHaveBeenCalled();
+  });
+});
+
 describe("renderSnippet", () => {
   it("keeps FTS <mark> tags as real elements", () => {
     expect(renderSnippet("the <mark>quick</mark> fox")).toBe(

@@ -36,6 +36,7 @@ interface CommandPaletteProps {
   onOpenFilePath: (path: string, newTab: boolean) => void;
   onExport?: () => void;
   onOpenSettings: () => void;
+  onOpenRules?: () => void;
   onCloseTab?: () => void;
   onOpenFind?: () => void;
 }
@@ -99,6 +100,7 @@ export function CommandPalette({
   onOpenFilePath,
   onExport,
   onOpenSettings,
+  onOpenRules,
   onCloseTab,
   onOpenFind,
 }: CommandPaletteProps) {
@@ -131,6 +133,7 @@ export function CommandPalette({
     ...(onCloseTab ? [{ id: "close", label: "Close tab", shortcut: ["⌘", "W"], onAction: () => { onClose(); onCloseTab(); } }] : []),
     ...(onExport ? [{ id: "export", label: "Export annotations", shortcut: ["⌘", "⇧", "E"], onAction: () => { onClose(); onExport(); } }] : []),
     ...(onOpenFind ? [{ id: "find", label: "Find in document", shortcut: ["⌘", "F"], onAction: () => { onClose(); onOpenFind(); } }] : []),
+    ...(onOpenRules ? [{ id: "rules", label: "Writing rules", shortcut: ["⌘", "⇧", "M"], onAction: () => { onClose(); onOpenRules(); } }] : []),
     { id: "settings", label: "Settings", shortcut: ["⌘", ","], onAction: () => { onClose(); onOpenSettings(); } },
   ];
 
