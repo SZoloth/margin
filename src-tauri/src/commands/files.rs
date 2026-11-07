@@ -112,6 +112,9 @@ fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: St
         return Err(format!("Source file does not exist: {}", old_path));
     }
 
+    // Only an open (recorded) document may be renamed; checked before disk is touched.
+    check_writable(conn, &old_path)?;
+
     // Rename on disk first — atomic on macOS (rename(2))
     fs::rename(&old_path, &new_path)
         .map_err(|e| format!("Failed to rename file: {}", e))?;
@@ -287,6 +290,18 @@ mod tests {
         assert_eq!(fs::read_to_string(&open).unwrap(), "saved");
         assert!(save_file_inner(&conn, other.to_str().unwrap(), "pwned").is_err());
         assert!(!other.exists());
+    }
+
+    #[test]
+    fn rename_refuses_unrecorded_source_without_touching_disk() {
+        let dir = make_test_dir("scope_rename");
+        let rc = dir.join("secrets.md");
+        fs::write(&rc, "x").unwrap();
+        let conn = setup_db();
+        let err = rename_file_inner(&conn, rc.to_string_lossy().to_string(), "moved".into()).unwrap_err();
+        assert!(err.contains("only open Markdown"), "{err}");
+        assert!(rc.exists());
+        assert!(!dir.join("moved.md").exists());
     }
 
     // === collect_markdown_entries tests ===
@@ -535,38 +550,17 @@ mod tests {
         let old = dir.join("old.md");
         fs::write(&old, "# old").unwrap();
         let old_str = old.to_string_lossy().to_string();
+        let new_str = dir.join("new.md").to_string_lossy().to_string();
 
-        // Create a DB without the documents table so the UPDATE fails
-        let conn = Connection::open_in_memory().unwrap();
+        // Another document already records new.md (file gone from disk), so
+        // the UPDATE hits UNIQUE(file_path) after the disk rename.
+        let conn = setup_db();
+        record(&conn, &old_str);
+        record(&conn, &new_str);
 
         let result = rename_file_inner(&conn, old_str.clone(), "new.md".to_string());
-        assert!(result.is_err());
         assert!(result.unwrap_err().contains("rolled back"));
-
-        // Verify the file was renamed back to the original name
         assert!(old.exists(), "original file should be restored after rollback");
         assert!(!dir.join("new.md").exists(), "new file should not exist after rollback");
-    }
-
-    #[test]
-    fn rename_rolls_back_when_no_document_row_matches_old_path() {
-        let dir = make_test_dir("rename_missing_db_row");
-        let old = dir.join("old.md");
-        fs::write(&old, "# old").unwrap();
-        let conn = setup_db();
-
-        let result =
-            rename_file_inner(&conn, old.to_string_lossy().to_string(), "new.md".to_string());
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("rolled back"));
-
-        // File should be rolled back to the original name
-        assert!(old.exists(), "original file should be restored after rollback");
-        assert!(
-            !dir.join("new.md").exists(),
-            "new file should not exist after rollback"
-        );
     }
 }
