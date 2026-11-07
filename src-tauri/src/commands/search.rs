@@ -58,18 +58,27 @@ pub fn extract_file_snippet(path: &str) -> Option<String> {
 /// Matches filename OR content. Runs on a blocking thread to avoid
 /// starving the async command pool while mdfind + file I/O execute.
 #[tauri::command]
-pub async fn search_files_on_disk(query: String, limit: Option<usize>) -> Result<Vec<FileSearchResult>, String> {
+pub async fn search_files_on_disk(
+    grants: tauri::State<'_, crate::commands::file_access::FileGrants>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<FileSearchResult>, String> {
     let limit = limit.unwrap_or(20);
 
     if query.trim().is_empty() {
         return Ok(Vec::new());
     }
 
-    tauri::async_runtime::spawn_blocking(move || {
+    let results = tauri::async_runtime::spawn_blocking(move || {
         search_files_on_disk_inner(&query, limit)
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("Task join error: {e}"))??;
+    // The user opens a result by clicking it, so results become openable.
+    for r in &results {
+        grants.grant(&r.path);
+    }
+    Ok(results)
 }
 
 fn search_files_on_disk_inner(query: &str, limit: usize) -> Result<Vec<FileSearchResult>, String> {

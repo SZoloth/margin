@@ -2,6 +2,7 @@ pub mod annotations;
 pub mod corrections;
 pub mod dashboard;
 pub mod documents;
+pub mod file_access;
 pub mod files;
 pub mod onboarding;
 pub mod feedback;
