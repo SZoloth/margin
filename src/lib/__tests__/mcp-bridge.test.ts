@@ -20,6 +20,11 @@ vi.mock("@tauri-apps/api/path", () => ({
   dirname: vi.fn((p: string) => Promise.resolve(p.replace(/\/[^/]+$/, ""))),
 }));
 
+const mockInvoke = vi.fn();
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
 // Must import after mocks are set up
 const {
   checkMcpConnection,
@@ -27,28 +32,50 @@ const {
   disableMcpInClaude,
   isMcpEnabledInClaude,
 } = await import("../mcp-bridge");
+const { sendToMcpServer } = await import("../mcp-export");
 
 const CONFIG_PATH = "/Users/test/Library/Application Support/Claude/claude_desktop_config.json";
 
 describe("checkMcpConnection", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    mockInvoke.mockReset();
     globalThis.fetch = vi.fn();
   });
 
-  it("returns true when bridge responds 200", async () => {
-    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+  it("asks the Rust backend, never fetches the bridge from the webview", async () => {
+    mockInvoke.mockResolvedValue(true);
     expect(await checkMcpConnection()).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith("mcp_bridge_status");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("returns false when bridge responds non-200", async () => {
-    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false });
+  it("returns false when the backend reports no bridge", async () => {
+    mockInvoke.mockResolvedValue(false);
     expect(await checkMcpConnection()).toBe(false);
   });
 
-  it("returns false when fetch throws", async () => {
-    (globalThis.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("ECONNREFUSED"));
+  it("returns false when the command throws", async () => {
+    mockInvoke.mockRejectedValue(new Error("boom"));
     expect(await checkMcpConnection()).toBe(false);
+  });
+});
+
+describe("sendToMcpServer", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    globalThis.fetch = vi.fn();
+  });
+
+  it("sends through the Rust backend with the markdown", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    expect(await sendToMcpServer("# notes")).toEqual({ sent: true });
+    expect(mockInvoke).toHaveBeenCalledWith("mcp_bridge_send", { markdown: "# notes" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("reports the backend's error", async () => {
+    mockInvoke.mockRejectedValue("HTTP 401");
+    expect(await sendToMcpServer("x")).toEqual({ sent: false, error: "HTTP 401" });
   });
 });
 

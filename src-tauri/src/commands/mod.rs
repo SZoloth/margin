@@ -6,6 +6,7 @@ pub mod files;
 pub mod onboarding;
 pub mod feedback;
 pub mod keep_local;
+pub mod mcp_bridge;
 pub mod search;
 pub mod seed_rules;
 pub mod snapshots;

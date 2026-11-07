@@ -3,7 +3,7 @@ import { execFile } from "child_process";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { ExportBridge } from "./export-bridge.js";
+import { ExportBridge, wrapUntrustedExport } from "./export-bridge.js";
 import { openReadDb, openWriteDb, nowMillis } from "./db.js";
 import { marginCliCommand, startExportBridge } from "./startup.js";
 import {
@@ -549,7 +549,7 @@ server.tool(
     const timeoutMs = Math.min((timeout_seconds ?? 300), 600) * 1000;
     try {
       const prompt = await bridge.waitForExport(timeoutMs);
-      return { content: [{ type: "text", text: prompt }] };
+      return { content: [{ type: "text", text: wrapUntrustedExport(prompt) }] };
     } catch {
       return {
         content: [{ type: "text", text: "Timed out waiting for export from Margin. The user may not have exported yet — try again or ask them to export." }],
@@ -770,7 +770,7 @@ server.resource(
       contents: [{
         uri: "margin://latest-export",
         mimeType: "text/markdown",
-        text: content,
+        text: wrapUntrustedExport(content),
       }],
     };
   },

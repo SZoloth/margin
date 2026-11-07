@@ -269,6 +269,12 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   keep_local_list_items: () => ({ items: [], count: 0 }),
   keep_local_get_content: () => "",
 
+  // --- MCP export bridge (no server in the browser) -------------------------
+  mcp_bridge_status: () => false,
+  mcp_bridge_send: () => {
+    throw new Error("MCP bridge unavailable in browser");
+  },
+
   // --- File watcher (no-op) -------------------------------------------------
   watch_file: () => undefined,
   unwatch_file: () => undefined,

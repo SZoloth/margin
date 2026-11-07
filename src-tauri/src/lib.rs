@@ -93,6 +93,8 @@ pub fn run() {
             commands::keep_local::keep_local_list_items,
             commands::keep_local::keep_local_get_item,
             commands::keep_local::keep_local_get_content,
+            commands::mcp_bridge::mcp_bridge_status,
+            commands::mcp_bridge::mcp_bridge_send,
             commands::search::index_document,
             commands::search::search_documents,
             commands::search::remove_document_index,
