@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Prints the folder that holds pstack (github.com/cursor/plugins/tree/main/pstack),
+# fetching a pinned copy in cloud sessions. Agents read pstack skills from there.
+# Usage: bash scripts/pstack
+set -euo pipefail
+
+PSTACK_SHA="ec569379616a4826b98f0f0a205dd3411b573611" # pstack 0.15.36
+pinned="$HOME/.cache/pstack/$PSTACK_SHA"
+
+for dir in "$pinned/pstack" "$HOME/.claude/plugins/marketplaces/cursor-plugins/pstack"; do
+  if [[ -f "$dir/skills/poteto-mode/SKILL.md" ]]; then
+    echo "$dir"
+    exit 0
+  fi
+done
+
+if [[ "${CLAUDE_CODE_REMOTE:-}" != "true" ]]; then
+  echo "pstack is not installed on this machine. Ask Sam before installing it:" >&2
+  echo "  claude plugin marketplace add cursor/plugins && claude plugin install pstack@cursor-plugins" >&2
+  exit 3
+fi
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+git -C "$tmp" init -q
+git -C "$tmp" remote add origin https://github.com/cursor/plugins.git
+git -C "$tmp" sparse-checkout set pstack
+for attempt in 1 2 3 4; do
+  if git -C "$tmp" fetch -q --depth 1 --filter=blob:none origin "$PSTACK_SHA" 2>/dev/null; then
+    break
+  fi
+  [[ $attempt == 4 ]] && { echo "could not fetch pstack from GitHub" >&2; exit 1; }
+  sleep $((attempt * 3))
+done
+git -C "$tmp" checkout -q FETCH_HEAD
+mkdir -p "$(dirname "$pinned")"
+rm -rf "$pinned"
+mv "$tmp" "$pinned"
+trap - EXIT
+echo "$pinned/pstack"
