@@ -4,7 +4,11 @@ target/
 .DS_Store
 *.swp
 *.swo
-.claude/
+# Local agent state stays private; only the shared verify-margin skill is tracked.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/verify-margin/
 playground/
 tsconfig.tsbuildinfo
 .env

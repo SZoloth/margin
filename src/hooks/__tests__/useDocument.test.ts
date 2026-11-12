@@ -151,3 +151,59 @@ describe("useDocument — content provider (fresh save during debounced emission
     expect(saveFileMock).toHaveBeenCalledWith(TEST_PATH, "state content");
   });
 });
+
+describe("useDocument — isLoading with overlapping loads", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Cold launch from Finder: tab restore and the queued "Open With" file load
+  // at the same moment. Both finish fast, so the dim must never appear.
+  it("does not stay dimmed when two fast loads overlap", async () => {
+    const { readFile } = await import("@/lib/tauri-commands");
+    vi.mocked(readFile).mockResolvedValue("# Doc");
+    const { result } = renderHook(() => useDocument());
+
+    await act(async () => {
+      await Promise.all([
+        result.current.openFilePath("/tmp/a.md"),
+        result.current.openFilePath("/tmp/b.md"),
+      ]);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("stays dimmed until the last overlapping load finishes", async () => {
+    const { readFile } = await import("@/lib/tauri-commands");
+    let finishSlow: (v: string) => void = () => {};
+    vi.mocked(readFile)
+      .mockResolvedValueOnce("# Fast")
+      .mockImplementationOnce(() => new Promise<string>((r) => { finishSlow = r; }));
+    const { result } = renderHook(() => useDocument());
+
+    let slow: Promise<void> = Promise.resolve();
+    await act(async () => {
+      const fast = result.current.openFilePath("/tmp/fast.md");
+      slow = result.current.openFilePath("/tmp/slow.md");
+      await fast;
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      finishSlow("# Slow");
+      await slow;
+    });
+    expect(result.current.isLoading).toBe(false);
+  });
+});

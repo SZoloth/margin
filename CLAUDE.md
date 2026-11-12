@@ -80,7 +80,7 @@ pnpm tsc --noEmit     # Type check without emitting
 
 After Rust changes, run `cargo check`. After TypeScript changes, run `pnpm tsc --noEmit`. Don't assume the first implementation compiles.
 
-**No browser automation.** This is a Tauri webview, not a browser tab. Chrome DevTools MCP, Puppeteer, Playwright cannot connect. Write tests, or drive the running app with computer-use (bundle id `com.samzoloth.margin`).
+**Prove UI changes with the `verify-margin` skill** (`.claude/skills/verify-margin/SKILL.md`). Browser tools can't attach to the Tauri webview, but `drive.mjs` drives the same React tree in Chromium against the browser stubs, screenshots light and dark, and checks which Tauri commands each action sent. For the real app, use computer use on bundle id `com.samzoloth.margin` on Sam's Mac.
 
 **Dev by default; production builds only as an isolated QA copy.** Use `pnpm tauri dev` (hot reload, orange "dev" badge) for development. To QA a production build as a first-time user, build it under a separate app ID and point `HOME` at a scratch folder. `HOME` gives it a fresh `~/.margin`. The separate ID gives it fresh web-view storage, which lives under the real `~/Library/WebKit/<bundle id>` whatever `HOME` says. Without it the build shares your onboarding flag and display settings.
 
@@ -92,6 +92,18 @@ open -n --env HOME=/tmp/margin-qa "src-tauri/target/release/bundle/macos/Margin 
 Reset between runs: `rm -rf /tmp/margin-qa ~/Library/WebKit/com.samzoloth.margin-qa`.
 
 The `no_prod_app.py` hook blocks launching the installed `/Applications/Margin.app` (it runs old code) and any production launch that would use your real `~/.margin`.
+
+## Working with pstack
+
+Code changes follow pstack's poteto-mode (github.com/cursor/plugins/tree/main/pstack). Run `bash scripts/pstack` first. It prints the pstack folder, fetching a pinned copy in cloud sessions. Then read `<pstack>/docs/harness/claude-code.md` once, and `<pstack>/skills/poteto-mode/SKILL.md` and the playbook it routes you to. Read pstack skills with `Read`; the `Skill` tool refuses them. Skip poteto-mode for docs-only, research and design-exploration threads.
+
+Margin's rules win where pstack disagrees:
+
+- Ask before anything external (messages, posts, account changes, deleting data, spending money). poteto-mode's "external actions proceed without asking" does not apply here.
+- Sam merges. Ignore the Shipping, Autopilot-full and auto-merge parts of Babysit.
+- Subagent fan-out (`swarm`, `arena`, `architect`'s parallel designs, `interrogate`) only on data-layer changes (see `docs/evals.md`) or when Sam asks. Every role runs on Claude here, so pstack's "diverse model panel" is one model family; say so when you report a cross-check.
+- `cursor-team-kit` skills (`deslop`, `control-ui`, `control-cli`) don't exist here. Use `verify-margin` in place of `control-ui`.
+- Replies to Sam follow the project's own reply style, not poteto-mode's "Writing the reply" section.
 
 ## Issue tracking
 
