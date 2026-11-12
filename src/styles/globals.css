@@ -27,6 +27,11 @@
   --color-page: #fffff8;
   --color-sidebar: #F5F2EA;
   --color-text-primary: #1a1714;
+  /* Selection and caret: an ink violet, a hue no highlight color uses, so
+     "selected" never reads as "marked". The default blue matched the blue
+     highlight almost exactly. */
+  --color-selection: rgba(92, 66, 160, 0.18);
+  --color-caret: #5c42a0;
   --color-text-secondary: #6b6560;
   --color-border: #dfdbd3;
 
@@ -99,6 +104,8 @@
   --color-page: #1e1c18;
   --color-sidebar: #262420;
   --color-text-primary: #e8e4dc;
+  --color-selection: rgba(168, 140, 240, 0.30);
+  --color-caret: #a88cf0;
   --color-text-secondary: #a39a8e;
   --color-border: #36342E;
 

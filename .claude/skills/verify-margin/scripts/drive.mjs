@@ -89,21 +89,38 @@ async function dragSelect(page, phrase) {
   await page.mouse.up();
 }
 
+// Selecting only selects (ADR-008): a pill with Highlight, Note, Never write
+// this and Copy appears once the selection settles.
+async function selectionToolbar(page, phrase) {
+  await dragSelect(page, phrase);
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await bar.waitFor();
+  await page.waitForTimeout(200); // let the 120ms fade-in finish before screenshots
+  return bar;
+}
+
+async function assertNoCall(ctx, cmd, when) {
+  const calls = await ctx.calls();
+  if (calls.some((c) => c.cmd === cmd)) throw new Error(`${cmd} was sent ${when}`);
+}
+
 const journeys = {
   async "never-write-this"(ctx) {
     const phrase = "a quick call";
-    await dragSelect(ctx.page, phrase);
-    await ctx.page.getByRole("dialog", { name: "Highlight notes" }).waitFor();
+    const bar = await selectionToolbar(ctx.page, phrase);
     await ctx.shot("selected");
-    await ctx.page.getByRole("button", { name: "Never write this" }).click();
-    await ctx.page.getByText(`never write “${phrase}”`, { exact: false }).first().waitFor();
+    await assertNoCall(ctx, "create_highlight", "on selection alone");
+    await bar.getByRole("button", { name: "Never write this" }).click();
+    // First run: the Writing guard offer echoes the phrase. Later runs: a toast.
+    await ctx.page.getByText(`“${phrase}”`, { exact: false }).first().waitFor();
     await ctx.shot("rule-made");
     ctx.expectCall("create_highlight");
     ctx.expectCall("create_never_write_rule", (a) => JSON.stringify(a).includes(phrase));
   },
 
   async "highlight-and-note"(ctx) {
-    await dragSelect(ctx.page, "real-time insight");
+    const bar = await selectionToolbar(ctx.page, "real-time insight");
+    await bar.getByRole("button", { name: "Note" }).click();
     const thread = ctx.page.getByRole("dialog", { name: "Highlight notes" });
     await thread.waitFor();
     await thread.getByRole("radio", { name: "Highlight green" }).click();
@@ -114,6 +131,40 @@ const journeys = {
     ctx.expectCall("create_highlight");
     ctx.expectCall("update_highlight", (a) => JSON.stringify(a).includes("green"));
     ctx.expectCall("create_margin_note", (a) => JSON.stringify(a).includes("Say what the insight is."));
+  },
+
+  async "select-and-copy"(ctx) {
+    await ctx.page.context().grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+    const phrase = "delve into";
+    const bar = await selectionToolbar(ctx.page, phrase);
+    await ctx.shot("selected");
+    await bar.getByRole("button", { name: "Copy" }).click();
+    await bar.getByRole("button", { name: "Copied" }).waitFor();
+    await ctx.shot("copied");
+    const copied = await ctx.page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
+    if (copied !== null && !copied.includes(phrase)) throw new Error(`clipboard held "${copied}"`);
+    await ctx.page.waitForTimeout(900);
+    if (await bar.isVisible()) throw new Error("toolbar still showing after Copy");
+    await assertNoCall(ctx, "create_highlight", "by selecting and copying");
+    const marks = await ctx.page.locator("mark[data-highlight-id]").count();
+    if (marks > 0) throw new Error(`${marks} highlight(s) on the page after select and copy`);
+  },
+
+  async "highlight-only"(ctx) {
+    const bar = await selectionToolbar(ctx.page, "fast-paced landscape");
+    await bar.getByRole("button", { name: "Highlight" }).click();
+    await ctx.page.locator("mark[data-highlight-id]").first().waitFor();
+    await ctx.page.waitForTimeout(300);
+    if (await ctx.page.getByRole("dialog", { name: "Highlight notes" }).isVisible()) {
+      throw new Error("Highlight opened the note card; only Note should");
+    }
+    await ctx.shot("highlighted");
+    // Collapse first: a drag that starts inside a live selection moves the text.
+    await ctx.page.keyboard.press("ArrowRight");
+    const again = await selectionToolbar(ctx.page, "fast-paced landscape");
+    await again.getByRole("button", { name: "Remove highlight" }).waitFor();
+    await ctx.shot("inside-highlight");
+    ctx.expectCall("create_highlight", (a) => JSON.stringify(a).includes("fast-paced landscape"));
   },
 };
 

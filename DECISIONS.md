@@ -208,6 +208,7 @@ Three directions were mocked as a clickable page: a pill above the selection, ac
 - **The pill never takes focus.** Its buttons cancel mousedown, so ⌘C, ⌘X, ⌘V and typing over the selection work as in any editor. Esc hides it and keeps the selection.
 - **Highlight** saves a highlight and nothing else (⌘⇧H does the same). **Note** highlights and opens the note card, as selecting used to (⌘⌥M, the Google Docs comment key). **Never write this** makes the phrase a Hard rule straight from the selection, without opening the card; it shows only for phrases short enough to be a rule (60 characters), as in the note card. **Copy** copies and says "Copied".
 - **Inside an existing highlight** the pill offers Note (opens that highlight's card) and Remove highlight. **Where highlights aren't allowed** (code) it offers only Copy.
+- **Selection and caret are ink violet** (added after Raphael Salaja's web recreation of iOS selection, which treats the selection tint as a design choice). The browser-default blue matched the blue highlight almost exactly, so a selection could read as a mark; violet is the one common hue no highlight uses. The loupe and drag handles from that reference were left out: they exist because a finger covers the text, and a Mac pointer doesn't.
 - **Only Note's highlight is provisional.** Closing the note card empty removes a highlight that Note just made. Before, it removed any highlight without notes, which was right when every selection made one but would now delete highlights made on purpose.
 
 ### Considered
