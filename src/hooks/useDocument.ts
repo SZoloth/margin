@@ -55,11 +55,24 @@ export function useDocument(): UseDocumentReturn {
   const [isLoading, setIsLoadingRaw] = useState(false);
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Loads can overlap (cold launch restores a tab while opening the file
+  // macOS handed us). Count them so one finishing can't orphan another's
+  // timer, which would leave the reader dimmed for good.
+  const pendingLoadsRef = useRef(0);
+
   // Delay showing loading state to avoid flash for fast loads
   const setIsLoading = useCallback((v: boolean) => {
     if (v) {
-      loadingTimerRef.current = setTimeout(() => setIsLoadingRaw(true), 150);
+      pendingLoadsRef.current += 1;
+      if (!loadingTimerRef.current) {
+        loadingTimerRef.current = setTimeout(() => {
+          loadingTimerRef.current = null;
+          if (pendingLoadsRef.current > 0) setIsLoadingRaw(true);
+        }, 150);
+      }
     } else {
+      pendingLoadsRef.current = Math.max(0, pendingLoadsRef.current - 1);
+      if (pendingLoadsRef.current > 0) return;
       if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
       loadingTimerRef.current = null;
       setIsLoadingRaw(false);
@@ -133,11 +146,13 @@ export function useDocument(): UseDocumentReturn {
   }, []);
 
   const openFile = useCallback(async () => {
+    let started = false;
     try {
       const selectedPath = await openFileDialog();
       if (!selectedPath) return;
 
       setIsLoading(true);
+      started = true;
       const fileContent = await readFile(selectedPath);
       const title = basename(selectedPath);
       const now = Date.now();
@@ -168,7 +183,7 @@ export function useDocument(): UseDocumentReturn {
     } catch (err) {
       reportError("Could not open file", err);
     } finally {
-      setIsLoading(false);
+      if (started) setIsLoading(false);
     }
   }, [currentDoc, refreshRecentDocs]);
 
