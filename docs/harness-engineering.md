@@ -274,7 +274,7 @@ Never auto-fix:
 | Review agent failure | Local-only, so no CI impact. Fail-open with warning |
 | Force push / rebase | Diff-hash dedup handles this (diff content, not SHA) |
 | Gap tracking file renames | Weekly audit catches broken test references |
-| Release workflow (tag push) | Harness doesn't apply — `release.yml` is separate, tags only fire after main is clean |
+| Release workflow (version bump merged to main, or tag push) | Harness doesn't apply. `release.yml` is separate: it tags `v<version>` itself when a merge to main changes the version in `tauri.conf.json` |
 | MCP workspace package | Frontend job routes MCP tests via `pnpm --filter mcp test` |
 | macOS runner costs | Minimized — only Rust checks on macOS, frontend on Linux |
 

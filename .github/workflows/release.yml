@@ -1,11 +1,50 @@
 name: Release
 
+# Merging a version bump to main releases it: the `version` job tags the
+# merge commit v<version> and the build runs on it. A manually pushed v* tag
+# still works. Tags pushed with GITHUB_TOKEN don't start new workflow runs, so
+# the auto-created tag never triggers a second build.
 on:
   push:
+    branches: [main]
     tags: ['v*']
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag a new version, or skip
+        id: tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists; nothing to release."
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+          echo "Tagged $GITHUB_SHA as $tag."
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version
+    if: needs.version.outputs.tag != ''
     runs-on: macos-15
     permissions:
       contents: write
@@ -70,8 +109,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Margin ${{ github.ref_name }}
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: Margin ${{ needs.version.outputs.tag }}
           releaseBody: 'Download the `.dmg` below to install Margin.'
           releaseDraft: false
           prerelease: false
