@@ -194,7 +194,7 @@ At narrow windows (1280×720) the note card covers the paragraph beside the sele
 
 ## ADR-008: Selecting text shows a toolbar instead of highlighting
 
-**Date:** 2026-11-12 · **Status:** Proposed (PR open; Sam picks the direction)
+**Date:** 2026-11-12 · **Status:** Accepted (Sam chose the pill, Nov 12)
 
 ### Context
 
