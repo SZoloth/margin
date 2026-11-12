@@ -217,7 +217,7 @@ Three directions were mocked as a clickable page: a pill above the selection, ac
 
 ### Not done yet
 
-Not checked by hand in the Mac webview. Covered by unit tests on the toolbar (when it appears, each action, focus, Esc, modes). Copy uses `document.execCommand("copy")` so the editor's own Markdown copy handling runs, falling back to the clipboard API.
+Sam tried it in `pnpm tauri dev` on his Mac (Nov 12). Covered by unit tests on the toolbar (when it appears, each action, focus, Esc, modes). Copy uses `document.execCommand("copy")` so the editor's own Markdown copy handling runs, falling back to the clipboard API.
 
 ## ADR-009: Adopt pstack's method, verify the UI with a committed driver
 
