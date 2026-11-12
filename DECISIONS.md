@@ -192,6 +192,33 @@ Sam asked for a polish pass so Margin can be shown off, then chose to polish the
 
 At narrow windows (1280×720) the note card covers the paragraph beside the selection, and React logs a set-state-during-render warning on load. Both predate this work.
 
+## ADR-008: Selecting text shows a toolbar instead of highlighting
+
+**Date:** 2026-11-12 · **Status:** Accepted (Sam chose the pill, Nov 12)
+
+### Context
+
+Since SAM-1144, a selection that settled for 250ms became a highlight and opened the note card. That made starting a correction free, but there was no way to select text to copy it or retype it: every selection made a highlight row, and the note card took focus. The document is editable, so this also got in the way of ordinary editing. Sam asked for a toolbar on the selection with the common actions.
+
+Three directions were mocked as a clickable page: a pill above the selection, actions in the right margin, and a quiet dot that opens into the actions. The pill was recommended because Margin is about to meet its first outside users, and the first selection has to show what the app is for; a labeled "Never write this" does that at a glance. The margin rail and the dot are calmer but hide the marking that the whole product starts from.
+
+### Decision
+
+- **Selecting only selects.** Once a selection settles (on mouse-up, or 250ms after a keyboard selection stops) a dark pill appears above it: Highlight · Note · Never write this | Copy. It flips below when there's no room above and follows the text on scroll.
+- **The pill never takes focus.** Its buttons cancel mousedown, so ⌘C, ⌘X, ⌘V and typing over the selection work as in any editor. Esc hides it and keeps the selection.
+- **Highlight** saves a highlight and nothing else (⌘⇧H does the same). **Note** highlights and opens the note card, as selecting used to (⌘⌥M, the Google Docs comment key). **Never write this** makes the phrase a Hard rule straight from the selection, without opening the card; it shows only for phrases short enough to be a rule (60 characters), as in the note card. **Copy** copies and says "Copied".
+- **Inside an existing highlight** the pill offers Note (opens that highlight's card) and Remove highlight. **Where highlights aren't allowed** (code) it offers only Copy.
+- **Only Note's highlight is provisional.** Closing the note card empty removes a highlight that Note just made. Before, it removed any highlight without notes, which was right when every selection made one but would now delete highlights made on purpose.
+
+### Considered
+
+- **Paste on the pill.** Left out: in a reading app you don't paste over text you're reading, and when editing, ⌘V already replaces the selection.
+- **Keep auto-highlight and hold ⌥ Option to just select** (built first, the same morning). It kept the zero-click path but left plain selection undiscoverable, and Sam asked for a toolbar instead.
+
+### Not done yet
+
+Sam tried it in `pnpm tauri dev` on his Mac (Nov 12). Covered by unit tests on the toolbar (when it appears, each action, focus, Esc, modes). Copy uses `document.execCommand("copy")` so the editor's own Markdown copy handling runs, falling back to the clipboard API.
+
 ## ADR-009: Adopt pstack's method, verify the UI with a committed driver
 
 **Date:** 2026-11-12

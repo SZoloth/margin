@@ -876,3 +876,77 @@
   justify-content: flex-end;
   gap: 6px;
 }
+
+/* Selection toolbar (ADR-008): appears when a selection settles. Ink on
+   paper in light mode, paper on ink in dark, so it reads as a tool laid
+   over the page rather than part of it. */
+.selection-toolbar {
+  position: fixed;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--color-text-primary);
+  color: var(--color-page);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 500;
+  white-space: nowrap;
+  animation: selection-toolbar-in 120ms var(--ease-entrance, ease-out);
+}
+.selection-toolbar[data-below] {
+  animation-name: selection-toolbar-in-below;
+}
+.selection-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.selection-toolbar-btn:hover {
+  background: color-mix(in srgb, var(--color-page) 14%, transparent);
+}
+.selection-toolbar-btn:focus-visible {
+  outline: 2px solid var(--color-page);
+  outline-offset: -2px;
+}
+.selection-toolbar-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  /* A solid swatch: the translucent dark-mode highlight vanishes on the
+     light pill. */
+  background: #f2d35b;
+}
+.selection-toolbar-never {
+  width: 10px;
+  height: 6px;
+  border-bottom: 2px solid var(--color-danger);
+  transform: translateY(-2px);
+}
+.selection-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 5px 3px;
+  background: color-mix(in srgb, var(--color-page) 30%, transparent);
+}
+@keyframes selection-toolbar-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes selection-toolbar-in-below {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selection-toolbar { animation: none; }
+}
