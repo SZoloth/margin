@@ -7,7 +7,7 @@ import { UnsavedChangesDialog } from "@/components/layout/UnsavedChangesDialog";
 import { UIFork } from "uifork";
 
 const Reader = lazy(() => import("@/components/editor/Reader"));
-import { FloatingToolbar } from "@/components/editor/FloatingToolbar";
+import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { RuleViolationPopover } from "@/components/editor/RuleViolationPopover";
@@ -1177,8 +1177,12 @@ export default function App() {
     [editor, doc.currentDoc],
   );
 
+  // A highlight made by Note is provisional until it carries a note: closing
+  // the card empty removes it. Highlights made on purpose stay.
+  const provisionalHighlightRef = useRef<string | null>(null);
+
   const handleHighlight = useCallback(
-    async (color?: string) => {
+    async (color?: string, opts: { openNote?: boolean } = {}) => {
       const resolvedColor = color ?? settings.defaultHighlightColor;
       if (!editor) return;
       const { from, to } = editor.state.selection;
@@ -1204,8 +1208,9 @@ export default function App() {
       const highlightId = ids[0];
       if (!highlightId) return;
 
-      // Highlighting is the first step of noting, not a separate gesture —
-      // open the thread immediately, focused on the new-note field (SAM-1144).
+      // Note = highlight, then the note card focused on a new note.
+      if (!opts.openNote) return;
+      provisionalHighlightRef.current = highlightId;
       requestAnimationFrame(() => {
         const mark = editor.view.dom.querySelector(
           `mark[data-highlight-id="${highlightId}"]`,
@@ -1228,7 +1233,7 @@ export default function App() {
   const neverRuleHighlightsRef = useRef(new Set<string>());
   const [guardOfferPhrase, setGuardOfferPhrase] = useState<string | null>(null);
   const handleNeverWrite = useCallback(
-    async (h: Highlight) => {
+    async (h: Pick<Highlight, "id" | "text_content">) => {
       const title = doc.currentDoc?.title ?? "a document";
       const day = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
       const rule = await createNeverWriteRule(h.text_content, `From your mark on ${title}, ${day}.`);
@@ -1246,6 +1251,40 @@ export default function App() {
     },
     [doc.currentDoc?.title, onboarding],
   );
+
+  // "Never write this" straight from the selection toolbar: the highlight is
+  // the rule's evidence, the underlines drawing in are the confirmation.
+  const handleSelectionNeverWrite = useCallback(async () => {
+    if (!editor || !doc.currentDoc) return;
+    const { from, to } = editor.state.selection;
+    if (from === to) return;
+    const text = editor.state.doc.textBetween(from, to, "\n");
+    const [id] = await persistHighlight(settings.defaultHighlightColor, from, to);
+    if (!id) return;
+    try {
+      await handleNeverWrite({ id, text_content: text });
+      const phrase = text.trim().replace(/\s+/g, " ");
+      setOnboardingToast(`Hard rule: never write \u201c${phrase}\u201d. It\u2019s underlined wherever it appears.`);
+    } catch (err) {
+      reportError(`Couldn\u2019t make the rule: ${err instanceof Error ? err.message : String(err)}`, err);
+    }
+  }, [editor, doc.currentDoc, persistHighlight, settings.defaultHighlightColor, handleNeverWrite]);
+
+  // Selection inside an existing highlight: open that highlight's note card.
+  const handleOpenSelectedHighlight = useCallback(() => {
+    if (!editor) return;
+    const { from } = editor.state.selection;
+    const mark = editor.state.doc
+      .resolve(from + 1)
+      .marks()
+      .find((m) => m.type.name === "highlight");
+    const highlightId = mark?.attrs.highlightId as string | undefined;
+    if (!highlightId) return;
+    const el = editor.view.dom.querySelector(`mark[data-highlight-id="${highlightId}"]`);
+    if (el) setAnchorRect(el.getBoundingClientRect());
+    setFocusHighlightId(highlightId);
+    setAutoFocusNew(true);
+  }, [editor]);
 
   const handleRecolor = useCallback(
     async (highlightId: string, color: string) => {
@@ -1854,9 +1893,15 @@ export default function App() {
         />
       </Suspense>
 
-      <FloatingToolbar
+      <SelectionToolbar
         editor={editor}
-        onHighlight={handleHighlight}
+        canNeverWrite={!!doc.currentDoc}
+        suppressed={!!focusHighlightId || diffReview.mode === "reviewing"}
+        onHighlight={() => void handleHighlight()}
+        onNote={() => void handleHighlight(undefined, { openNote: true })}
+        onOpenHighlight={handleOpenSelectedHighlight}
+        onRemoveHighlight={() => void handleRemoveHighlights()}
+        onNeverWrite={() => void handleSelectionNeverWrite()}
       />
 
       {diffReview.mode === "reviewing" && (
@@ -1921,16 +1966,16 @@ export default function App() {
             onRecolor={handleRecolor}
             onNeverWrite={doc.currentDoc ? handleNeverWrite : undefined}
             onClose={() => {
-              // Highlights are provisional until they carry a note — a mark
-              // with no judgment is noise, so closing noteless removes it
-              // (select-to-copy and dismissed selections stay clean).
-              if (focusHighlightId) {
+              // A highlight made by Note and left without one is removed;
+              // highlights made on purpose stay, notes or not.
+              if (focusHighlightId && provisionalHighlightRef.current === focusHighlightId) {
                 const hasNotes = annotationsRef.current.marginNotes.some(
                   (n) => n.highlight_id === focusHighlightId,
                 );
                 const isRuleEvidence = neverRuleHighlightsRef.current.has(focusHighlightId);
                 if (!hasNotes && !isRuleEvidence) void handleDeleteHighlight(focusHighlightId);
               }
+              provisionalHighlightRef.current = null;
               setFocusHighlightId(null);
               setAnchorRect(null);
               setAutoFocusNew(false);
