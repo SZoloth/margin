@@ -69,6 +69,7 @@ pnpm tsc --noEmit     # Type check without emitting
 - **Fresh data before export:** `handleExportAnnotations` calls Tauri directly instead of reading React state to avoid stale closures.
 - **External vs user edits:** `setContent()` marks dirty; `setContentExternal()` (from file watcher) does not.
 - **Path alias:** `@/*` maps to `./src/*` in TypeScript and Vite.
+- **Design rules:** read `docs/design-rules.md` before UI or motion work. `docs/motion-spec.md` and the tokens in `globals.css` win where they disagree.
 - **Styling:** CSS variables for theming (light/dark via `prefers-color-scheme`), Tailwind v4, custom CSS in `src/styles/`. Highlight colors defined as CSS custom properties in `globals.css`.
 - **Editor:** TipTap with custom extensions in `src/components/editor/extensions/` (MultiColorHighlight, MarginNote).
 - **SQLite as coordination layer:** The database is the protocol between Rust (desktop app), MCP (Node.js), and generated artifacts. Schema truth lives in Rust migrations. All consumers derive from it.

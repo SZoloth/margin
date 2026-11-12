@@ -12,6 +12,7 @@ Read these files before substantial work:
 6. `docs/troubleshooting.md`
 7. `docs/harness-engineering.md`
 8. `PLANS.md` if active work is already in progress
+9. `docs/design-rules.md` before UI or motion work
 
 This repo already has harness architecture in `docs/harness-engineering.md` and `.harness/`.
 Use this file as a router, not a long-form context dump.
