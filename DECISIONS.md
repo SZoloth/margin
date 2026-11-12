@@ -191,3 +191,17 @@ Sam asked for a polish pass so Margin can be shown off, then chose to polish the
 ### Not done yet
 
 At narrow windows (1280×720) the note card covers the paragraph beside the selection, and React logs a set-state-during-render warning on load. Both predate this work.
+
+## ADR-009: Adopt pstack's method, verify the UI with a committed driver
+
+**Date:** 2026-11-12
+**Status:** Proposed
+
+**Context.** Sam asked for pstack (Lauren Tan's Cursor plugin of engineering workflows) on every thread, to give agents a better way to check and iterate on frontend and backend work. Three facts shaped how. Cloud sessions do not install plugins a repository enables in `.claude/settings.json`, so a committed plugin setting would reach Sam's Mac only. 57 of pstack's 58 skills set `disable-model-invocation`, so the model can't call them through the `Skill` tool and must read them as files, which is what pstack's own Claude Code adapter says to do. And pstack's UI verification step points at `control-ui`, a browser and Electron driver from another Cursor plugin, which cannot reach a Tauri webview.
+
+**Decision.** `scripts/pstack` fetches pstack at a pinned commit in cloud sessions and prints its path. `CLAUDE.md` tells code threads to follow poteto-mode and lists where Margin's rules override it. pstack's `create-verification-skill` recipe produced `.claude/skills/verify-margin/`: a Playwright driver for the stub build that asserts on the Tauri commands each action sends, a feature map, and the four verification lanes. `.gitignore` now tracks that one skill folder and keeps the rest of `.claude/` private.
+
+**Why not the plugin install alone.** It would load pstack on Sam's Mac and nowhere else, and threads run in the cloud. Pinning also means an upstream pstack change reaches Margin only when someone bumps the commit.
+
+**What this does not fix.** The driver runs Chromium against stubs, so it proves the UI sent the right command, not that Rust handled it or that WebKit renders it the same. A real-app lane in the cloud (tauri-driver with WebKitWebDriver under Xvfb) would close that gap and is the next candidate.
+

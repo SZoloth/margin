@@ -30,6 +30,19 @@ beforeEach(async () => {
   mockStat = fs.stat;
 });
 
+describe("browser mock call log", () => {
+  it("records every invoke on window, flagging unhandled commands", async () => {
+    const g = globalThis as { __MARGIN_STUB_CALLS__?: unknown[] };
+    g.__MARGIN_STUB_CALLS__ = [];
+    await mockInvoke("get_recent_documents", { limit: 5 });
+    await mockInvoke("definitely_not_a_command");
+    expect(g.__MARGIN_STUB_CALLS__).toEqual([
+      { cmd: "get_recent_documents", args: { limit: 5 }, handled: true },
+      { cmd: "definitely_not_a_command", args: {}, handled: false },
+    ]);
+  });
+});
+
 describe("browser mock invoke", () => {
   it("returns Document[] for get_recent_documents", async () => {
     const result = await mockInvoke("get_recent_documents");

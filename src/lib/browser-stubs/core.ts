@@ -393,10 +393,20 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 // Public API (matches @tauri-apps/api/core)
 // ---------------------------------------------------------------------------
 
+// Every call is kept on window so the verify-margin driver can prove which
+// backend commands a UI action sent (.claude/skills/verify-margin).
+type StubCall = { cmd: string; args: Record<string, unknown>; handled: boolean };
+
+function recordCall(cmd: string, args: Record<string, unknown>): void {
+  const g = globalThis as { __MARGIN_STUB_CALLS__?: StubCall[] };
+  (g.__MARGIN_STUB_CALLS__ ??= []).push({ cmd, args, handled: cmd in handlers });
+}
+
 export async function invoke<T = unknown>(
   cmd: string,
   args: Record<string, unknown> = {},
 ): Promise<T> {
+  recordCall(cmd, args);
   const handler = handlers[cmd];
   if (handler) {
     return handler(args) as T;
