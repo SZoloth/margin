@@ -18,22 +18,22 @@ describe("SettingsNav", () => {
     onClose: vi.fn(),
   };
 
-  it("renders all section links", () => {
+  it("lists the sections a reader needs, without the internal test tool", () => {
     renderWithProvider(<SettingsNav {...defaultProps} />);
 
-    expect(screen.getByText("Reading")).toBeInTheDocument();
-    expect(screen.getByText("Writing")).toBeInTheDocument();
-    expect(screen.getByText("Writing rules")).toBeInTheDocument();
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    expect(screen.getByText("Integrations")).toBeInTheDocument();
-    expect(screen.getByText("Help")).toBeInTheDocument();
-    expect(screen.getByText("About")).toBeInTheDocument();
+    const labels = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(labels).toEqual(["←Settings", "Reading", "Writing rules", "Integrations", "Help", "About"]);
+  });
+
+  it("keeps Writing rules current while its rule tests are open", () => {
+    renderWithProvider(<SettingsNav {...defaultProps} activeSection="dashboard" />);
+    expect(screen.getByText("Writing rules").closest("button")).toHaveAttribute("aria-current", "true");
   });
 
   it("highlights the active section", () => {
-    renderWithProvider(<SettingsNav {...defaultProps} activeSection="writing" />);
+    renderWithProvider(<SettingsNav {...defaultProps} activeSection="style-memory" />);
 
-    const writingItem = screen.getByText("Writing").closest("button");
+    const writingItem = screen.getByText("Writing rules").closest("button");
     expect(writingItem).toHaveAttribute("aria-current", "true");
 
     const readingItem = screen.getByText("Reading").closest("button");
@@ -46,8 +46,8 @@ describe("SettingsNav", () => {
 
     renderWithProvider(<SettingsNav {...defaultProps} onSelect={onSelect} />);
 
-    await user.click(screen.getByText("Writing"));
-    expect(onSelect).toHaveBeenCalledWith("writing");
+    await user.click(screen.getByText("Writing rules"));
+    expect(onSelect).toHaveBeenCalledWith("style-memory");
   });
 
   it("has a back button that calls onClose", async () => {

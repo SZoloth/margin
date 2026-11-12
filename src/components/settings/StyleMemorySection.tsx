@@ -33,9 +33,10 @@ interface StyleMemorySectionProps {
     matchText: string,
     suggestedEdit: string,
   ) => boolean | Promise<boolean>;
+  onOpenRuleTests?: () => void;
 }
 
-export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {}) {
+export function StyleMemorySection({ onAcceptEdit, onOpenRuleTests }: StyleMemorySectionProps = {}) {
   const [view, setView] = useState<View>("guide");
   const [readyCount, setReadyCount] = useState<number | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
@@ -193,6 +194,7 @@ export function StyleMemorySection({ onAcceptEdit }: StyleMemorySectionProps = {
             onStatsChange={handleRuleStatsChange}
             readyNotes={readyCount ?? 0}
             onShowNotes={() => setView("notes")}
+            onOpenRuleTests={onOpenRuleTests}
           />
         )}
       </div>

@@ -13,8 +13,8 @@ describe("WritingSection", () => {
   it("renders persist corrections toggle", () => {
     render(<WritingSection {...defaultProps} />);
 
-    expect(screen.getByText("Learn from feedback")).toBeInTheDocument();
-    expect(screen.getByText("Save correction feedback to Margin's local learning system as you write")).toBeInTheDocument();
+    expect(screen.getByText("Keep notes for rules")).toBeInTheDocument();
+    expect(screen.getByText(/so they can become writing rules/)).toBeInTheDocument();
     expect(screen.getByRole("switch")).toBeInTheDocument();
   });
 

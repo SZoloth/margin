@@ -4,15 +4,22 @@ import { useTestRunContext } from "@/hooks/useTestRunContext";
 
 export type Section = "reading" | "writing" | "style-memory" | "dashboard" | "integrations" | "help" | "about";
 
-const SECTIONS: { id: Section; label: string }[] = [
+// "writing" folded into Reading; "dashboard" (rule tests against Claude)
+// lives under Writing rules. Both ids stay valid for old deep links.
+export const SECTIONS: { id: Section; label: string }[] = [
   { id: "reading", label: "Reading" },
-  { id: "writing", label: "Writing" },
   { id: "style-memory", label: "Writing rules" },
-  { id: "dashboard", label: "Dashboard" },
   { id: "integrations", label: "Integrations" },
   { id: "help", label: "Help" },
   { id: "about", label: "About" },
 ];
+
+/** The nav item a section belongs to. */
+function navIdFor(section: Section): Section {
+  if (section === "dashboard") return "style-memory";
+  if (section === "writing") return "reading";
+  return section;
+}
 
 interface SettingsNavProps {
   activeSection: Section;
@@ -22,6 +29,7 @@ interface SettingsNavProps {
 
 export function SettingsNav({ activeSection, onSelect, onClose }: SettingsNavProps) {
   const { isTestRunning } = useTestRunContext();
+  const current = navIdFor(activeSection);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -52,21 +60,21 @@ export function SettingsNav({ activeSection, onSelect, onClose }: SettingsNavPro
             key={section.id}
             type="button"
             onClick={() => onSelect(section.id)}
-            aria-current={activeSection === section.id ? "true" : undefined}
+            aria-current={current === section.id ? "true" : undefined}
             className={cn(
               "rounded-[var(--radius-sm)] px-3 py-2 text-left text-[length:var(--text-sm)] font-medium transition-colors duration-150",
-              activeSection === section.id
+              current === section.id
                 ? "bg-[var(--color-surface-subtle)] text-[var(--color-text-primary)] font-semibold"
                 : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
             )}
           >
             <span className="flex items-center gap-2">
               {section.label}
-              {section.id === "dashboard" && isTestRunning && (
+              {section.id === "style-memory" && isTestRunning && (
                 <span
                   className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
-                  title="Test running"
-                  aria-label="Test running"
+                  title="Rule test running"
+                  aria-label="Rule test running"
                 />
               )}
             </span>
