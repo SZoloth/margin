@@ -47,7 +47,7 @@ export function RunButton({
         </div>
       ) : !isRunning ? (
         <span className="text-[length:var(--text-xs)] text-[var(--color-text-tertiary)]">
-          9 types &times; 3 samples &times; 2 modes
+          27 prompts, each written with and without your rules
         </span>
       ) : null}
     </div>

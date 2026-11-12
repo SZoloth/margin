@@ -205,3 +205,21 @@ At narrow windows (1280×720) the note card covers the paragraph beside the sele
 
 **What this does not fix.** The driver runs Chromium against stubs, so it proves the UI sent the right command, not that Rust handled it or that WebKit renders it the same. A real-app lane in the cloud (tauri-driver with WebKitWebDriver under Xvfb) would close that gap and is the next candidate.
 
+## ADR-007: Settings has five pages, and rule tests live under Writing rules
+
+**Date:** 2026-11-06 · **Status:** accepted (Sam picked "Move into Writing rules")
+
+Settings had seven pages in three different layouts. Two of them were thin: Writing held one toggle, and Dashboard is a 27-prompt comparison run that only makes sense once you have rules. A viewer reading the nav saw an internal eval tool at the same level as Reading.
+
+- The nav is Reading, Writing rules, Integrations, Help, About. The `writing` and `dashboard` section ids still work, so old deep links and the menu land on the right page.
+- Rule tests open from "Test your rules against Claude" at the foot of the style guide, shown only when rules exist. The page has a back link and a title, and the nav keeps Writing rules current while it is open. The running-test dot moved to Writing rules.
+- The notes toggle (`persistCorrections`) sits on Reading as "Keep notes for rules", with copy that says what turning it off does.
+- Every page is titled with its own name, left-aligned in the same column as Writing rules.
+- Help explains the loop first and drops the `margin-editor` agent, which nothing in the repo ships.
+- Integrations copy says what each switch changes for you before how it works.
+- The test bench underlines catches the way the reader does (solid, red for Hard rules, amber for Preferences), and the style guide toolbar buttons are one size up.
+
+### Not done
+
+- The set-state-during-render warning on load is still there.
+- At 1280×720 the note card can cover the paragraph beside the selection. That gets its own PR.

@@ -387,6 +387,16 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   save_content_snapshot: () => "mock-snapshot",
   get_content_snapshot: () => null,
   delete_content_snapshot: () => undefined,
+
+  // --- Rule tests (dashboard) ----------------------------------------------
+  // No saved runs in the browser; the page shows its empty state.
+  get_dashboard_summary: () => ({
+    latestRun: null,
+    recentRuns: [],
+    ruleCount: ((handlers.get_writing_rules?.({}) ?? []) as { source?: string }[]).filter(
+      (r) => r.source !== "synthesis-candidate",
+    ).length,
+  }),
 };
 
 // ---------------------------------------------------------------------------

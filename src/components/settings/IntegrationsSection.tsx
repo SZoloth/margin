@@ -93,18 +93,14 @@ export function IntegrationsSection() {
   return (
     <div className="flex flex-col gap-2">
       <SettingsCard>
-        <SectionHeader title="Integrations" />
-
-        <p className="mt-2 mb-2 text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">
-          Connect Margin to Claude for AI-assisted reading and writing
-        </p>
+        <SectionHeader title="Claude" />
 
         {!loading && (
           <>
             <SettingRow
               label="Claude Desktop"
               labelId={desktopLabelId}
-              description="Auto-configured — toggle to enable or disable"
+              description="Lets Claude Desktop read your library, add highlights and notes, and see your rules. Margin sets it up."
             >
               <ToggleSwitch checked={enabled} onChange={handleToggle} ariaLabelledBy={desktopLabelId} />
             </SettingRow>
@@ -128,7 +124,7 @@ export function IntegrationsSection() {
             <SettingRow
               label="Writing guard"
               labelId={guardLabelId}
-              description="Let Margin add your writing rules to Claude Code and Codex. Margin edits files in ~/.claude and ~/.codex."
+              description="Stops Claude Code from saving writing that breaks a Hard rule, and gives Claude Code and Codex your rules. Margin edits files in ~/.claude and ~/.codex."
             >
               <ToggleSwitch
                 checked={guardEnabled}
@@ -139,7 +135,7 @@ export function IntegrationsSection() {
 
             <SettingRow
               label="Claude Code"
-              description="Add to ~/.claude.json, then restart Claude Code"
+              description="The same access for Claude Code. Paste into ~/.claude.json, then restart Claude Code."
             >
               <SettingsButton onClick={handleCopy}>
                 {copied ? "Copied" : "Copy config"}

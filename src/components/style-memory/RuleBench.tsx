@@ -10,7 +10,7 @@ const SAMPLE =
 
 /**
  * "Try your rules": paste a draft and see what the writing guard would do with
- * it. Hard rules underline in red; preferences with a pattern underline dotted.
+ * it. Hard rules underline in red; preferences in amber, same as the reader.
  */
 export function RuleBench({ rules, onClose }: { rules: WritingRule[]; onClose: () => void }) {
   const [text, setText] = useState(SAMPLE);
@@ -28,10 +28,9 @@ export function RuleBench({ rules, onClose }: { rules: WritingRule[]; onClose: (
         key={i}
         title={(() => { const r = byId.get(h.ruleId); return r ? displayRuleText(r) : undefined; })()}
         className={cn(
-          "bg-transparent text-inherit underline underline-offset-4",
-          h.kind === "hard"
-            ? "decoration-[var(--color-danger)] decoration-wavy decoration-[1.5px]"
-            : "decoration-[var(--color-success)] decoration-dotted decoration-2",
+          // Same mark the reader draws, so a catch looks identical in both places.
+          "bg-transparent text-inherit underline decoration-solid decoration-1 underline-offset-[3px]",
+          h.kind === "hard" ? "decoration-[var(--color-danger)]" : "decoration-[var(--color-warning)]",
         )}
       >
         {text.slice(h.start, h.end)}
