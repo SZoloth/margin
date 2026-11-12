@@ -1,0 +1,109 @@
+/* Shared interaction classes — replaces inline onMouseEnter/Leave handlers */
+
+/* Sidebar rows, search results, list items */
+.interactive-item {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--duration-fast) var(--ease-micro), transform 200ms var(--ease-spring);
+}
+
+.interactive-item:hover {
+  background-color: var(--hover-bg);
+}
+
+.interactive-item:active {
+  background-color: var(--active-bg);
+  transform: scale(0.98);
+}
+
+/* Small action buttons (cancel, save, edit, delete) */
+.btn-sm {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-subtle, transparent);
+  transition: background-color 150ms var(--ease-micro), transform 200ms var(--ease-spring);
+}
+
+.btn-sm:hover {
+  background-color: var(--color-surface-muted, var(--hover-bg));
+}
+
+.btn-sm:active {
+  background-color: var(--active-bg);
+  transform: scale(0.95);
+}
+
+/* Sidebar tab switcher (Files / Articles) */
+.sidebar-tab {
+  transition: background-color var(--duration-fast) var(--ease-micro), color var(--duration-fast) var(--ease-micro);
+}
+
+.sidebar-tab:hover {
+  background-color: var(--hover-bg);
+}
+
+.sidebar-tab:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -2px;
+}
+
+/* Focus indicators for keyboard navigation */
+.interactive-item:focus-visible,
+.btn-sm:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -2px;
+}
+
+/* Transition utilities — reusable entrance/exit patterns */
+.transition-entrance {
+  transition: opacity var(--duration-normal) var(--ease-entrance), transform var(--duration-normal) var(--ease-entrance);
+}
+
+.transition-exit {
+  transition: opacity var(--duration-fast) var(--ease-exit), transform var(--duration-fast) var(--ease-exit);
+}
+
+.transition-fade {
+  transition: opacity var(--duration-normal) var(--ease-entrance);
+}
+
+/* Staggered list item entrance */
+@keyframes sidebar-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar-list-item {
+  animation: sidebar-item-in var(--duration-normal) var(--ease-entrance) both;
+}
+
+/* Empty state entrance */
+@keyframes empty-state-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.empty-state-entrance {
+  animation: empty-state-in var(--duration-slow) var(--ease-entrance);
+}
+
+/* Sidebar resize handle */
+*:hover > .resize-handle-line {
+  opacity: 0.4 !important;
+}
+*:active > .resize-handle-line {
+  opacity: 0.6 !important;
+}

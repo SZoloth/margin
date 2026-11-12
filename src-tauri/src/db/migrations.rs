@@ -1,0 +1,1970 @@
+use rusqlite::Connection;
+use std::fs;
+use std::io::BufRead;
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+fn db_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    let margin_dir = home.join(".margin");
+    fs::create_dir_all(&margin_dir)?;
+    Ok(margin_dir.join("margin.db"))
+}
+
+/// Shared database connection pool (single connection behind a mutex).
+/// All Tauri commands use this via managed state instead of opening fresh connections.
+pub struct DbPool(pub Mutex<Connection>);
+
+impl DbPool {
+    pub fn new(conn: Connection) -> Self {
+        DbPool(Mutex::new(conn))
+    }
+}
+
+fn apply_pragmas(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    conn.execute_batch("PRAGMA busy_timeout=5000;")?;
+    conn.execute_batch("PRAGMA synchronous=NORMAL;")?;
+    Ok(())
+}
+
+pub fn init_db() -> Result<DbPool, Box<dyn std::error::Error>> {
+    let path = db_path()?;
+    let conn = Connection::open(&path)?;
+
+    apply_pragmas(&conn)?;
+
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            file_path TEXT,
+            keep_local_id TEXT,
+            title TEXT,
+            author TEXT,
+            url TEXT,
+            word_count INTEGER DEFAULT 0,
+            last_opened_at INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            UNIQUE(file_path),
+            UNIQUE(keep_local_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS document_tags (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            tag TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            UNIQUE(document_id, tag)
+        );
+
+        CREATE TABLE IF NOT EXISTS highlights (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            color TEXT NOT NULL DEFAULT 'yellow',
+            text_content TEXT NOT NULL,
+            from_pos INTEGER NOT NULL,
+            to_pos INTEGER NOT NULL,
+            prefix_context TEXT,
+            suffix_context TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS margin_notes (
+            id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL REFERENCES highlights(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            intent TEXT NOT NULL DEFAULT 'correction' CHECK(intent IN ('correction', 'note', 'prompt')),
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_highlights_document ON highlights(document_id);
+        CREATE INDEX IF NOT EXISTS idx_margin_notes_highlight ON margin_notes(highlight_id);
+
+        CREATE TABLE IF NOT EXISTS corrections (
+            id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL UNIQUE,
+            document_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            original_text TEXT NOT NULL,
+            prefix_context TEXT,
+            suffix_context TEXT,
+            extended_context TEXT,
+            notes_json TEXT NOT NULL,
+            document_title TEXT,
+            document_source TEXT NOT NULL,
+            document_path TEXT,
+            category TEXT,
+            highlight_color TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
+        CREATE INDEX IF NOT EXISTS idx_corrections_session ON corrections(session_id);
+
+        CREATE TABLE IF NOT EXISTS open_tabs (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            tab_order INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        );
+
+        DROP TABLE IF EXISTS comments;
+        DROP TABLE IF EXISTS comment_threads;",
+    )?;
+
+    // Migration: rebuild corrections table without foreign keys and backfill from JSONL
+    migrate_corrections_drop_fks(&conn)?;
+
+    // Migration: add writing_type column to corrections
+    migrate_corrections_add_writing_type(&conn)?;
+
+    // Migration: add access_count and indexed_at columns to documents
+    migrate_documents_add_frecency_columns(&conn)?;
+
+    // Migration: create writing_rules table
+    migrate_add_writing_rules_table(&conn)?;
+
+    // Migration: create content_snapshots table
+    migrate_add_content_snapshots_table(&conn)?;
+
+    // Migration: add polarity column to corrections
+    migrate_corrections_add_polarity(&conn)?;
+
+    // Migration: add synthesized_at column to corrections
+    migrate_corrections_add_synthesized_at(&conn)?;
+
+    // Migration: add reviewed_at column to writing_rules
+    migrate_writing_rules_add_reviewed_at(&conn)?;
+
+    // Migration: add register column to writing_rules
+    migrate_writing_rules_add_register(&conn)?;
+
+    // Migration: remove UNIQUE constraint on highlight_id in corrections and re-backfill
+    migrate_corrections_remove_highlight_unique(&conn)?;
+
+    // Migration: create dashboard tables (test_runs, test_run_types)
+    migrate_add_dashboard_tables(&conn)?;
+
+    // Migration: add exported_at column to highlights
+    migrate_highlights_add_exported_at(&conn)?;
+
+    // Migration: add feedback_type column to corrections
+    migrate_corrections_add_feedback_type(&conn)?;
+
+    // Migration: add intent column to margin notes
+    migrate_margin_notes_add_intent(&conn)?;
+
+    // Migration: add suggested_edit and accepted_at columns to corrections
+    migrate_corrections_add_suggested_edit(&conn)?;
+
+    // Migration: create thesis_candidates table
+    migrate_add_thesis_candidates_table(&conn)?;
+
+    // Migration: add rationale column to corrections
+    migrate_corrections_add_rationale(&conn)?;
+
+    // Migration: add polarity column to writing_rules
+    migrate_writing_rules_add_polarity(&conn)?;
+
+    // Migration: add detection_pattern column to writing_rules
+    migrate_writing_rules_add_detection_pattern(&conn)?;
+
+    // Migration: widen writing_type CHECK on writing_rules to the canonical
+    // type set (runs last so the rebuild sees every column)
+    migrate_writing_rules_widen_type_check(&conn)?;
+
+    // Migration: add archived_at to writing_rules — must run AFTER the
+    // widen rebuild above, whose explicit column list would otherwise drop it.
+    migrate_writing_rules_add_archived_at(&conn)?;
+
+    // Cleanup: mark stale running test runs as failed (from previous crashes)
+    let _ = conn.execute(
+        "UPDATE test_runs SET status = 'failed' WHERE status = 'running'",
+        [],
+    );
+
+    // Seed: voice calibration + editorial rules into writing_rules table
+    seed_voice_and_editorial_rules(&conn)?;
+
+    // Seed: coaching-prompt prohibitions (DB is the source of truth, not the Go binary)
+    seed_prohibition_rules(&conn)?;
+
+    // Seed: guard v2 detection patterns (prohibition regexes + soft AI-tell families)
+    seed_guard_patterns_v2(&conn)?;
+
+    Ok(DbPool::new(conn))
+}
+
+/// Rebuilds the corrections table without foreign key constraints.
+/// Also backfills any corrections from JSONL files that are missing from the DB.
+fn migrate_corrections_drop_fks(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if migration is needed: does the corrections table have FK constraints?
+    let has_fks: bool = {
+        let mut stmt = conn.prepare("PRAGMA foreign_key_list(corrections)")?;
+        let count: usize = stmt.query_map([], |_| Ok(()))?.count();
+        count > 0
+    };
+
+    if has_fks {
+        // Must disable FKs to rebuild the table
+        conn.execute_batch("PRAGMA foreign_keys=OFF;")?;
+
+        conn.execute_batch(
+            "BEGIN;
+
+             CREATE TABLE corrections_new (
+                 id TEXT PRIMARY KEY,
+                 highlight_id TEXT NOT NULL UNIQUE,
+                 document_id TEXT NOT NULL,
+                 session_id TEXT NOT NULL,
+                 original_text TEXT NOT NULL,
+                 prefix_context TEXT,
+                 suffix_context TEXT,
+                 extended_context TEXT,
+                 notes_json TEXT NOT NULL,
+                 document_title TEXT,
+                 document_source TEXT NOT NULL,
+                 document_path TEXT,
+                 category TEXT,
+                 highlight_color TEXT NOT NULL,
+                 created_at INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL
+             );
+
+             INSERT INTO corrections_new SELECT * FROM corrections;
+
+             DROP TABLE corrections;
+
+             ALTER TABLE corrections_new RENAME TO corrections;
+
+             CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
+             CREATE INDEX IF NOT EXISTS idx_corrections_session ON corrections(session_id);
+
+             COMMIT;",
+        )?;
+
+        conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    }
+
+    // Backfill: import corrections from JSONL files that are not already in the DB.
+    // Only run once — check if backfill marker exists.
+    let backfilled: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM corrections WHERE session_id = '__backfilled__'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(true); // if query fails, skip backfill
+
+    if !backfilled {
+        if let Some(home) = dirs::home_dir() {
+            let corrections_dir = home.join(".margin").join("corrections");
+            backfill_corrections_from_dir(conn, &corrections_dir);
+        }
+        // Always insert sentinel so backfill doesn't re-run, even if dir was empty/missing
+        let _ = conn.execute(
+            "INSERT OR IGNORE INTO corrections
+                (id, highlight_id, document_id, session_id, original_text,
+                 notes_json, document_source, highlight_color, created_at, updated_at)
+             VALUES ('__backfill_marker__', '__backfill_marker__', '', '__backfilled__',
+                     '', '[]', 'system', 'none', 0, 0)",
+            [],
+        );
+    }
+
+    Ok(())
+}
+
+/// Import corrections from JSONL files in `dir` that are missing from the DB.
+/// Files are processed in sorted order (oldest first) so newer entries win on conflict.
+/// Returns the number of corrections imported.
+fn backfill_corrections_from_dir(conn: &Connection, dir: &std::path::Path) -> usize {
+    if !dir.is_dir() {
+        return 0;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return 0;
+    };
+
+    // Sort JSONL files by name (date-based filenames → chronological order)
+    let mut paths: Vec<_> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("jsonl"))
+        .collect();
+    paths.sort();
+
+    let mut imported = 0;
+    for path in &paths {
+        let Ok(file) = fs::File::open(path) else {
+            eprintln!("backfill: failed to open {}", path.display());
+            continue;
+        };
+        let reader = std::io::BufReader::new(file);
+        for line in reader.lines() {
+            let Ok(line) = line else { continue };
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+                eprintln!("backfill: skipping malformed JSON line");
+                continue;
+            };
+            let Some(highlight_id) = val["highlight_id"].as_str() else {
+                continue;
+            };
+
+            let exported_at = val["exported_at"].as_i64().unwrap_or(0);
+            let id = format!("bf-{}-{}", highlight_id, exported_at);
+            // INSERT OR IGNORE: deterministic ID makes re-runs idempotent,
+            // and different highlight_id or exported_at values all get their own rows.
+            match conn.execute(
+                "INSERT OR IGNORE INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text,
+                     prefix_context, suffix_context, extended_context, notes_json,
+                     document_title, document_source, document_path, category,
+                     highlight_color, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                rusqlite::params![
+                    id,
+                    highlight_id,
+                    val["document_id"].as_str().unwrap_or(""),
+                    val["session_id"].as_str().unwrap_or(""),
+                    val["original_text"].as_str().unwrap_or(""),
+                    val["prefix_context"].as_str(),
+                    val["suffix_context"].as_str(),
+                    val["extended_context"].as_str(),
+                    serde_json::to_string(&val["notes"]).unwrap_or_else(|_| "[]".into()),
+                    val["document_title"].as_str(),
+                    val["document_source"].as_str().unwrap_or("unknown"),
+                    val["document_path"].as_str(),
+                    Option::<String>::None,
+                    val["highlight_color"].as_str().unwrap_or("yellow"),
+                    exported_at,
+                    exported_at,
+                ],
+            ) {
+                Ok(n) if n > 0 => imported += 1,
+                Ok(_) => {} // INSERT OR IGNORE: row already exists
+                Err(e) => eprintln!("backfill: failed to insert correction: {e}"),
+            }
+        }
+    }
+    imported
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    // === DbPool tests ===
+
+    #[test]
+    fn db_pool_sets_wal_mode() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        // In-memory databases report "memory" instead of "wal", but the pragma doesn't error.
+        // For a real file DB it would be "wal". Just verify it doesn't fail.
+        assert!(!mode.is_empty());
+    }
+
+    #[test]
+    fn db_pool_sets_foreign_keys() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let fk: i64 = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0)).unwrap();
+        assert_eq!(fk, 1);
+    }
+
+    #[test]
+    fn db_pool_sets_busy_timeout() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let timeout: i64 = conn.query_row("PRAGMA busy_timeout", [], |r| r.get(0)).unwrap();
+        assert_eq!(timeout, 5000);
+    }
+
+    #[test]
+    fn db_pool_connection_is_reusable() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        let pool = DbPool::new(conn);
+
+        // First use
+        {
+            let c = pool.0.lock().unwrap();
+            c.execute_batch("CREATE TABLE test (id INTEGER PRIMARY KEY)").unwrap();
+            c.execute("INSERT INTO test (id) VALUES (1)", []).unwrap();
+        }
+
+        // Second use — same connection, data persists
+        {
+            let c = pool.0.lock().unwrap();
+            let count: i64 = c.query_row("SELECT COUNT(*) FROM test", [], |r| r.get(0)).unwrap();
+            assert_eq!(count, 1);
+        }
+    }
+
+    // === Frecency migration tests ===
+
+    #[test]
+    fn migrate_adds_access_count_and_indexed_at() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE documents (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                file_path TEXT,
+                keep_local_id TEXT,
+                title TEXT,
+                author TEXT,
+                url TEXT,
+                word_count INTEGER DEFAULT 0,
+                last_opened_at INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                UNIQUE(file_path),
+                UNIQUE(keep_local_id)
+            );",
+        ).unwrap();
+
+        migrate_documents_add_frecency_columns(&conn).unwrap();
+
+        // Verify columns exist
+        conn.execute(
+            "INSERT INTO documents (id, source, last_opened_at, created_at, access_count, indexed_at)
+             VALUES ('d1', 'file', 1000, 1000, 5, 2000)",
+            [],
+        ).unwrap();
+
+        let (ac, ia): (i64, Option<i64>) = conn.query_row(
+            "SELECT access_count, indexed_at FROM documents WHERE id = 'd1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).unwrap();
+        assert_eq!(ac, 5);
+        assert_eq!(ia, Some(2000));
+
+        // Idempotent
+        migrate_documents_add_frecency_columns(&conn).unwrap();
+    }
+
+    fn corrections_table_sql() -> &'static str {
+        "CREATE TABLE corrections (
+            id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL,
+            document_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            original_text TEXT NOT NULL,
+            prefix_context TEXT,
+            suffix_context TEXT,
+            extended_context TEXT,
+            notes_json TEXT NOT NULL,
+            document_title TEXT,
+            document_source TEXT NOT NULL,
+            document_path TEXT,
+            category TEXT,
+            highlight_color TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            writing_type TEXT,
+            polarity TEXT CHECK(polarity IN ('positive', 'corrective'))
+        );"
+    }
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(corrections_table_sql()).unwrap();
+        conn
+    }
+
+    fn count(conn: &Connection) -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn backfill_imports_jsonl_into_empty_db() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"bad text","notes":["fix"],"document_source":"file","highlight_color":"yellow","exported_at":1700000000000}}"#).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h2","document_id":"d1","session_id":"s1","original_text":"another","notes":["also fix"],"document_source":"file","highlight_color":"green","exported_at":1700000001000}}"#).unwrap();
+        f.flush().unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 2);
+        let text: String = conn
+            .query_row(
+                "SELECT original_text FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(text, "bad text");
+    }
+
+    #[test]
+    fn backfill_inserts_alongside_existing_and_is_idempotent() {
+        let conn = setup_db();
+        // Pre-insert one correction with a non-backfill ID
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at) VALUES ('existing', 'h1', 'd1', 's1', 'old text', '[]', 'file', 'yellow', 0, 0)",
+            [],
+        ).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        // Same highlight_id as existing but different deterministic ID → inserts as new row
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s2","original_text":"new text","notes":["fix"],"document_source":"file","highlight_color":"yellow","exported_at":1700000000000}}"#).unwrap();
+        // New highlight_id
+        writeln!(f, r#"{{"highlight_id":"h2","document_id":"d1","session_id":"s2","original_text":"fresh","notes":["new"],"document_source":"file","highlight_color":"green","exported_at":1700000001000}}"#).unwrap();
+        f.flush().unwrap();
+
+        let imported = backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(imported, 2); // both inserted
+        assert_eq!(count(&conn), 3); // 1 existing + 2 backfilled
+
+        // Re-run is idempotent (same deterministic IDs → INSERT OR IGNORE)
+        let imported2 = backfill_corrections_from_dir(&conn, dir.path());
+        assert_eq!(imported2, 0); // all ignored
+        assert_eq!(count(&conn), 3); // no change
+    }
+
+    #[test]
+    fn backfill_creates_multiple_rows_for_same_highlight_different_exports() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+
+        // Older file
+        let old_path = dir.path().join("corrections-2026-02-01.jsonl");
+        let mut f = fs::File::create(&old_path).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"old version","notes":["old"],"document_source":"file","highlight_color":"yellow","exported_at":1000}}"#).unwrap();
+        f.flush().unwrap();
+
+        // Newer file — same highlight_id but different exported_at → different deterministic ID → both inserted
+        let new_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&new_path).unwrap();
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s2","original_text":"new version","notes":["new"],"document_source":"file","highlight_color":"green","exported_at":2000}}"#).unwrap();
+        f.flush().unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 2); // both rows exist — corrections are events
+    }
+
+    #[test]
+    fn backfill_ignores_non_jsonl_files() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+        // Create a .txt file — should be skipped
+        let txt_path = dir.path().join("notes.txt");
+        fs::write(&txt_path, r#"{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"t","notes":[],"document_source":"file","highlight_color":"yellow","exported_at":0}"#).unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 0);
+    }
+
+    #[test]
+    fn backfill_skips_malformed_lines() {
+        let conn = setup_db();
+        let dir = tempfile::tempdir().unwrap();
+        let jsonl_path = dir.path().join("corrections-2026-02-23.jsonl");
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        writeln!(f, "not json at all").unwrap();
+        writeln!(f, r#"{{"no_highlight_id":true}}"#).unwrap();
+        writeln!(f, "").unwrap(); // empty line
+        writeln!(f, r#"{{"highlight_id":"h1","document_id":"d1","session_id":"s1","original_text":"good","notes":["ok"],"document_source":"file","highlight_color":"yellow","exported_at":0}}"#).unwrap();
+        f.flush().unwrap();
+
+        backfill_corrections_from_dir(&conn, dir.path());
+
+        assert_eq!(count(&conn), 1); // only the valid line
+    }
+
+    #[test]
+    fn backfill_handles_missing_directory() {
+        let conn = setup_db();
+        let nonexistent = PathBuf::from("/tmp/margin-test-nonexistent-dir-xyz");
+        // Should not panic
+        backfill_corrections_from_dir(&conn, &nonexistent);
+        assert_eq!(count(&conn), 0);
+    }
+
+    #[test]
+    fn migrate_adds_writing_type_column() {
+        // Start with a table WITHOUT writing_type
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE corrections (
+                id TEXT PRIMARY KEY,
+                highlight_id TEXT NOT NULL UNIQUE,
+                document_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                original_text TEXT NOT NULL,
+                prefix_context TEXT,
+                suffix_context TEXT,
+                extended_context TEXT,
+                notes_json TEXT NOT NULL,
+                document_title TEXT,
+                document_source TEXT NOT NULL,
+                document_path TEXT,
+                category TEXT,
+                highlight_color TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );",
+        )
+        .unwrap();
+
+        // Insert a row before migration
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id1', 'h1', 'd1', 's1', 'text', '[]', 'file', 'yellow', 1000, 1000)",
+            [],
+        )
+        .unwrap();
+
+        // Run migration
+        migrate_corrections_add_writing_type(&conn).unwrap();
+
+        // Existing row should have NULL writing_type
+        let wt: Option<String> = conn
+            .query_row(
+                "SELECT writing_type FROM corrections WHERE id = 'id1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(wt, None);
+
+        // Should be able to insert with writing_type
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at, writing_type)
+             VALUES ('id2', 'h2', 'd1', 's1', 'text2', '[]', 'file', 'yellow', 2000, 2000, 'email')",
+            [],
+        )
+        .unwrap();
+
+        let wt2: Option<String> = conn
+            .query_row(
+                "SELECT writing_type FROM corrections WHERE id = 'id2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(wt2, Some("email".to_string()));
+
+        // Running migration again is idempotent
+        migrate_corrections_add_writing_type(&conn).unwrap();
+    }
+
+    // === Writing rules migration tests ===
+
+    #[test]
+    fn migrate_creates_writing_rules_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        // Insert a valid rule
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'ai-slop', 'No negative parallelism', 'must-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn migrate_writing_rules_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap(); // should not error
+    }
+
+    #[test]
+    fn writing_rules_rejects_invalid_writing_type() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        let result = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'invalid-type', 'test', 'rule', 'must-fix', 'manual', 1000, 1000)",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn writing_rules_rejects_invalid_severity() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        let result = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'test', 'rule', 'critical', 'manual', 1000, 1000)",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn writing_rules_unique_constraint_prevents_duplicates() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'ai-slop', 'No negative parallelism', 'must-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        // Same writing_type + category + rule_text should fail
+        let result = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r2', 'general', 'ai-slop', 'No negative parallelism', 'should-fix', 'manual', 2000, 2000)",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn writing_rules_allows_same_rule_different_types() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'general', 'tone', 'Be direct', 'should-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        // Same category + rule_text but different writing_type is fine
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r2', 'email', 'tone', 'Be direct', 'should-fix', 'manual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn migrate_widens_writing_rules_type_check_and_preserves_data() {
+        // Simulate a pre-migration database: narrow 9-type CHECK plus all
+        // columns added by later migrations (this migration runs after them).
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE writing_rules (
+                id TEXT PRIMARY KEY,
+                writing_type TEXT NOT NULL DEFAULT 'general'
+                    CHECK(writing_type IN ('general','email','prd','blog','cover-letter','resume','slack','pitch','outreach')),
+                category TEXT NOT NULL,
+                rule_text TEXT NOT NULL,
+                when_to_apply TEXT,
+                why TEXT,
+                severity TEXT NOT NULL DEFAULT 'should-fix'
+                    CHECK(severity IN ('must-fix','should-fix','nice-to-fix')),
+                example_before TEXT,
+                example_after TEXT,
+                source TEXT NOT NULL DEFAULT 'manual',
+                signal_count INTEGER NOT NULL DEFAULT 1,
+                notes TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                reviewed_at INTEGER,
+                register TEXT,
+                polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+                detection_pattern TEXT,
+                UNIQUE(writing_type, category, rule_text)
+            );
+            CREATE INDEX idx_writing_rules_type ON writing_rules(writing_type);
+            CREATE INDEX idx_writing_rules_polarity ON writing_rules(polarity);
+            INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES ('r1', 'email', 'tone', 'Be direct', 'must-fix', 'manual', 3, 1000, 1000, 1000);",
+        )
+        .unwrap();
+
+        // 'text' is rejected under the old CHECK
+        let rejected = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('pre', 'text', 'tone', 'x', 'should-fix', 'manual', 1, 1)",
+            [],
+        );
+        assert!(rejected.is_err());
+
+        migrate_writing_rules_widen_type_check(&conn).unwrap();
+
+        // Existing data survives
+        let (wt, reviewed): (String, Option<i64>) = conn
+            .query_row(
+                "SELECT writing_type, reviewed_at FROM writing_rules WHERE id = 'r1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(wt, "email");
+        assert_eq!(reviewed, Some(1000));
+
+        // The canonical set now accepts 'text' and the MCP-side types
+        for (i, new_type) in ["text", "case-study", "email-hiring", "email-friend", "social-post", "text-friend"].iter().enumerate() {
+            conn.execute(
+                "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+                 VALUES (?1, ?2, 'tone', ?3, 'should-fix', 'manual', 1, 1)",
+                rusqlite::params![format!("new{i}"), new_type, format!("rule-{new_type}")],
+            ).unwrap();
+        }
+
+        // Still rejects garbage
+        let still_bad = conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('bad', 'definitely-not-a-type', 'tone', 'x', 'should-fix', 'manual', 1, 1)",
+            [],
+        );
+        assert!(still_bad.is_err());
+
+        // Indexes were recreated
+        let idx_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND tbl_name='writing_rules' AND name LIKE 'idx_writing_rules%'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(idx_count, 2);
+
+        // Idempotent
+        migrate_writing_rules_widen_type_check(&conn).unwrap();
+    }
+
+    #[test]
+    fn migrate_widen_type_check_noops_on_wide_schema() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        // Fresh schema already has the wide CHECK — must not rebuild or fail.
+        migrate_writing_rules_widen_type_check(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, created_at, updated_at)
+             VALUES ('r1', 'text', 'tone', 'x', 'should-fix', 'manual', 1, 1)",
+            [],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn migrate_adds_polarity_column() {
+        // Start with a table WITHOUT polarity (but with writing_type)
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE corrections (
+                id TEXT PRIMARY KEY,
+                highlight_id TEXT NOT NULL UNIQUE,
+                document_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                original_text TEXT NOT NULL,
+                prefix_context TEXT,
+                suffix_context TEXT,
+                extended_context TEXT,
+                notes_json TEXT NOT NULL,
+                document_title TEXT,
+                document_source TEXT NOT NULL,
+                document_path TEXT,
+                category TEXT,
+                highlight_color TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                writing_type TEXT
+            );",
+        )
+        .unwrap();
+
+        // Insert a row before migration
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id1', 'h1', 'd1', 's1', 'text', '[]', 'file', 'yellow', 1000, 1000)",
+            [],
+        )
+        .unwrap();
+
+        // Run migration
+        migrate_corrections_add_polarity(&conn).unwrap();
+
+        // Existing row should have NULL polarity
+        let pol: Option<String> = conn
+            .query_row(
+                "SELECT polarity FROM corrections WHERE id = 'id1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pol, None);
+
+        // Should be able to insert with polarity = 'positive'
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id2', 'h2', 'd1', 's1', 'text2', '[]', 'file', 'yellow', 2000, 2000, 'positive')",
+            [],
+        )
+        .unwrap();
+
+        let pol2: Option<String> = conn
+            .query_row(
+                "SELECT polarity FROM corrections WHERE id = 'id2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pol2, Some("positive".to_string()));
+
+        // Should be able to insert with polarity = 'corrective'
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id3', 'h3', 'd1', 's1', 'text3', '[]', 'file', 'yellow', 3000, 3000, 'corrective')",
+            [],
+        )
+        .unwrap();
+
+        let pol3: Option<String> = conn
+            .query_row(
+                "SELECT polarity FROM corrections WHERE id = 'id3'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pol3, Some("corrective".to_string()));
+
+        // Running migration again is idempotent
+        migrate_corrections_add_polarity(&conn).unwrap();
+    }
+
+    #[test]
+    fn writing_rules_stores_all_optional_fields() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity,
+             example_before, example_after, source, signal_count, notes, created_at, updated_at)
+             VALUES ('r1', 'blog', 'argument-rigor', 'Expand assertions with proof', 'Bold claims', 'Credibility',
+             'must-fix', 'Claim without proof.', 'Claim with example.', 'corrections', 3, 'From blog review', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let (when, why, before, after, notes, signal): (Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, i64) = conn.query_row(
+            "SELECT when_to_apply, why, example_before, example_after, notes, signal_count FROM writing_rules WHERE id = 'r1'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+        ).unwrap();
+        assert_eq!(when, Some("Bold claims".to_string()));
+        assert_eq!(why, Some("Credibility".to_string()));
+        assert_eq!(before, Some("Claim without proof.".to_string()));
+        assert_eq!(after, Some("Claim with example.".to_string()));
+        assert_eq!(notes, Some("From blog review".to_string()));
+        assert_eq!(signal, 3);
+    }
+
+    #[test]
+    fn migrate_adds_exported_at_column_to_highlights() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE documents (
+                id TEXT PRIMARY KEY, source TEXT NOT NULL,
+                last_opened_at INTEGER NOT NULL, created_at INTEGER NOT NULL
+            );
+            CREATE TABLE highlights (
+                id TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                color TEXT NOT NULL DEFAULT 'yellow', text_content TEXT NOT NULL,
+                from_pos INTEGER NOT NULL, to_pos INTEGER NOT NULL,
+                prefix_context TEXT, suffix_context TEXT,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+            );",
+        ).unwrap();
+
+        conn.execute(
+            "INSERT INTO documents (id, source, last_opened_at, created_at) VALUES ('d1', 'file', 1000, 1000)", [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO highlights (id, document_id, color, text_content, from_pos, to_pos, created_at, updated_at)
+             VALUES ('h1', 'd1', 'yellow', 'text', 0, 4, 1000, 1000)", [],
+        ).unwrap();
+
+        migrate_highlights_add_exported_at(&conn).unwrap();
+
+        let val: Option<i64> = conn.query_row("SELECT exported_at FROM highlights WHERE id = 'h1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(val, None);
+
+        conn.execute("UPDATE highlights SET exported_at = 5000 WHERE id = 'h1'", []).unwrap();
+        let val2: Option<i64> = conn.query_row("SELECT exported_at FROM highlights WHERE id = 'h1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(val2, Some(5000));
+
+        // Idempotent
+        migrate_highlights_add_exported_at(&conn).unwrap();
+    }
+
+    #[test]
+    fn seed_voice_and_editorial_rules_ships_no_personal_voice_rules() {
+        // A new user's voice profile must start empty; seeded rules are
+        // generic editorial guidance only.
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_writing_rules_add_reviewed_at(&conn).unwrap();
+
+        seed_voice_and_editorial_rules(&conn).unwrap();
+
+        let voice: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'voice-calibration'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(voice, 0);
+
+        let seeded: i64 = conn
+            .query_row("SELECT COUNT(*) FROM writing_rules WHERE source = 'seed-v1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(seeded > 0, "generic editorial rules are still seeded");
+    }
+
+    #[test]
+    fn seed_prohibition_rules_seeds_once_with_ids() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_writing_rules_add_reviewed_at(&conn).unwrap();
+
+        seed_prohibition_rules(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND source = 'seed-prohibitions-v1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 5);
+
+        // Every prohibition carries a stable block id in notes
+        let missing_id: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND (notes IS NULL OR notes NOT LIKE 'prohibition-id:%')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(missing_id, 0);
+
+        // Re-run is a no-op (sentinel check)
+        seed_prohibition_rules(&conn).unwrap();
+        let count2: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count2, 5);
+    }
+
+    #[test]
+    fn seed_guard_patterns_v2_attaches_regexes_and_families() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        migrate_writing_rules_add_reviewed_at(&conn).unwrap();
+        migrate_writing_rules_add_detection_pattern(&conn).unwrap();
+
+        seed_prohibition_rules(&conn).unwrap();
+        seed_guard_patterns_v2(&conn).unwrap();
+
+        // Soft families seeded with detection patterns
+        let soft: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE source = 'seed-slop-v2' AND detection_pattern IS NOT NULL AND notes LIKE 'slop-family:%'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(soft, 10);
+
+        // Mechanically-detectable prohibitions got their regexes
+        let hard: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE category = 'prohibition' AND detection_pattern IS NOT NULL",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(hard, 2);
+
+        // Idempotent
+        seed_guard_patterns_v2(&conn).unwrap();
+        let total: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM writing_rules WHERE source = 'seed-slop-v2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(total, 10);
+    }
+}
+
+/// Adds a `writing_type` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_writing_type(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if column already exists
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "writing_type")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE corrections ADD COLUMN writing_type TEXT;
+             CREATE INDEX IF NOT EXISTS idx_corrections_writing_type ON corrections(writing_type);",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Creates the `writing_rules` table if it doesn't exist.
+/// Canonical writing types for `writing_rules` — the union of the Go CLI's
+/// `ValidWritingTypes` (cli/db/rules.go) and the MCP server's
+/// `VALID_WRITING_TYPES` (mcp/src/tools/writing-rules.ts). Keep all three
+/// lists in sync.
+const VALID_WRITING_TYPES_SQL: &str = "'general','email','prd','blog','cover-letter','resume','slack','pitch','outreach','text','case-study','email-hiring','email-friend','social-post','text-friend'";
+
+pub fn migrate_add_writing_rules_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        &format!("CREATE TABLE IF NOT EXISTS writing_rules (
+            id TEXT PRIMARY KEY,
+            writing_type TEXT NOT NULL DEFAULT 'general'
+                CHECK(writing_type IN ({VALID_WRITING_TYPES_SQL})),
+            category TEXT NOT NULL,
+            rule_text TEXT NOT NULL,
+            when_to_apply TEXT,
+            why TEXT,
+            severity TEXT NOT NULL DEFAULT 'should-fix'
+                CHECK(severity IN ('must-fix','should-fix','nice-to-fix')),
+            example_before TEXT,
+            example_after TEXT,
+            source TEXT NOT NULL DEFAULT 'manual',
+            signal_count INTEGER NOT NULL DEFAULT 1,
+            notes TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(writing_type, category, rule_text)
+        );
+        CREATE INDEX IF NOT EXISTS idx_writing_rules_type ON writing_rules(writing_type);",
+        )
+    )?;
+    Ok(())
+}
+
+/// Widens the `writing_type` CHECK on `writing_rules` to the canonical
+/// 15-type set shared with the Go CLI and MCP server. Older databases only
+/// allow 9 types and reject inserts for 'text' or the MCP-specific types
+/// ('case-study', 'email-hiring', 'email-friend', 'social-post',
+/// 'text-friend'). SQLite can't alter CHECK constraints, so the table is
+/// rebuilt — same pattern as `migrate_corrections_remove_highlight_unique`.
+/// Runs after all column-add migrations so the rebuilt table has every
+/// current column.
+fn migrate_writing_rules_widen_type_check(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let sql: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='writing_rules'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+
+    // Nothing to widen (no CHECK at all), or already on the canonical set.
+    if !sql.contains("CHECK(writing_type IN") || sql.contains("'case-study'") {
+        return Ok(());
+    }
+
+    conn.execute_batch("PRAGMA foreign_keys=OFF;")?;
+
+    conn.execute_batch(
+        &format!("BEGIN;
+
+         CREATE TABLE writing_rules_new (
+             id TEXT PRIMARY KEY,
+             writing_type TEXT NOT NULL DEFAULT 'general'
+                 CHECK(writing_type IN ({VALID_WRITING_TYPES_SQL})),
+             category TEXT NOT NULL,
+             rule_text TEXT NOT NULL,
+             when_to_apply TEXT,
+             why TEXT,
+             severity TEXT NOT NULL DEFAULT 'should-fix'
+                 CHECK(severity IN ('must-fix','should-fix','nice-to-fix')),
+             example_before TEXT,
+             example_after TEXT,
+             source TEXT NOT NULL DEFAULT 'manual',
+             signal_count INTEGER NOT NULL DEFAULT 1,
+             notes TEXT,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL,
+             reviewed_at INTEGER,
+             register TEXT,
+             polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+             detection_pattern TEXT,
+             UNIQUE(writing_type, category, rule_text)
+         );
+
+         INSERT INTO writing_rules_new
+             (id, writing_type, category, rule_text, when_to_apply, why,
+              severity, example_before, example_after, source, signal_count,
+              notes, created_at, updated_at, reviewed_at, register, polarity,
+              detection_pattern)
+         SELECT id, writing_type, category, rule_text, when_to_apply, why,
+                severity, example_before, example_after, source, signal_count,
+                notes, created_at, updated_at, reviewed_at, register, polarity,
+                detection_pattern
+         FROM writing_rules;
+
+         DROP TABLE writing_rules;
+
+         ALTER TABLE writing_rules_new RENAME TO writing_rules;
+
+         CREATE INDEX IF NOT EXISTS idx_writing_rules_type ON writing_rules(writing_type);
+         CREATE INDEX IF NOT EXISTS idx_writing_rules_polarity ON writing_rules(polarity);
+
+         COMMIT;",
+        )
+    )?;
+
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+
+    Ok(())
+}
+
+/// Creates the `content_snapshots` table if it doesn't exist.
+pub fn migrate_add_content_snapshots_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS content_snapshots (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            snapshot_type TEXT NOT NULL DEFAULT 'pre_external_edit'
+                CHECK(snapshot_type IN ('pre_external_edit', 'manual')),
+            created_at INTEGER NOT NULL,
+            UNIQUE(document_id, snapshot_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_snapshots_document ON content_snapshots(document_id);",
+    )?;
+    Ok(())
+}
+
+/// Adds a `polarity` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_polarity(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "polarity")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE corrections ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));
+             CREATE INDEX IF NOT EXISTS idx_corrections_polarity ON corrections(polarity);",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Removes the UNIQUE constraint on highlight_id in the corrections table and re-backfills.
+/// A correction is an event, not a state — multiple corrections per highlight position are valid.
+fn migrate_corrections_remove_highlight_unique(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if the UNIQUE constraint on highlight_id still exists
+    let sql: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='corrections'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_default();
+
+    if !sql.contains("UNIQUE") {
+        return Ok(());
+    }
+
+    conn.execute_batch("PRAGMA foreign_keys=OFF;")?;
+
+    conn.execute_batch(
+        "BEGIN;
+
+         CREATE TABLE corrections_new (
+             id TEXT PRIMARY KEY,
+             highlight_id TEXT NOT NULL,
+             document_id TEXT NOT NULL,
+             session_id TEXT NOT NULL,
+             original_text TEXT NOT NULL,
+             prefix_context TEXT,
+             suffix_context TEXT,
+             extended_context TEXT,
+             notes_json TEXT NOT NULL,
+             document_title TEXT,
+             document_source TEXT NOT NULL,
+             document_path TEXT,
+             category TEXT,
+             highlight_color TEXT NOT NULL,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL,
+             writing_type TEXT,
+             polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+             synthesized_at INTEGER
+         );
+
+         INSERT INTO corrections_new SELECT * FROM corrections;
+
+         DROP TABLE corrections;
+
+         ALTER TABLE corrections_new RENAME TO corrections;
+
+         CREATE INDEX IF NOT EXISTS idx_corrections_document ON corrections(document_id);
+         CREATE INDEX IF NOT EXISTS idx_corrections_session ON corrections(session_id);
+
+         COMMIT;",
+    )?;
+
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+
+    // Delete backfill sentinel so re-backfill runs
+    let _ = conn.execute("DELETE FROM corrections WHERE id = '__backfill_marker__'", []);
+
+    // Re-run backfill with deterministic IDs
+    if let Some(home) = dirs::home_dir() {
+        let corrections_dir = home.join(".margin").join("corrections");
+        backfill_corrections_from_dir(conn, &corrections_dir);
+    }
+
+    // Re-insert sentinel
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO corrections
+            (id, highlight_id, document_id, session_id, original_text,
+             notes_json, document_source, highlight_color, created_at, updated_at)
+         VALUES ('__backfill_marker__', '__backfill_marker__', '', '__backfilled__',
+                 '', '[]', 'system', 'none', 0, 0)",
+        [],
+    );
+
+    Ok(())
+}
+
+/// Creates the `test_runs` and `test_run_types` tables for the stats dashboard.
+pub fn migrate_add_dashboard_tables(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS test_runs (
+            id TEXT PRIMARY KEY,
+            timestamp INTEGER NOT NULL,
+            mode TEXT NOT NULL CHECK(mode IN ('coached', 'uncoached', 'comparison')),
+            rule_count INTEGER NOT NULL,
+            total_samples INTEGER NOT NULL,
+            avg_mechanical_issues REAL NOT NULL,
+            avg_dimension_score REAL NOT NULL,
+            avg_mechanical_delta REAL,
+            avg_dimension_delta REAL,
+            dimension_averages_json TEXT,
+            dimension_deltas_json TEXT,
+            best_type TEXT,
+            worst_type TEXT,
+            status TEXT NOT NULL DEFAULT 'completed',
+            created_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS test_run_types (
+            id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+            writing_type TEXT NOT NULL,
+            sample_count INTEGER NOT NULL,
+            avg_mechanical_issues REAL NOT NULL,
+            avg_dimension_score REAL NOT NULL,
+            dimension_scores_json TEXT,
+            mechanical_delta REAL,
+            dimension_delta REAL,
+            systematic_violations_json TEXT,
+            created_at INTEGER NOT NULL
+        );",
+    )?;
+    Ok(())
+}
+
+/// Seeds voice calibration and editorial rules into the writing_rules table.
+/// Idempotent: uses INSERT OR IGNORE so duplicate (writing_type, category, rule_text) combos are skipped.
+/// Source content was previously split across ~/.claude/voice-corpus/voice-profile.md and ~/.claude/writing-rules.md.
+pub fn seed_voice_and_editorial_rules(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    // Check sentinel to avoid re-running on every startup.
+    // To add new seed rules in a future release, bump to 'seed-v2' (new sentinel + new block).
+    let already_seeded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM writing_rules WHERE source = 'seed-v1' LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_seeded {
+        return Ok(());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Each tuple: (writing_type, category, rule_text, severity, when_to_apply, why, signal_count)
+    // Voice-calibration rules are never seeded: they describe one person's voice
+    // and must come from the user's own corrections.
+    let rules: Vec<(&str, &str, &str, &str, Option<&str>, Option<&str>, i64)> = vec![
+        // === Editorial rules (from writing-rules.md) ===
+
+        // Voice test
+        ("general", "editorial", "Read aloud — would you say this at a coffee shop? If it sounds like a press release, rewrite.", "must-fix",
+         Some("All prose"), Some("Core voice authenticity test"), 10),
+
+        // AI content tells
+        ("general", "editorial", "Avoid rule of three unless genuine enumeration.", "should-fix",
+         Some("Sentence structure"), Some("Common AI rhetorical pattern"), 5),
+        ("general", "editorial", "Use em dashes sparingly, not as a crutch.", "nice-to-fix",
+         Some("Punctuation"), Some("AI overuses em dashes"), 3),
+        ("general", "editorial", "Prefer physical, tactile verbs over abstract process verbs: 'sanded down' not 'improved', 'bolted on' not 'added', 'stripped back' not 'simplified'.", "should-fix",
+         Some("Verb choice"), Some("Makes prose concrete and harder to fake"), 6),
+
+        // Editorial rules
+        ("general", "editorial", "NEVER modify user/stakeholder quotes — apply kill words only to Claude's prose.", "must-fix",
+         Some("When editing text containing quotes"), Some("Quotes are sacrosanct"), 10),
+        ("general", "editorial", "Requirements docs: write use cases in user language ('I'm looking for X'), not analyst jargon ('semantic search', 'concept retrieval').", "should-fix",
+         Some("PRDs and requirements"), None, 3),
+
+        // Professional content
+        ("general", "editorial", "Professional/portfolio content: NO emojis, prefer editorial magazine quality.", "should-fix",
+         Some("Cover letters, outreach, portfolio"), None, 3),
+        ("general", "editorial", "Run /writing-quality-gate on all professional content before submission.", "should-fix",
+         Some("Professional and external-facing writing"), None, 5),
+
+        // Outcome framing
+        ("general", "editorial", "Always filter through 'did behavior change?' before claiming an outcome. Artifacts (frameworks, decks) ≠ outcomes.", "should-fix",
+         Some("Outcome claims in resumes, case studies, portfolios"), Some("Vanity metrics without behavior explanation = noise"), 4),
+
+        // Argument depth (from corrections — 6 signals)
+        ("general", "argument-rigor", "Don't name-drop frameworks you haven't digested. Research first, cite second.", "must-fix",
+         Some("Any reference to external frameworks or theories"), Some("Strongest correction signal — 6 instances"), 6),
+        ("general", "argument-rigor", "Examples must support the actual thesis, not just a related point.", "should-fix",
+         Some("Using examples to support arguments"), None, 4),
+        ("general", "argument-rigor", "Don't flatten nuance into a punchline. Say what's actually happening in concrete terms.", "should-fix",
+         Some("Conclusions and summaries"), None, 3),
+        ("general", "argument-rigor", "Cover the full argument space. Partial coverage weakens the argument.", "should-fix",
+         Some("Making comprehensive arguments"), None, 3),
+
+        // Structural craft
+        ("general", "structural-craft", "Claims need evidence. Unsupported assertions lose the reader.", "should-fix",
+         Some("Making claims in essays and articles"), None, 2),
+        ("general", "structural-craft", "Add links for referenced work. Readers who want depth should be able to follow the thread.", "nice-to-fix",
+         Some("Citing external frameworks or articles"), None, 2),
+    ];
+
+    for (writing_type, category, rule_text, severity, when_to_apply, why, signal_count) in &rules {
+        conn.execute(
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, when_to_apply, why, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'seed-v1', ?8, ?9, ?9, ?9)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                writing_type,
+                category,
+                rule_text,
+                severity,
+                when_to_apply,
+                why,
+                signal_count,
+                now,
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Seeds the coaching-prompt prohibitions into writing_rules so the DB — not
+/// the Go binary — is the source of truth for them. The coaching prompt
+/// renders category='prohibition' rows in its <prohibitions> section; the
+/// notes field carries the stable block id ("prohibition-id:...").
+pub fn seed_prohibition_rules(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let already_seeded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM writing_rules WHERE source = 'seed-prohibitions-v1' LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_seeded {
+        return Ok(());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Each tuple: (id_tag, rule_text, severity, when_to_apply, why, example_before, example_after)
+    let prohibitions: Vec<(&str, &str, &str, Option<&str>, Option<&str>, Option<&str>, Option<&str>)> = vec![
+        ("NEG_PARALLELISM",
+         "Never contrast what something \"isn't\" with what it \"is.\"",
+         "must-fix",
+         Some("Match variants: \"isn't X — it's Y\", \"isn't X. It's Y\", \"not about X — it's about Y\", \"wasn't X — was Y\", \"don't X — Y\", \"more X, not Y\", \"X works. It fails Y\""),
+         Some("Instead: state what it IS directly. Drop the contrast."),
+         Some("The challenge isn't technical — it's organizational"),
+         Some("The challenge is organizational")),
+        ("EM_DASH_LIMIT",
+         "Maximum 2 em dashes (—) per document. Zero is fine. Three or more is a violation.",
+         "must-fix",
+         None,
+         Some("Instead: use periods, commas, or restructure the sentence."),
+         None,
+         None),
+        ("TERMINAL_PUNCTUATION",
+         "Every paragraph of prose must end with a period, question mark, or exclamation point. No trailing off without punctuation.",
+         "must-fix",
+         Some("This applies to email bodies, message bodies, and all prose — not headers or signatures."),
+         None,
+         None,
+         None),
+        ("AI_SLOP",
+         "Never use \"is the kind of X that\" — this is a recognized AI writing tell.",
+         "must-fix",
+         Some("Also avoid: hyperbolic claims like \"the most [adj] thing\", \"thing nobody mentions\", \"the real X is\""),
+         None,
+         Some("This is the kind of problem I want to work on"),
+         Some("I want to work on this problem")),
+        ("COLON_LIMIT",
+         "Maximum 1 colon in prose per document. Use sparingly.",
+         "should-fix",
+         None,
+         None,
+         None,
+         None),
+    ];
+
+    for (id_tag, rule_text, severity, when_to_apply, why, before, after) in &prohibitions {
+        conn.execute(
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, when_to_apply, why, example_before, example_after, notes, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES (?1, 'general', 'prohibition', ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'seed-prohibitions-v1', 10, ?9, ?9, ?9)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                rule_text,
+                severity,
+                when_to_apply,
+                why,
+                before,
+                after,
+                format!("prohibition-id:{id_tag}"),
+                now,
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Adds `access_count` and `indexed_at` columns to the documents table if they don't exist.
+fn migrate_documents_add_frecency_columns(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(documents)")?;
+        let cols = stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        cols
+    };
+
+    if !columns.iter().any(|c| c == "access_count") {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN access_count INTEGER DEFAULT 0;")?;
+    }
+    if !columns.iter().any(|c| c == "indexed_at") {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN indexed_at INTEGER;")?;
+    }
+    Ok(())
+}
+
+/// Adds a `synthesized_at` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_synthesized_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "synthesized_at")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE corrections ADD COLUMN synthesized_at INTEGER;
+             CREATE INDEX IF NOT EXISTS idx_corrections_synthesized ON corrections(synthesized_at);",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Seeds curated guard detection patterns (v2). Two parts:
+/// (1) gives the mechanically-detectable prohibitions their regexes, and
+/// (2) inserts soft AI-tell pattern families (derived from the humanizer /
+/// Wikipedia "Signs of AI writing" taxonomy, MIT) that the guard
+/// cluster-scores — a doc is flagged only when >= 2 families co-occur.
+pub fn seed_guard_patterns_v2(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let already_seeded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM writing_rules WHERE source = 'seed-slop-v2' LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_seeded {
+        return Ok(());
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    // Hard patterns: attach regexes to the seeded prohibitions (matched by id tag).
+    tx.execute(
+        "UPDATE writing_rules SET detection_pattern = ?1, updated_at = ?2
+         WHERE category = 'prohibition' AND notes = 'prohibition-id:NEG_PARALLELISM'",
+        rusqlite::params![r"(?i)\bisn'?t [^.!?\n]{2,50}[—–] ?it'?s\b", now],
+    )?;
+    tx.execute(
+        "UPDATE writing_rules SET detection_pattern = ?1, updated_at = ?2
+         WHERE category = 'prohibition' AND notes = 'prohibition-id:AI_SLOP'",
+        rusqlite::params![r"(?i)\bthe kind of \w+ that\b", now],
+    )?;
+
+    // Soft families: (family, rule_text, detection_pattern)
+    let families: Vec<(&str, &str, &str)> = vec![
+        ("copula-avoidance",
+         "Plain is/has beats inflated copulas: 'serves as a', 'stands as a', 'boasts a'.",
+         r"(?i)\b(serves as a|stands as a|boasts (a|an|the))\b"),
+        ("ai-vocabulary",
+         "AI-vocabulary tell: delve, tapestry, testament, underscore, intricacies, garner, foster, showcase, ever-evolving.",
+         r"(?i)\b(delve|delving|delved|tapestry|a testament to|underscor(es|ing|ed)|intricacies|garner(ed|ing)?|foster(ing|ed)|showcas(es|ing)|ever-evolving)\b"),
+        ("significance-inflation",
+         "Significance inflation: 'pivotal moment', 'evolving landscape', 'indelible mark', 'deeply rooted', 'enduring legacy'.",
+         r"(?i)\b(stands as a testament|pivotal (moment|role)|rich tapestry|evolving landscape|indelible mark|deeply rooted|enduring legacy)\b"),
+        ("aphorism-formula",
+         "Aphorism formula: 'X is the currency/architecture/language of Y', 'becomes a trap'.",
+         r"(?i)\b((is|becomes) the (currency|architecture|language|lifeblood|backbone|engine) of|becomes a trap)\b"),
+        ("filler-phrases",
+         "Filler phrases: 'in order to', 'due to the fact that', 'it should be noted', 'it is worth noting'.",
+         r"(?i)\b(in order to|due to the fact that|at this point in time|it should be noted|it is worth noting)\b"),
+        ("hedging-pileup",
+         "Stacked hedges: 'could potentially', 'may possibly'. One hedge is calibration; two is mush.",
+         r"(?i)\b(could potentially|may possibly|might potentially)\b"),
+        ("chatbot-artifacts",
+         "Chatbot register leaking into prose: 'I hope this helps', 'Would you like me to', 'feel free to reach out'.",
+         r"(?i)\b(i hope this (helps|finds you)|would you like me to|feel free to reach out)\b"),
+        ("inline-header-bullets",
+         "Inline-header bullet lists ('- **Label:** restates the label...') are an AI formatting tell.",
+         r"(?m)^[-*] \*\*[^*\n]+:\*\*"),
+        ("predicate-hyphenation",
+         "Hyphenated compounds in predicate position: 'is high-quality', 'is data-driven'. Humans drop the hyphen there.",
+         r"(?i)\b(is|are|was|were|feels|seems) (high-quality|data-driven|cross-functional|best-in-class|cutting-edge|world-class|user-friendly)\b"),
+        ("staccato-drama",
+         "Manufactured punchlines: runs of clipped 'No X. No Y.' fragments stacked for false emphasis.",
+         r"(?m)^No \w+( \w+)?\.( No \w+( \w+)?\.)+"),
+    ];
+
+    for (family, rule_text, pattern) in &families {
+        conn.execute(
+            "INSERT OR IGNORE INTO writing_rules (id, writing_type, category, rule_text, severity, detection_pattern, notes, source, signal_count, created_at, updated_at, reviewed_at)
+             VALUES (?1, 'general', 'ai-slop', ?2, 'should-fix', ?3, ?4, 'seed-slop-v2', 3, ?5, ?5, ?5)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                rule_text,
+                pattern,
+                format!("slop-family:{family}"),
+                now,
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Adds a `detection_pattern` column to writing_rules if it doesn't exist.
+/// A rule contributes to the mechanical guard hook ONLY via this column
+/// (a validated regex); example_before is illustrative, never executable.
+/// Adds an `archived_at` column to the writing_rules table if it doesn't exist.
+/// Rules are archived, never deleted — deletion loses provenance forever.
+pub(crate) fn migrate_writing_rules_add_archived_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "archived_at")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN archived_at INTEGER;")?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn migrate_writing_rules_add_detection_pattern(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "detection_pattern")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN detection_pattern TEXT;")?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `reviewed_at` column to the writing_rules table if it doesn't exist.
+fn migrate_writing_rules_add_reviewed_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "reviewed_at")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN reviewed_at INTEGER;")?;
+        // Pre-seeded rules start as reviewed
+        conn.execute_batch(
+            "UPDATE writing_rules SET reviewed_at = created_at WHERE source IN ('voice-calibration', 'editorial', 'seed-v1');",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `register` column to the writing_rules table and backfills voice-calibration rules.
+fn migrate_writing_rules_add_register(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "register")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN register TEXT;")?;
+
+        // Backfill voice-calibration rules: casual-only rules
+        conn.execute_batch(
+            "UPDATE writing_rules SET register = 'casual' WHERE category = 'voice-calibration'
+             AND (when_to_apply LIKE '%casual%' OR when_to_apply LIKE '%Casual%'
+                  OR when_to_apply LIKE '%Default register%' OR when_to_apply LIKE '%Message%'
+                  OR when_to_apply LIKE '%banter%');",
+        )?;
+
+        // Backfill voice-calibration rules: everything else defaults to 'all'
+        conn.execute_batch(
+            "UPDATE writing_rules SET register = 'all' WHERE category = 'voice-calibration'
+             AND register IS NULL;",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Adds `exported_at` column to the highlights table.
+/// NULL = not yet exported; non-NULL = epoch millis when last exported.
+fn migrate_highlights_add_exported_at(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(highlights)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "exported_at")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE highlights ADD COLUMN exported_at INTEGER;")?;
+    }
+
+    Ok(())
+}
+
+const VALID_FEEDBACK_TYPES: &[&str] = &[
+    "question", "suggestion", "edit", "voice", "weakness", "evidence", "wordiness", "factcheck",
+];
+
+/// Adds a `feedback_type` column to the corrections table if it doesn't exist.
+fn migrate_corrections_add_feedback_type(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "feedback_type")
+    };
+
+    if !has_column {
+        let check_values = VALID_FEEDBACK_TYPES
+            .iter()
+            .map(|v| format!("'{v}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        conn.execute_batch(&format!(
+            "ALTER TABLE corrections ADD COLUMN feedback_type TEXT CHECK(feedback_type IN ({check_values}));
+             CREATE INDEX IF NOT EXISTS idx_corrections_feedback_type ON corrections(feedback_type);"
+        ))?;
+    }
+
+    Ok(())
+}
+
+fn migrate_margin_notes_add_intent(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(margin_notes)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "intent")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE margin_notes ADD COLUMN intent TEXT NOT NULL DEFAULT 'correction' CHECK(intent IN ('correction', 'note', 'prompt'));",
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Adds `suggested_edit` and `accepted_at` columns to the corrections table if they don't exist.
+fn migrate_corrections_add_suggested_edit(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        cols
+    };
+
+    if !columns.iter().any(|c| c == "suggested_edit") {
+        conn.execute_batch("ALTER TABLE corrections ADD COLUMN suggested_edit TEXT;")?;
+    }
+
+    if !columns.iter().any(|c| c == "accepted_at") {
+        conn.execute_batch("ALTER TABLE corrections ADD COLUMN accepted_at INTEGER;")?;
+    }
+
+    Ok(())
+}
+
+/// Creates the `thesis_candidates` table for persisting thesis distillation results.
+pub fn migrate_add_thesis_candidates_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS thesis_candidates (
+            id TEXT PRIMARY KEY,
+            statement TEXT NOT NULL,
+            evidence_json TEXT NOT NULL DEFAULT '[]',
+            confidence TEXT,
+            source_document_ids_json TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'draft'
+                CHECK(status IN ('draft', 'accepted', 'rejected')),
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_thesis_status ON thesis_candidates(status);
+        CREATE INDEX IF NOT EXISTS idx_thesis_created ON thesis_candidates(created_at);",
+    )?;
+    Ok(())
+}
+
+/// Adds a `rationale` column to the corrections table if it doesn't exist.
+/// Rationale captures *why* a positive annotation works, turning taste into reusable criteria.
+fn migrate_corrections_add_rationale(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(corrections)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "rationale")
+    };
+
+    if !has_column {
+        conn.execute_batch("ALTER TABLE corrections ADD COLUMN rationale TEXT;")?;
+    }
+
+    Ok(())
+}
+
+/// Adds a `polarity` column to the writing_rules table if it doesn't exist.
+/// Polarity distinguishes taste criteria ("positive" — do this) from corrective rules (NULL/"corrective" — avoid this).
+fn migrate_writing_rules_add_polarity(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    let has_column: bool = {
+        let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .collect();
+        columns.iter().any(|c| c == "polarity")
+    };
+
+    if !has_column {
+        conn.execute_batch(
+            "ALTER TABLE writing_rules ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));
+             CREATE INDEX IF NOT EXISTS idx_writing_rules_polarity ON writing_rules(polarity);",
+        )?;
+    }
+
+    Ok(())
+}

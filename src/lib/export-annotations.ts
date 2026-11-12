@@ -1,0 +1,385 @@
+import type { Editor } from "@tiptap/core";
+import type { Highlight, MarginNote, CorrectionInput, CorrectionRecord } from "@/types/annotations";
+import type { Document } from "@/types/document";
+
+interface ExportParams {
+  document: Document;
+  editor: Editor;
+  highlights: Highlight[];
+  marginNotes: MarginNote[];
+  polarityMap?: Map<string, "positive" | "corrective">;
+}
+
+export interface BuildCorrectionExportInputsParams {
+  highlights: Highlight[];
+  marginNotes: MarginNote[];
+  writingType: string | null;
+  polarityMap: Map<string, "positive" | "corrective">;
+  rationaleMap: Map<string, string>;
+  getExtendedContext: (highlight: Highlight) => string | null;
+  /** Current document text at the highlight's range — when it differs from
+   *  text_content the user rewrote the passage after flagging it, and the new
+   *  text is the richest correction signal: the drafted→sent delta. */
+  getCurrentText?: (highlight: Highlight) => string | null;
+}
+
+export interface BuildCorrectionExportInputsResult {
+  inputs: CorrectionInput[];
+  correctionCount: number;
+  promptCount: number;
+  noteOnlyCount: number;
+}
+
+export function buildCorrectionExportInputs({
+  highlights,
+  marginNotes,
+  writingType,
+  polarityMap,
+  rationaleMap,
+  getExtendedContext,
+  getCurrentText,
+}: BuildCorrectionExportInputsParams): BuildCorrectionExportInputsResult {
+  const notesByHighlightAndIntent = new Map<string, Map<MarginNote["intent"], string[]>>();
+  for (const note of marginNotes) {
+    const intent = note.intent ?? "correction";
+    const byIntent = notesByHighlightAndIntent.get(note.highlight_id) ?? new Map<MarginNote["intent"], string[]>();
+    const notes = byIntent.get(intent) ?? [];
+    notes.push(note.content);
+    byIntent.set(intent, notes);
+    notesByHighlightAndIntent.set(note.highlight_id, byIntent);
+  }
+
+  const inputs: CorrectionInput[] = [];
+  let noteOnlyCount = 0;
+
+  for (const h of highlights) {
+    const byIntent = notesByHighlightAndIntent.get(h.id);
+    if (!byIntent) continue;
+
+    const currentText = getCurrentText?.(h) ?? null;
+    const suggestedEdit =
+      currentText && currentText.trim() !== h.text_content.trim() ? currentText : null;
+
+    for (const intent of ["correction", "prompt"] as const) {
+      const notes = byIntent.get(intent);
+      if (!notes || notes.length === 0) continue;
+      inputs.push({
+        highlight_id: h.id,
+        original_text: h.text_content,
+        prefix_context: h.prefix_context,
+        suffix_context: h.suffix_context,
+        extended_context: getExtendedContext(h),
+        notes,
+        highlight_color: h.color,
+        writing_type: writingType,
+        polarity: intent === "correction" ? polarityMap.get(h.id) ?? null : null,
+        intent,
+        rationale: intent === "correction" ? rationaleMap.get(h.id) ?? null : null,
+        suggested_edit: intent === "correction" ? suggestedEdit : null,
+      });
+    }
+
+    noteOnlyCount += byIntent.get("note")?.length ?? 0;
+  }
+
+  return {
+    inputs,
+    correctionCount: inputs.filter((input) => input.intent === "correction").length,
+    promptCount: inputs.filter((input) => input.intent === "prompt").length,
+    noteOnlyCount,
+  };
+}
+
+function posToLineNumber(editor: Editor, pos: number): number {
+  try {
+    const docSize = editor.state.doc.content.size;
+    const clampedPos = Math.max(0, Math.min(pos, docSize));
+    const textBefore = editor.state.doc.textBetween(0, clampedPos, "\n");
+    return textBefore.split("\n").length;
+  } catch {
+    return -1;
+  }
+}
+
+function posToLineRange(editor: Editor, from: number, to: number): string {
+  const startLine = posToLineNumber(editor, from);
+  const endLine = posToLineNumber(editor, to);
+
+  if (startLine === -1 || endLine === -1) return "Line ?";
+  if (startLine === endLine) return `Line ${startLine}`;
+  return `Lines ${startLine}-${endLine}`;
+}
+
+function quoteText(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+export function getExtendedContext(
+  editor: Editor,
+  fromPos: number,
+  toPos: number,
+): string | null {
+  try {
+    const doc = editor.state.doc;
+
+    // Resolve the block-level ancestor containing the highlight range
+    const $from = doc.resolve(fromPos);
+    const $to = doc.resolve(toPos);
+
+    // Walk up to find the deepest block ancestor that contains both endpoints
+    let blockStart = fromPos;
+    let blockEnd = toPos;
+
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const node = $from.node(depth);
+      if (node.isBlock) {
+        const start = $from.start(depth);
+        const end = $from.end(depth);
+        // Check if the to position is also within this block
+        if (end >= toPos) {
+          blockStart = start;
+          blockEnd = end;
+          break;
+        }
+      }
+    }
+
+    // If the to position is in a different block, extend to cover it
+    if (blockEnd < toPos) {
+      for (let depth = $to.depth; depth > 0; depth--) {
+        const node = $to.node(depth);
+        if (node.isBlock) {
+          blockEnd = Math.max(blockEnd, $to.end(depth));
+          break;
+        }
+      }
+    }
+
+    const text = doc.textBetween(blockStart, blockEnd, "\n");
+    if (text.length > 0) return text;
+  } catch {
+    // Fall through to character-window fallback
+  }
+
+  // Fallback: 250-char window on either side
+  try {
+    const doc = editor.state.doc;
+    const docSize = doc.content.size;
+    const start = Math.max(0, fromPos - 250);
+    const end = Math.min(docSize, toPos + 250);
+    const text = doc.textBetween(start, end, "\n");
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function formatAnnotationsMarkdown(
+  params: ExportParams,
+): Promise<string> {
+  const { document: doc, editor, highlights, marginNotes, polarityMap } = params;
+
+  // Build note lookup: highlight_id -> MarginNote[]
+  const notesByHighlight = new Map<string, MarginNote[]>();
+  for (const note of marginNotes) {
+    const existing = notesByHighlight.get(note.highlight_id) ?? [];
+    existing.push(note);
+    notesByHighlight.set(note.highlight_id, existing);
+  }
+
+  // Build items sorted by position
+  const items = [...highlights].sort((a, b) => a.from_pos - b.from_pos);
+
+  if (items.length === 0) {
+    return "_No annotations to export._";
+  }
+
+  // Header
+  const lines: string[] = [];
+  if (doc.source === "file" && doc.file_path) {
+    lines.push(`# Annotations: \`${doc.file_path}\``);
+  } else {
+    lines.push(`# Annotations: "${doc.title ?? "Untitled"}"`);
+    if (doc.url) {
+      lines.push(`_Source: ${doc.url}_`);
+    }
+  }
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const timeStr = now.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  lines.push("");
+  lines.push(
+    `_Exported from Margin — ${dateStr} ${timeStr} — ${items.length} annotations_`,
+  );
+
+  // Annotations
+  for (const highlight of items) {
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+
+    const lineRange = posToLineRange(editor, highlight.from_pos, highlight.to_pos);
+    const notes = notesByHighlight.get(highlight.id);
+    const hasNotes = notes && notes.length > 0;
+    const polarity = polarityMap?.get(highlight.id);
+    let polarityTag = "";
+    if (hasNotes && polarity) {
+      polarityTag = ` [+${polarity}]`;
+    } else if (hasNotes && !polarity) {
+      polarityTag = " [untagged — infer polarity from note]";
+    }
+    lines.push(`### ${lineRange} -- ${highlight.color} highlight${polarityTag}`);
+    lines.push(quoteText(highlight.text_content));
+
+    if (hasNotes) {
+      lines.push("");
+      for (const note of notes) {
+        lines.push(`**Note:** ${note.content}`);
+      }
+    }
+  }
+
+  // WQG footer: only when at least one highlight has a matching note
+  const hasMatchedNotes = items.some((h) => notesByHighlight.has(h.id));
+
+  if (hasMatchedNotes) {
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push(
+      "Run `/writing-quality-gate editorial` to apply these corrections.",
+    );
+    lines.push("Writing rules: `~/.margin/writing-rules.md`");
+  }
+
+  lines.push("");
+  return lines.join("\n");
+}
+
+function normalizeTimestamp(timestamp: number): number {
+  if (!Number.isFinite(timestamp)) return Date.now();
+  // Heuristic: treat 10-digit seconds as seconds, 13-digit as millis.
+  if (timestamp > 0 && timestamp < 1_000_000_000_000) return timestamp * 1000;
+  return timestamp;
+}
+
+function formatDate(timestamp: number): string {
+  const d = new Date(normalizeTimestamp(timestamp));
+  if (Number.isNaN(d.getTime())) return "Unknown date";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max - 1) + "\u2026";
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function safeSnippet(text: string, max: number): string {
+  return truncate(oneLine(text), max);
+}
+
+export function formatStyleMemory(
+  corrections: CorrectionRecord[],
+  opts?: { totalCount?: number; maxItems?: number; maxPerDoc?: number },
+): string {
+  if (corrections.length === 0) return "";
+
+  const maxItems = opts?.maxItems ?? 200;
+  const maxPerDoc = opts?.maxPerDoc ?? 30;
+  const totalCount = opts?.totalCount ?? corrections.length;
+
+  const sorted = [...corrections].sort((a, b) => {
+    const byTime = (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    if (byTime !== 0) return byTime;
+    return (a.documentId ?? "").localeCompare(b.documentId ?? "");
+  });
+
+  const limited = sorted.slice(0, Math.max(1, Math.min(maxItems, sorted.length)));
+  const uniqueDocs = new Set(limited.map((c) => c.documentId));
+  const lines: string[] = [];
+
+  lines.push("# Writing preferences (from Margin)");
+  const showing = limited.length;
+  if (totalCount > showing) {
+    lines.push(
+      `${totalCount} correction${totalCount === 1 ? "" : "s"} total — showing latest ${showing} from ${uniqueDocs.size} document${uniqueDocs.size === 1 ? "" : "s"}`,
+    );
+  } else {
+    lines.push(
+      `${showing} correction${showing === 1 ? "" : "s"} across ${uniqueDocs.size} document${uniqueDocs.size === 1 ? "" : "s"}`,
+    );
+  }
+  lines.push("");
+  lines.push("Apply these editing patterns when writing for me:");
+
+  // Split by polarity first
+  const positiveSamples = limited.filter((c) => c.polarity === "positive");
+  const correctiveSamples = limited.filter((c) => c.polarity === "corrective");
+  const untagged = limited.filter((c) => !c.polarity);
+
+  function renderGroup(items: CorrectionRecord[], header: string) {
+    if (items.length === 0) return;
+    lines.push("");
+    lines.push(`## ${header}`);
+
+    // Group by documentId, preserving order of first appearance
+    const groups: { docId: string; title: string | null; date: number; items: CorrectionRecord[] }[] = [];
+    const groupMap = new Map<string, (typeof groups)[number]>();
+
+    for (const c of items) {
+      let group = groupMap.get(c.documentId);
+      if (!group) {
+        group = { docId: c.documentId, title: c.documentTitle, date: c.createdAt, items: [] };
+        groupMap.set(c.documentId, group);
+        groups.push(group);
+      }
+      group.items.push(c);
+    }
+
+    for (const group of groups) {
+      const title = safeSnippet(group.title ?? "Untitled", 80).replaceAll("\"", "'");
+      lines.push("");
+      lines.push(`### From "${title}" (${formatDate(group.date)}):`);
+      const docItems = group.items.slice(0, maxPerDoc);
+      for (const c of docItems) {
+        const original = safeSnippet(c.originalText, 120);
+        const note = safeSnippet(c.notes.length > 0 ? c.notes.join("; ") : "flagged", 160);
+        const color = safeSnippet(c.highlightColor || "unknown", 24);
+        lines.push(`- ${original} \u2192 ${note} [${color}]`);
+      }
+    }
+  }
+
+  // When there are polarity-tagged items, group them separately
+  const hasPolarity = positiveSamples.length > 0 || correctiveSamples.length > 0;
+  if (hasPolarity) {
+    renderGroup(positiveSamples, "Writing Samples (do more of this)");
+    renderGroup(correctiveSamples, "Corrections (avoid this)");
+    if (untagged.length > 0) {
+      renderGroup(untagged, "Other feedback");
+    }
+  } else {
+    // Legacy: no polarity data, render flat by document
+    renderGroup(limited, "Feedback by document");
+  }
+
+  lines.push("");
+  lines.push("Apply these patterns consistently in all future writing.");
+  return lines.join("\n");
+}

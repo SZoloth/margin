@@ -1,0 +1,285 @@
+.reader-content {
+  max-width: var(--reader-max-width, 65ch);
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  font-family: var(--reader-font-family, var(--font-serif));
+  font-optical-sizing: auto;
+  font-size: var(--reader-font-size, 1.125rem);
+  line-height: var(--reader-line-height, 1.72);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings */
+.reader-content h1 {
+  font-family: var(--font-serif);
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 3rem;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.reader-content h2 {
+  font-family: var(--font-serif);
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.reader-content h3 {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  text-wrap: balance;
+}
+
+/* Paragraphs */
+.reader-content p {
+  margin-bottom: 1.25em;
+  text-wrap: pretty;
+}
+
+/* First paragraph after heading — no extra space */
+.reader-content h1 + p,
+.reader-content h2 + p,
+.reader-content h3 + p {
+  margin-top: 0;
+}
+
+/* Links */
+.reader-content a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-text-secondary);
+  text-underline-offset: 0.15em;
+  transition: text-decoration-color 0.15s;
+}
+
+.reader-content a:hover {
+  text-decoration-color: var(--color-text-primary);
+}
+
+/* Blockquotes — Tufte style: italic with subtle left border */
+.reader-content blockquote {
+  font-style: italic;
+  margin: 1.5em 0;
+  padding: 0 0 0 1.5em;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+/* Code */
+.reader-content code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: rgba(128, 128, 128, 0.1);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+}
+
+.reader-content pre {
+  background: rgba(128, 128, 128, 0.08);
+  padding: 1.25rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1.5em 0;
+  line-height: 1.5;
+}
+
+.reader-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+/* Lists */
+.reader-content ul {
+  list-style-type: disc;
+  margin: 1em 0;
+  padding-left: 1.5em;
+}
+
+.reader-content ol {
+  list-style-type: decimal;
+  margin: 1em 0;
+  padding-left: 1.5em;
+}
+
+.reader-content li {
+  margin-bottom: 0.35em;
+}
+
+.reader-content li > p {
+  margin-bottom: 0.5em;
+}
+
+/* Horizontal rule */
+.reader-content hr {
+  border: none;
+  text-align: center;
+  margin: 2.5em 0;
+}
+
+.reader-content hr::before {
+  content: '* * *';
+  font-size: 0.875rem;
+  letter-spacing: 0.5em;
+  color: var(--color-text-secondary);
+}
+
+/* Images */
+.reader-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 1.5em 0;
+  border-radius: 4px;
+  outline: 1px solid rgba(0, 0, 0, 0.1);
+  outline-offset: -1px;
+}
+
+/* Tables (TipTap wraps in .tableWrapper for overflow) */
+.reader-content .tableWrapper {
+  overflow-x: auto;
+  margin: 1.5em 0;
+}
+
+.reader-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.reader-content th,
+.reader-content td {
+  padding: 0.5em 0.75em;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  min-width: 4em;
+}
+
+.reader-content th {
+  font-weight: 600;
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.reader-content .selectedCell {
+  background: rgba(128, 128, 128, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  .reader-content th {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .reader-content .selectedCell {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+:root[data-theme="dark"] .reader-content img {
+  outline-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Dark mode: light-on-dark text gains optical weight (halation), so
+   tracking loosens slightly — headings keep less negative tracking. */
+:root[data-theme="dark"] .reader-content {
+  letter-spacing: 0.008em;
+}
+
+:root[data-theme="dark"] .reader-content h1 {
+  letter-spacing: -0.014em;
+}
+
+:root[data-theme="dark"] .reader-content h2 {
+  letter-spacing: -0.005em;
+}
+
+/* Task lists */
+.reader-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 1em 0;
+}
+
+.reader-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  margin-bottom: 0.35em;
+}
+
+.reader-content ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.2em;
+}
+
+.reader-content ul[data-type="taskList"] li > label input[type="checkbox"] {
+  accent-color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.reader-content ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.reader-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Nested task lists */
+.reader-content ul[data-type="taskList"] ul[data-type="taskList"] {
+  margin: 0.25em 0 0 1.5em;
+}
+
+/* Responsive typography */
+@media (max-width: 768px) {
+  .reader-content {
+    font-size: 1rem;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .reader-content h1 {
+    font-size: 1.75rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .reader-content h2 {
+    font-size: 1.375rem;
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .reader-content h3 {
+    font-size: 1.125rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .reader-content blockquote {
+    margin: 1em 0;
+    padding-left: 1em;
+  }
+
+  .reader-content pre {
+    padding: 1rem;
+    margin: 1em 0;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .reader-content {
+    padding: 2.5rem 1.25rem 5rem;
+  }
+}

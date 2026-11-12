@@ -1,0 +1,247 @@
+/* Diff review — editorial tracked changes */
+
+:root {
+  --color-diff-add-bg: #e8ede0;
+  --color-diff-add-border: #7a9460;
+  --color-diff-del-bg: #ecdede;
+  --color-diff-del-border: #b07070;
+  --color-diff-del-text: #5a2e2e;
+}
+
+:root[data-theme="dark"] {
+  --color-diff-add-bg: #232e1e;
+  --color-diff-add-border: #6a8450;
+  --color-diff-del-bg: #2e1e1e;
+  --color-diff-del-border: #9a6060;
+  --color-diff-del-text: #c89090;
+}
+
+/* Insertion mark */
+.diff-mark--insertion {
+  background-color: var(--color-diff-add-bg);
+  text-decoration: underline;
+  text-decoration-color: var(--color-diff-add-border);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Deletion mark */
+.diff-mark--deletion {
+  background-color: var(--color-diff-del-bg);
+  color: var(--color-diff-del-text);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-diff-del-border);
+  text-decoration-thickness: 1px;
+  opacity: 0.8;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Banner strip below title bar */
+.diff-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 24px;
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  color: var(--color-text-secondary);
+  background-color: var(--color-sidebar);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.diff-banner__accent {
+  width: 3px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 1px;
+  background-color: var(--color-accent);
+}
+
+.diff-banner__count {
+  color: var(--color-text-secondary);
+}
+
+.diff-banner__time {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.diff-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.diff-banner__btn {
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font-sans);
+  border: none;
+  background: none;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-micro);
+}
+
+.diff-banner__btn:hover {
+  opacity: 0.7;
+}
+
+.diff-banner__btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.diff-banner__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.diff-banner__btn:disabled:hover {
+  opacity: 0.35;
+}
+
+.diff-banner__btn--accent {
+  color: var(--color-accent);
+}
+
+.diff-banner__btn--primary {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.diff-banner__btn--revert {
+  color: var(--color-diff-del-border);
+}
+
+.diff-banner__btn--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+  opacity: 0.35;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.diff-banner__btn--icon:hover {
+  opacity: 0.7;
+}
+
+/* Floating navigation chip */
+.diff-nav-chip {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: #FFFFF8;
+  background-color: #1A1714;
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 800;
+  user-select: none;
+}
+
+:root[data-theme="dark"] .diff-nav-chip {
+  background-color: #2a2a2a;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.diff-nav-chip__label {
+  font-weight: 500;
+}
+
+.diff-nav-chip__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: #FFFFF8;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background-color var(--duration-fast) var(--ease-micro);
+}
+
+.diff-nav-chip__btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.diff-nav-chip__btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.diff-nav-chip__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.diff-nav-chip__btn:disabled:hover {
+  background-color: transparent;
+}
+
+/* Per-change Keep/Revert controls */
+.diff-controls {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 50;
+}
+
+.diff-controls__btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: background-color var(--duration-fast) var(--ease-micro);
+}
+
+.diff-controls__btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 2px;
+}
+
+.diff-controls__btn--keep {
+  color: var(--color-diff-add-border);
+  background-color: rgba(122, 148, 96, 0.1);
+  background-color: color-mix(in srgb, var(--color-diff-add-border) 10%, transparent);
+}
+
+.diff-controls__btn--keep:hover {
+  background-color: var(--color-diff-add-bg);
+}
+
+.diff-controls__btn--revert {
+  color: var(--color-text-tertiary);
+}
+
+.diff-controls__btn--revert:hover {
+  background-color: var(--color-diff-del-bg);
+}

@@ -1,0 +1,39 @@
+node_modules/
+dist/
+target/
+.DS_Store
+*.swp
+*.swo
+.claude/
+playground/
+tsconfig.tsbuildinfo
+.env
+.env.*
+*.p8
+*.p12
+*.pem
+*.mov
+dogfood-output/
+docs/ai-integration-exploration.md
+.research/
+.agents/
+cli/cli
+__pycache__/
+*.pyc
+.venv/
+.worktrees
+.playground/
+
+# Generated evaluation artifacts can contain private source prose.
+mcp/scripts/autoresearch/autoresearch-results.tsv
+mcp/scripts/autoresearch/skill-results.tsv
+mcp/scripts/dspy/optimized_prompts/*.json
+mcp/scripts/regression/*-20*.json
+
+# Built by src-tauri/build.rs from ../cli
+src-tauri/binaries/
+
+# Local eval output
+mcp/scripts/regression/
+mcp/scripts/autoresearch/*.tsv
+mcp/scripts/autoresearch/*-eval.json

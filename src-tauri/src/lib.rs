@@ -1,0 +1,281 @@
+pub mod commands;
+pub mod db;
+pub mod watcher;
+
+use std::sync::Mutex;
+use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::{Emitter, Manager};
+
+use commands::keep_local::HttpClient;
+
+/// Routes file paths from macOS "Open With" / double-click to the frontend.
+///
+/// `AppHandle::emit` returns `Ok` even when no webview has registered a
+/// listener yet, so on a cold launch an emitted path is silently dropped and
+/// the app shows whatever tab it restored. Paths are therefore queued until the
+/// frontend says it is listening (by draining the queue), and only emitted
+/// after that.
+#[derive(Default)]
+pub struct OpenFileQueue {
+    frontend_ready: bool,
+    pending: Vec<String>,
+}
+
+impl OpenFileQueue {
+    /// Records a path the OS asked us to open. Returns `true` when the caller
+    /// should emit it now (the frontend is listening), `false` when it was queued.
+    pub fn receive(&mut self, path: String) -> bool {
+        if self.frontend_ready {
+            return true;
+        }
+        if !self.pending.contains(&path) {
+            self.pending.push(path);
+        }
+        false
+    }
+
+    /// Called once the frontend's listener is registered: hands back anything
+    /// queued and switches to emitting.
+    pub fn drain_and_mark_ready(&mut self) -> Vec<String> {
+        self.frontend_ready = true;
+        self.pending.drain(..).collect()
+    }
+}
+
+pub struct PendingOpenFiles(pub Mutex<OpenFileQueue>);
+
+#[tauri::command]
+fn drain_pending_open_files(state: tauri::State<'_, PendingOpenFiles>) -> Vec<String> {
+    let mut queue = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    queue.drain_and_mark_ready()
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .manage(HttpClient(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .expect("failed to build HTTP client"),
+        ))
+        .manage(Mutex::new(watcher::FileWatcher::new()))
+        .manage(PendingOpenFiles(Mutex::new(OpenFileQueue::default())))
+        .invoke_handler(tauri::generate_handler![
+            commands::search::index_all_documents,
+            commands::files::open_file_dialog,
+            commands::files::read_file,
+            commands::files::save_file,
+            commands::files::list_markdown_files,
+            commands::files::rename_file,
+            commands::documents::get_recent_documents,
+            commands::documents::upsert_document,
+            commands::annotations::create_highlight,
+            commands::annotations::get_highlights,
+            commands::annotations::update_highlight,
+            commands::annotations::delete_highlight,
+            commands::annotations::create_margin_note,
+            commands::annotations::get_margin_notes,
+            commands::annotations::update_margin_note,
+            commands::annotations::delete_margin_note,
+            commands::annotations::delete_all_highlights_for_document,
+            commands::annotations::update_highlight_positions,
+            commands::annotations::mark_highlights_exported,
+            commands::snapshots::save_content_snapshot,
+            commands::snapshots::get_content_snapshot,
+            commands::snapshots::delete_content_snapshot,
+            commands::keep_local::keep_local_health,
+            commands::keep_local::keep_local_list_items,
+            commands::keep_local::keep_local_get_item,
+            commands::keep_local::keep_local_get_content,
+            commands::search::index_document,
+            commands::search::search_documents,
+            commands::search::remove_document_index,
+            commands::search::search_files_on_disk,
+            commands::corrections::persist_corrections,
+            commands::corrections::get_all_corrections,
+            commands::corrections::get_corrections_count,
+            commands::feedback::sync_feedback_signal,
+            commands::corrections::get_corrections_by_document,
+            commands::corrections::update_correction_writing_type,
+            commands::corrections::delete_correction,
+            commands::corrections::accept_correction,
+            commands::corrections::export_corrections_json,
+            commands::corrections::get_corrections_flat,
+            commands::corrections::bulk_delete_corrections,
+            commands::corrections::bulk_tag_corrections,
+            commands::corrections::bulk_set_polarity_corrections,
+            commands::corrections::update_correction_rationale,
+            commands::corrections::set_correction_category,
+            commands::corrections::get_voice_signals,
+            commands::corrections::mark_corrections_synthesized,
+            commands::corrections::mark_corrections_unsynthesized,
+            commands::tabs::get_open_tabs,
+            commands::tabs::save_open_tabs,
+            commands::writing_rules::get_writing_rules,
+            commands::writing_rules::export_writing_rules,
+            commands::writing_rules::get_agent_integration,
+            commands::writing_rules::set_agent_integration,
+            commands::writing_rules::update_writing_rule,
+            commands::writing_rules::delete_writing_rule,
+            commands::writing_rules::unarchive_writing_rule,
+            commands::writing_rules::get_archived_writing_rules,
+            commands::writing_rules::export_voice_profile,
+            commands::writing_rules::mark_rules_reviewed,
+            commands::writing_rules::mark_rules_unreviewed,
+            commands::onboarding::write_first_run_sample,
+            commands::onboarding::create_never_write_rule,
+            commands::seed_rules::seed_rules_from_guide,
+            commands::seed_rules::open_style_guide_dialog,
+            commands::dashboard::start_test_run,
+            commands::dashboard::get_dashboard_summary,
+            commands::dashboard::get_test_run_detail,
+            commands::dashboard::export_dashboard_markdown,
+            commands::thesis::save_thesis_candidate,
+            commands::thesis::get_thesis_candidates,
+            commands::thesis::update_thesis_status,
+            watcher::watch_file,
+            watcher::unwatch_file,
+            drain_pending_open_files,
+        ])
+        .setup(|app| {
+            let pool = db::migrations::init_db()?;
+            app.manage(pool);
+
+            // Clear native window title in debug builds (title is rendered in ChromeBar)
+            #[cfg(debug_assertions)]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_title("");
+            }
+
+            // Native menu bar. Custom items emit "menu-action" with their id;
+            // the frontend maps ids onto the same handlers the shortcuts use.
+            let settings_item = MenuItemBuilder::with_id("settings", "Settings…")
+                .accelerator("Cmd+,")
+                .build(app)?;
+            let open_item = MenuItemBuilder::with_id("open-file", "Open…")
+                .accelerator("Cmd+O")
+                .build(app)?;
+            let export_item =
+                MenuItemBuilder::with_id("export-annotations", "Export Annotations…")
+                    .accelerator("Cmd+Shift+E")
+                    .build(app)?;
+            let find_item = MenuItemBuilder::with_id("find", "Find in Document…")
+                .accelerator("Cmd+F")
+                .build(app)?;
+            let style_memory_item = MenuItemBuilder::with_id("style-memory", "Style Memory")
+                .accelerator("Cmd+Shift+M")
+                .build(app)?;
+
+            let app_menu = SubmenuBuilder::new(app, "Margin")
+                .about(Some(AboutMetadata::default()))
+                .separator()
+                .item(&settings_item)
+                .separator()
+                .services()
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .item(&open_item)
+                .separator()
+                .item(&export_item)
+                .separator()
+                .close_window()
+                .build()?;
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+            let view_menu = SubmenuBuilder::new(app, "View")
+                .item(&find_item)
+                .item(&style_memory_item)
+                .separator()
+                .fullscreen()
+                .build()?;
+            let window_menu = SubmenuBuilder::new(app, "Window")
+                .minimize()
+                .maximize()
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+                .build()?;
+            app.set_menu(menu)?;
+            app.on_menu_event(|app_handle, event| {
+                let _ = app_handle.emit("menu-action", event.id().as_ref());
+            });
+
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Opened { urls } = event {
+            for url in urls {
+                if let Ok(path) = url.to_file_path() {
+                    if let Some(path_str) = path.to_str() {
+                        let path_string = path_str.to_string();
+
+                        let emit_now = app_handle
+                            .try_state::<PendingOpenFiles>()
+                            .map(|state| {
+                                state
+                                    .0
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .receive(path_string.clone())
+                            })
+                            .unwrap_or(true);
+                        if emit_now {
+                            let _ = app_handle.emit("open-file", &path_string);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod open_file_queue_tests {
+    use super::OpenFileQueue;
+
+    #[test]
+    fn cold_launch_path_is_queued_not_emitted() {
+        let mut q = OpenFileQueue::default();
+        assert!(!q.receive("/a.md".into()), "must not emit before the frontend listens");
+        assert_eq!(q.drain_and_mark_ready(), vec!["/a.md".to_string()]);
+    }
+
+    #[test]
+    fn duplicate_paths_are_queued_once() {
+        let mut q = OpenFileQueue::default();
+        q.receive("/a.md".into());
+        q.receive("/a.md".into());
+        assert_eq!(q.drain_and_mark_ready(), vec!["/a.md".to_string()]);
+    }
+
+    #[test]
+    fn after_drain_paths_are_emitted_and_not_queued() {
+        let mut q = OpenFileQueue::default();
+        q.drain_and_mark_ready();
+        assert!(q.receive("/b.md".into()));
+        assert!(q.drain_and_mark_ready().is_empty());
+    }
+}

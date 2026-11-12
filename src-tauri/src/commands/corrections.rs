@@ -1,0 +1,2092 @@
+use crate::commands::now_millis;
+use super::writing_rules::export_artifacts;
+use crate::db::migrations::DbPool;
+use crate::db::models::CorrectionInput;
+use rusqlite::{Connection, OptionalExtension};
+use std::fs;
+use std::io::Write;
+use std::path::Path;
+use std::time::SystemTime;
+use uuid::Uuid;
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrectionRecord {
+    pub original_text: String,
+    pub notes: Vec<String>,
+    pub highlight_color: String,
+    pub document_title: Option<String>,
+    pub document_id: String,
+    pub created_at: i64,
+    pub writing_type: Option<String>,
+    pub polarity: Option<String>,
+    pub feedback_type: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentCorrections {
+    pub document_id: String,
+    pub document_title: Option<String>,
+    pub document_path: Option<String>,
+    pub corrections: Vec<CorrectionDetail>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrectionDetail {
+    pub highlight_id: String,
+    pub original_text: String,
+    pub notes: Vec<String>,
+    pub extended_context: Option<String>,
+    pub highlight_color: String,
+    pub writing_type: Option<String>,
+    pub polarity: Option<String>,
+    pub feedback_type: Option<String>,
+    pub document_title: Option<String>,
+    pub created_at: i64,
+    pub synthesized_at: Option<i64>,
+    pub suggested_edit: Option<String>,
+    pub accepted_at: Option<i64>,
+    pub rationale: Option<String>,
+    pub category: Option<String>,
+}
+
+#[derive(Debug)]
+struct PersistCorrectionsOutcome {
+    session_id: String,
+    correction_count: usize,
+    prompt_count: usize,
+}
+
+fn sanitize_filename_component(input: &str) -> String {
+    let mut out = String::with_capacity(input.len().min(64));
+    for ch in input.chars() {
+        if out.len() >= 64 {
+            break;
+        }
+        let keep = ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.');
+        out.push(if keep { ch } else { '_' });
+    }
+    if out.is_empty() {
+        "unknown".to_string()
+    } else {
+        out
+    }
+}
+
+fn fetch_corrections(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<CorrectionRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity, feedback_type
+         FROM corrections
+         WHERE session_id != '__backfilled__'
+         ORDER BY created_at DESC
+         LIMIT ?1",
+    )?;
+
+    let rows = stmt.query_map([limit], |row| {
+        let original_text: String = row.get(0)?;
+        let notes_json: String = row.get(1)?;
+        let highlight_color: String = row.get(2)?;
+        let document_title: Option<String> = row.get(3)?;
+        let document_id: String = row.get(4)?;
+        let created_at: i64 = row.get(5)?;
+        let writing_type: Option<String> = row.get(6)?;
+        let polarity: Option<String> = row.get(7)?;
+        let feedback_type: Option<String> = row.get(8)?;
+
+        let notes: Vec<String> = serde_json::from_str(&notes_json).unwrap_or_default();
+
+        Ok(CorrectionRecord {
+            original_text,
+            notes,
+            highlight_color,
+            document_title,
+            document_id,
+            created_at,
+            writing_type,
+            polarity,
+            feedback_type,
+        })
+    })?;
+
+    let mut records = Vec::new();
+    for row in rows {
+        records.push(row?);
+    }
+    Ok(records)
+}
+
+fn count_corrections(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM corrections WHERE session_id != '__backfilled__'",
+        [],
+        |row| row.get(0),
+    )
+}
+
+#[tauri::command]
+pub async fn get_all_corrections(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<CorrectionRecord>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let limit = limit.unwrap_or(200).clamp(1, 2000);
+    fetch_corrections(&conn, limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_corrections_count(state: tauri::State<'_, DbPool>) -> Result<i64, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    count_corrections(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn persist_corrections(
+    state: tauri::State<'_, DbPool>,
+    corrections: Vec<CorrectionInput>,
+    document_id: String,
+    document_title: Option<String>,
+    document_source: String,
+    document_path: Option<String>,
+    export_date: String,
+) -> Result<String, String> {
+    let corrections_dir = dirs::home_dir()
+        .ok_or("Could not determine home directory")?
+        .join(".margin")
+        .join("corrections");
+    let outcome = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        persist_corrections_inner(
+            &conn,
+            &corrections,
+            &document_id,
+            document_title.as_deref(),
+            &document_source,
+            document_path.as_deref(),
+            &export_date,
+            &corrections_dir,
+        )?
+    };
+    // Corrections feed the generated profile — keep artifacts fresh when
+    // the batch actually wrote correction rows (prompt/note-only batches
+    // don't affect the profile). The frontend also calls exportWritingRules
+    // after persist; the export is idempotent.
+    if outcome.correction_count > 0 {
+        export_artifacts();
+    }
+    let _ = outcome.prompt_count;
+    Ok(outcome.session_id)
+}
+
+fn persist_corrections_inner(
+    conn: &Connection,
+    corrections: &[CorrectionInput],
+    document_id: &str,
+    document_title: Option<&str>,
+    document_source: &str,
+    document_path: Option<&str>,
+    export_date: &str,
+    corrections_dir: &Path,
+) -> Result<PersistCorrectionsOutcome, String> {
+    let session_id = Uuid::new_v4().to_string();
+    let now = now_millis();
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+
+    let safe_export_date = sanitize_filename_component(&export_date);
+    fs::create_dir_all(corrections_dir)
+        .map_err(|e| format!("Failed to create corrections directory: {e}"))?;
+    let mut jsonl_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(corrections_dir.join(format!("corrections-{}.jsonl", safe_export_date)))
+        .map_err(|e| format!("Failed to open corrections JSONL file: {e}"))?;
+    let mut prompt_file: Option<fs::File> = None;
+    let mut correction_count = 0usize;
+    let mut prompt_count = 0usize;
+
+    for input in corrections {
+        match input.intent.as_str() {
+            "correction" => {
+                if input.original_text.trim().is_empty() {
+                    return Err("empty original_text is not allowed for corrections".to_string());
+                }
+            }
+            "note" => continue,
+            "prompt" => {
+                if prompt_file.is_none() {
+                    prompt_file = Some(
+                        fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(corrections_dir.join(format!("prompts-{}.jsonl", safe_export_date)))
+                            .map_err(|e| format!("Failed to open prompts JSONL file: {e}"))?,
+                    );
+                }
+                if let Some(file) = prompt_file.as_mut() {
+                    let jsonl_record = serde_json::json!({
+                        "highlight_id": input.highlight_id,
+                        "session_id": session_id,
+                        "original_text": input.original_text,
+                        "prefix_context": input.prefix_context,
+                        "suffix_context": input.suffix_context,
+                        "extended_context": input.extended_context,
+                        "notes": input.notes,
+                        "document_id": document_id,
+                        "document_title": document_title,
+                        "document_source": document_source,
+                        "document_path": document_path,
+                        "highlight_color": input.highlight_color,
+                        "writing_type": input.writing_type,
+                        "intent": input.intent,
+                        "exported_at": now,
+                    });
+                    writeln!(file, "{}", jsonl_record)
+                        .map_err(|e| format!("Failed to append prompts JSONL record: {e}"))?;
+                }
+                prompt_count += 1;
+                continue;
+            }
+            other => {
+                return Err(format!(
+                    "invalid correction intent: {other:?} (expected \"correction\", \"note\", or \"prompt\")"
+                ));
+            }
+        }
+
+        let notes_json = serde_json::to_string(&input.notes).map_err(|e| e.to_string())?;
+        let existing_id = tx.query_row(
+            "SELECT id FROM corrections
+             WHERE highlight_id = ?1 AND synthesized_at IS NULL
+             ORDER BY created_at DESC LIMIT 1",
+            [&input.highlight_id],
+            |row| row.get::<_, String>(0),
+        ).optional().map_err(|e| e.to_string())?;
+
+        if let Some(existing_id) = existing_id {
+            tx.execute(
+                "UPDATE corrections
+                 SET document_id = ?1, session_id = ?2, original_text = ?3,
+                     prefix_context = ?4, suffix_context = ?5, extended_context = ?6,
+                     notes_json = ?7, document_title = ?8, document_source = ?9,
+                     document_path = ?10, highlight_color = ?11, updated_at = ?12,
+                     writing_type = ?13, polarity = ?14, feedback_type = ?15,
+                     suggested_edit = ?16, rationale = ?17
+                 WHERE id = ?18",
+                rusqlite::params![
+                    document_id, session_id, input.original_text, input.prefix_context,
+                    input.suffix_context, input.extended_context, notes_json,
+                    document_title, document_source, document_path, input.highlight_color,
+                    now, input.writing_type, input.polarity, input.feedback_type,
+                    input.suggested_edit, input.rationale, existing_id,
+                ],
+            ).map_err(|e| e.to_string())?;
+        } else {
+            tx.execute(
+                "INSERT INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text,
+                     prefix_context, suffix_context, extended_context, notes_json,
+                     document_title, document_source, document_path, category,
+                     highlight_color, created_at, updated_at, writing_type, polarity, feedback_type,
+                     suggested_edit, rationale)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                rusqlite::params![
+                    Uuid::new_v4().to_string(), input.highlight_id, document_id,
+                    session_id, input.original_text, input.prefix_context,
+                    input.suffix_context, input.extended_context, notes_json,
+                    document_title, document_source, document_path,
+                    Option::<String>::None, input.highlight_color, now, now,
+                    input.writing_type, input.polarity, input.feedback_type,
+                    input.suggested_edit, input.rationale,
+                ],
+            ).map_err(|e| e.to_string())?;
+        }
+        correction_count += 1;
+
+        // Append JSONL record
+        let jsonl_record = serde_json::json!({
+            "highlight_id": input.highlight_id,
+            "session_id": session_id,
+            "original_text": input.original_text,
+            "prefix_context": input.prefix_context,
+            "suffix_context": input.suffix_context,
+            "extended_context": input.extended_context,
+            "notes": input.notes,
+            "document_id": document_id,
+            "document_title": document_title,
+            "document_source": document_source,
+            "document_path": document_path,
+            "highlight_color": input.highlight_color,
+            "writing_type": input.writing_type,
+            "polarity": input.polarity,
+            "intent": input.intent,
+            "exported_at": now,
+        });
+
+        writeln!(jsonl_file, "{}", jsonl_record)
+            .map_err(|e| format!("Failed to append corrections JSONL record: {e}"))?;
+
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    let _ = jsonl_file.flush();
+    if let Some(mut file) = prompt_file {
+        let _ = file.flush();
+    }
+
+    Ok(PersistCorrectionsOutcome {
+        session_id,
+        correction_count,
+        prompt_count,
+    })
+}
+
+fn fetch_corrections_flat(
+    conn: &Connection,
+    limit: i64,
+) -> rusqlite::Result<Vec<CorrectionDetail>> {
+    let mut stmt = conn.prepare(
+        "SELECT highlight_id, original_text, notes_json, extended_context,
+                highlight_color, writing_type, polarity, document_title, created_at,
+                synthesized_at, feedback_type, suggested_edit, accepted_at, rationale,
+                category
+         FROM corrections
+         WHERE session_id != '__backfilled__'
+         ORDER BY CASE WHEN synthesized_at IS NULL THEN 0 ELSE 1 END, created_at DESC
+         LIMIT ?1",
+    )?;
+
+    let rows = stmt.query_map([limit], |row| {
+        Ok(CorrectionDetail {
+            highlight_id: row.get(0)?,
+            original_text: row.get(1)?,
+            notes: serde_json::from_str::<Vec<String>>(
+                &row.get::<_, String>(2)?,
+            )
+            .unwrap_or_default(),
+            extended_context: row.get(3)?,
+            highlight_color: row.get(4)?,
+            writing_type: row.get(5)?,
+            polarity: row.get(6)?,
+            document_title: row.get(7)?,
+            created_at: row.get(8)?,
+            synthesized_at: row.get(9)?,
+            feedback_type: row.get(10)?,
+            suggested_edit: row.get(11)?,
+            accepted_at: row.get(12)?,
+            rationale: row.get(13)?,
+            category: row.get(14)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
+const SQLITE_VAR_LIMIT: usize = 900;
+
+fn bulk_delete(conn: &Connection, highlight_ids: &[String]) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "DELETE FROM corrections WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+fn bulk_tag(
+    conn: &Connection,
+    highlight_ids: &[String],
+    writing_type: &str,
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let now = now_millis();
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 2) {
+        let placeholders: Vec<String> = (3..=chunk.len() + 2).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET writing_type = ?1, updated_at = ?2 WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 2);
+        params.push(&writing_type as &dyn rusqlite::types::ToSql);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for id in chunk {
+            params.push(id as &dyn rusqlite::types::ToSql);
+        }
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+fn fetch_corrections_by_document(
+    conn: &Connection,
+    limit: i64,
+) -> rusqlite::Result<Vec<DocumentCorrections>> {
+    let mut stmt = conn.prepare(
+        "SELECT highlight_id, original_text, notes_json, extended_context,
+                highlight_color, writing_type, polarity, document_title, document_id,
+                document_path, created_at, synthesized_at, feedback_type,
+                suggested_edit, accepted_at, rationale, category
+         FROM corrections
+         WHERE session_id != '__backfilled__'
+         ORDER BY created_at DESC
+         LIMIT ?1",
+    )?;
+
+    let rows = stmt.query_map([limit], |row| {
+        Ok((
+            row.get::<_, String>(8)?,        // document_id
+            row.get::<_, Option<String>>(7)?, // document_title
+            row.get::<_, Option<String>>(9)?, // document_path
+            CorrectionDetail {
+                highlight_id: row.get(0)?,
+                original_text: row.get(1)?,
+                notes: serde_json::from_str::<Vec<String>>(
+                    &row.get::<_, String>(2)?,
+                )
+                .unwrap_or_default(),
+                extended_context: row.get(3)?,
+                highlight_color: row.get(4)?,
+                writing_type: row.get(5)?,
+                polarity: row.get(6)?,
+                document_title: row.get(7)?,
+                created_at: row.get(10)?,
+                synthesized_at: row.get(11)?,
+                feedback_type: row.get(12)?,
+                suggested_edit: row.get(13)?,
+                accepted_at: row.get(14)?,
+                rationale: row.get(15)?,
+                category: row.get(16)?,
+            },
+        ))
+    })?;
+
+    let mut groups: Vec<DocumentCorrections> = Vec::new();
+    let mut group_map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    for row in rows {
+        let (doc_id, doc_title, doc_path, detail) = row?;
+        if let Some(&idx) = group_map.get(&doc_id) {
+            groups[idx].corrections.push(detail);
+        } else {
+            let idx = groups.len();
+            group_map.insert(doc_id.clone(), idx);
+            groups.push(DocumentCorrections {
+                document_id: doc_id,
+                document_title: doc_title,
+                document_path: doc_path,
+                corrections: vec![detail],
+            });
+        }
+    }
+
+    Ok(groups)
+}
+
+fn update_writing_type(
+    conn: &Connection,
+    highlight_id: &str,
+    writing_type: &str,
+) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE corrections SET writing_type = ?1, updated_at = ?2 WHERE highlight_id = ?3",
+        rusqlite::params![writing_type, now_millis(), highlight_id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+fn set_category_by_highlight(
+    conn: &Connection,
+    highlight_id: &str,
+    category: Option<&str>,
+) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE corrections SET category = ?1, updated_at = ?2 WHERE highlight_id = ?3",
+        rusqlite::params![category, now_millis(), highlight_id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+fn delete_correction_by_highlight(conn: &Connection, highlight_id: &str) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "DELETE FROM corrections WHERE highlight_id = ?1",
+        [highlight_id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrectionsExport {
+    pub exported_at: String,
+    pub total_count: usize,
+    pub corrections: Vec<ExportedCorrection>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportedCorrection {
+    pub highlight_id: String,
+    pub original_text: String,
+    pub notes: Vec<String>,
+    pub extended_context: Option<String>,
+    pub writing_type: Option<String>,
+    pub polarity: Option<String>,
+    pub feedback_type: Option<String>,
+    pub document_title: Option<String>,
+    pub highlight_color: String,
+    pub created_at: i64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    pub count: usize,
+    pub highlight_ids: Vec<String>,
+}
+
+/// Formats Unix seconds as an ISO 8601 UTC timestamp (e.g. "2026-03-01T12:34:56Z").
+fn unix_secs_to_iso8601(secs: u64) -> String {
+    let days = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hours = time_of_day / 3600;
+    let minutes = (time_of_day % 3600) / 60;
+    let seconds = time_of_day % 60;
+
+    let mut y = 1970i64;
+    let mut remaining_days = days as i64;
+    loop {
+        let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+        let year_days: i64 = if leap { 366 } else { 365 };
+        if remaining_days < year_days { break; }
+        remaining_days -= year_days;
+        y += 1;
+    }
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut m = 0usize;
+    for &md in &month_days {
+        if remaining_days < md as i64 { break; }
+        remaining_days -= md as i64;
+        m += 1;
+    }
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m + 1, remaining_days + 1, hours, minutes, seconds)
+}
+
+fn build_corrections_export(conn: &Connection) -> rusqlite::Result<CorrectionsExport> {
+    let mut stmt = conn.prepare(
+        "SELECT highlight_id, original_text, notes_json, extended_context, writing_type, polarity,
+                feedback_type, document_title, highlight_color, created_at
+         FROM corrections
+         WHERE session_id != '__backfilled__' AND synthesized_at IS NULL
+         ORDER BY created_at DESC",
+    )?;
+
+    let corrections: Vec<ExportedCorrection> = stmt
+        .query_map([], |row| {
+            Ok(ExportedCorrection {
+                highlight_id: row.get(0)?,
+                original_text: row.get(1)?,
+                notes: serde_json::from_str::<Vec<String>>(
+                    &row.get::<_, String>(2)?,
+                )
+                .unwrap_or_default(),
+                extended_context: row.get(3)?,
+                writing_type: row.get(4)?,
+                polarity: row.get(5)?,
+                feedback_type: row.get(6)?,
+                document_title: row.get(7)?,
+                highlight_color: row.get(8)?,
+                created_at: row.get(9)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let now = unix_secs_to_iso8601(
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    );
+    Ok(CorrectionsExport {
+        exported_at: now,
+        total_count: corrections.len(),
+        corrections,
+    })
+}
+
+#[tauri::command]
+pub async fn get_corrections_by_document(state: tauri::State<'_, DbPool>, limit: Option<i64>) -> Result<Vec<DocumentCorrections>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let limit = limit.unwrap_or(50).clamp(1, 500);
+    fetch_corrections_by_document(&conn, limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_correction_writing_type(
+    state: tauri::State<'_, DbPool>,
+    highlight_id: String,
+    writing_type: String,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        update_writing_type(&conn, &highlight_id, &writing_type).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+/// Triage path: set a correction's category (e.g. 'non-feedback' to exclude it
+/// from synthesis queries, or NULL to clear). Previously raw SQL only.
+#[tauri::command]
+pub async fn set_correction_category(
+    state: tauri::State<'_, DbPool>,
+    highlight_id: String,
+    category: Option<String>,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        set_category_by_highlight(&conn, &highlight_id, category.as_deref())
+            .map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_correction(state: tauri::State<'_, DbPool>, highlight_id: String) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        delete_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+fn accept_correction_by_highlight(conn: &Connection, highlight_id: &str) -> rusqlite::Result<Option<String>> {
+    let now = now_millis();
+    let changes = conn.execute(
+        "UPDATE corrections SET accepted_at = ?1, updated_at = ?1 WHERE highlight_id = ?2",
+        rusqlite::params![now, highlight_id],
+    )?;
+    if changes == 0 {
+        return Ok(None);
+    }
+    conn.query_row(
+        "SELECT suggested_edit FROM corrections WHERE highlight_id = ?1",
+        rusqlite::params![highlight_id],
+        |row| row.get(0),
+    )
+}
+
+#[tauri::command]
+pub async fn accept_correction(state: tauri::State<'_, DbPool>, highlight_id: String) -> Result<Option<String>, String> {
+    let result = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        accept_correction_by_highlight(&conn, &highlight_id).map_err(|e| e.to_string())?
+    };
+    if result.is_some() {
+        export_artifacts();
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_corrections_flat(
+    state: tauri::State<'_, DbPool>,
+    limit: Option<i64>,
+) -> Result<Vec<CorrectionDetail>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let limit = limit.unwrap_or(500).max(1).min(2000);
+    fetch_corrections_flat(&conn, limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn bulk_delete_corrections(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<u64, String> {
+    let deleted = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        bulk_delete(&conn, &highlight_ids).map_err(|e| e.to_string())?
+    };
+    if deleted > 0 {
+        export_artifacts();
+    }
+    Ok(deleted)
+}
+
+#[tauri::command]
+pub async fn bulk_tag_corrections(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+    writing_type: String,
+) -> Result<u64, String> {
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        bulk_tag(&conn, &highlight_ids, &writing_type).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
+}
+
+fn bulk_set_polarity(
+    conn: &Connection,
+    highlight_ids: &[String],
+    polarity: &str,
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let now = now_millis();
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 2) {
+        let placeholders: Vec<String> = (3..=chunk.len() + 2).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET polarity = ?1, updated_at = ?2 WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 2);
+        params.push(&polarity as &dyn rusqlite::types::ToSql);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for id in chunk {
+            params.push(id as &dyn rusqlite::types::ToSql);
+        }
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+#[tauri::command]
+pub async fn bulk_set_polarity_corrections(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+    polarity: String,
+) -> Result<u64, String> {
+    if polarity != "positive" && polarity != "corrective" {
+        return Err(format!("invalid polarity: {polarity:?} (expected \"positive\" or \"corrective\")"));
+    }
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        bulk_set_polarity(&conn, &highlight_ids, &polarity).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
+}
+
+fn update_rationale(
+    conn: &Connection,
+    highlight_id: &str,
+    rationale: Option<&str>,
+) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE corrections SET rationale = ?1, updated_at = ?2 WHERE highlight_id = ?3",
+        rusqlite::params![rationale, now_millis(), highlight_id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_correction_rationale(
+    state: tauri::State<'_, DbPool>,
+    highlight_id: String,
+    rationale: Option<String>,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        update_rationale(&conn, &highlight_id, rationale.as_deref()).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+fn mark_unsynthesized(
+    conn: &Connection,
+    highlight_ids: &[String],
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET synthesized_at = NULL WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+#[tauri::command]
+pub async fn mark_corrections_unsynthesized(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<u64, String> {
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_unsynthesized(&conn, &highlight_ids).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
+}
+
+#[tauri::command]
+pub async fn get_voice_signals(
+    state: tauri::State<'_, DbPool>,
+    polarity: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<CorrectionDetail>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let limit = limit.unwrap_or(500).clamp(1, 2000);
+    fetch_voice_signals(&conn, polarity.as_deref(), limit).map_err(|e| e.to_string())
+}
+
+fn fetch_voice_signals(
+    conn: &Connection,
+    polarity: Option<&str>,
+    limit: i64,
+) -> rusqlite::Result<Vec<CorrectionDetail>> {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match polarity {
+        Some(p) => (
+            "SELECT highlight_id, original_text, notes_json, extended_context,
+                    highlight_color, writing_type, polarity, document_title, created_at,
+                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale, category
+             FROM corrections
+             WHERE session_id != '__backfilled__' AND polarity = ?1
+             ORDER BY created_at DESC
+             LIMIT ?2".to_string(),
+            vec![Box::new(p.to_string()) as Box<dyn rusqlite::types::ToSql>, Box::new(limit)],
+        ),
+        None => (
+            "SELECT highlight_id, original_text, notes_json, extended_context,
+                    highlight_color, writing_type, polarity, document_title, created_at,
+                    synthesized_at, feedback_type, suggested_edit, accepted_at, rationale, category
+             FROM corrections
+             WHERE session_id != '__backfilled__' AND polarity IS NOT NULL
+             ORDER BY created_at DESC
+             LIMIT ?1".to_string(),
+            vec![Box::new(limit) as Box<dyn rusqlite::types::ToSql>],
+        ),
+    };
+
+    let mut stmt = conn.prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok(CorrectionDetail {
+            highlight_id: row.get(0)?,
+            original_text: row.get(1)?,
+            notes: serde_json::from_str::<Vec<String>>(
+                &row.get::<_, String>(2)?,
+            )
+            .unwrap_or_default(),
+            extended_context: row.get(3)?,
+            highlight_color: row.get(4)?,
+            writing_type: row.get(5)?,
+            polarity: row.get(6)?,
+            document_title: row.get(7)?,
+            created_at: row.get(8)?,
+            synthesized_at: row.get(9)?,
+            feedback_type: row.get(10)?,
+            suggested_edit: row.get(11)?,
+            accepted_at: row.get(12)?,
+            rationale: row.get(13)?,
+            category: row.get(14)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
+fn export_corrections_only(conn: &Connection, path: &std::path::Path) -> Result<ExportResult, String> {
+    let export = build_corrections_export(conn).map_err(|e| e.to_string())?;
+    let highlight_ids: Vec<String> = export.corrections.iter().map(|c| c.highlight_id.clone()).collect();
+    let count = export.total_count;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+    }
+
+    let json = serde_json::to_string_pretty(&export).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| format!("Failed to write export: {e}"))?;
+
+    Ok(ExportResult { count, highlight_ids })
+}
+
+fn mark_synthesized(
+    conn: &Connection,
+    highlight_ids: &[String],
+) -> rusqlite::Result<u64> {
+    if highlight_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let now = now_millis();
+    let mut total = 0u64;
+    for chunk in highlight_ids.chunks(SQLITE_VAR_LIMIT - 1) {
+        let placeholders: Vec<String> = (2..=chunk.len() + 1).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET synthesized_at = ?1 WHERE highlight_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 1);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for id in chunk {
+            params.push(id as &dyn rusqlite::types::ToSql);
+        }
+        total += stmt.execute(params.as_slice())? as u64;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+#[tauri::command]
+pub async fn export_corrections_json(state: tauri::State<'_, DbPool>, path: Option<String>) -> Result<ExportResult, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+
+    let export_path = if let Some(p) = path {
+        std::path::PathBuf::from(p)
+    } else {
+        dirs::home_dir()
+            .ok_or("Could not determine home directory")?
+            .join(".margin")
+            .join("corrections-export.json")
+    };
+
+    export_corrections_only(&conn, &export_path)
+}
+
+#[tauri::command]
+pub async fn mark_corrections_synthesized(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<u64, String> {
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_synthesized(&conn, &highlight_ids).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn full_schema_sql() -> &'static str {
+        "CREATE TABLE corrections (
+            id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL,
+            document_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            original_text TEXT NOT NULL,
+            prefix_context TEXT,
+            suffix_context TEXT,
+            extended_context TEXT,
+            notes_json TEXT NOT NULL,
+            document_title TEXT,
+            document_source TEXT NOT NULL,
+            document_path TEXT,
+            category TEXT,
+            highlight_color TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            writing_type TEXT,
+            polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+            synthesized_at INTEGER,
+            feedback_type TEXT CHECK(feedback_type IN ('question', 'suggestion', 'edit', 'voice', 'weakness', 'evidence', 'wordiness', 'factcheck')),
+            suggested_edit TEXT,
+            accepted_at INTEGER,
+            rationale TEXT
+        );
+        CREATE TABLE writing_rules (
+            id TEXT PRIMARY KEY,
+            writing_type TEXT NOT NULL,
+            category TEXT NOT NULL,
+            rule_text TEXT NOT NULL,
+            when_to_apply TEXT,
+            why TEXT,
+            severity TEXT NOT NULL DEFAULT 'should-fix',
+            example_before TEXT,
+            example_after TEXT,
+            source TEXT NOT NULL DEFAULT 'synthesis',
+            signal_count INTEGER NOT NULL DEFAULT 1,
+            notes TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            reviewed_at INTEGER,
+            register TEXT,
+            polarity TEXT CHECK(polarity IN ('positive', 'corrective')),
+            detection_pattern TEXT,
+            archived_at INTEGER,
+            UNIQUE(writing_type, category, rule_text)
+        );"
+    }
+
+    fn setup_full_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(full_schema_sql()).unwrap();
+        conn
+    }
+
+    fn insert_correction(conn: &Connection, highlight_id: &str, text: &str, notes: &str) {
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES (?1, ?2, 'doc1', 'sess1', ?3, ?4, 'Test', 'file', 'yellow', 1000, 1000)",
+            rusqlite::params![Uuid::new_v4().to_string(), highlight_id, text, notes],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn sanitize_filename_component_replaces_unsafe_chars_and_is_not_empty() {
+        assert_eq!(
+            sanitize_filename_component("2026/02/23 10:20:30"),
+            "2026_02_23_10_20_30"
+        );
+        assert_eq!(sanitize_filename_component(""), "unknown");
+    }
+
+    #[test]
+    fn fetch_corrections_orders_desc_and_respects_limit() {
+        let conn = setup_full_db();
+        for i in 0..5 {
+            conn.execute(
+                "INSERT INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text, notes_json,
+                     document_title, document_source, highlight_color, created_at, updated_at)
+                 VALUES (?1, ?2, 'doc', 'sess', ?3, '[\"n\"]', NULL, 'file', 'yellow', ?4, ?5)",
+                rusqlite::params![
+                    Uuid::new_v4().to_string(),
+                    format!("h{i}"),
+                    format!("t{i}"),
+                    i as i64,
+                    i as i64,
+                ],
+            )
+            .unwrap();
+        }
+
+        let records = fetch_corrections(&conn, 2).unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].created_at, 4);
+        assert_eq!(records[1].created_at, 3);
+    }
+
+    #[test]
+    fn count_corrections_counts_all_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["note1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["note2"]"#);
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+    }
+
+    #[test]
+    fn count_corrections_excludes_backfilled_session_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "live text", r#"["note1"]"#);
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'legacy text', '[\"legacy\"]', 'Doc', 'file', 'yellow', 500, 500)",
+            [],
+        )
+        .unwrap();
+
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+    }
+
+    #[test]
+    fn fetch_corrections_deserializes_notes_json() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "bad phrase", r#"["use X instead","also Y"]"#);
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].original_text, "bad phrase");
+        assert_eq!(records[0].notes, vec!["use X instead", "also Y"]);
+        assert_eq!(records[0].highlight_color, "yellow");
+    }
+
+    #[test]
+    fn fetch_corrections_excludes_backfilled_session_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "live text", r#"["note1"]"#);
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'legacy text', '[\"legacy\"]', 'Doc', 'file', 'yellow', 500, 500)",
+            [],
+        )
+        .unwrap();
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].original_text, "live text");
+    }
+
+    #[test]
+    fn duplicate_highlight_id_creates_two_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "original", r#"["old note"]"#);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+
+        // Same highlight_id should create a second row (corrections are events)
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES (?1, 'h1', 'doc1', 'sess2', 'updated', '[\"new note\"]', 'Test', 'file', 'green', 2000, 2000)",
+            rusqlite::params![Uuid::new_v4().to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+    }
+
+    #[test]
+    fn corrections_insert_without_foreign_keys() {
+        // This is the key bug fix test: corrections should insert even when
+        // highlight_id and document_id don't reference existing rows
+        let conn = setup_full_db();
+        insert_correction(&conn, "nonexistent-highlight", "some text", r#"["note"]"#);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+    }
+
+    #[test]
+    fn persist_corrections_filters_by_intent_and_writes_prompt_sidecar() {
+        let conn = setup_full_db();
+        let out_dir = tempfile::tempdir().unwrap();
+        let inputs = vec![
+            CorrectionInput {
+                highlight_id: "h1".to_string(),
+                original_text: "bad phrase".to_string(),
+                prefix_context: None,
+                suffix_context: None,
+                extended_context: None,
+                notes: vec!["AI filler".to_string()],
+                highlight_color: "yellow".to_string(),
+                writing_type: Some("general".to_string()),
+                polarity: Some("corrective".to_string()),
+                feedback_type: None,
+                intent: "correction".to_string(),
+                suggested_edit: None,
+                rationale: None,
+            },
+            CorrectionInput {
+                highlight_id: "h2".to_string(),
+                original_text: "research request".to_string(),
+                prefix_context: None,
+                suffix_context: None,
+                extended_context: None,
+                notes: vec!["Turn this into a prompt".to_string()],
+                highlight_color: "blue".to_string(),
+                writing_type: Some("general".to_string()),
+                polarity: None,
+                feedback_type: None,
+                intent: "prompt".to_string(),
+                suggested_edit: None,
+                rationale: None,
+            },
+            CorrectionInput {
+                highlight_id: "h3".to_string(),
+                original_text: "reader thought".to_string(),
+                prefix_context: None,
+                suffix_context: None,
+                extended_context: None,
+                notes: vec!["Save this thought".to_string()],
+                highlight_color: "green".to_string(),
+                writing_type: Some("general".to_string()),
+                polarity: None,
+                feedback_type: None,
+                intent: "note".to_string(),
+                suggested_edit: None,
+                rationale: None,
+            },
+        ];
+
+        let outcome = persist_corrections_inner(
+            &conn,
+            &inputs,
+            "doc1",
+            Some("Test"),
+            "file",
+            Some("/tmp/test.md"),
+            "2026-07-05",
+            out_dir.path(),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.correction_count, 1);
+        assert_eq!(outcome.prompt_count, 1);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+
+        let prompt_sidecar = out_dir.path().join("prompts-2026-07-05.jsonl");
+        let sidecar = fs::read_to_string(prompt_sidecar).unwrap();
+        assert!(sidecar.contains("Turn this into a prompt"));
+        assert!(!sidecar.contains("Save this thought"));
+    }
+
+    #[test]
+    fn export_enriches_an_unsynthesized_signal_without_duplication() {
+        let conn = setup_full_db();
+        let out_dir = tempfile::tempdir().unwrap();
+        insert_correction(&conn, "h1", "weak sentence", r#"["Use evidence."]"#);
+        let inputs = vec![CorrectionInput {
+            highlight_id: "h1".to_string(),
+            original_text: "weak sentence".to_string(),
+            prefix_context: None,
+            suffix_context: None,
+            extended_context: Some("Wider context".to_string()),
+            notes: vec!["Use evidence.".to_string()],
+            highlight_color: "yellow".to_string(),
+            writing_type: Some("blog".to_string()),
+            polarity: Some("corrective".to_string()),
+            feedback_type: None,
+            intent: "correction".to_string(),
+            suggested_edit: None,
+            rationale: Some("Readers need proof.".to_string()),
+        }];
+
+        persist_corrections_inner(
+            &conn, &inputs, "doc1", Some("Test"), "file", None,
+            "2026-08-12", out_dir.path(),
+        ).unwrap();
+
+        let captured: (i64, Option<String>, Option<String>) = conn.query_row(
+            "SELECT COUNT(*), MAX(writing_type), MAX(rationale)
+             FROM corrections WHERE highlight_id = 'h1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).unwrap();
+        assert_eq!(captured.0, 1);
+        assert_eq!(captured.1.as_deref(), Some("blog"));
+        assert_eq!(captured.2.as_deref(), Some("Readers need proof."));
+    }
+
+    #[test]
+    fn persist_corrections_rejects_empty_original_text() {
+        let conn = setup_full_db();
+        let out_dir = tempfile::tempdir().unwrap();
+        let inputs = vec![CorrectionInput {
+            highlight_id: "h1".to_string(),
+            original_text: " \n\t".to_string(),
+            prefix_context: None,
+            suffix_context: None,
+            extended_context: None,
+            notes: vec!["This would become garbage".to_string()],
+            highlight_color: "yellow".to_string(),
+            writing_type: Some("general".to_string()),
+            polarity: Some("corrective".to_string()),
+            feedback_type: None,
+            intent: "correction".to_string(),
+            suggested_edit: None,
+            rationale: None,
+        }];
+
+        let err = persist_corrections_inner(
+            &conn,
+            &inputs,
+            "doc1",
+            Some("Test"),
+            "file",
+            Some("/tmp/test.md"),
+            "2026-07-05",
+            out_dir.path(),
+        )
+        .expect_err("empty correction text should be rejected");
+
+        assert!(err.contains("empty original_text"));
+        assert_eq!(count_corrections(&conn).unwrap(), 0);
+    }
+
+    // --- writing_type tests ---
+
+    #[test]
+    fn fetch_corrections_includes_writing_type() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, writing_type)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'text', '[\"note\"]', 'Test', 'file', 'yellow', 1000, 1000, 'email')",
+            [],
+        ).unwrap();
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].writing_type, Some("email".to_string()));
+    }
+
+    #[test]
+    fn fetch_corrections_null_writing_type() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records[0].writing_type, None);
+    }
+
+    #[test]
+    fn same_highlight_id_different_writing_types_both_exist() {
+        let conn = setup_full_db();
+        // Insert with writing_type 'prd'
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, writing_type)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'text', '[\"note\"]', 'Test', 'file', 'yellow', 1000, 1000, 'prd')",
+            [],
+        ).unwrap();
+
+        // Insert again with NULL writing_type — both rows should exist
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, writing_type)
+             VALUES ('id2', 'h1', 'doc1', 'sess2', 'updated', '[\"new\"]', 'Test', 'file', 'yellow', 2000, 2000, NULL)",
+            [],
+        ).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn same_highlight_id_inserts_independently() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, writing_type)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'text', '[\"note\"]', 'Test', 'file', 'yellow', 1000, 1000, 'prd')",
+            [],
+        ).unwrap();
+
+        // Insert with different writing_type — both rows exist independently
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, writing_type)
+             VALUES ('id2', 'h1', 'doc1', 'sess2', 'text', '[\"note\"]', 'Test', 'file', 'yellow', 2000, 2000, 'email')",
+            [],
+        ).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2);
+
+        // Both writing types exist
+        let types: Vec<Option<String>> = conn
+            .prepare("SELECT writing_type FROM corrections WHERE highlight_id = 'h1' ORDER BY created_at")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert_eq!(types, vec![Some("prd".to_string()), Some("email".to_string())]);
+    }
+
+    // --- get_corrections_by_document tests ---
+
+    fn insert_full_correction(conn: &Connection, highlight_id: &str, doc_id: &str, doc_title: &str, text: &str, notes: &str, created_at: i64) {
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, document_path, highlight_color, created_at, updated_at, writing_type)
+             VALUES (?1, ?2, ?3, 'sess1', ?4, ?5, ?6, 'file', '/path', 'yellow', ?7, ?7, NULL)",
+            rusqlite::params![Uuid::new_v4().to_string(), highlight_id, doc_id, text, notes, doc_title, created_at],
+        ).unwrap();
+    }
+
+    #[test]
+    fn get_corrections_by_document_empty() {
+        let conn = setup_full_db();
+        let groups = fetch_corrections_by_document(&conn, 50).unwrap();
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn get_corrections_by_document_groups_correctly() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Article A", "text1", r#"["n1"]"#, 3000);
+        insert_full_correction(&conn, "h2", "doc2", "Article B", "text2", r#"["n2"]"#, 2000);
+        insert_full_correction(&conn, "h3", "doc1", "Article A", "text3", r#"["n3"]"#, 1000);
+
+        let groups = fetch_corrections_by_document(&conn, 50).unwrap();
+        assert_eq!(groups.len(), 2);
+        // First group is doc1 (most recent correction at 3000)
+        assert_eq!(groups[0].document_id, "doc1");
+        assert_eq!(groups[0].corrections.len(), 2);
+        // Second group is doc2
+        assert_eq!(groups[1].document_id, "doc2");
+        assert_eq!(groups[1].corrections.len(), 1);
+    }
+
+    // --- update_correction_writing_type tests ---
+
+    #[test]
+    fn update_writing_type_succeeds() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+        update_writing_type(&conn, "h1", "blog").unwrap();
+
+        let wt: Option<String> = conn
+            .query_row("SELECT writing_type FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(wt, Some("blog".to_string()));
+    }
+
+    #[test]
+    fn update_writing_type_nonexistent_fails() {
+        let conn = setup_full_db();
+        let result = update_writing_type(&conn, "nonexistent", "blog");
+        assert!(result.is_err());
+    }
+
+    // --- set_correction_category tests ---
+
+    #[test]
+    fn set_category_marks_non_feedback_and_clears() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+
+        set_category_by_highlight(&conn, "h1", Some("non-feedback")).unwrap();
+        let cat: Option<String> = conn
+            .query_row("SELECT category FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cat.as_deref(), Some("non-feedback"));
+
+        set_category_by_highlight(&conn, "h1", None).unwrap();
+        let cat: Option<String> = conn
+            .query_row("SELECT category FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cat, None);
+    }
+
+    #[test]
+    fn set_category_nonexistent_fails() {
+        let conn = setup_full_db();
+        let result = set_category_by_highlight(&conn, "nonexistent", Some("non-feedback"));
+        assert!(result.is_err());
+    }
+
+    // --- delete_correction tests ---
+
+    #[test]
+    fn delete_correction_succeeds() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+        delete_correction_by_highlight(&conn, "h1").unwrap();
+        assert_eq!(count_corrections(&conn).unwrap(), 0);
+    }
+
+    #[test]
+    fn delete_correction_nonexistent_fails() {
+        let conn = setup_full_db();
+        let result = delete_correction_by_highlight(&conn, "nonexistent");
+        assert!(result.is_err());
+    }
+
+    // --- export_corrections_json tests ---
+
+    #[test]
+    fn build_export_empty_db() {
+        let conn = setup_full_db();
+        let export = build_corrections_export(&conn).unwrap();
+        assert_eq!(export.total_count, 0);
+        assert!(export.corrections.is_empty());
+        // Should produce valid JSON
+        let json = serde_json::to_string(&export).unwrap();
+        assert!(json.contains("\"corrections\":[]"));
+    }
+
+    #[test]
+    fn build_export_with_corrections() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Test Doc", "bad text", r#"["use good text"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Test Doc", "also bad", r#"["fix"]"#, 2000);
+
+        let export = build_corrections_export(&conn).unwrap();
+        assert_eq!(export.total_count, 2);
+        assert_eq!(export.corrections.len(), 2);
+        // Most recent first
+        assert_eq!(export.corrections[0].original_text, "also bad");
+        assert_eq!(export.corrections[1].original_text, "bad text");
+    }
+
+    #[test]
+    fn export_does_not_mark_synthesized() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let result = export_corrections_only(&conn, &path).unwrap();
+
+        assert_eq!(result.count, 2);
+        assert_eq!(result.highlight_ids.len(), 2);
+        assert!(path.exists());
+        // Rows are preserved, not deleted
+        assert_eq!(count_corrections(&conn).unwrap(), 2);
+        // Export does NOT mark synthesized — all should still be NULL
+        let unsynthesized: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE synthesized_at IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(unsynthesized, 2);
+    }
+
+    #[test]
+    fn export_then_mark_synthesized_full_flow() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let result = export_corrections_only(&conn, &path).unwrap();
+        assert_eq!(result.count, 2);
+
+        // Mark synthesized explicitly (simulates: agent created rules, then marks done)
+        let marked = mark_synthesized(&conn, &result.highlight_ids).unwrap();
+        assert_eq!(marked, 2);
+
+        // All should now have synthesized_at set
+        let unsynthesized: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE synthesized_at IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(unsynthesized, 0);
+    }
+
+    #[test]
+    fn export_without_mark_keeps_corrections_reexportable() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path1 = dir.path().join("export1.json");
+        let result1 = export_corrections_only(&conn, &path1).unwrap();
+        assert_eq!(result1.count, 1);
+
+        // Without calling mark_synthesized, second export returns the SAME items
+        let path2 = dir.path().join("export2.json");
+        let result2 = export_corrections_only(&conn, &path2).unwrap();
+        assert_eq!(result2.count, 1);
+    }
+
+    #[test]
+    fn export_after_mark_returns_zero_items() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path1 = dir.path().join("export1.json");
+        let result1 = export_corrections_only(&conn, &path1).unwrap();
+        mark_synthesized(&conn, &result1.highlight_ids).unwrap();
+
+        // After marking, second export returns 0
+        let path2 = dir.path().join("export2.json");
+        let result2 = export_corrections_only(&conn, &path2).unwrap();
+        assert_eq!(result2.count, 0);
+    }
+
+    #[test]
+    fn export_preserves_backfilled_rows() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'old text', '[\"old\"]', 'Doc', 'file', 'yellow', 500, 500)",
+            [],
+        ).unwrap();
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+        let total_rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(total_rows, 2);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let result = export_corrections_only(&conn, &path).unwrap();
+
+        assert_eq!(result.count, 1); // only non-backfilled exported
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+        let total_rows_after: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(total_rows_after, 2);
+
+        // Mark synthesized — only the exported correction, not the backfilled one
+        mark_synthesized(&conn, &result.highlight_ids).unwrap();
+        let bf_synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE session_id = '__backfilled__'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(bf_synth, None);
+    }
+
+    #[test]
+    fn export_returns_zero_when_empty() {
+        let conn = setup_full_db();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let result = export_corrections_only(&conn, &path).unwrap();
+        assert_eq!(result.count, 0);
+        assert_eq!(result.highlight_ids.len(), 0);
+    }
+
+    #[test]
+    fn build_export_handles_special_chars() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'text with \"quotes\" and\nnewlines', '[\"note with \\\"escapes\\\"\"]', 'Test', 'file', 'yellow', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let export = build_corrections_export(&conn).unwrap();
+        let json = serde_json::to_string_pretty(&export).unwrap();
+        // Should be valid JSON despite special chars
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed["corrections"][0]["originalText"].as_str().unwrap().contains("quotes"));
+    }
+
+    // --- fetch_corrections_flat tests ---
+
+    #[test]
+    fn fetch_corrections_flat_returns_ordered_list() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc A", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc2", "Doc B", "text2", r#"["n2"]"#, 3000);
+        insert_full_correction(&conn, "h3", "doc1", "Doc A", "text3", r#"["n3"]"#, 2000);
+
+        let results = fetch_corrections_flat(&conn, 10).unwrap();
+        assert_eq!(results.len(), 3);
+        // Most recent first
+        assert_eq!(results[0].highlight_id, "h2");
+        assert_eq!(results[0].created_at, 3000);
+        assert_eq!(results[1].highlight_id, "h3");
+        assert_eq!(results[2].highlight_id, "h1");
+    }
+
+    #[test]
+    fn fetch_corrections_flat_respects_limit() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+        insert_full_correction(&conn, "h3", "doc1", "Doc", "text3", r#"["n3"]"#, 3000);
+
+        let results = fetch_corrections_flat(&conn, 2).unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn fetch_corrections_flat_excludes_backfilled() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, document_path, highlight_color, created_at, updated_at)
+             VALUES ('bf1', 'hbf', 'doc1', '__backfilled__', 'old', '[\"old\"]', 'Doc', 'file', '/path', 'yellow', 500, 500)",
+            [],
+        ).unwrap();
+
+        let results = fetch_corrections_flat(&conn, 50).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].highlight_id, "h1");
+    }
+
+    // --- bulk_delete tests ---
+
+    #[test]
+    fn bulk_delete_removes_matching_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["n1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["n2"]"#);
+        insert_correction(&conn, "h3", "text3", r#"["n3"]"#);
+
+        let deleted = bulk_delete(&conn, &["h1".to_string(), "h3".to_string()]).unwrap();
+        assert_eq!(deleted, 2);
+        assert_eq!(count_corrections(&conn).unwrap(), 1);
+
+        let remaining: String = conn
+            .query_row("SELECT highlight_id FROM corrections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remaining, "h2");
+    }
+
+    #[test]
+    fn bulk_delete_empty_returns_zero() {
+        let conn = setup_full_db();
+        let deleted = bulk_delete(&conn, &[]).unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    #[test]
+    fn bulk_delete_nonexistent_returns_zero() {
+        let conn = setup_full_db();
+        let deleted = bulk_delete(&conn, &["nonexistent".to_string()]).unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    // --- bulk_tag tests ---
+
+    #[test]
+    fn bulk_tag_updates_matching_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["n1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["n2"]"#);
+        insert_correction(&conn, "h3", "text3", r#"["n3"]"#);
+
+        let tagged = bulk_tag(&conn, &["h1".to_string(), "h2".to_string()], "email").unwrap();
+        assert_eq!(tagged, 2);
+
+        let wt1: Option<String> = conn
+            .query_row("SELECT writing_type FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(wt1, Some("email".to_string()));
+
+        let wt3: Option<String> = conn
+            .query_row("SELECT writing_type FROM corrections WHERE highlight_id = 'h3'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(wt3, None); // untouched
+    }
+
+    #[test]
+    fn bulk_tag_empty_returns_zero() {
+        let conn = setup_full_db();
+        let tagged = bulk_tag(&conn, &[], "email").unwrap();
+        assert_eq!(tagged, 0);
+    }
+
+    // --- polarity tests ---
+
+    #[test]
+    fn fetch_corrections_includes_polarity() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'good text', '[\"nice\"]', 'Test', 'file', 'yellow', 1000, 1000, 'positive')",
+            [],
+        ).unwrap();
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].polarity, Some("positive".to_string()));
+    }
+
+    #[test]
+    fn fetch_corrections_null_polarity() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text", r#"["note"]"#);
+
+        let records = fetch_corrections(&conn, 10).unwrap();
+        assert_eq!(records[0].polarity, None);
+    }
+
+    #[test]
+    fn bulk_set_polarity_updates_matching_rows() {
+        let conn = setup_full_db();
+        insert_correction(&conn, "h1", "text1", r#"["n1"]"#);
+        insert_correction(&conn, "h2", "text2", r#"["n2"]"#);
+        insert_correction(&conn, "h3", "text3", r#"["n3"]"#);
+
+        let updated = bulk_set_polarity(&conn, &["h1".to_string(), "h2".to_string()], "positive").unwrap();
+        assert_eq!(updated, 2);
+
+        let pol1: Option<String> = conn
+            .query_row("SELECT polarity FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(pol1, Some("positive".to_string()));
+
+        let pol2: Option<String> = conn
+            .query_row("SELECT polarity FROM corrections WHERE highlight_id = 'h2'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(pol2, Some("positive".to_string()));
+
+        let pol3: Option<String> = conn
+            .query_row("SELECT polarity FROM corrections WHERE highlight_id = 'h3'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(pol3, None); // untouched
+    }
+
+    #[test]
+    fn bulk_set_polarity_empty_returns_zero() {
+        let conn = setup_full_db();
+        let updated = bulk_set_polarity(&conn, &[], "positive").unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn fetch_voice_signals_filters_by_polarity() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'good', '[\"nice\"]', 'Test', 'file', 'yellow', 1000, 1000, 'positive')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id2', 'h2', 'doc1', 'sess1', 'bad', '[\"fix\"]', 'Test', 'file', 'yellow', 2000, 2000, 'corrective')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id3', 'h3', 'doc1', 'sess1', 'untagged', '[\"meh\"]', 'Test', 'file', 'yellow', 3000, 3000)",
+            [],
+        ).unwrap();
+
+        let positive = fetch_voice_signals(&conn, Some("positive"), 100).unwrap();
+        assert_eq!(positive.len(), 1);
+        assert_eq!(positive[0].original_text, "good");
+
+        let corrective = fetch_voice_signals(&conn, Some("corrective"), 100).unwrap();
+        assert_eq!(corrective.len(), 1);
+        assert_eq!(corrective[0].original_text, "bad");
+    }
+
+    // --- mark_unsynthesized tests ---
+
+    #[test]
+    fn mark_unsynthesized_clears_timestamp() {
+        let conn = setup_full_db();
+        insert_full_correction(&conn, "h1", "doc1", "Doc", "text1", r#"["n1"]"#, 1000);
+        insert_full_correction(&conn, "h2", "doc1", "Doc", "text2", r#"["n2"]"#, 2000);
+
+        // Mark as synthesized first
+        mark_synthesized(&conn, &["h1".to_string(), "h2".to_string()]).unwrap();
+
+        // Verify they're synthesized
+        let synth_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM corrections WHERE synthesized_at IS NOT NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth_count, 2);
+
+        // Now mark h1 as unsynthesized
+        let updated = mark_unsynthesized(&conn, &["h1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        // h1 should have NULL synthesized_at, h2 should still be set
+        let h1_synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(h1_synth, None);
+
+        let h2_synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h2'", [], |r| r.get(0))
+            .unwrap();
+        assert!(h2_synth.is_some());
+    }
+
+    #[test]
+    fn mark_unsynthesized_empty_returns_zero() {
+        let conn = setup_full_db();
+        let updated = mark_unsynthesized(&conn, &[]).unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn fetch_voice_signals_all_non_null() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'good', '[\"nice\"]', 'Test', 'file', 'yellow', 1000, 1000, 'positive')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at, polarity)
+             VALUES ('id2', 'h2', 'doc1', 'sess1', 'bad', '[\"fix\"]', 'Test', 'file', 'yellow', 2000, 2000, 'corrective')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id3', 'h3', 'doc1', 'sess1', 'untagged', '[\"meh\"]', 'Test', 'file', 'yellow', 3000, 3000)",
+            [],
+        ).unwrap();
+
+        // None polarity means "all non-null"
+        let all_tagged = fetch_voice_signals(&conn, None, 100).unwrap();
+        assert_eq!(all_tagged.len(), 2);
+        // Should not include the untagged one
+        assert!(all_tagged.iter().all(|c| c.polarity.is_some()));
+    }
+
+    // --- synthesis contract tests ---
+
+    #[test]
+    fn persist_corrections_leaves_corrections_unsynthesized_and_creates_no_rules() {
+        // Capture and synthesis are separate stages: persisting a correction
+        // must NOT create a writing rule (that's the reviewed synthesis pass)
+        // and must NOT stamp synthesized_at (that would dequeue it).
+        let conn = setup_full_db();
+        let out_dir = tempfile::tempdir().unwrap();
+        let inputs = vec![CorrectionInput {
+            highlight_id: "h1".to_string(),
+            original_text: "bad phrase".to_string(),
+            prefix_context: None,
+            suffix_context: None,
+            extended_context: None,
+            notes: vec!["use X instead".to_string()],
+            highlight_color: "yellow".to_string(),
+            writing_type: Some("email".to_string()),
+            polarity: Some("corrective".to_string()),
+            feedback_type: None,
+            intent: "correction".to_string(),
+            suggested_edit: None,
+            rationale: None,
+        }];
+
+        persist_corrections_inner(
+            &conn,
+            &inputs,
+            "doc1",
+            Some("Test"),
+            "file",
+            Some("/tmp/test.md"),
+            "2026-07-06",
+            out_dir.path(),
+        )
+        .unwrap();
+
+        let rule_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM writing_rules", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rule_count, 0);
+
+        let synth: Option<i64> = conn
+            .query_row(
+                "SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(synth.is_none());
+    }
+
+    // --- accept_correction tests ---
+
+    #[test]
+    fn accept_correction_sets_accepted_at_and_returns_suggested_edit() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at,
+                 suggested_edit)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'old text', '[\"fix it\"]',
+                     'Test', 'file', 'yellow', 1000, 1000, 'new text')",
+            [],
+        ).unwrap();
+
+        let result = accept_correction_by_highlight(&conn, "h1").unwrap();
+        assert_eq!(result, Some("new text".to_string()));
+
+        let accepted_at: Option<i64> = conn
+            .query_row("SELECT accepted_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(accepted_at.is_some());
+    }
+
+    #[test]
+    fn accept_correction_returns_none_for_null_suggested_edit() {
+        let conn = setup_full_db();
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, document_source, highlight_color, created_at, updated_at)
+             VALUES ('id1', 'h1', 'doc1', 'sess1', 'old text', '[\"fix it\"]',
+                     'Test', 'file', 'yellow', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let result = accept_correction_by_highlight(&conn, "h1").unwrap();
+        assert_eq!(result, None);
+
+        let accepted_at: Option<i64> = conn
+            .query_row("SELECT accepted_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(accepted_at.is_some());
+    }
+
+    #[test]
+    fn accept_correction_nonexistent_returns_none() {
+        let conn = setup_full_db();
+        let result = accept_correction_by_highlight(&conn, "nonexistent").unwrap();
+        assert_eq!(result, None);
+    }
+}

@@ -1,0 +1,156 @@
+import { useState, useCallback, useRef, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { indexAllDocuments } from "@/lib/tauri-commands";
+import { reportError } from "@/lib/error-bus";
+
+export interface SearchResult {
+  documentId: string;
+  title: string;
+  snippet: string;
+  rank: number;
+  /** On-disk path for file-sourced documents; null for keep-local docs. */
+  filePath?: string | null;
+}
+
+export interface FileResult {
+  path: string;
+  filename: string;
+}
+
+export function useSearch() {
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [fileResults, setFileResults] = useState<FileResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [query, setQuery] = useState("");
+  const [isIndexing, setIsIndexing] = useState(false);
+
+  const searchIdRef = useRef(0);
+  const mdfindTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Consecutive FTS failures — a single blip stays silent, a broken index toasts once
+  const ftsFailStreakRef = useRef(0);
+
+  const search = useCallback((q: string) => {
+    setQuery(q);
+
+    // Clear pending mdfind timeout from previous keystroke
+    if (mdfindTimeoutRef.current !== null) {
+      clearTimeout(mdfindTimeoutRef.current);
+      mdfindTimeoutRef.current = null;
+    }
+
+    // Increment search ID to cancel previous in-flight results
+    const thisSearchId = ++searchIdRef.current;
+
+    if (!q.trim()) {
+      setResults([]);
+      setFileResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    // FTS5 search — no debounce, fires on every keystroke (<5ms for local FTS)
+    setIsSearching(true);
+    invoke<SearchResult[]>("search_documents", {
+      query: q.trim(),
+      limit: 20,
+    })
+      .then((ftsResults) => {
+        if (searchIdRef.current !== thisSearchId) return;
+        ftsFailStreakRef.current = 0;
+        setResults(ftsResults);
+        setIsSearching(false);
+      })
+      .catch((err) => {
+        if (searchIdRef.current !== thisSearchId) return;
+        console.error("FTS search failed:", err);
+        if (++ftsFailStreakRef.current === 2) {
+          reportError("Search is failing — results may be incomplete", err);
+        }
+        setResults([]);
+        setIsSearching(false);
+      });
+
+    // Debounced mdfind fallback (200ms) — secondary file-on-disk discovery
+    mdfindTimeoutRef.current = setTimeout(async () => {
+      if (searchIdRef.current !== thisSearchId) return;
+      try {
+        const files = await invoke<FileResult[]>("search_files_on_disk", {
+          query: q.trim(),
+          limit: 20,
+        });
+        if (searchIdRef.current !== thisSearchId) return;
+        setFileResults(files);
+      } catch (err) {
+        if (searchIdRef.current !== thisSearchId) return;
+        console.error("File search failed:", err);
+        setFileResults([]);
+      }
+    }, 200);
+  }, []);
+
+  const indexDocument = useCallback(
+    async (documentId: string, title: string, content: string) => {
+      try {
+        await invoke("index_document", { documentId, title, content });
+      } catch (err) {
+        console.error("Index failed:", err);
+      }
+    },
+    []
+  );
+
+  const removeIndex = useCallback(async (documentId: string) => {
+    try {
+      await invoke("remove_document_index", { documentId });
+    } catch (err) {
+      console.error("Remove index failed:", err);
+    }
+  }, []);
+
+  // Background indexing on mount
+  useEffect(() => {
+    let cancelled = false;
+    setIsIndexing(true);
+    indexAllDocuments()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.indexed > 0) {
+          console.log(
+            `Indexed ${result.indexed} documents (${result.skipped} skipped, ${result.errors} errors)`
+          );
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        reportError("Search index could not be built — results may be stale", err);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsIndexing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Clean up mdfind timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (mdfindTimeoutRef.current !== null) {
+        clearTimeout(mdfindTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    results,
+    fileResults,
+    isSearching,
+    isIndexing,
+    query,
+    search,
+    indexDocument,
+    removeIndex,
+  };
+}

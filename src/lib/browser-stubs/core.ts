@@ -1,0 +1,416 @@
+/**
+ * Browser mock for @tauri-apps/api/core
+ *
+ * When `pnpm dev` runs without the Tauri runtime, Vite aliases
+ * @tauri-apps/api/core → this file. Provides in-memory CRUD for
+ * annotations and sensible defaults for all other commands.
+ */
+
+// ---------------------------------------------------------------------------
+// Sample data
+// ---------------------------------------------------------------------------
+
+const SAMPLE_DOC_ID = "sample-doc";
+
+const sampleDocument = {
+  id: SAMPLE_DOC_ID,
+  source: "file" as const,
+  file_path: "/mock/documents/welcome.md",
+  keep_local_id: null,
+  title: "Welcome to Margin",
+  author: null,
+  url: null,
+  word_count: 128,
+  last_opened_at: Date.now(),
+  created_at: Date.now() - 86_400_000,
+};
+
+const sampleMarkdown = `# Welcome to Margin
+
+Margin is a local-first reading and annotation app. Open markdown files, highlight text, and write margin notes.
+
+## Getting started
+
+Select any text and choose a highlight color from the floating toolbar. Click a highlight to add a margin note.
+
+Teams can leverage Margin to build a personal writing style profile from their own corrections.
+
+> "The art of reading is the art of picking up cues from a text." — Mortimer Adler
+
+## How it works
+
+Every correction you make is saved as structured feedback. Margin watches what you fix — not just what you flag — and distills it into writing rules that travel with you.
+
+The annotation rail on the right shows where your notes live. In long documents, a minimap at the window's edge marks each annotation's position in the whole piece, so a glance tells you where the thinking happened.
+
+## A longer walk
+
+Reading is a conversation. When you highlight a passage and write a note, you are doing two things at once: responding to this document, and teaching the system what you value. The second part compounds.
+
+Over time the rules get sharper. Early corrections are broad — cut filler, prefer verbs. Later ones get specific to your voice: the constructions you reach for when you are hedging, the openings you overuse, the words you have trained yourself to distrust.
+
+None of this requires a separate review session. The same underline that marked your attention becomes the surface where the correction lives, and the same correction becomes the rule that catches the next draft. Reading and improving are one loop.
+
+## Why local-first
+
+Your documents are markdown files on disk. Your annotations live beside them. The style profile that accumulates is yours — a portable artifact, not a platform feature. Export it, version it, feed it to whatever model writes your next draft.
+
+The goal is not a smarter editor. It is a reader that remembers what you taught it, and a writer that does not make the same mistake twice.
+
+## Closing thought
+
+Tools shape attention. A highlighter that only marks is a memory aid. A highlighter that teaches is something else — an argument with your future drafts, won once instead of over and over.
+`;
+
+// ---------------------------------------------------------------------------
+// In-memory stores
+// ---------------------------------------------------------------------------
+
+type HighlightRow = {
+  id: string;
+  document_id: string;
+  color: string;
+  text_content: string;
+  from_pos: number;
+  to_pos: number;
+  prefix_context: string | null;
+  suffix_context: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+type MarginNoteRow = {
+  id: string;
+  highlight_id: string;
+  content: string;
+  created_at: number;
+  updated_at: number;
+};
+
+let highlights: HighlightRow[] = [];
+let marginNotes: MarginNoteRow[] = [];
+let idCounter = 0;
+
+function uid(): string {
+  return `mock-${++idCounter}-${Date.now().toString(36)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Command dispatcher
+// ---------------------------------------------------------------------------
+
+const BROWSER_SAMPLE_PATH = "/browser/.margin/samples/first-draft.md";
+let firstRunSample: string | null = null;
+
+// Writing rules live in memory so a rule made with "Never write this" shows up
+// in Writing rules. `?fresh` starts with none, like a new install.
+type StubRule = Record<string, unknown> & { id: string; ruleText: string };
+const FIXTURE_RULES: StubRule[] = [
+    // One fixture rule so rule-resurfacing underlines are exercisable in
+    // browser dev mode — "leverage" gets the dotted underline.
+    {
+      id: "stub-rule-1",
+      writingType: "general",
+      category: "kill-words",
+      ruleText: "leverage",
+      whenToApply: null,
+      why: "Empty corporate verb — say what you actually mean.",
+      severity: "must-fix",
+      exampleBefore: "leverage",
+      exampleAfter: "use",
+      source: "synthesis",
+      signalCount: 4,
+      notes: "synthesized-from:stub-note-1",
+      reviewedAt: 1,
+      detectionPattern: null,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    // Extra dev fixtures so the Writing rules manager (search, filters,
+    // review queue, enforcement tag) has something to exercise.
+    {
+      id: "stub-rule-2",
+      writingType: "email",
+      category: "openers",
+      ruleText: "Never open with a greeting line",
+      whenToApply: "Cold outreach and replies",
+      why: "It spends the reader's first line on nothing.",
+      severity: "should-fix",
+      exampleBefore: "Hope you're well!",
+      exampleAfter: "Your Q3 numbers changed my mind about pricing.",
+      source: "synthesis-candidate",
+      signalCount: 6,
+      notes: null,
+      reviewedAt: null,
+      detectionPattern: "^(Hi|Hello|Hope you)",
+      createdAt: 1_760_000_000_000,
+      updatedAt: 1_760_000_000_000,
+    },
+    {
+      id: "stub-rule-3",
+      writingType: "blog",
+      category: "structure",
+      ruleText: "State the claim before the evidence",
+      whenToApply: null,
+      why: null,
+      severity: "nice-to-fix",
+      exampleBefore: null,
+      exampleAfter: null,
+      source: "manual",
+      signalCount: 2,
+      notes: null,
+      reviewedAt: null,
+      detectionPattern: null,
+      createdAt: 1_760_500_000_000,
+      updatedAt: 1_760_500_000_000,
+    },
+];
+const isFresh = () =>
+  typeof location !== "undefined" && new URLSearchParams(location.search).has("fresh");
+const writingRules: StubRule[] = isFresh() ? [] : FIXTURE_RULES.map((r) => ({ ...r }));
+
+const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
+  // --- Mount-time (must return correct shape or app crashes) ----------------
+  get_recent_documents: () => [sampleDocument],
+  get_open_tabs: () => [],
+  index_all_documents: () => ({ indexed: 0, skipped: 0, errors: 0 }),
+  drain_pending_open_files: () => [],
+
+  // --- File ops -------------------------------------------------------------
+  read_file: (a) =>
+    a.path === BROWSER_SAMPLE_PATH && firstRunSample !== null ? firstRunSample : sampleMarkdown,
+  open_file_dialog: () => null,
+  save_file: () => undefined,
+  list_markdown_files: () => [],
+  upsert_document: (a) => a.doc ?? sampleDocument,
+  rename_file: (a) => a.doc ?? sampleDocument,
+
+  // --- Highlight CRUD -------------------------------------------------------
+  get_highlights: (a) => {
+    const docId = a.documentId as string | undefined;
+    return docId ? highlights.filter((h) => h.document_id === docId) : highlights;
+  },
+
+  create_highlight: (a) => {
+    const row: HighlightRow = {
+      id: uid(),
+      document_id: a.documentId as string,
+      color: a.color as string,
+      text_content: a.textContent as string,
+      from_pos: a.fromPos as number,
+      to_pos: a.toPos as number,
+      prefix_context: (a.prefixContext as string) ?? null,
+      suffix_context: (a.suffixContext as string) ?? null,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    };
+    highlights.push(row);
+    return row;
+  },
+
+  update_highlight: (a) => {
+    const row = highlights.find((h) => h.id === a.id);
+    if (row) {
+      row.color = a.color as string;
+      row.text_content = a.textContent as string;
+      row.from_pos = a.fromPos as number;
+      row.to_pos = a.toPos as number;
+      row.prefix_context = (a.prefixContext as string) ?? null;
+      row.suffix_context = (a.suffixContext as string) ?? null;
+      row.updated_at = Date.now();
+    }
+  },
+
+  delete_highlight: (a) => {
+    highlights = highlights.filter((h) => h.id !== a.id);
+  },
+
+  delete_all_highlights_for_document: (a) => {
+    highlights = highlights.filter((h) => h.document_id !== a.documentId);
+  },
+
+  update_highlight_positions: () => undefined,
+
+  // --- Margin note CRUD -----------------------------------------------------
+  get_margin_notes: () => [...marginNotes],
+
+  create_margin_note: (a) => {
+    const row: MarginNoteRow = {
+      id: uid(),
+      highlight_id: a.highlightId as string,
+      content: a.content as string,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    };
+    marginNotes.push(row);
+    return row;
+  },
+
+  update_margin_note: (a) => {
+    const note = marginNotes.find((n) => n.id === a.id);
+    if (note) {
+      note.content = a.content as string;
+      note.updated_at = Date.now();
+    }
+  },
+
+  delete_margin_note: (a) => {
+    marginNotes = marginNotes.filter((n) => n.id !== a.id);
+  },
+
+  // --- Search (empty) -------------------------------------------------------
+  search_documents: () => [],
+  search_files_on_disk: () => [],
+  index_document: () => undefined,
+  remove_document_index: () => undefined,
+
+  // --- Keep-local (offline) -------------------------------------------------
+  keep_local_health: () => ({ ok: false, now: Date.now() }),
+  keep_local_list_items: () => ({ items: [], count: 0 }),
+  keep_local_get_content: () => "",
+
+  // --- File watcher (no-op) -------------------------------------------------
+  watch_file: () => undefined,
+  unwatch_file: () => undefined,
+
+  // --- Corrections / writing rules (empty) ----------------------------------
+  persist_corrections: () => "mock-export-id",
+  get_all_corrections: () => [],
+  get_corrections_count: () => 0,
+  sync_feedback_signal: () => true,
+  get_corrections_by_document: () => [],
+  // Dev fixtures so the Notes stage of Writing rules has something to show.
+  get_corrections_flat: () => [
+    {
+      highlightId: "stub-note-1",
+      originalText: "Teams can leverage Margin to build a personal writing style profile",
+      notes: ["Corporate verb. Say use."],
+      extendedContext: null,
+      highlightColor: "yellow",
+      writingType: "general",
+      polarity: "corrective",
+      synthesizedAt: null,
+      documentTitle: "Welcome to Margin",
+      createdAt: Date.now() - 3_600_000,
+      suggestedEdit: null,
+      acceptedAt: null,
+      category: null,
+    },
+    {
+      highlightId: "stub-note-2",
+      originalText: "The art of reading is the art of picking up cues from a text.",
+      notes: ["Short, concrete, quotable. More of this."],
+      extendedContext: null,
+      highlightColor: "green",
+      writingType: null,
+      polarity: "positive",
+      synthesizedAt: null,
+      documentTitle: "Welcome to Margin",
+      createdAt: Date.now() - 7_200_000,
+      suggestedEdit: null,
+      acceptedAt: null,
+      category: null,
+    },
+  ],
+  update_correction_writing_type: () => undefined,
+  set_correction_category: () => undefined,
+  delete_correction: () => undefined,
+  export_corrections_json: () => ({ count: 0, highlightIds: [] }),
+  mark_corrections_synthesized: () => 0,
+  bulk_delete_corrections: () => 0,
+  bulk_tag_corrections: () => 0,
+  bulk_set_polarity_corrections: () => 0,
+  get_voice_signals: () => [],
+  export_voice_profile: () => ({
+    path: "",
+    positiveCount: 0,
+    correctiveCount: 0,
+    unclassifiedCount: 0,
+    ruleCount: 0,
+  }),
+
+  get_writing_rules: () => writingRules.slice(),
+  export_writing_rules: () => ({ markdownPath: "", hookPath: "", ruleCount: 0 }),
+  get_agent_integration: () => false,
+  set_agent_integration: () => undefined,
+  // Kept in memory so browser dev mode runs the same first-run path as the app.
+  write_first_run_sample: (a) => {
+    if (firstRunSample === null && typeof a.content === "string") firstRunSample = a.content;
+    return BROWSER_SAMPLE_PATH;
+  },
+  create_never_write_rule: (args) => {
+    const now = Date.now();
+    const phrase = typeof args.phrase === "string" ? args.phrase : "";
+    const why = typeof args.why === "string" ? args.why : null;
+    // Same normalizing as the backend's create_never_rule.
+    const ruleText = phrase
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    const existing = writingRules.find((r) => r.category === "kill-words" && r.ruleText === ruleText);
+    if (existing) {
+      existing.signalCount = (existing.signalCount as number) + 1;
+      existing.updatedAt = now;
+      return { ...existing };
+    }
+    const rule: StubRule = {
+      id: `stub-never-${now}`,
+      writingType: "general",
+      category: "kill-words",
+      ruleText,
+      whenToApply: null,
+      why,
+      severity: "must-fix",
+      exampleBefore: phrase.trim() || null,
+      exampleAfter: null,
+      source: "highlight",
+      signalCount: 1,
+      notes: null,
+      reviewedAt: now,
+      detectionPattern: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    writingRules.push(rule);
+    return { ...rule };
+  },
+  update_writing_rule: () => undefined,
+  delete_writing_rule: () => undefined,
+  unarchive_writing_rule: () => undefined,
+  get_archived_writing_rules: () => [],
+
+  // --- Tabs -----------------------------------------------------------------
+  save_open_tabs: () => undefined,
+
+  // --- Snapshots ------------------------------------------------------------
+  save_content_snapshot: () => "mock-snapshot",
+  get_content_snapshot: () => null,
+  delete_content_snapshot: () => undefined,
+};
+
+// ---------------------------------------------------------------------------
+// Public API (matches @tauri-apps/api/core)
+// ---------------------------------------------------------------------------
+
+export async function invoke<T = unknown>(
+  cmd: string,
+  args: Record<string, unknown> = {},
+): Promise<T> {
+  const handler = handlers[cmd];
+  if (handler) {
+    return handler(args) as T;
+  }
+  console.warn(`[browser-mock] unhandled: ${cmd}`);
+  return undefined as T;
+}
+
+// ---------------------------------------------------------------------------
+// Test helper
+// ---------------------------------------------------------------------------
+
+export function __resetForTests(): void {
+  highlights = [];
+  marginNotes = [];
+  idCounter = 0;
+}

@@ -1,0 +1,186 @@
+@import "tailwindcss";
+@import "./typography.css";
+@import "./editor.css";
+@import "./annotations.css";
+@import "./interactions.css";
+@import "./tabs.css";
+@import "./toc.css";
+@import "./diff.css";
+
+@theme {
+  --color-highlight-yellow: #f5ebb0;
+  --color-highlight-green: #d0e4c8;
+  --color-highlight-blue: #cddaed;
+  --color-highlight-pink: #e8d0db;
+  --color-highlight-orange: #f0d4b8;
+
+}
+
+/* Light theme (default) — Tufte-inspired warm cream */
+:root {
+  /* Type: one stack per role. Newsreader is the variable build so the
+     browser picks its optical size (6–72) from the rendered size. */
+  --font-serif: 'Newsreader Variable', Georgia, serif;
+  --font-sans: 'Instrument Sans', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+
+  --color-page: #fffff8;
+  --color-sidebar: #F5F2EA;
+  --color-text-primary: #1a1714;
+  --color-text-secondary: #6b6560;
+  --color-border: #dfdbd3;
+
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
+
+  --hover-bg: rgba(0, 0, 0, 0.04);
+  --active-bg: rgba(0, 0, 0, 0.07);
+
+  /* Semantic colors — warmed to match palette */
+  /* 5.48:1 on --color-page — WCAG AA for status/rule text */
+  --color-success: #42752c;
+  --color-danger: #c44b3f;
+  --color-danger-text: #a13a30;
+  --color-warning: #c49a2a;
+  --color-accent: #8a6e1a;
+  /* 5.35:1 on --color-page, 4.80:1 on --color-sidebar — WCAG AA */
+  --color-text-tertiary: #6e6a64;
+  --color-green: #5a9a3e;
+  --color-red: #c44b3f;
+  --color-amber: #c49a2a;
+
+  /* Severity badge tokens — warmed */
+  --color-severity-must-fix-bg: #f5e8e6;
+  --color-severity-must-fix-text: #8b3a2a;
+  --color-severity-must-fix-border: #e0c4bf;
+  --color-severity-should-fix-bg: #f5f0e0;
+  --color-severity-should-fix-text: #7a5c1a;
+  --color-severity-should-fix-border: #ddd3ac;
+  --color-severity-nice-to-fix-bg: #eaf2e4;
+  --color-severity-nice-to-fix-text: #3d6038;
+  --color-severity-nice-to-fix-border: #c4d9b8;
+
+  /* Elevation — wider differentiation */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 10px 32px rgba(0, 0, 0, 0.12);
+
+  /* Surface tokens */
+  --color-surface-subtle: rgba(0, 0, 0, 0.04);
+  --color-surface-muted: rgba(0, 0, 0, 0.07);
+  --color-overlay: rgba(0, 0, 0, 0.3);
+
+  /* UI Type Scale — 6 perceptually distinct steps */
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
+
+  /* Easing system */
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-micro: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-page: 250ms;
+}
+
+/* Dark theme — preserves warmth */
+:root[data-theme="dark"] {
+  --color-page: #1e1c18;
+  --color-sidebar: #262420;
+  --color-text-primary: #e8e4dc;
+  --color-text-secondary: #a39a8e;
+  --color-border: #36342E;
+
+  --hover-bg: rgba(255, 255, 255, 0.07);
+  --active-bg: rgba(255, 255, 255, 0.12);
+
+  /* Surface tokens — dark */
+  --color-surface-subtle: rgba(255, 255, 255, 0.07);
+  --color-surface-muted: rgba(255, 255, 255, 0.12);
+  --color-overlay: rgba(0, 0, 0, 0.5);
+
+  /* Wire dark highlight colors into base tokens — increased separation */
+  --color-highlight-yellow: rgba(250, 214, 90, 0.20); /* paler and lighter than 245,200,40 @ 30%, which read as mustard */
+  --color-highlight-green: rgba(72, 190, 90, 0.24);
+  --color-highlight-blue: rgba(80, 140, 220, 0.24);
+  --color-highlight-pink: rgba(220, 80, 150, 0.24);
+  --color-highlight-orange: rgba(240, 120, 40, 0.28);
+
+  /* Elevation — higher opacity for dark mode */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* Semantic colors — warmed dark variants */
+  --color-success: #8aad7a;
+  --color-danger: #d4786c;
+  --color-danger-text: #d4786c;
+  --color-warning: #c9a84c;
+  --color-accent: #c9a84c;
+  /* 5.30:1 on --color-page, 4.82:1 on --color-sidebar — WCAG AA */
+  --color-text-tertiary: #948f87;
+  --color-green: #8aad7a;
+  --color-red: #d4786c;
+  --color-amber: #c9a84c;
+
+  /* Severity badge tokens — warmed dark */
+  --color-severity-must-fix-bg: #3b2420;
+  --color-severity-must-fix-text: #d4786c;
+  --color-severity-must-fix-border: #5c3530;
+  --color-severity-should-fix-bg: #3b3420;
+  --color-severity-should-fix-text: #c9a84c;
+  --color-severity-should-fix-border: #5c4a28;
+  --color-severity-nice-to-fix-bg: #243b28;
+  --color-severity-nice-to-fix-text: #8aad7a;
+  --color-severity-nice-to-fix-border: #305c38;
+}
+
+/* Chrome bar tab hover — show close button on hover */
+.chrome-tab-item:hover .chrome-tab-close {
+  opacity: 1 !important;
+}
+.chrome-tab-item:hover .chrome-tab-dirty {
+  display: none;
+}
+
+body {
+  background-color: var(--color-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Reduced motion: collapse all animations to instant */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes barFill {
+  from { width: 0%; }
+}

@@ -1,0 +1,662 @@
+import type Database from "better-sqlite3";
+import type { CorrectionRecord } from "./corrections.js";
+import { nowMillis } from "../db.js";
+
+export interface WritingRule {
+  id: string;
+  writingType: string;
+  category: string;
+  ruleText: string;
+  whenToApply: string | null;
+  why: string | null;
+  severity: string;
+  exampleBefore: string | null;
+  exampleAfter: string | null;
+  source: string;
+  signalCount: number;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+  register: string | null;
+  polarity: string | null;
+}
+
+/**
+ * Review gate — mirrors `unreviewedCandidateFilter` in cli/db/rules.go.
+ * Synthesis candidates are invisible to MCP consumers until reviewed
+ * (reviewed_at set by the UI or `margin rules accept`).
+ */
+const REVIEW_GATE = `NOT (source = 'synthesis-candidate' AND reviewed_at IS NULL) AND archived_at IS NULL`;
+
+export function getWritingRules(
+  db: Database.Database,
+  writingType?: string,
+): WritingRule[] {
+  if (writingType) {
+    return db
+      .prepare(
+        `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
+                why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
+                signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+                register, polarity
+         FROM writing_rules WHERE writing_type = ? AND ${REVIEW_GATE}
+         ORDER BY signal_count DESC, created_at DESC`,
+      )
+      .all(writingType) as WritingRule[];
+  }
+
+  return db
+    .prepare(
+      `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
+              why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+              register, polarity
+       FROM writing_rules
+       WHERE ${REVIEW_GATE}
+       ORDER BY writing_type, signal_count DESC, created_at DESC`,
+    )
+    .all() as WritingRule[];
+}
+
+const VALID_SEVERITIES = ["must-fix", "should-fix", "nice-to-fix"] as const;
+/**
+ * Canonical writing types — union of this list and the Go CLI's
+ * ValidWritingTypes (cli/db/rules.go). Mirrored by the writing_type CHECK
+ * on writing_rules (src-tauri/src/db/migrations.rs).
+ */
+const VALID_WRITING_TYPES = [
+  "general", "email", "prd", "blog", "cover-letter",
+  "resume", "slack", "pitch", "outreach", "text",
+  "case-study", "email-hiring", "email-friend", "social-post", "text-friend",
+] as const;
+
+export interface CreateWritingRuleParams {
+  rule_text: string;
+  writing_type: string;
+  category: string;
+  severity: string;
+  when_to_apply?: string | null;
+  why?: string | null;
+  example_before?: string | null;
+  example_after?: string | null;
+  notes?: string | null;
+  source?: string;
+  signal_count?: number;
+  register?: string | null;
+  polarity?: string | null;
+  /** Highlight IDs of the corrections this rule was synthesized from.
+   *  When present, the rule enters as a review-gated candidate and the
+   *  provenance is recorded so mark_rules_reviewed can stamp the source
+   *  corrections synthesized. */
+  synthesized_from?: string[];
+}
+
+export function createWritingRule(
+  db: Database.Database,
+  params: CreateWritingRuleParams,
+): WritingRule | { error: string } {
+  if (!VALID_SEVERITIES.includes(params.severity as (typeof VALID_SEVERITIES)[number])) {
+    return { error: `Invalid severity "${params.severity}". Allowed: ${VALID_SEVERITIES.join(", ")}` };
+  }
+
+  if (!VALID_WRITING_TYPES.includes(params.writing_type as (typeof VALID_WRITING_TYPES)[number])) {
+    return { error: `Invalid writing_type "${params.writing_type}". Allowed: ${VALID_WRITING_TYPES.join(", ")}` };
+  }
+
+  const id = crypto.randomUUID();
+  const now = nowMillis();
+  // Rules carrying correction provenance go through the review gate —
+  // same contract as the CLI add-candidates path.
+  const source = params.synthesized_from?.length
+    ? "synthesis-candidate"
+    : params.source ?? "synthesis";
+  const signalCount = params.signal_count ?? params.synthesized_from?.length ?? 1;
+  if (!Number.isInteger(signalCount) || signalCount < 1) {
+    return { error: `Invalid signal_count "${String(params.signal_count)}". Must be an integer >= 1.` };
+  }
+
+  if (params.polarity !== undefined && params.polarity !== null &&
+      params.polarity !== "positive" && params.polarity !== "corrective") {
+    return { error: `Invalid polarity "${params.polarity}". Allowed: positive, corrective` };
+  }
+
+  // Provenance marker must prefix notes — mark_reviewed parses
+  // `synthesized-from:<id>,...` to stamp source corrections on accept.
+  // On upsert conflict the new ids must UNION with existing provenance,
+  // not overwrite it — otherwise the earlier source corrections are never
+  // stamped synthesized and resurface in the queue forever.
+  const existing = db
+    .prepare("SELECT notes FROM writing_rules WHERE writing_type = ? AND category = ? AND rule_text = ?")
+    .get(params.writing_type, params.category, params.rule_text) as { notes: string | null } | undefined;
+  const notes = mergeProvenanceNotes(existing?.notes ?? null, params.synthesized_from, params.notes);
+
+  db.prepare(
+    `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at, register, polarity)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(writing_type, category, rule_text) DO UPDATE SET
+       when_to_apply = COALESCE(excluded.when_to_apply, writing_rules.when_to_apply),
+       why = COALESCE(excluded.why, writing_rules.why),
+       severity = CASE
+         WHEN writing_rules.severity = 'must-fix' OR excluded.severity = 'must-fix' THEN 'must-fix'
+         WHEN writing_rules.severity = 'should-fix' OR excluded.severity = 'should-fix' THEN 'should-fix'
+         ELSE 'nice-to-fix'
+       END,
+       example_before = COALESCE(excluded.example_before, writing_rules.example_before),
+       example_after = COALESCE(excluded.example_after, writing_rules.example_after),
+       signal_count = writing_rules.signal_count + excluded.signal_count,
+       notes = COALESCE(excluded.notes, writing_rules.notes),
+       register = COALESCE(excluded.register, writing_rules.register),
+       polarity = COALESCE(excluded.polarity, writing_rules.polarity),
+       updated_at = excluded.updated_at`,
+  ).run(
+    id, params.writing_type, params.category, params.rule_text,
+    params.when_to_apply ?? null, params.why ?? null, params.severity,
+    params.example_before ?? null, params.example_after ?? null,
+    source, signalCount, notes, now, now,
+    params.register ?? null, params.polarity ?? null,
+  );
+
+  return db
+    .prepare(
+      `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
+              why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+              register, polarity
+       FROM writing_rules WHERE writing_type = ? AND category = ? AND rule_text = ?`,
+    )
+    .get(params.writing_type, params.category, params.rule_text) as WritingRule;
+}
+
+/**
+ * Unions highlight ids into a `synthesized-from:<ids>` notes value.
+ * Free text is preserved after a "; " separator so the provenance prefix
+ * stays parseable (parsers cut the id list at the first ';' or newline).
+ * Mirrors mergeProvenance in cli/db/rules.go.
+ */
+function mergeProvenanceNotes(
+  existingNotes: string | null,
+  newIds: string[] | undefined,
+  extraNotes?: string | null,
+): string | null {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  let rest = existingNotes ?? "";
+  const m = /^synthesized-from:([^;\n]*)([\s\S]*)$/.exec(rest);
+  if (m) {
+    for (const h of m[1].split(",")) {
+      const id = h.trim();
+      if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
+    }
+    rest = m[2].replace(/^[;\n]\s*/, "");
+  }
+  for (const h of newIds ?? []) {
+    const id = h.trim();
+    if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
+  }
+  const extra = [rest.trim(), (extraNotes ?? "").trim()].filter(Boolean).join("; ");
+  if (ids.length === 0) return extra || null;
+  return `synthesized-from:${ids.join(",")}${extra ? `; ${extra}` : ""}`;
+}
+
+export interface UpdateWritingRuleParams {
+  id: string;
+  rule_text?: string;
+  severity?: string;
+  when_to_apply?: string | null;
+  why?: string | null;
+  example_before?: string | null;
+  example_after?: string | null;
+  notes?: string | null;
+  writing_type?: string;
+  signal_count?: number;
+  register?: string | null;
+}
+
+export function updateWritingRule(
+  db: Database.Database,
+  params: UpdateWritingRuleParams,
+): WritingRule | { error: string } {
+  const existing = db
+    .prepare("SELECT id FROM writing_rules WHERE id = ?")
+    .get(params.id) as { id: string } | undefined;
+
+  if (!existing) {
+    return { error: `Writing rule not found: ${params.id}` };
+  }
+
+  if (params.severity && !VALID_SEVERITIES.includes(params.severity as (typeof VALID_SEVERITIES)[number])) {
+    return { error: `Invalid severity "${params.severity}". Allowed: ${VALID_SEVERITIES.join(", ")}` };
+  }
+
+  if (params.writing_type && !VALID_WRITING_TYPES.includes(params.writing_type as (typeof VALID_WRITING_TYPES)[number])) {
+    return { error: `Invalid writing_type "${params.writing_type}". Allowed: ${VALID_WRITING_TYPES.join(", ")}` };
+  }
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  if (params.rule_text !== undefined) { sets.push("rule_text = ?"); values.push(params.rule_text); }
+  if (params.severity !== undefined) { sets.push("severity = ?"); values.push(params.severity); }
+  if (params.when_to_apply !== undefined) { sets.push("when_to_apply = ?"); values.push(params.when_to_apply); }
+  if (params.why !== undefined) { sets.push("why = ?"); values.push(params.why); }
+  if (params.example_before !== undefined) { sets.push("example_before = ?"); values.push(params.example_before); }
+  if (params.example_after !== undefined) { sets.push("example_after = ?"); values.push(params.example_after); }
+  if (params.notes !== undefined) { sets.push("notes = ?"); values.push(params.notes); }
+  if (params.writing_type !== undefined) { sets.push("writing_type = ?"); values.push(params.writing_type); }
+  if (params.signal_count !== undefined) { sets.push("signal_count = ?"); values.push(params.signal_count); }
+  if (params.register !== undefined) { sets.push("register = ?"); values.push(params.register); }
+
+  if (sets.length === 0) {
+    return { error: "No fields to update" };
+  }
+
+  const now = nowMillis();
+  sets.push("updated_at = ?");
+  values.push(now);
+  values.push(params.id);
+
+  db.prepare(`UPDATE writing_rules SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+
+  return db
+    .prepare(
+      `SELECT id, writing_type as writingType, category, rule_text as ruleText, when_to_apply as whenToApply,
+              why, severity, example_before as exampleBefore, example_after as exampleAfter, source,
+              signal_count as signalCount, notes, created_at as createdAt, updated_at as updatedAt,
+              register, polarity
+       FROM writing_rules WHERE id = ?`,
+    )
+    .get(params.id) as WritingRule;
+}
+
+export function deleteWritingRule(
+  db: Database.Database,
+  ruleId: string,
+): { success: true } | { error: string } {
+  // Archive, never delete: a hard DELETE loses the synthesized-from
+  // provenance that keeps source corrections stamped. Re-synthesizing the
+  // same rule updates fields but leaves archived_at set — deletes stick.
+  const result = db
+    .prepare("UPDATE writing_rules SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL")
+    .run(nowMillis(), nowMillis(), ruleId);
+
+  if (result.changes === 0) {
+    return { error: `Writing rule not found: ${ruleId}` };
+  }
+
+  return { success: true };
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  general: "General",
+  email: "Email",
+  prd: "PRD",
+  blog: "Blog / essay",
+  "cover-letter": "Cover letter",
+  resume: "Resume",
+  slack: "Slack",
+  pitch: "Pitch",
+  outreach: "Outreach",
+  text: "Text message",
+  "case-study": "Case study",
+  "email-hiring": "Email (hiring)",
+  "email-friend": "Email (friend)",
+  "social-post": "Social post",
+  "text-friend": "Text (friend)",
+};
+
+/**
+ * Rules-only markdown (used by MCP resource and get_writing_rules_markdown tool).
+ * For the full unified profile written to ~/.margin/writing-rules.md, use getWritingProfileMarkdown.
+ */
+export function getWritingRulesMarkdown(rules: WritingRule[]): string {
+  const lines: string[] = [];
+  lines.push("# Writing Rules");
+  lines.push("");
+  lines.push(
+    "_For AI agents: apply rules matching the writing type. General rules always apply._",
+  );
+  lines.push(...formatRulesSection(rules));
+  lines.push("");
+  return lines.join("\n");
+}
+
+/** Unicode-safe truncation — iterates code points, not UTF-16 code units. */
+function truncate(text: string, max: number): string {
+  const codePoints = [...text];
+  if (codePoints.length <= max) return text;
+  return codePoints.slice(0, max).join("") + "…";
+}
+
+/**
+ * Unified writing profile: voice calibration + corrections + rules.
+ * Mirrors generate_writing_profile_markdown in writing_rules.rs.
+ */
+export function getWritingProfileMarkdown(
+  rules: WritingRule[],
+  corrections: Pick<CorrectionRecord, "originalText" | "notes" | "polarity">[],
+): string {
+  const lines: string[] = [];
+  lines.push("# Writing Profile");
+  lines.push("");
+  lines.push("_Generated by Margin. Voice calibration + corrections + writing rules in one file._");
+  lines.push(`_Generated at ${new Date().toISOString()} — if this is old, exports are failing; check margin logs._`);
+  lines.push("_For AI agents: apply rules matching the writing type. General rules always apply._");
+
+  // Voice calibration section — grouped by register
+  const voiceRules = rules.filter((r) => r.category === "voice-calibration");
+  if (voiceRules.length > 0) {
+    lines.push("", "---", "", "## Voice Calibration", "");
+    lines.push("_Statistical voice fingerprint. These are constraints, not suggestions._");
+
+    const universal = voiceRules.filter((r) => r.register !== "casual" && r.register !== "professional");
+    const casual = voiceRules.filter((r) => r.register === "casual");
+    const professional = voiceRules.filter((r) => r.register === "professional");
+
+    if (universal.length > 0) {
+      lines.push("", "### Universal (all registers)");
+      for (const rule of universal) {
+        lines.push("", `- **${rule.ruleText}**`);
+        if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+        if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      }
+    }
+
+    if (casual.length > 0) {
+      lines.push("", "### Casual register (slack, outreach, email, general chat)");
+      for (const rule of casual) {
+        lines.push("", `- **${rule.ruleText}**`);
+        if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+        if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      }
+    }
+
+    if (professional.length > 0) {
+      lines.push("", "### Professional register (pitch, prd, cover-letter, resume, blog)");
+      lines.push("_These rules DO NOT apply to casual writing. Use complete sentences, standard punctuation._");
+      for (const rule of professional) {
+        lines.push("", `- **${rule.ruleText}**`);
+        if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+        if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      }
+    }
+
+    // If there are casual rules but no professional rules, add explicit scoping note
+    if (casual.length > 0 && professional.length === 0) {
+      lines.push("", "### Professional register (pitch, prd, cover-letter, resume, blog)");
+      lines.push("_Casual-register rules above DO NOT apply. Use complete sentences, standard punctuation._");
+    }
+  }
+
+  // Corrections by polarity
+  const positive = corrections.filter((c) => c.polarity === "positive");
+  const corrective = corrections.filter((c) => c.polarity === "corrective");
+  const unclassified = corrections.filter((c) => c.polarity !== "positive" && c.polarity !== "corrective");
+
+  if (positive.length > 0) {
+    lines.push("", "---", "", "## Writing Samples", "");
+    lines.push("_Patterns to emulate — do more of this._");
+    for (const c of positive) {
+      const snippet = truncate(c.originalText, 200);
+      lines.push("", `> ${snippet.replace(/\n/g, "\n> ")}`);
+      if (c.notes.length > 0) lines.push(`— ${c.notes.join("; ")}`);
+    }
+  }
+
+  if (corrective.length > 0) {
+    lines.push("", "---", "", "## Corrections", "");
+    lines.push("_Patterns to avoid — don't do this._");
+    for (const c of corrective) {
+      const snippet = truncate(c.originalText, 200);
+      lines.push("", `- **${snippet}** → ${c.notes.join("; ")}`);
+    }
+  }
+
+  if (unclassified.length > 0) {
+    lines.push("", "---", "", "## Unclassified", "");
+    lines.push("_These annotations haven't been tagged as positive or corrective yet._");
+    for (const c of unclassified) {
+      const snippet = truncate(c.originalText, 120);
+      const note = c.notes.length === 0 ? "flagged" : c.notes.join("; ");
+      lines.push("", `- ${snippet} → ${note}`);
+    }
+  }
+
+  // Taste criteria (positive polarity non-voice rules)
+  const tasteCriteria = rules.filter(
+    (r) => r.category !== "voice-calibration" && r.polarity === "positive",
+  );
+  if (tasteCriteria.length > 0) {
+    lines.push("", "---", "", "## Taste Criteria (Do This)", "");
+    lines.push("_Patterns to emulate — positive examples of the voice and craft to replicate._");
+    for (const rule of tasteCriteria) {
+      lines.push("", `- **${rule.ruleText}**`);
+      if (rule.why) lines.push(`  - Why: ${rule.why}`);
+      if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+      if (rule.exampleBefore) lines.push(`  - Example: ${truncate(rule.exampleBefore, 200)}`);
+      lines.push(`  - Signal: seen ${rule.signalCount} time(s)`);
+    }
+  }
+
+  // Corrective rules (NULL or corrective polarity, non-voice)
+  const correctiveRules = rules.filter(
+    (r) => r.category !== "voice-calibration" && r.polarity !== "positive",
+  );
+  if (correctiveRules.length > 0) {
+    lines.push("", "---", "", "# Writing Rules", "");
+    lines.push("_Synthesized from corrections and editorial preferences._");
+    lines.push(...formatRulesSection(correctiveRules));
+  }
+
+  lines.push("");
+  return lines.join("\n");
+}
+
+/** Title-case a kebab category slug ("ai-slop" -> "Ai Slop"). */
+function categoryLabel(category: string): string {
+  return category
+    .replace(/-/g, " ")
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
+    .join(" ");
+}
+
+/**
+ * One rule. Hard rules (must-fix) are checklist items; preferences are plain
+ * bullets. The database's three severities never reach the agent.
+ * Mirrors formatRule in cli/profile/export.go.
+ */
+function formatRule(rule: WritingRule): string[] {
+  const marker = rule.severity === "must-fix" ? "- [ ] " : "- ";
+  const lines = [`${marker}**${rule.ruleText}** _(${categoryLabel(rule.category)})_`];
+  if (rule.whenToApply) lines.push(`  - When: ${rule.whenToApply}`);
+  if (rule.why) lines.push(`  - Why: ${rule.why}`);
+  if (rule.exampleBefore && rule.category !== "heading-patterns") lines.push(`  - Before: "${rule.exampleBefore}"`);
+  if (rule.exampleAfter) lines.push(`  - After: "${rule.exampleAfter}"`);
+  if (rule.notes) lines.push(`  - Notes: ${rule.notes.replace(/\n/g, "; ")}`);
+  lines.push(`  - Seen ${rule.signalCount} time(s)`);
+  return lines;
+}
+
+function formatStrictnessSections(rules: WritingRule[], heading: string): string[] {
+  const hard = rules.filter((r) => r.severity === "must-fix");
+  const prefs = rules.filter((r) => r.severity !== "must-fix");
+  const lines: string[] = [];
+  if (hard.length > 0) {
+    lines.push("", `${heading} Hard rules`, "", "_Breaking one is always a mistake. Check every item before handing work over._", "");
+    for (const r of hard) lines.push(...formatRule(r));
+  }
+  if (prefs.length > 0) {
+    lines.push("", `${heading} Preferences`, "", "_Follow these by default. The request, the reader, or the source can override them._", "");
+    for (const r of prefs) lines.push(...formatRule(r));
+  }
+  return lines;
+}
+
+/** Shared rules section formatter (extracted from getWritingRulesMarkdown). */
+function formatRulesSection(rules: WritingRule[]): string[] {
+  const lines: string[] = [];
+
+  const groups = new Map<string, WritingRule[]>();
+  for (const rule of rules) {
+    const existing = groups.get(rule.writingType);
+    if (existing) existing.push(rule);
+    else groups.set(rule.writingType, [rule]);
+  }
+
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    if (a === "general") return -1;
+    if (b === "general") return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const writingType of sortedKeys) {
+    const groupRules = groups.get(writingType)!;
+    lines.push("");
+    lines.push(`## ${TYPE_LABELS[writingType] ?? writingType}`);
+
+    lines.push(...formatStrictnessSections(groupRules, "###"));
+  }
+
+  return lines;
+}
+
+/**
+ * Port of generate_writing_guard_py from writing_rules.rs.
+ * Generates the writing guard hook Python script from must-fix kill words and ai-slop patterns.
+ */
+export function getWritingGuardPy(rules: WritingRule[]): string {
+  const killWords = rules
+    .filter((r) => r.severity === "must-fix" && r.category === "kill-words")
+    .map((r) => r.ruleText);
+
+  const slopPatterns = rules
+    .filter((r) => r.category === "ai-slop" && r.exampleBefore)
+    .map((r) => [r.exampleBefore!, r.ruleText]);
+
+  const headingPatterns = rules
+    .filter((r) => r.category === "heading-patterns" && r.severity === "must-fix" && r.exampleBefore)
+    .map((r) => [r.exampleBefore!, r.ruleText]);
+
+  const autoCorrections = rules
+    .filter((r) => r.category === "auto-synthesized" && r.severity === "must-fix" && r.exampleBefore && r.exampleBefore.length <= 80)
+    .map((r) => [r.exampleBefore!, r.ruleText]);
+
+  const killWordsJson = JSON.stringify(killWords);
+  const slopPatternsJson = JSON.stringify(slopPatterns);
+  const headingPatternsJson = JSON.stringify(headingPatterns);
+  const autoCorrectionsJson = JSON.stringify(autoCorrections);
+
+  if ([killWordsJson, slopPatternsJson, headingPatternsJson, autoCorrectionsJson].some((s) => s.includes('"""'))) {
+    return `#!/usr/bin/env python3
+# ERROR: A writing rule contains a triple-quote sequence that cannot be safely
+# embedded. Remove the offending rule text and re-export.
+import sys; print('writing_guard: triple-quote injection blocked — skipping guard', file=sys.stderr); sys.exit(1)
+`;
+  }
+
+  return `#!/usr/bin/env python3
+"""
+Writing guard hook — AUTO-GENERATED by Margin's export_writing_rules command.
+Do not edit manually. Changes will be overwritten.
+
+Kill words and slop patterns are loaded from JSON data blobs for safety.
+Source of truth: ~/.margin/margin.db (writing_rules table)
+"""
+import json, sys, re
+
+# Only check prose file extensions
+PROSE_EXTENSIONS = {".md", ".mdx", ".txt", ".html", ".htm"}
+
+# Kill words — loaded from JSON for codegen safety.
+KILL_WORDS = json.loads(r"""${killWordsJson}""")
+
+# AI-slop sentence patterns — [pattern, explanation]
+SLOP_PATTERNS = json.loads(r"""${slopPatternsJson}""")
+
+# Heading patterns — [regex, explanation] applied per heading line
+HEADING_PATTERNS = json.loads(r"""${headingPatternsJson}""")
+
+# Auto-synthesized corrections — [original_text, explanation] substring match
+AUTO_CORRECTIONS = json.loads(r"""${autoCorrectionsJson}""")
+
+def get_extension(path):
+    if not path:
+        return ""
+    dot = path.rfind(".")
+    return path[dot:].lower() if dot != -1 else ""
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+        tool = data.get("tool_name", "")
+        inp = data.get("tool_input") or {}
+
+        # Determine file path and text to check
+        path = ""
+        text = ""
+        if tool == "Write":
+            path = inp.get("file_path", "")
+            text = inp.get("content", "")
+        elif tool == "Edit":
+            path = inp.get("file_path", "")
+            text = inp.get("new_string", "")
+
+        if not text or get_extension(path) not in PROSE_EXTENSIONS:
+            sys.exit(0)
+
+        violations = []
+
+        # Check kill words
+        lower = text.lower()
+        for word in KILL_WORDS:
+            if word in lower:
+                violations.append(f'Kill word: "{word}"')
+
+        # Check slop patterns
+        for pattern, explanation in SLOP_PATTERNS:
+            if re.search(pattern, text):
+                violations.append(explanation)
+
+        # Check heading patterns
+        if HEADING_PATTERNS:
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith('#'):
+                    continue
+                heading_text = stripped.lstrip('#').strip()
+                if not heading_text:
+                    continue
+                for pattern, explanation in HEADING_PATTERNS:
+                    if re.search(pattern, heading_text):
+                        violations.append(f'{explanation}: "{stripped}"')
+                        break
+
+        # Check auto-synthesized corrections (substring match)
+        for original_text, explanation in AUTO_CORRECTIONS:
+            if original_text.lower() in lower:
+                violations.append(f'Auto-correction: "{original_text}" — {explanation}')
+
+        if violations:
+            msg = "WRITING GUARD: Writing rule violations detected:\\n"
+            for v in violations:
+                msg += f"  - {v}\\n"
+            msg += "Fix violations. See ~/.margin/writing-rules.md for rules."
+
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "ask",
+                    "permissionDecisionReason": msg
+                }
+            }))
+
+    except Exception as e:
+        # Fail-open: never block writes due to hook errors
+        print(f"Writing guard encountered an error (fail-open): {e}", file=sys.stderr)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
+`;
+}

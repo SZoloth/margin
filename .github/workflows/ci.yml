@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm tsc --noEmit
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Frontend tests
+        run: |
+          mkdir -p test-results
+          pnpm test -- --reporter=default --reporter=json --outputFile=test-results/vitest.json
+
+      - name: MCP tests
+        run: |
+          mkdir -p test-results
+          pnpm --filter mcp test -- --reporter=default --reporter=json --outputFile=test-results/mcp-vitest.json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: test-results/
+          retention-days: 14
+
+  backend:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install MCP server dependencies (bundled as margin-mcp)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Bun (builds the bundled margin-mcp)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Go (builds the bundled margin-cli)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Rust check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Rust clippy
+        run: |
+          mkdir -p evidence
+          cargo clippy --manifest-path src-tauri/Cargo.toml --message-format=json -- -D warnings \
+            2>&1 | tee evidence/clippy.json
+
+      - name: Rust tests
+        run: |
+          mkdir -p evidence
+          cargo test --manifest-path src-tauri/Cargo.toml \
+            2>&1 | tee evidence/cargo-test.txt
+
+      - name: Upload backend evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-evidence
+          path: evidence/
+          retention-days: 14

@@ -1,0 +1,47 @@
+[package]
+name = "margin"
+version = "1.17.1"
+description = "A local markdown reader and editor"
+authors = ["Sam Zoloth"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "margin_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "margin"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+reqwest = { version = "0.13", features = ["json", "rustls"], default-features = false }
+notify = { version = "7", features = ["macos_fsevent"] }
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+shlex = "2.0.1"
+
+[profile.release]
+codegen-units = 16   # parallelize codegen (default 1)
+opt-level = 2        # negligible diff for desktop app, faster compile
+strip = true         # smaller binary, faster signing
+
+[dev-dependencies]
+tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "search"
+harness = false

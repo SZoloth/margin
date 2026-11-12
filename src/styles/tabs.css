@@ -1,0 +1,150 @@
+.tab-bar {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-bar-inner {
+  display: flex;
+  align-items: stretch;
+  min-height: 43px;
+  padding-left: 0;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  max-width: 200px;
+  min-width: 0;
+  cursor: pointer;
+  position: relative;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  font-weight: 500;
+  transition: background-color 150ms var(--ease-micro), color 150ms var(--ease-micro);
+}
+
+.tab-item:hover {
+  background-color: var(--hover-bg);
+}
+
+.tab-item:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -2px;
+}
+
+.tab-item.tab-active {
+  color: var(--color-text-primary);
+}
+
+.tab-item.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background-color: var(--color-accent);
+  border-radius: 1px;
+}
+
+.tab-item.tab-dragging {
+  opacity: 0.4;
+}
+
+.tab-item.tab-drop-target {
+  border-left: 2px solid var(--color-text-secondary);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.tab-dirty {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--color-text-secondary);
+  flex-shrink: 0;
+  transition: opacity var(--duration-fast) var(--ease-micro);
+}
+
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-micro), background-color var(--duration-fast) var(--ease-micro), transform 200ms var(--ease-spring);
+}
+
+.tab-close:active {
+  transform: scale(0.96);
+}
+
+.tab-item:hover .tab-close {
+  opacity: 1;
+}
+
+/* When dirty indicator is shown on hover, hide it and show X instead */
+.tab-item:hover .tab-dirty {
+  display: none;
+}
+
+.tab-close:hover {
+  background-color: var(--active-bg);
+}
+
+.tab-close:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
+  opacity: 1;
+}
+
+.tab-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 4px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-subtle, transparent);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--duration-fast) var(--ease-micro);
+}
+
+.tab-new:hover {
+  background-color: var(--hover-bg);
+}
+
+.tab-new:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: -1px;
+}
+

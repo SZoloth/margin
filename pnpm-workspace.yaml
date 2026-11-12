@@ -1,0 +1,6 @@
+packages:
+  - "."
+  - "mcp"
+onlyBuiltDependencies:
+  - esbuild
+  - better-sqlite3

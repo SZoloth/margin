@@ -1,0 +1,18 @@
+/* Locally bundled fonts via @fontsource, so the app renders correctly offline.
+ * Families are named once, in the --font-* tokens in globals.css. */
+
+/* Newsreader, the reader serif. Variable build (wght 200-800, opsz 6-72):
+ * the static build fixes optical size at 18, so headings and small notes
+ * were set in the text cut. The browser only fetches the subsets it needs. */
+@import "@fontsource-variable/newsreader/opsz.css";
+@import "@fontsource-variable/newsreader/opsz-italic.css";
+
+/* Instrument Sans, the UI sans */
+@import "@fontsource/instrument-sans/latin-400.css";
+@import "@fontsource/instrument-sans/latin-400-italic.css";
+@import "@fontsource/instrument-sans/latin-500.css";
+@import "@fontsource/instrument-sans/latin-500-italic.css";
+@import "@fontsource/instrument-sans/latin-600.css";
+@import "@fontsource/instrument-sans/latin-700.css";
+
+/* Monospace is the system's (SF Mono on macOS); nothing to bundle. */

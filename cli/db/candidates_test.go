@@ -1,0 +1,223 @@
+package db
+
+import (
+	"database/sql"
+	"strings"
+	"testing"
+
+	_ "modernc.org/sqlite"
+)
+
+func setupRulesDB(t *testing.T) *sql.DB {
+	t.Helper()
+	path := t.TempDir() + "/rules.db"
+	d, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = d.Exec(`CREATE TABLE writing_rules (
+		id TEXT PRIMARY KEY, writing_type TEXT, category TEXT, rule_text TEXT,
+		when_to_apply TEXT, why TEXT, severity TEXT, example_before TEXT,
+		example_after TEXT, source TEXT, signal_count INTEGER DEFAULT 1,
+		notes TEXT, created_at INTEGER, updated_at INTEGER,
+		detection_pattern TEXT, reviewed_at INTEGER, archived_at INTEGER,
+		UNIQUE(writing_type, category, rule_text)
+	)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+// The core safety property: a synthesized candidate is invisible to every
+// export selection until it is accepted.
+func TestCandidateReviewGate(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	n, err := InsertCandidateRules(d, []CandidateRuleInput{
+		{Category: "ai-slop", RuleText: "Never hedge-stack", WritingType: "blog",
+			Severity: "must-fix", SignalCount: 4, SourceHighlights: []string{"h1", "h2"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("inserted %d, want 1", n)
+	}
+
+	// Excluded from coaching selection while unreviewed.
+	high, err := GetHighSignalRules(d, 30, "blog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(high) != 0 {
+		t.Errorf("unreviewed candidate leaked into GetHighSignalRules (%d rules)", len(high))
+	}
+
+	// Visible in the candidate queue.
+	cands, err := GetCandidateRules(d, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cands) != 1 {
+		t.Fatalf("candidate queue has %d, want 1", len(cands))
+	}
+	if !cands[0].IsUnreviewedCandidate() {
+		t.Error("candidate should report IsUnreviewedCandidate = true")
+	}
+	// Source-highlight provenance is preserved in notes.
+	if cands[0].Notes == nil || *cands[0].Notes != "synthesized-from:h1,h2" {
+		t.Errorf("source-highlight provenance missing: %v", cands[0].Notes)
+	}
+
+	// Accept it → now it flows into coaching.
+	if err := AcceptCandidateRule(d, cands[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	high, err = GetHighSignalRules(d, 30, "blog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(high) != 1 {
+		t.Errorf("accepted candidate missing from GetHighSignalRules (%d rules)", len(high))
+	}
+	if high[0].Source != "synthesis" {
+		t.Errorf("accepted candidate source = %q, want synthesis", high[0].Source)
+	}
+}
+
+func TestRejectCandidateRemovesIt(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	InsertCandidateRules(d, []CandidateRuleInput{
+		{Category: "tone", RuleText: "Drop the exclamation points", WritingType: "email", Severity: "should-fix", SignalCount: 2},
+	})
+	cands, _ := GetCandidateRules(d, false)
+	if len(cands) != 1 {
+		t.Fatalf("setup: want 1 candidate, got %d", len(cands))
+	}
+	if err := RejectCandidateRule(d, cands[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := GetCandidateRules(d, false)
+	if len(after) != 0 {
+		t.Errorf("rejected candidate still present (%d)", len(after))
+	}
+}
+
+func TestAcceptedCandidateCannotBeRejected(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	InsertCandidateRules(d, []CandidateRuleInput{
+		{Category: "structure", RuleText: "Lead with the outcome", WritingType: "general", Severity: "should-fix", SignalCount: 3},
+	})
+	cands, _ := GetCandidateRules(d, false)
+	AcceptCandidateRule(d, cands[0].ID)
+	// Once accepted it's no longer an unreviewed candidate, so reject is a no-op error.
+	if err := RejectCandidateRule(d, cands[0].ID); err == nil {
+		t.Error("expected reject of an accepted rule to fail")
+	}
+}
+
+// Unknown writing types must error visibly — the old code silently coerced
+// them to 'general', filing candidates under the wrong corpus.
+func TestInsertCandidateRulesRejectsInvalidWritingType(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	_, err := InsertCandidateRules(d, []CandidateRuleInput{
+		{Category: "tone", RuleText: "Be direct", WritingType: "tweet", Severity: "should-fix", SignalCount: 1},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid writing_type, got silent success")
+	}
+
+	// The whole batch must roll back — a bad type can't leave partial rows.
+	cands, _ := GetCandidateRules(d, false)
+	if len(cands) != 0 {
+		t.Errorf("invalid candidate persisted (%d rows)", len(cands))
+	}
+}
+
+func TestInsertCandidateRulesBatchIsAtomicOnInvalidType(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	_, err := InsertCandidateRules(d, []CandidateRuleInput{
+		{Category: "tone", RuleText: "Valid rule", WritingType: "email", Severity: "should-fix", SignalCount: 1},
+		{Category: "tone", RuleText: "Bad type rule", WritingType: "bogus", Severity: "should-fix", SignalCount: 1},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid writing_type")
+	}
+	cands, _ := GetCandidateRules(d, false)
+	if len(cands) != 0 {
+		t.Errorf("partial batch leaked: %d rows", len(cands))
+	}
+}
+
+// The canonical type set is the union of the Go and MCP lists — every type
+// the MCP server can write must round-trip here too.
+func TestInsertCandidateRulesAcceptsCanonicalTypes(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	for _, wt := range ValidWritingTypes {
+		n, err := InsertCandidateRules(d, []CandidateRuleInput{
+			{Category: "tone", RuleText: "rule-" + wt, WritingType: wt, Severity: "should-fix", SignalCount: 1},
+		})
+		if err != nil {
+			t.Fatalf("canonical type %q rejected: %v", wt, err)
+		}
+		if n != 1 {
+			t.Fatalf("canonical type %q: inserted %d, want 1", wt, n)
+		}
+	}
+}
+
+// A repeated correction synthesizing to the same rule must bump signal_count
+// and merge provenance — INSERT OR IGNORE alone would drop both, leaving the
+// new source corrections unstamped on acceptance (they'd resurface forever).
+func TestInsertCandidateRulesRecurrenceMerges(t *testing.T) {
+	d := setupRulesDB(t)
+	defer d.Close()
+
+	in := CandidateRuleInput{
+		Category: "tone", RuleText: "Be direct", WritingType: "email",
+		Severity: "should-fix", SignalCount: 1, SourceHighlights: []string{"h1"},
+	}
+	if _, err := InsertCandidateRules(d, []CandidateRuleInput{in}); err != nil {
+		t.Fatal(err)
+	}
+	// Same rule synthesized again from a different correction.
+	in.SourceHighlights = []string{"h2", "h3"}
+	in.SignalCount = 2
+	n, err := InsertCandidateRules(d, []CandidateRuleInput{in})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("recurrence reported %d inserts, want 0", n)
+	}
+
+	var signal int
+	var notes string
+	err = d.QueryRow(
+		`SELECT signal_count, notes FROM writing_rules
+		 WHERE writing_type='email' AND category='tone' AND rule_text='Be direct'`).
+		Scan(&signal, &notes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signal != 3 {
+		t.Errorf("signal_count = %d, want 3 (1 + 2)", signal)
+	}
+	for _, want := range []string{"synthesized-from:", "h1", "h2", "h3"} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("provenance notes %q missing %q", notes, want)
+		}
+	}
+}

@@ -1,0 +1,445 @@
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+export function startWindowDrag(): void {
+  getCurrentWindow().startDragging().catch(() => {});
+}
+import type { Document, FileEntry } from "@/types/document";
+import type { CorrectionInput, CorrectionRecord, CorrectionDetail, DocumentCorrections } from "@/types/annotations";
+import type { PersistedTab } from "@/types/tab";
+import type { WritingType } from "@/lib/writing-types";
+
+export async function openFileDialog(): Promise<string | null> {
+  return invoke<string | null>("open_file_dialog");
+}
+
+export async function readFile(path: string): Promise<string> {
+  return invoke<string>("read_file", { path });
+}
+
+export async function saveFile(path: string, content: string): Promise<void> {
+  return invoke<void>("save_file", { path, content });
+}
+
+export async function listMarkdownFiles(dir: string): Promise<FileEntry[]> {
+  return invoke<FileEntry[]>("list_markdown_files", { dir });
+}
+
+export async function getRecentDocuments(limit?: number): Promise<Document[]> {
+  return invoke<Document[]>("get_recent_documents", { limit });
+}
+
+export async function upsertDocument(doc: Document): Promise<Document> {
+  return invoke<Document>("upsert_document", { doc });
+}
+
+export async function renameFile(oldPath: string, newName: string): Promise<Document> {
+  return invoke<Document>("rename_file", { oldPath, newName });
+}
+
+export async function drainPendingOpenFiles(): Promise<string[]> {
+  return invoke<string[]>("drain_pending_open_files");
+}
+
+export async function getOpenTabs(): Promise<PersistedTab[]> {
+  return invoke<PersistedTab[]>("get_open_tabs");
+}
+
+export async function saveOpenTabs(tabs: PersistedTab[]): Promise<void> {
+  return invoke<void>("save_open_tabs", { tabs });
+}
+
+export async function persistCorrections(
+  corrections: CorrectionInput[],
+  documentId: string,
+  documentTitle: string | null,
+  documentSource: string,
+  documentPath: string | null,
+  exportDate: string,
+): Promise<string> {
+  return invoke<string>("persist_corrections", {
+    corrections,
+    documentId,
+    documentTitle,
+    documentSource,
+    documentPath,
+    exportDate,
+  });
+}
+
+export async function getAllCorrections(limit?: number): Promise<CorrectionRecord[]> {
+  return invoke<CorrectionRecord[]>(
+    "get_all_corrections",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function getCorrectionsCount(): Promise<number> {
+  return invoke<number>("get_corrections_count");
+}
+
+export async function getCorrectionsByDocument(limit?: number): Promise<DocumentCorrections[]> {
+  return invoke<DocumentCorrections[]>(
+    "get_corrections_by_document",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function syncFeedbackSignal(
+  highlightId: string,
+  polarity: "positive" | "corrective" | null,
+  rationale: string | null,
+): Promise<boolean> {
+  return invoke<boolean>("sync_feedback_signal", { highlightId, polarity, rationale });
+}
+
+export async function updateCorrectionWritingType(highlightId: string, writingType: WritingType): Promise<void> {
+  return invoke<void>("update_correction_writing_type", { highlightId, writingType });
+}
+
+export async function updateCorrectionRationale(highlightId: string, rationale: string | null): Promise<void> {
+  return invoke<void>("update_correction_rationale", { highlightId, rationale });
+}
+
+export async function deleteCorrection(highlightId: string): Promise<void> {
+  return invoke<void>("delete_correction", { highlightId });
+}
+
+export async function acceptCorrection(highlightId: string): Promise<string | null> {
+  return invoke<string | null>("accept_correction", { highlightId });
+}
+
+export interface ExportResult {
+  count: number;
+  highlightIds: string[];
+}
+
+export async function exportCorrectionsJson(path?: string): Promise<ExportResult> {
+  return invoke<ExportResult>(
+    "export_corrections_json",
+    path === undefined ? {} : { path },
+  );
+}
+
+export async function markCorrectionsSynthesized(highlightIds: string[]): Promise<number> {
+  return invoke<number>("mark_corrections_synthesized", { highlightIds });
+}
+
+export interface IndexAllResult {
+  indexed: number;
+  skipped: number;
+  errors: number;
+}
+
+export async function indexAllDocuments(): Promise<IndexAllResult> {
+  return invoke<IndexAllResult>("index_all_documents");
+}
+
+export type WritingRuleSeverity = "must-fix" | "should-fix" | "nice-to-fix";
+
+export interface WritingRule {
+  id: string;
+  writingType: WritingType;
+  category: string;
+  ruleText: string;
+  whenToApply: string | null;
+  why: string | null;
+  severity: WritingRuleSeverity;
+  exampleBefore: string | null;
+  exampleAfter: string | null;
+  source: string;
+  signalCount: number;
+  notes: string | null;
+  reviewedAt: number | null;
+  detectionPattern: string | null;
+  archivedAt?: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WritingRulesExportResult {
+  markdownPath: string;
+  hookPath: string;
+  ruleCount: number;
+}
+
+export async function getWritingRules(writingType?: WritingType): Promise<WritingRule[]> {
+  return invoke<WritingRule[]>(
+    "get_writing_rules",
+    writingType === undefined ? {} : { writingType },
+  );
+}
+
+export async function exportWritingRules(): Promise<WritingRulesExportResult> {
+  return invoke<WritingRulesExportResult>("export_writing_rules");
+}
+
+/** Whether exports may write Claude Code's writing guard and Codex's AGENTS.md. */
+export async function getAgentIntegration(): Promise<boolean> {
+  return invoke<boolean>("get_agent_integration");
+}
+
+export async function setAgentIntegration(enabled: boolean): Promise<void> {
+  return invoke<void>("set_agent_integration", { enabled });
+}
+
+/** Writes the first-run sample to ~/.margin/samples (once) and returns its path. Null outside the app. */
+export async function writeFirstRunSample(content: string): Promise<string | null> {
+  return (await invoke<string | null>("write_first_run_sample", { content })) ?? null;
+}
+
+/** "Never write this": a must-fix kill word for all writing, made without Claude. */
+export async function createNeverWriteRule(phrase: string, why?: string): Promise<WritingRule> {
+  return invoke<WritingRule>("create_never_write_rule", { phrase, why });
+}
+
+export async function getCorrectionsFlat(limit?: number): Promise<CorrectionDetail[]> {
+  return invoke<CorrectionDetail[]>(
+    "get_corrections_flat",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function bulkDeleteCorrections(highlightIds: string[]): Promise<number> {
+  return invoke<number>("bulk_delete_corrections", { highlightIds });
+}
+
+export async function setCorrectionCategory(highlightId: string, category: string | null): Promise<void> {
+  return invoke<void>("set_correction_category", { highlightId, category });
+}
+
+export async function bulkTagCorrections(highlightIds: string[], writingType: string): Promise<number> {
+  return invoke<number>("bulk_tag_corrections", { highlightIds, writingType });
+}
+
+export async function bulkSetPolarity(highlightIds: string[], polarity: "positive" | "corrective"): Promise<number> {
+  return invoke<number>("bulk_set_polarity_corrections", { highlightIds, polarity });
+}
+
+export async function getVoiceSignals(polarity?: "positive" | "corrective", limit?: number): Promise<import("@/types/annotations").CorrectionDetail[]> {
+  return invoke<import("@/types/annotations").CorrectionDetail[]>(
+    "get_voice_signals",
+    {
+      ...(polarity !== undefined ? { polarity } : {}),
+      ...(limit !== undefined ? { limit } : {}),
+    },
+  );
+}
+
+export interface VoiceProfileExportResult {
+  path: string;
+  positiveCount: number;
+  correctiveCount: number;
+  unclassifiedCount: number;
+  ruleCount: number;
+}
+
+export async function exportVoiceProfile(): Promise<VoiceProfileExportResult> {
+  return invoke<VoiceProfileExportResult>("export_voice_profile");
+}
+
+export async function updateWritingRule(
+  id: string,
+  updates: {
+    ruleText?: string;
+    severity?: WritingRuleSeverity;
+    whenToApply?: string;
+    why?: string;
+    exampleBefore?: string;
+    exampleAfter?: string;
+    notes?: string;
+  },
+): Promise<void> {
+  return invoke<void>("update_writing_rule", {
+    id,
+    ruleText: updates.ruleText,
+    severity: updates.severity,
+    whenToApply: updates.whenToApply,
+    why: updates.why,
+    exampleBefore: updates.exampleBefore,
+    exampleAfter: updates.exampleAfter,
+    notes: updates.notes,
+  });
+}
+
+export async function deleteWritingRule(id: string): Promise<void> {
+  return invoke<void>("delete_writing_rule", { id });
+}
+
+export async function unarchiveWritingRule(id: string): Promise<void> {
+  return invoke<void>("unarchive_writing_rule", { id });
+}
+
+export async function getArchivedWritingRules(): Promise<WritingRule[]> {
+  return invoke<WritingRule[]>("get_archived_writing_rules");
+}
+
+export type SnapshotType = "pre_external_edit" | "manual";
+
+export async function saveContentSnapshot(
+  documentId: string,
+  content: string,
+  snapshotType: SnapshotType = "pre_external_edit",
+): Promise<string> {
+  return invoke<string>("save_content_snapshot", { documentId, content, snapshotType });
+}
+
+export async function getContentSnapshot(
+  documentId: string,
+  snapshotType: SnapshotType = "pre_external_edit",
+): Promise<string | null> {
+  return invoke<string | null>("get_content_snapshot", { documentId, snapshotType });
+}
+
+export async function deleteContentSnapshot(
+  documentId: string,
+  snapshotType: SnapshotType = "pre_external_edit",
+): Promise<void> {
+  return invoke<void>("delete_content_snapshot", { documentId, snapshotType });
+}
+
+export async function updateHighlightPositions(
+  updates: [string, number, number][],
+): Promise<void> {
+  return invoke<void>("update_highlight_positions", { updates });
+}
+
+export async function markHighlightsExported(highlightIds: string[]): Promise<number> {
+  return invoke<number>("mark_highlights_exported", { highlightIds });
+}
+
+export async function markCorrectionsUnsynthesized(highlightIds: string[]): Promise<number> {
+  return invoke<number>("mark_corrections_unsynthesized", { highlightIds });
+}
+
+export async function markRulesReviewed(ruleIds: string[]): Promise<number> {
+  return invoke<number>("mark_rules_reviewed", { ruleIds });
+}
+
+export async function markRulesUnreviewed(ruleIds: string[]): Promise<number> {
+  return invoke<number>("mark_rules_unreviewed", { ruleIds });
+}
+
+export interface SeedRulesResult {
+  created: number;
+  deduplicated: number;
+  errors: string[];
+}
+
+export async function seedRulesFromGuide(
+  guideText: string,
+  writingType?: string,
+  guideName?: string,
+): Promise<SeedRulesResult> {
+  return invoke<SeedRulesResult>("seed_rules_from_guide", {
+    guideText,
+    writingType,
+    guideName,
+  });
+}
+
+export async function openStyleGuideDialog(): Promise<string | null> {
+  return invoke<string | null>("open_style_guide_dialog");
+}
+
+// Dashboard types
+export interface TestRunSummary {
+  id: string;
+  timestamp: number;
+  mode: string;
+  ruleCount: number;
+  totalSamples: number;
+  avgMechanicalIssues: number;
+  avgDimensionScore: number;
+  avgMechanicalDelta: number | null;
+  avgDimensionDelta: number | null;
+  dimensionAveragesJson: string | null;
+  dimensionDeltasJson: string | null;
+  bestType: string | null;
+  worstType: string | null;
+  status: string;
+  createdAt: number;
+}
+
+export interface DashboardSummary {
+  latestRun: TestRunSummary | null;
+  recentRuns: TestRunSummary[];
+  ruleCount: number;
+}
+
+export interface TestRunTypeDetail {
+  id: string;
+  writingType: string;
+  sampleCount: number;
+  avgMechanicalIssues: number;
+  avgDimensionScore: number;
+  dimensionScoresJson: string | null;
+  mechanicalDelta: number | null;
+  dimensionDelta: number | null;
+  systematicViolationsJson: string | null;
+  createdAt: number;
+}
+
+export interface TestRunDetail {
+  run: TestRunSummary;
+  types: TestRunTypeDetail[];
+}
+
+export async function getDashboardSummary(limit?: number): Promise<DashboardSummary> {
+  return invoke<DashboardSummary>(
+    "get_dashboard_summary",
+    limit === undefined ? {} : { limit },
+  );
+}
+
+export async function getTestRunDetail(runId: string): Promise<TestRunDetail> {
+  return invoke<TestRunDetail>("get_test_run_detail", { runId });
+}
+
+export async function startTestRun(): Promise<string> {
+  return invoke<string>("start_test_run");
+}
+
+export async function exportDashboardMarkdown(): Promise<string> {
+  return invoke<string>("export_dashboard_markdown");
+}
+
+// --- Thesis candidates ---
+
+export interface ThesisCandidate {
+  id: string;
+  statement: string;
+  /** JSON string: [{highlightId, text, relevance}] */
+  evidenceJson: string;
+  confidence: string | null;
+  /** JSON string: [documentId, ...] */
+  sourceDocumentIdsJson: string;
+  status: "draft" | "accepted" | "rejected";
+  createdAt: number;
+  updatedAt: number;
+}
+
+export async function saveThesisCandidate(
+  statement: string,
+  evidenceJson: string,
+  confidence: string | null,
+  sourceDocumentIdsJson: string,
+): Promise<ThesisCandidate> {
+  return invoke<ThesisCandidate>("save_thesis_candidate", {
+    statement,
+    evidenceJson,
+    confidence,
+    sourceDocumentIdsJson,
+  });
+}
+
+export async function getThesisCandidates(): Promise<ThesisCandidate[]> {
+  return invoke<ThesisCandidate[]>("get_thesis_candidates");
+}
+
+export async function updateThesisStatus(
+  id: string,
+  status: "draft" | "accepted" | "rejected",
+): Promise<boolean> {
+  return invoke<boolean>("update_thesis_status", { id, status });
+}

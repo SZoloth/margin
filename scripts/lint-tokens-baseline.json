@@ -1,0 +1,740 @@
+[
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 23,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 42,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 187,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 18,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 201,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 14,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 216,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 14,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 223,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ color: \"var(--color-text-secondary)\", fontSize: 13 }}>"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 236,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 14,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 248,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 13,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 272,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 291,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 305,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 319,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 337,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/ExportAnnotationsPopover.tsx",
+    "line": 352,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/editor/HighlightThread.tsx",
+    "line": 300,
+    "rule": "undefined-css-var",
+    "snippet": "color: polarity === \"positive\" ? \"var(--color-positive, #2d8a4e)\" : undefined,"
+  },
+  {
+    "file": "src/components/editor/HighlightThread.tsx",
+    "line": 301,
+    "rule": "undefined-css-var",
+    "snippet": "background: polarity === \"positive\" ? \"var(--color-positive-bg, rgba(45, 138, 78, 0.1))\" : undefined,"
+  },
+  {
+    "file": "src/components/editor/HighlightThread.tsx",
+    "line": 315,
+    "rule": "undefined-css-var",
+    "snippet": "color: polarity === \"corrective\" ? \"var(--color-corrective, #d97706)\" : undefined,"
+  },
+  {
+    "file": "src/components/editor/HighlightThread.tsx",
+    "line": 316,
+    "rule": "undefined-css-var",
+    "snippet": "background: polarity === \"corrective\" ? \"var(--color-corrective-bg, rgba(217, 119, 6, 0.1))\" : undefined,"
+  },
+  {
+    "file": "src/components/editor/MarginIndicators.tsx",
+    "line": 6,
+    "rule": "hardcoded-color",
+    "snippet": "yellow: \"#c9b463\","
+  },
+  {
+    "file": "src/components/editor/MarginIndicators.tsx",
+    "line": 7,
+    "rule": "hardcoded-color",
+    "snippet": "blue: \"#8da8c4\","
+  },
+  {
+    "file": "src/components/editor/MarginIndicators.tsx",
+    "line": 8,
+    "rule": "hardcoded-color",
+    "snippet": "green: \"#8bb07a\","
+  },
+  {
+    "file": "src/components/editor/MarginIndicators.tsx",
+    "line": 9,
+    "rule": "hardcoded-color",
+    "snippet": "pink: \"#c48da8\","
+  },
+  {
+    "file": "src/components/editor/MarginIndicators.tsx",
+    "line": 10,
+    "rule": "hardcoded-color",
+    "snippet": "orange: \"#c4a07a\","
+  },
+  {
+    "file": "src/components/layout/AppShell.tsx",
+    "line": 445,
+    "rule": "hardcoded-color",
+    "snippet": "color: \"#FF5722\","
+  },
+  {
+    "file": "src/components/layout/AppShell.tsx",
+    "line": 304,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 13,"
+  },
+  {
+    "file": "src/components/layout/AppShell.tsx",
+    "line": 440,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 9,"
+  },
+  {
+    "file": "src/components/layout/Sidebar.tsx",
+    "line": 199,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 20,"
+  },
+  {
+    "file": "src/components/layout/Sidebar.tsx",
+    "line": 508,
+    "rule": "hardcoded-fontsize",
+    "snippet": "style={{ fontSize: 11, opacity: 0.6, fontWeight: 400 }}"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 88,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 125,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 220,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 15,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 230,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ fontFamily: \"'Newsreader', Georgia, serif\", fontSize: 14, color: \"var(--color-text-primary)\", lineHeight: 1.4, marginBottom: 6 }}>"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 234,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ display: \"flex\", alignItems: \"center\", gap: 8, fontSize: 12, color: \"var(--color-text-tertiary, var(--color-text-secondary))\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 245,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 272,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 306,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 311,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ marginBottom: 6, fontSize: 10, fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", letterSpacing: \"0.3px\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 531,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<span aria-hidden=\"true\" style={{ position: \"absolute\", left: 8, top: 7, color: \"var(--color-text-secondary)\", fontSize: 12, pointerEvents: \"none\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 542,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 558,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 577,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 593,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<span style={{ fontSize: 11, color: \"var(--color-text-secondary)\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 602,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 620,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 635,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 661,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ textAlign: \"center\", color: \"var(--color-text-secondary)\", fontSize: 13, padding: \"64px 32px\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 665,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ textAlign: \"center\", color: \"var(--color-text-secondary)\", fontSize: 13, padding: \"64px 32px\", lineHeight: 1.6 }}>"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 674,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/style-memory/CorrectionsTab.tsx",
+    "line": 706,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 747,
+    "rule": "hardcoded-color",
+    "snippet": "&#9660;"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 29,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 52,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 65,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ display: \"flex\", alignItems: \"center\", gap: 4, fontSize: 10, color: \"var(--color-text-secondary)\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 97,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 192,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 12,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 205,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<label style={{ fontSize: 10, fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", letterSpacing: \"0.3px\" }}>Rule text</label>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 210,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<label style={{ fontSize: 10, fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", letterSpacing: \"0.3px\" }}>Severity</label>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 222,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<label style={{ fontSize: 10, fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", letterSpacing: \"0.3px\" }}>When to apply</label>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 227,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<label style={{ fontSize: 10, fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", letterSpacing: \"0.3px\" }}>Why</label>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 232,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<label style={{ fontSize: 10, fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", letterSpacing: \"0.3px\" }}>Before</label>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 236,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<label style={{ fontSize: 10, fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", letterSpacing: \"0.3px\" }}>After</label>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 241,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<button type=\"button\" onClick={handleSave} style={{ padding: \"4px 12px\", fontSize: 11, background: \"var(--color-text-primary)\", color: \"var(--color-page)\", border: \"none\", borderRadius: \"var(--radius-sm)\", cursor: \"pointer\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 244,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<button type=\"button\" onClick={handleCancel} style={{ padding: \"4px 12px\", fontSize: 11, background: \"var(--color-page)\", color: \"var(--color-text-secondary)\", border: \"1px solid var(--color-border)\", borderRadius: \"var(--radius-sm)\", cursor: \"pointer\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 258,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ fontSize: 13, fontWeight: 500, color: \"var(--color-text-primary)\", flex: 1, lineHeight: 1.4 }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 266,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ fontSize: 11, color: \"var(--color-text-secondary)\", lineHeight: 1.4, marginBottom: 4 }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 267,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<strong style={{ fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", fontSize: 9, letterSpacing: \"0.3px\" }}>When </strong>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 272,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ fontSize: 11, color: \"var(--color-text-secondary)\", lineHeight: 1.4, marginBottom: 4 }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 273,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<strong style={{ fontWeight: 600, color: \"var(--color-text-secondary)\", textTransform: \"uppercase\", fontSize: 9, letterSpacing: \"0.3px\" }}>Why </strong>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 289,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 315,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 332,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 349,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 370,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 385,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 626,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 643,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 658,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<span style={{ fontSize: 11, color: \"var(--color-text-secondary)\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 666,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 679,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<span style={{ fontSize: 11, color: \"var(--color-text-secondary)\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 688,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 11,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 706,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ textAlign: \"center\", color: \"var(--color-text-secondary)\", fontSize: 13, padding: \"64px 32px\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 710,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<div style={{ textAlign: \"center\", color: \"var(--color-text-secondary)\", fontSize: 13, padding: \"64px 32px\", lineHeight: 1.6 }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 721,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 14,"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 738,
+    "rule": "hardcoded-fontsize",
+    "snippet": "<span style={{ fontSize: 11, fontWeight: 400, color: \"var(--color-text-secondary)\" }}>"
+  },
+  {
+    "file": "src/components/style-memory/RulesTab.tsx",
+    "line": 743,
+    "rule": "hardcoded-fontsize",
+    "snippet": "fontSize: 10,"
+  },
+  {
+    "file": "src/components/style-memory/__tests__/RulesTab.test.tsx",
+    "line": 51,
+    "rule": "undefined-css-var",
+    "snippet": "expect(style.background).toContain(\"var(--color-severity-\");"
+  },
+  {
+    "file": "src/components/style-memory/__tests__/RulesTab.test.tsx",
+    "line": 52,
+    "rule": "undefined-css-var",
+    "snippet": "expect(style.color).toContain(\"var(--color-severity-\");"
+  },
+  {
+    "file": "src/components/style-memory/__tests__/RulesTab.test.tsx",
+    "line": 53,
+    "rule": "undefined-css-var",
+    "snippet": "expect(style.borderColor).toContain(\"var(--color-severity-\");"
+  },
+  {
+    "file": "src/hooks/useDesignDials.ts",
+    "line": 11,
+    "rule": "hardcoded-color",
+    "snippet": "yellow: \"#f5edd2\","
+  },
+  {
+    "file": "src/hooks/useDesignDials.ts",
+    "line": 12,
+    "rule": "hardcoded-color",
+    "snippet": "green: \"#dce8d5\","
+  },
+  {
+    "file": "src/hooks/useDesignDials.ts",
+    "line": 13,
+    "rule": "hardcoded-color",
+    "snippet": "blue: \"#d8e2eb\","
+  },
+  {
+    "file": "src/hooks/useDesignDials.ts",
+    "line": 14,
+    "rule": "hardcoded-color",
+    "snippet": "pink: \"#ecdde3\","
+  },
+  {
+    "file": "src/hooks/useDesignDials.ts",
+    "line": 15,
+    "rule": "hardcoded-color",
+    "snippet": "orange: \"#f0e2cf\","
+  },
+  {
+    "file": "src/styles/annotations.css",
+    "line": 70,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 11px;"
+  },
+  {
+    "file": "src/styles/annotations.css",
+    "line": 86,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 12px;"
+  },
+  {
+    "file": "src/styles/annotations.css",
+    "line": 112,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 10px;"
+  },
+  {
+    "file": "src/styles/annotations.css",
+    "line": 121,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 13px;"
+  },
+  {
+    "file": "src/styles/annotations.css",
+    "line": 144,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 13px;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 4,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-add-bg: #e8ede0;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 5,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-add-border: #7a9460;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 6,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-del-bg: #ecdede;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 7,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-del-border: #b07070;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 8,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-del-text: #5a2e2e;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 12,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-add-bg: #232e1e;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 13,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-add-border: #6a8450;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 14,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-del-bg: #2e1e1e;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 15,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-del-border: #9a6060;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 16,
+    "rule": "hardcoded-color",
+    "snippet": "--color-diff-del-text: #c89090;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 150,
+    "rule": "hardcoded-color",
+    "snippet": "color: #FFFFF8;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 151,
+    "rule": "hardcoded-color",
+    "snippet": "background-color: #1A1714;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 159,
+    "rule": "hardcoded-color",
+    "snippet": "background-color: #2a2a2a;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 175,
+    "rule": "hardcoded-color",
+    "snippet": "color: #FFFFF8;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 69,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 12px;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 147,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 12px;"
+  },
+  {
+    "file": "src/styles/diff.css",
+    "line": 213,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 10px;"
+  },
+  {
+    "file": "src/styles/editor.css",
+    "line": 9,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 13px;"
+  },
+  {
+    "file": "src/styles/editor.css",
+    "line": 23,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 11px;"
+  },
+  {
+    "file": "src/styles/editor.css",
+    "line": 3,
+    "rule": "undefined-css-var",
+    "snippet": "margin: 0 0 var(--space-lg) 0;"
+  },
+  {
+    "file": "src/styles/editor.css",
+    "line": 5,
+    "rule": "undefined-css-var",
+    "snippet": "background: var(--color-surface-secondary);"
+  },
+  {
+    "file": "src/styles/editor.css",
+    "line": 8,
+    "rule": "undefined-css-var",
+    "snippet": "font-family: var(--font-mono, ui-monospace, monospace);"
+  },
+  {
+    "file": "src/styles/editor.css",
+    "line": 21,
+    "rule": "undefined-css-var",
+    "snippet": "margin-bottom: var(--space-sm);"
+  },
+  {
+    "file": "src/styles/editor.css",
+    "line": 22,
+    "rule": "undefined-css-var",
+    "snippet": "font-family: var(--font-sans, system-ui, sans-serif);"
+  },
+  {
+    "file": "src/styles/tabs.css",
+    "line": 33,
+    "rule": "hardcoded-fontsize",
+    "snippet": "font-size: 13px;"
+  }
+]

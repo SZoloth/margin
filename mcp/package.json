@@ -1,0 +1,29 @@
+{
+  "name": "@margin/mcp-server",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "pnpm exec tsc",
+    "dev": "tsc --watch",
+    "test": "pnpm exec vitest run",
+    "test:watch": "vitest",
+    "eval:check": "tsx scripts/compliance-check.ts",
+    "eval:adversarial": "tsx scripts/adversarial-test.ts",
+    "eval:comparison": "tsx scripts/adversarial-test.ts --mode comparison --save"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^11.0.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "tsx": "4.23.13",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

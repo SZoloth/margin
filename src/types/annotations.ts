@@ -1,0 +1,73 @@
+export interface Highlight {
+  id: string;
+  document_id: string;
+  color: string;
+  text_content: string;
+  from_pos: number;
+  to_pos: number;
+  prefix_context: string | null;
+  suffix_context: string | null;
+  created_at: number;
+  updated_at: number;
+  exported_at: number | null;
+}
+
+export interface MarginNote {
+  id: string;
+  highlight_id: string;
+  content: string;
+  intent: "correction" | "note" | "prompt";
+  created_at: number;
+  updated_at: number;
+}
+
+export interface CorrectionInput {
+  highlight_id: string;
+  original_text: string;
+  prefix_context: string | null;
+  suffix_context: string | null;
+  extended_context: string | null;
+  notes: string[];
+  highlight_color: string;
+  writing_type: string | null;
+  polarity: "positive" | "corrective" | null;
+  intent: "correction" | "note" | "prompt";
+  suggested_edit?: string | null;
+  rationale?: string | null;
+}
+
+export interface CorrectionRecord {
+  originalText: string;
+  notes: string[];
+  highlightColor: string;
+  documentTitle: string | null;
+  documentId: string;
+  createdAt: number;
+  writingType: string | null;
+  polarity: "positive" | "corrective" | null;
+}
+
+export interface CorrectionDetail {
+  highlightId: string;
+  originalText: string;
+  notes: string[];
+  extendedContext: string | null;
+  highlightColor: string;
+  writingType: string | null;
+  polarity: "positive" | "corrective" | null;
+  synthesizedAt: number | null;
+  documentTitle: string | null;
+  createdAt: number;
+  suggestedEdit: string | null;
+  acceptedAt: number | null;
+  rationale?: string | null;
+  /** Triage category — 'non-feedback' rows are excluded from synthesis. */
+  category?: string | null;
+}
+
+export interface DocumentCorrections {
+  documentId: string;
+  documentTitle: string | null;
+  documentPath: string | null;
+  corrections: CorrectionDetail[];
+}

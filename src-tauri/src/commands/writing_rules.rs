@@ -1,0 +1,2214 @@
+use crate::commands::corrections::CorrectionRecord;
+use crate::commands::now_millis;
+use crate::db::migrations::DbPool;
+use rusqlite::Connection;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WritingRule {
+    pub id: String,
+    pub writing_type: String,
+    pub category: String,
+    pub rule_text: String,
+    pub when_to_apply: Option<String>,
+    pub why: Option<String>,
+    pub severity: String,
+    pub example_before: Option<String>,
+    pub example_after: Option<String>,
+    pub source: String,
+    pub signal_count: i64,
+    pub notes: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub reviewed_at: Option<i64>,
+    pub register: Option<String>,
+    pub polarity: Option<String>,
+    pub detection_pattern: Option<String>,
+    pub archived_at: Option<i64>,
+}
+
+fn rule_from_row(row: &rusqlite::Row) -> rusqlite::Result<WritingRule> {
+    Ok(WritingRule {
+        id: row.get(0)?,
+        writing_type: row.get(1)?,
+        category: row.get(2)?,
+        rule_text: row.get(3)?,
+        when_to_apply: row.get(4)?,
+        why: row.get(5)?,
+        severity: row.get(6)?,
+        example_before: row.get(7)?,
+        example_after: row.get(8)?,
+        source: row.get(9)?,
+        signal_count: row.get(10)?,
+        notes: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+        reviewed_at: row.get(14)?,
+        register: row.get(15)?,
+        polarity: row.get(16)?,
+        detection_pattern: row.get(17)?,
+        archived_at: row.get(18)?,
+    })
+}
+
+const RULES_SELECT: &str =
+    "SELECT id, writing_type, category, rule_text, when_to_apply, why, severity,
+            example_before, example_after, source, signal_count, notes, created_at, updated_at,
+            reviewed_at, register, polarity, detection_pattern, archived_at
+     FROM writing_rules";
+
+pub(crate) fn fetch_writing_rules(
+    conn: &Connection,
+    writing_type: Option<&str>,
+) -> rusqlite::Result<Vec<WritingRule>> {
+    match writing_type {
+        Some(wt) => {
+            let sql = format!("{RULES_SELECT} WHERE writing_type = ?1 AND archived_at IS NULL ORDER BY signal_count DESC, created_at DESC");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map([wt], rule_from_row)?;
+            rows.collect()
+        }
+        None => {
+            let sql = format!("{RULES_SELECT} WHERE archived_at IS NULL ORDER BY writing_type, signal_count DESC, created_at DESC");
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map([], rule_from_row)?;
+            rows.collect()
+        }
+    }
+}
+
+/// Groups items by a string key, preserving insertion order.
+#[cfg(test)]
+fn group_by_key<'a, T, F>(items: &'a [T], key_fn: F) -> Vec<(&'a str, Vec<&'a T>)>
+where
+    F: Fn(&T) -> &str,
+{
+    let mut groups: Vec<(&'a str, Vec<&'a T>)> = Vec::new();
+    let mut index: std::collections::HashMap<&'a str, usize> = std::collections::HashMap::new();
+
+    for item in items {
+        let key = key_fn(item);
+        if let Some(&idx) = index.get(key) {
+            groups[idx].1.push(item);
+        } else {
+            let idx = groups.len();
+            index.insert(key, idx);
+            groups.push((key, vec![item]));
+        }
+    }
+    groups
+}
+
+#[cfg(test)]
+fn writing_type_label(wt: &str) -> &str {
+    match wt {
+        "general" => "General",
+        "email" => "Email",
+        "prd" => "PRD",
+        "blog" => "Blog / essay",
+        "cover-letter" => "Cover letter",
+        "resume" => "Resume",
+        "slack" => "Slack",
+        "pitch" => "Pitch",
+        "outreach" => "Outreach",
+        other => other,
+    }
+}
+
+#[cfg(test)]
+fn titlecase_category(category: &str) -> String {
+    category
+        .replace('-', " ")
+        .split_whitespace()
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                None => String::new(),
+                Some(f) => f.to_uppercase().to_string() + c.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(test)]
+fn format_rules_section(lines: &mut Vec<String>, rules: &[&WritingRule]) {
+    let mut groups = group_by_key(rules, |r| &r.writing_type);
+
+    // Sort: "general" first, then alphabetical
+    groups.sort_by(|a, b| {
+        if a.0 == "general" {
+            std::cmp::Ordering::Less
+        } else if b.0 == "general" {
+            std::cmp::Ordering::Greater
+        } else {
+            a.0.cmp(&b.0)
+        }
+    });
+
+    for (writing_type, group_rules) in &groups {
+        lines.push(String::new());
+        lines.push(format!("## {}", writing_type_label(writing_type)));
+
+        let cat_groups = group_by_key(group_rules, |r| &r.category);
+
+        for (category, cat_rules) in &cat_groups {
+            lines.push(String::new());
+            lines.push(format!("### {}", titlecase_category(category)));
+
+            for rule in cat_rules {
+                lines.push(String::new());
+                lines.push(format!(
+                    "**Rule: {}** [{}]",
+                    rule.rule_text, rule.severity
+                ));
+                if let Some(when) = &rule.when_to_apply {
+                    lines.push(format!("- When to apply: {when}"));
+                }
+                if let Some(why) = &rule.why {
+                    lines.push(format!("- Why: {why}"));
+                }
+                lines.push(format!("- Signal: seen {} time(s)", rule.signal_count));
+                if rule.example_before.is_some() || rule.example_after.is_some() {
+                    let show_before = rule.example_before.is_some() && rule.category != "heading-patterns";
+                    if show_before || rule.example_after.is_some() {
+                        lines.push("- Before -> After:".to_string());
+                        if show_before {
+                            if let Some(before) = &rule.example_before {
+                                lines.push(format!("  - Before: \"{before}\""));
+                            }
+                        }
+                        if let Some(after) = &rule.example_after {
+                            lines.push(format!("  - After: \"{after}\""));
+                        }
+                    }
+                }
+                if let Some(notes) = &rule.notes {
+                    lines.push(format!("- Notes: {notes}"));
+                }
+            }
+        }
+    }
+}
+
+/// Generates a unified writing profile markdown that includes voice calibration,
+/// corrections (positive/corrective samples), and synthesized rules.
+/// Retained for test coverage — production export delegates to `margin` CLI.
+#[cfg(test)]
+fn generate_writing_profile_markdown(
+    rules: &[WritingRule],
+    corrections: &[CorrectionRecord],
+) -> String {
+    let mut lines = Vec::new();
+    lines.push("# Writing Profile".to_string());
+    lines.push(String::new());
+    lines.push("_Generated by Margin. Voice calibration + corrections + writing rules in one file._".to_string());
+    lines.push("_For AI agents: apply rules matching the writing type. General rules always apply._".to_string());
+
+    // --- Voice calibration section (from voice-calibration category rules) ---
+    let voice_rules: Vec<&WritingRule> = rules.iter().filter(|r| r.category == "voice-calibration").collect();
+    if !voice_rules.is_empty() {
+        lines.push(String::new());
+        lines.push("---".to_string());
+        lines.push(String::new());
+        lines.push("## Voice Calibration".to_string());
+        lines.push(String::new());
+        lines.push("_Statistical voice fingerprint. These are constraints, not suggestions._".to_string());
+
+        // Group by register: "all" first, then "casual", then "professional"
+        let universal: Vec<&&WritingRule> = voice_rules.iter()
+            .filter(|r| r.register.as_deref() != Some("casual") && r.register.as_deref() != Some("professional"))
+            .collect();
+        let casual: Vec<&&WritingRule> = voice_rules.iter()
+            .filter(|r| r.register.as_deref() == Some("casual"))
+            .collect();
+        let professional: Vec<&&WritingRule> = voice_rules.iter()
+            .filter(|r| r.register.as_deref() == Some("professional"))
+            .collect();
+
+        if !universal.is_empty() {
+            lines.push(String::new());
+            lines.push("### Universal (all registers)".to_string());
+            for rule in &universal {
+                lines.push(String::new());
+                lines.push(format!("- **{}**", rule.rule_text));
+                if let Some(when) = &rule.when_to_apply {
+                    lines.push(format!("  - When: {when}"));
+                }
+                if let Some(why) = &rule.why {
+                    lines.push(format!("  - Why: {why}"));
+                }
+            }
+        }
+
+        if !casual.is_empty() {
+            lines.push(String::new());
+            lines.push("### Casual register (slack, outreach, email, general chat)".to_string());
+            for rule in &casual {
+                lines.push(String::new());
+                lines.push(format!("- **{}**", rule.rule_text));
+                if let Some(when) = &rule.when_to_apply {
+                    lines.push(format!("  - When: {when}"));
+                }
+                if let Some(why) = &rule.why {
+                    lines.push(format!("  - Why: {why}"));
+                }
+            }
+        }
+
+        if !professional.is_empty() {
+            lines.push(String::new());
+            lines.push("### Professional register (pitch, prd, cover-letter, resume, blog)".to_string());
+            lines.push("_These rules DO NOT apply to casual writing. Use complete sentences, standard punctuation._".to_string());
+            for rule in &professional {
+                lines.push(String::new());
+                lines.push(format!("- **{}**", rule.rule_text));
+                if let Some(when) = &rule.when_to_apply {
+                    lines.push(format!("  - When: {when}"));
+                }
+                if let Some(why) = &rule.why {
+                    lines.push(format!("  - Why: {why}"));
+                }
+            }
+        }
+
+        // If there are casual rules, add explicit scoping note for professional types
+        if !casual.is_empty() && professional.is_empty() {
+            lines.push(String::new());
+            lines.push("### Professional register (pitch, prd, cover-letter, resume, blog)".to_string());
+            lines.push("_Casual-register rules above DO NOT apply. Use complete sentences, standard punctuation._".to_string());
+        }
+    }
+
+    // --- Writing samples (positive polarity corrections) ---
+    let mut positive: Vec<&CorrectionRecord> = Vec::new();
+    let mut corrective: Vec<&CorrectionRecord> = Vec::new();
+    let mut unclassified: Vec<&CorrectionRecord> = Vec::new();
+
+    for c in corrections {
+        match c.polarity.as_deref() {
+            Some("positive") => positive.push(c),
+            Some("corrective") => corrective.push(c),
+            _ => unclassified.push(c),
+        }
+    }
+
+    if !positive.is_empty() {
+        lines.push(String::new());
+        lines.push("---".to_string());
+        lines.push(String::new());
+        lines.push("## Writing Samples".to_string());
+        lines.push(String::new());
+        lines.push("_Patterns to emulate — do more of this._".to_string());
+        for c in &positive {
+            lines.push(String::new());
+            let snippet = truncate_with_ellipsis(&c.original_text, 200);
+            lines.push(format!("> {}", snippet.replace('\n', "\n> ")));
+            if !c.notes.is_empty() {
+                lines.push(format!("— {}", c.notes.join("; ")));
+            }
+        }
+    }
+
+    if !corrective.is_empty() {
+        lines.push(String::new());
+        lines.push("---".to_string());
+        lines.push(String::new());
+        lines.push("## Corrections".to_string());
+        lines.push(String::new());
+        lines.push("_Patterns to avoid — don't do this._".to_string());
+        for c in &corrective {
+            lines.push(String::new());
+            let snippet = truncate_with_ellipsis(&c.original_text, 200);
+            lines.push(format!("- **{}** → {}", snippet, c.notes.join("; ")));
+        }
+    }
+
+    if !unclassified.is_empty() {
+        lines.push(String::new());
+        lines.push("---".to_string());
+        lines.push(String::new());
+        lines.push("## Unclassified".to_string());
+        lines.push(String::new());
+        lines.push("_These annotations haven't been tagged as positive or corrective yet._".to_string());
+        for c in &unclassified {
+            lines.push(String::new());
+            let snippet = truncate_with_ellipsis(&c.original_text, 120);
+            let note = if c.notes.is_empty() { "flagged".to_string() } else { c.notes.join("; ") };
+            lines.push(format!("- {} → {}", snippet, note));
+        }
+    }
+
+    // --- Synthesized rules (non-voice-calibration rules) ---
+    let non_voice_rules: Vec<&WritingRule> = rules.iter().filter(|r| r.category != "voice-calibration").collect();
+    if !non_voice_rules.is_empty() {
+        lines.push(String::new());
+        lines.push("---".to_string());
+        lines.push(String::new());
+        lines.push("# Writing Rules".to_string());
+        lines.push(String::new());
+        lines.push("_Synthesized from corrections and editorial preferences._".to_string());
+        format_rules_section(&mut lines, &non_voice_rules);
+    }
+
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+/// Legacy standalone rules-only markdown generator (kept for tests only).
+#[cfg(test)]
+fn generate_writing_rules_markdown(rules: &[WritingRule]) -> String {
+    let mut lines = Vec::new();
+
+    // Taste criteria section (positive polarity)
+    let taste_rules: Vec<&WritingRule> = rules
+        .iter()
+        .filter(|r| r.polarity.as_deref() == Some("positive"))
+        .collect();
+    if !taste_rules.is_empty() {
+        lines.push("# Taste Criteria (Do This)".to_string());
+        lines.push(String::new());
+        lines.push("_Patterns to emulate — these represent good writing to do more of._".to_string());
+        format_rules_section(&mut lines, &taste_rules);
+        lines.push(String::new());
+    }
+
+    // Corrective rules section (NULL or corrective polarity)
+    let corrective_rules: Vec<&WritingRule> = rules
+        .iter()
+        .filter(|r| r.polarity.as_deref() != Some("positive"))
+        .collect();
+    lines.push("# Writing Rules".to_string());
+    lines.push(String::new());
+    lines.push("_For AI agents: apply rules matching the writing type. General rules always apply._".to_string());
+    if !corrective_rules.is_empty() {
+        format_rules_section(&mut lines, &corrective_rules);
+    }
+    lines.push(String::new());
+
+    lines.join("\n")
+}
+
+/// Retained for test coverage — production export delegates to `margin` CLI.
+#[cfg(test)]
+fn generate_writing_guard_py(rules: &[WritingRule]) -> String {
+    // Only corrective rules (polarity IS NULL or polarity = 'corrective') feed the guard.
+    // Taste criteria (polarity = 'positive') are guidance only — never hard-blocked.
+    let corrective_rules: Vec<&WritingRule> = rules
+        .iter()
+        .filter(|r| r.polarity.as_deref() != Some("positive"))
+        .collect();
+
+    // Collect kill words from must-fix rules
+    let kill_words: Vec<&str> = corrective_rules
+        .iter()
+        .filter(|r| r.severity == "must-fix" && r.category == "kill-words")
+        .map(|r| r.rule_text.as_str())
+        .collect();
+
+    // Collect slop patterns
+    let slop_patterns: Vec<(&str, &str)> = corrective_rules
+        .iter()
+        .filter(|r| r.category == "ai-slop" && r.example_before.is_some())
+        .filter_map(|r| {
+            r.example_before
+                .as_deref()
+                .map(|pattern| (pattern, r.rule_text.as_str()))
+        })
+        .collect();
+
+    // Collect heading patterns
+    let heading_patterns: Vec<(&str, &str)> = corrective_rules
+        .iter()
+        .filter(|r| r.category == "heading-patterns" && r.severity == "must-fix" && r.example_before.is_some())
+        .filter_map(|r| {
+            r.example_before
+                .as_deref()
+                .map(|pattern| (pattern, r.rule_text.as_str()))
+        })
+        .collect();
+
+    // Collect auto-synthesized corrections (substring match on original text, capped at 80 chars)
+    let auto_corrections: Vec<(&str, &str)> = corrective_rules
+        .iter()
+        .filter(|r| {
+            r.category == "auto-synthesized"
+                && r.severity == "must-fix"
+                && r.example_before.as_ref().map_or(false, |eb| eb.len() <= 80)
+        })
+        .filter_map(|r| {
+            r.example_before
+                .as_deref()
+                .map(|original| (original, r.rule_text.as_str()))
+        })
+        .collect();
+
+    // Build JSON data blobs for safety (no raw string embedding in Python source)
+    let kill_words_json =
+        serde_json::to_string(&kill_words).unwrap_or_else(|_| "[]".to_string());
+    let slop_patterns_json = serde_json::to_string(
+        &slop_patterns
+            .iter()
+            .map(|(p, e)| vec![*p, *e])
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|_| "[]".to_string());
+    let heading_patterns_json = serde_json::to_string(
+        &heading_patterns
+            .iter()
+            .map(|(p, e)| vec![*p, *e])
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|_| "[]".to_string());
+    let auto_corrections_json = serde_json::to_string(
+        &auto_corrections
+            .iter()
+            .map(|(p, e)| vec![*p, *e])
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|_| "[]".to_string());
+
+    // Guard: `"""` in JSON would break the Python raw triple-quoted string delimiter.
+    // serde_json escapes `"` as `\"` so this shouldn't happen in practice, but defend
+    // against it since the generated file runs as a hook with full user permissions.
+    if [&kill_words_json, &slop_patterns_json, &heading_patterns_json, &auto_corrections_json]
+        .iter()
+        .any(|s| s.contains(r#"""""#))
+    {
+        return "#!/usr/bin/env python3\n\
+# ERROR: A writing rule contains a triple-quote sequence that cannot be safely\n\
+# embedded. Remove the offending rule text and re-export.\n\
+import sys; print('writing_guard: triple-quote injection blocked — skipping guard', file=sys.stderr); sys.exit(1)\n"
+            .to_string();
+    }
+
+    format!(
+        r#"#!/usr/bin/env python3
+"""
+Writing guard hook — AUTO-GENERATED by Margin's export_writing_rules command.
+Do not edit manually. Changes will be overwritten.
+
+Kill words and slop patterns are loaded from JSON data blobs for safety.
+Source of truth: ~/.margin/margin.db (writing_rules table)
+"""
+import json, sys, re
+
+# Only check prose file extensions
+PROSE_EXTENSIONS = {{".md", ".mdx", ".txt", ".html", ".htm"}}
+
+# Kill words — loaded from JSON for codegen safety.
+# Use a *raw* triple-quoted string so Python doesn't interpret backslash escapes inside JSON.
+KILL_WORDS = json.loads(r"""{kill_words_json}""")
+
+# AI-slop sentence patterns — [pattern, explanation]
+# Same raw-string rule as above.
+SLOP_PATTERNS = json.loads(r"""{slop_patterns_json}""")
+
+# Heading patterns — [regex, explanation] applied per heading line
+HEADING_PATTERNS = json.loads(r"""{heading_patterns_json}""")
+
+# Auto-synthesized corrections — [original_text, explanation] substring match
+AUTO_CORRECTIONS = json.loads(r"""{auto_corrections_json}""")
+
+def get_extension(path):
+    if not path:
+        return ""
+    dot = path.rfind(".")
+    return path[dot:].lower() if dot != -1 else ""
+
+def main():
+    try:
+        data = json.load(sys.stdin)
+        tool = data.get("tool_name", "")
+        inp = data.get("tool_input") or {{}}
+
+        # Determine file path and text to check
+        path = ""
+        text = ""
+        if tool == "Write":
+            path = inp.get("file_path", "")
+            text = inp.get("content", "")
+        elif tool == "Edit":
+            path = inp.get("file_path", "")
+            text = inp.get("new_string", "")
+
+        if not text or get_extension(path) not in PROSE_EXTENSIONS:
+            sys.exit(0)
+
+        violations = []
+
+        # Check kill words
+        lower = text.lower()
+        for word in KILL_WORDS:
+            if word in lower:
+                violations.append(f'Kill word: "{{word}}"')
+
+        # Check slop patterns
+        for pattern, explanation in SLOP_PATTERNS:
+            if re.search(pattern, text):
+                violations.append(explanation)
+
+        # Check heading patterns
+        if HEADING_PATTERNS:
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith('#'):
+                    continue
+                heading_text = stripped.lstrip('#').strip()
+                if not heading_text:
+                    continue
+                for pattern, explanation in HEADING_PATTERNS:
+                    if re.search(pattern, heading_text):
+                        violations.append(f'{{explanation}}: "{{stripped}}"')
+                        break
+
+        # Check auto-synthesized corrections (substring match)
+        for original_text, explanation in AUTO_CORRECTIONS:
+            if original_text.lower() in lower:
+                violations.append(f'Auto-correction: "{{original_text}}" — {{explanation}}')
+
+        if violations:
+            msg = "WRITING GUARD: Writing rule violations detected:\n"
+            for v in violations:
+                msg += f"  - {{v}}\n"
+            msg += "Fix violations. See ~/.margin/writing-rules.md for rules."
+
+            print(json.dumps({{
+                "hookSpecificOutput": {{
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "ask",
+                    "permissionDecisionReason": msg
+                }}
+            }}))
+
+    except Exception as e:
+        # Fail-open: never block writes due to hook errors
+        print(f"Writing guard encountered an error (fail-open): {{e}}", file=sys.stderr)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
+"#
+    )
+}
+
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    pub markdown_path: String,
+    pub hook_path: String,
+    pub rule_count: usize,
+}
+
+fn update_rule(
+    conn: &Connection,
+    id: &str,
+    rule_text: Option<&str>,
+    severity: Option<&str>,
+    when_to_apply: Option<&str>,
+    why: Option<&str>,
+    example_before: Option<&str>,
+    example_after: Option<&str>,
+    notes: Option<&str>,
+) -> rusqlite::Result<()> {
+    let now = now_millis();
+
+    let mut set_parts = vec![format!("updated_at = ?1")];
+    let mut param_list: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(now)];
+    let mut param_idx = 2usize;
+
+    if let Some(v) = rule_text {
+        set_parts.push(format!("rule_text = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = severity {
+        set_parts.push(format!("severity = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = when_to_apply {
+        set_parts.push(format!("when_to_apply = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = why {
+        set_parts.push(format!("why = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = example_before {
+        set_parts.push(format!("example_before = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = example_after {
+        set_parts.push(format!("example_after = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+    if let Some(v) = notes {
+        set_parts.push(format!("notes = ?{param_idx}"));
+        param_list.push(Box::new(v.to_string()));
+        param_idx += 1;
+    }
+
+    let sql = format!(
+        "UPDATE writing_rules SET {} WHERE id = ?{param_idx}",
+        set_parts.join(", ")
+    );
+    param_list.push(Box::new(id.to_string()));
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_list.iter().map(|p| p.as_ref()).collect();
+    let rows = conn.execute(&sql, param_refs.as_slice())?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+/// Rules are archived, never deleted: a hard DELETE would lose the
+/// provenance (`synthesized-from:` notes) that keeps its source corrections
+/// stamped. Archived rules are invisible to every read/enforcement path and
+/// stay archived if the same rule is re-synthesized.
+fn delete_rule(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE writing_rules SET archived_at = ?1, updated_at = ?1 WHERE id = ?2 AND archived_at IS NULL",
+        rusqlite::params![now_millis(), id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+fn unarchive_rule(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    let rows = conn.execute(
+        "UPDATE writing_rules SET archived_at = NULL, updated_at = ?1 WHERE id = ?2 AND archived_at IS NOT NULL",
+        rusqlite::params![now_millis(), id],
+    )?;
+    if rows == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_writing_rule(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    rule_text: Option<String>,
+    severity: Option<String>,
+    when_to_apply: Option<String>,
+    why: Option<String>,
+    example_before: Option<String>,
+    example_after: Option<String>,
+    notes: Option<String>,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        update_rule(
+            &conn,
+            &id,
+            rule_text.as_deref(),
+            severity.as_deref(),
+            when_to_apply.as_deref(),
+            why.as_deref(),
+            example_before.as_deref(),
+            example_after.as_deref(),
+            notes.as_deref(),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    // Mutation committed — regenerate artifacts (single-writer via CLI).
+    export_artifacts();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_writing_rule(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        delete_rule(&conn, &id).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn unarchive_writing_rule(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+) -> Result<(), String> {
+    {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        unarchive_rule(&conn, &id).map_err(|e| e.to_string())?;
+    }
+    export_artifacts();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_archived_writing_rules(
+    state: tauri::State<'_, DbPool>,
+) -> Result<Vec<WritingRule>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let sql = format!("{RULES_SELECT} WHERE archived_at IS NOT NULL ORDER BY archived_at DESC");
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], rule_from_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_writing_rules(
+    state: tauri::State<'_, DbPool>,
+    writing_type: Option<String>,
+) -> Result<Vec<WritingRule>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    fetch_writing_rules(&conn, writing_type.as_deref()).map_err(|e| e.to_string())
+}
+
+fn margin_app_log(message: &str) {
+    let Some(home) = dirs::home_dir() else {
+        return;
+    };
+    let log_path = home.join(".margin").join("margin-app.log");
+    if let Some(parent) = log_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = writeln!(file, "[{}] {message}", now_millis());
+    }
+}
+
+fn resolve_margin_cli_from_path(home: &Path, path: &str) -> Result<PathBuf, String> {
+    let local_candidate = home.join(".local").join("bin").join("margin");
+    if local_candidate.is_file() {
+        return Ok(local_candidate);
+    }
+
+    for dir in std::env::split_paths(path) {
+        let candidate = dir.join("margin");
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(format!(
+        "Could not resolve margin CLI. Checked $HOME/.local/bin/margin and PATH={path:?}."
+    ))
+}
+
+/// The CLI shipped inside Margin.app (Tauri `externalBin`), next to the app binary.
+fn bundled_cli_beside(exe: &Path) -> Option<PathBuf> {
+    let candidate = exe.parent()?.join("margin-cli");
+    candidate.is_file().then_some(candidate)
+}
+
+fn resolve_margin_cli() -> Result<PathBuf, String> {
+    // The bundled copy wins so the app always runs the CLI it was built with.
+    if let Some(bundled) = std::env::current_exe().ok().as_deref().and_then(bundled_cli_beside) {
+        return Ok(bundled);
+    }
+
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    let path = std::env::var("PATH").unwrap_or_default();
+    if let Ok(found) = resolve_margin_cli_from_path(&home, &path) {
+        return Ok(found);
+    }
+
+    let output = std::process::Command::new("/bin/zsh")
+        .args(["-lc", "command -v margin"])
+        .output()
+        .map_err(|e| format!("Could not resolve margin CLI via login shell: {e}"))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let candidate = PathBuf::from(stdout.trim());
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(format!(
+        "Could not resolve margin CLI. Checked $HOME/.local/bin/margin, PATH, and login shell. {stderr}"
+    ))
+}
+
+fn agent_integration_setting_path(home: &Path) -> PathBuf {
+    home.join(".margin").join("agent-integration")
+}
+
+/// Whether exports may write Claude Code's guard hook and Codex's AGENTS.md.
+/// Those files change how other apps behave, so this is off until the user
+/// turns it on. Users whose earlier Margin already wrote the guard keep it on.
+fn agent_integration_enabled(home: &Path) -> bool {
+    match fs::read_to_string(agent_integration_setting_path(home)) {
+        Ok(setting) => setting.trim() == "on",
+        Err(_) => home.join(".claude").join("hooks").join("writing_guard.py").is_file(),
+    }
+}
+
+fn write_agent_integration(home: &Path, enabled: bool) -> Result<(), String> {
+    let path = agent_integration_setting_path(home);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, if enabled { "on\n" } else { "off\n" }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_agent_integration() -> Result<bool, String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    Ok(agent_integration_enabled(&home))
+}
+
+#[tauri::command]
+pub async fn set_agent_integration(enabled: bool) -> Result<(), String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    write_agent_integration(&home, enabled)?;
+    if enabled {
+        export_artifacts();
+    }
+    Ok(())
+}
+
+/// Delegate file generation to the `margin` CLI (single-writer pattern).
+/// The CLI reads from SQLite and writes ~/.margin/writing-rules.md, plus
+/// ~/.claude/hooks/writing_guard.py when agent integration is on. The hook
+/// path is empty when it was not written.
+fn run_cli_export() -> Result<(String, String), String> {
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    let md_path = home.join(".margin").join("writing-rules.md");
+    let agents = agent_integration_enabled(&home);
+    let hook_path = if agents {
+        home.join(".claude").join("hooks").join("writing_guard.py").to_string_lossy().to_string()
+    } else {
+        String::new()
+    };
+    let margin_cli = resolve_margin_cli().map_err(|e| {
+        margin_app_log(&format!("Writing rules export failed: {e}"));
+        e
+    })?;
+
+    let mut args = vec!["export", "profile"];
+    if !agents {
+        args.extend(["--target", "markdown"]);
+    }
+    let output = std::process::Command::new(&margin_cli)
+        .args(&args)
+        .output()
+        .map_err(|e| {
+            let message = format!("Failed to run `{}` export profile: {e}", margin_cli.display());
+            margin_app_log(&format!("Writing rules export failed: {message}"));
+            message
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = format!("margin export profile failed: {stderr}");
+        margin_app_log(&format!("Writing rules export failed: {message}"));
+        return Err(message);
+    }
+
+    Ok((md_path.to_string_lossy().to_string(), hook_path))
+}
+
+/// Shared inner logic: delegate file writing to CLI, read rules + corrections for return values.
+fn do_export(state: &DbPool) -> Result<(Vec<WritingRule>, Vec<CorrectionRecord>, String, String), String> {
+    let (markdown_path, hook_path) = run_cli_export()?;
+
+    let (rules, corrections) = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        let rules = fetch_writing_rules(&conn, None).map_err(|e| e.to_string())?;
+        let corrections = fetch_all_corrections_for_profile(&conn).map_err(|e| e.to_string())?;
+        (rules, corrections)
+    };
+
+    Ok((rules, corrections, markdown_path, hook_path))
+}
+
+#[tauri::command]
+pub async fn export_writing_rules(
+    state: tauri::State<'_, DbPool>,
+) -> Result<ExportResult, String> {
+    let (rules, _, markdown_path, hook_path) = do_export(&state)?;
+
+    Ok(ExportResult {
+        markdown_path,
+        hook_path,
+        rule_count: rules.len(),
+    })
+}
+
+fn fetch_all_corrections_for_profile(conn: &Connection) -> rusqlite::Result<Vec<CorrectionRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT original_text, notes_json, highlight_color, document_title, document_id, created_at, writing_type, polarity, feedback_type
+         FROM corrections
+         WHERE session_id != '__backfilled__'
+         ORDER BY created_at DESC",
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        let notes_json: String = row.get(1)?;
+        Ok(CorrectionRecord {
+            original_text: row.get(0)?,
+            notes: serde_json::from_str(&notes_json).unwrap_or_default(),
+            highlight_color: row.get(2)?,
+            document_title: row.get(3)?,
+            document_id: row.get(4)?,
+            created_at: row.get(5)?,
+            writing_type: row.get(6)?,
+            polarity: row.get(7)?,
+            feedback_type: row.get(8)?,
+        })
+    })?;
+
+    rows.collect()
+}
+
+#[cfg(test)]
+fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
+    let mut iter = text.chars();
+    let prefix: String = iter.by_ref().take(max_chars).collect();
+    if iter.next().is_some() {
+        format!("{prefix}…")
+    } else {
+        prefix
+    }
+}
+
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceProfileExportResult {
+    pub path: String,
+    pub positive_count: usize,
+    pub corrective_count: usize,
+    pub unclassified_count: usize,
+    pub rule_count: usize,
+}
+
+/// Marks rules reviewed, mirroring `AcceptCandidateRule` in
+/// cli/db/rules.go: for `synthesis-candidate` rows this also promotes the
+/// source to 'synthesis' and stamps `synthesized_at` on the provenance
+/// corrections listed in the `synthesized-from:<highlight-ids>` notes line
+/// (only rows still NULL are stamped). Non-candidate rules just get the
+/// review timestamp.
+fn mark_reviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64> {
+    if rule_ids.is_empty() {
+        return Ok(0);
+    }
+    let now = now_millis();
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    let mut source_highlight_ids: Vec<String> = Vec::new();
+    for chunk in rule_ids.chunks(900) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let id_list = placeholders.join(",");
+
+        // Read candidate provenance before promotion — AcceptCandidateRule
+        // reads notes ahead of the UPDATE for the same reason.
+        let select_sql = format!(
+            "SELECT notes FROM writing_rules WHERE id IN ({id_list}) AND source = 'synthesis-candidate'"
+        );
+        {
+            let mut stmt = tx.prepare(&select_sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            let rows =
+                stmt.query_map(params.as_slice(), |row| row.get::<_, Option<String>>(0))?;
+            for row in rows {
+                if let Some(notes) = row? {
+                    if let Some(rest) = notes.strip_prefix("synthesized-from:") {
+                        for hid in rest.split(',').map(str::trim).filter(|h| !h.is_empty()) {
+                            source_highlight_ids.push(hid.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        let update_sql = format!(
+            "UPDATE writing_rules
+             SET reviewed_at = ?{now_idx}, updated_at = ?{now_idx},
+                 source = CASE WHEN source = 'synthesis-candidate' THEN 'synthesis' ELSE source END
+             WHERE id IN ({id_list})",
+            now_idx = chunk.len() + 1,
+        );
+        {
+            let mut stmt = tx.prepare(&update_sql)?;
+            let mut params: Vec<&dyn rusqlite::types::ToSql> =
+                Vec::with_capacity(chunk.len() + 1);
+            for id in chunk {
+                params.push(id as &dyn rusqlite::types::ToSql);
+            }
+            params.push(&now as &dyn rusqlite::types::ToSql);
+            total += stmt.execute(params.as_slice())? as u64;
+        }
+    }
+    // Mark provenance corrections synthesized — mirrors the
+    // `UPDATE corrections ... AND synthesized_at IS NULL` in
+    // AcceptCandidateRule.
+    for chunk in source_highlight_ids.chunks(899) {
+        let placeholders: Vec<String> = (2..=chunk.len() + 1).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "UPDATE corrections SET synthesized_at = ?1
+             WHERE highlight_id IN ({}) AND synthesized_at IS NULL",
+            placeholders.join(",")
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(chunk.len() + 1);
+        params.push(&now as &dyn rusqlite::types::ToSql);
+        for hid in chunk {
+            params.push(hid as &dyn rusqlite::types::ToSql);
+        }
+        stmt.execute(params.as_slice())?;
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+/// Parses `synthesized-from:<highlight-id>,...` provenance notes into ids.
+/// The id list ends at the first `;` or newline — trailing free text must
+/// not glue onto the last id (that id would never match on stamping).
+fn parse_synthesized_from(notes: &str) -> impl Iterator<Item = &str> {
+    notes
+        .strip_prefix("synthesized-from:")
+        .into_iter()
+        .flat_map(|rest| {
+            let id_list = rest.split([';', '\n']).next().unwrap_or("");
+            id_list.split(',')
+        })
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+}
+
+/// Clears the review stamp. Rules promoted from candidates are demoted back
+/// to 'synthesis-candidate' so the review gate (cli/db/rules.go
+/// `unreviewedCandidateFilter`) excludes them from exports until re-reviewed.
+/// Provenance corrections that are no longer claimed by any accepted
+/// 'synthesis' rule are un-stamped (`synthesized_at = NULL`) so they re-enter
+/// the synthesis queue instead of being orphaned by a demoted-then-rejected
+/// candidate.
+fn mark_unreviewed(conn: &Connection, rule_ids: &[String]) -> rusqlite::Result<u64> {
+    if rule_ids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut total = 0u64;
+    let mut provenance_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for chunk in rule_ids.chunks(900) {
+        let placeholders: Vec<String> = (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+        let id_list = placeholders.join(",");
+
+        // Capture provenance from rules about to be demoted.
+        let select_sql = format!(
+            "SELECT notes FROM writing_rules WHERE id IN ({id_list}) AND source = 'synthesis'"
+        );
+        {
+            let mut stmt = tx.prepare(&select_sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            let rows =
+                stmt.query_map(params.as_slice(), |row| row.get::<_, Option<String>>(0))?;
+            for row in rows {
+                if let Some(notes) = row? {
+                    for hid in parse_synthesized_from(&notes) {
+                        provenance_ids.insert(hid.to_string());
+                    }
+                }
+            }
+        }
+
+        let sql = format!(
+            "UPDATE writing_rules
+             SET reviewed_at = NULL,
+                 source = CASE WHEN source = 'synthesis' THEN 'synthesis-candidate' ELSE source END
+             WHERE id IN ({id_list})"
+        );
+        {
+            let mut stmt = tx.prepare(&sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            total += stmt.execute(params.as_slice())? as u64;
+        }
+    }
+
+    // Un-stamp provenance corrections no longer claimed by a still-accepted
+    // synthesis rule — mirrors the `synthesized_at IS NULL` queue semantics.
+    if !provenance_ids.is_empty() {
+        let mut still_claimed: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        {
+            let mut stmt =
+                tx.prepare("SELECT notes FROM writing_rules WHERE source = 'synthesis'")?;
+            let rows =
+                stmt.query_map([], |row| row.get::<_, Option<String>>(0))?;
+            for row in rows {
+                if let Some(notes) = row? {
+                    for hid in parse_synthesized_from(&notes) {
+                        still_claimed.insert(hid.to_string());
+                    }
+                }
+            }
+        }
+        let to_clear: Vec<String> = provenance_ids
+            .iter()
+            .filter(|id| !still_claimed.contains(*id))
+            .cloned()
+            .collect();
+        for chunk in to_clear.chunks(899) {
+            let placeholders: Vec<String> =
+                (1..=chunk.len()).map(|i| format!("?{i}")).collect();
+            let sql = format!(
+                "UPDATE corrections SET synthesized_at = NULL
+                 WHERE highlight_id IN ({}) AND synthesized_at IS NOT NULL",
+                placeholders.join(",")
+            );
+            let mut stmt = tx.prepare(&sql)?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            stmt.execute(params.as_slice())?;
+        }
+    }
+    tx.commit()?;
+    Ok(total)
+}
+
+/// Best-effort artifact regeneration after a pipeline mutation. Mirrors the
+/// Go CLI where every mutating command calls profile.ExportProfile
+/// (cli/cmd/*.go). Failures are logged inside run_cli_export and never
+/// propagate — the mutation itself already succeeded.
+pub(crate) fn export_artifacts() {
+    let _ = run_cli_export();
+}
+
+#[tauri::command]
+pub async fn mark_rules_reviewed(
+    state: tauri::State<'_, DbPool>,
+    rule_ids: Vec<String>,
+) -> Result<u64, String> {
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_reviewed(&conn, &rule_ids).map_err(|e| e.to_string())?
+    };
+    // Accepted rules must reach the generated artifacts — mirrors
+    // cli/cmd/rules.go accept → profile.ExportProfile.
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
+}
+
+#[tauri::command]
+pub async fn mark_rules_unreviewed(
+    state: tauri::State<'_, DbPool>,
+    rule_ids: Vec<String>,
+) -> Result<u64, String> {
+    let updated = {
+        let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        mark_unreviewed(&conn, &rule_ids).map_err(|e| e.to_string())?
+    };
+    if updated > 0 {
+        export_artifacts();
+    }
+    Ok(updated)
+}
+
+/// Alias for export_writing_rules — voice profile is now merged into writing-rules.md.
+#[tauri::command]
+pub async fn export_voice_profile(
+    state: tauri::State<'_, DbPool>,
+) -> Result<VoiceProfileExportResult, String> {
+    let (rules, corrections, markdown_path, _) = do_export(&state)?;
+
+    let positive_count = corrections.iter().filter(|c| c.polarity.as_deref() == Some("positive")).count();
+    let corrective_count = corrections.iter().filter(|c| c.polarity.as_deref() == Some("corrective")).count();
+    let unclassified_count = corrections.len() - positive_count - corrective_count;
+
+    Ok(VoiceProfileExportResult {
+        path: markdown_path,
+        positive_count,
+        corrective_count,
+        unclassified_count,
+        rule_count: rules.len(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrations::migrate_add_writing_rules_table;
+    use rusqlite::Connection;
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_add_writing_rules_table(&conn).unwrap();
+        // Add reviewed_at column (matches production migration)
+        let has_col: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)").unwrap();
+            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap()
+                .filter_map(|r| r.ok()).collect();
+            cols.iter().any(|c| c == "reviewed_at")
+        };
+        if !has_col {
+            conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN reviewed_at INTEGER;").unwrap();
+        }
+        // Add register column (matches production migration)
+        let has_register: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)").unwrap();
+            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap()
+                .filter_map(|r| r.ok()).collect();
+            cols.iter().any(|c| c == "register")
+        };
+        if !has_register {
+            conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN register TEXT;").unwrap();
+        }
+        // Add polarity column (matches production migration)
+        let has_polarity: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(writing_rules)").unwrap();
+            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap()
+                .filter_map(|r| r.ok()).collect();
+            cols.iter().any(|c| c == "polarity")
+        };
+        if !has_polarity {
+            conn.execute_batch("ALTER TABLE writing_rules ADD COLUMN polarity TEXT CHECK(polarity IN ('positive', 'corrective'));").unwrap();
+        }
+        // detection_pattern via the production migration
+        crate::db::migrations::migrate_writing_rules_add_detection_pattern(&conn).unwrap();
+        crate::db::migrations::migrate_writing_rules_add_archived_at(&conn).unwrap();
+        conn
+    }
+
+    fn create_corrections_table(conn: &Connection) {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS corrections (
+                id TEXT PRIMARY KEY,
+                highlight_id TEXT NOT NULL UNIQUE,
+                document_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                original_text TEXT NOT NULL,
+                notes_json TEXT NOT NULL,
+                document_title TEXT,
+                highlight_color TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                writing_type TEXT,
+                polarity TEXT,
+                feedback_type TEXT,
+                synthesized_at INTEGER
+            );",
+        )
+        .unwrap();
+    }
+
+    fn insert_rule(conn: &Connection, id: &str, writing_type: &str, category: &str, rule_text: &str, severity: &str) {
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'manual', 1, 1000, 1000)",
+            rusqlite::params![id, writing_type, category, rule_text, severity],
+        ).unwrap();
+    }
+
+    fn insert_full_rule(
+        conn: &Connection,
+        id: &str,
+        writing_type: &str,
+        category: &str,
+        rule_text: &str,
+        severity: &str,
+        when_to_apply: Option<&str>,
+        why: Option<&str>,
+        example_before: Option<&str>,
+        example_after: Option<&str>,
+        signal_count: i64,
+    ) {
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity,
+             example_before, example_after, source, signal_count, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'manual', ?10, 1000, 1000)",
+            rusqlite::params![id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, signal_count],
+        ).unwrap();
+    }
+
+    // --- fetch_writing_rules tests ---
+
+    #[test]
+    fn get_writing_rules_returns_all() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "ai-slop", "No parallelism", "must-fix");
+        insert_rule(&conn, "r2", "email", "tone", "Be direct", "should-fix");
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        assert_eq!(rules.len(), 2);
+    }
+
+    #[test]
+    fn get_writing_rules_filters_by_type() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "ai-slop", "No parallelism", "must-fix");
+        insert_rule(&conn, "r2", "email", "tone", "Be direct", "should-fix");
+        insert_rule(&conn, "r3", "email", "hedging", "No hedging", "should-fix");
+
+        let rules = fetch_writing_rules(&conn, Some("email")).unwrap();
+        assert_eq!(rules.len(), 2);
+        assert!(rules.iter().all(|r| r.writing_type == "email"));
+    }
+
+    #[test]
+    fn get_writing_rules_empty_db() {
+        let conn = setup_db();
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        assert!(rules.is_empty());
+    }
+
+    // --- generate_writing_rules_markdown tests ---
+
+    #[test]
+    fn markdown_has_header_and_agent_instruction() {
+        let rules = vec![];
+        let md = generate_writing_rules_markdown(&rules);
+        assert!(md.contains("# Writing Rules"));
+        assert!(md.contains("_For AI agents:"));
+    }
+
+    #[test]
+    fn unified_profile_has_header() {
+        let md = generate_writing_profile_markdown(&[], &[]);
+        assert!(md.contains("# Writing Profile"));
+        assert!(md.contains("_For AI agents:"));
+    }
+
+    #[test]
+    fn markdown_groups_by_writing_type() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "ai-slop", "No parallelism", "must-fix");
+        insert_rule(&conn, "r2", "blog", "structure", "Use transitions", "should-fix");
+        insert_rule(&conn, "r3", "general", "tone", "Be human", "should-fix");
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_rules_markdown(&rules);
+
+        assert!(md.contains("## General"));
+        assert!(md.contains("## Blog / essay"));
+
+        // General should come before Blog
+        let gen_pos = md.find("## General").unwrap();
+        let blog_pos = md.find("## Blog / essay").unwrap();
+        assert!(gen_pos < blog_pos);
+    }
+
+    #[test]
+    fn markdown_includes_rule_details() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "ai-slop", "No negative parallelism", "must-fix",
+            Some("Any sentence with isn't X, it's Y"), Some("AI slop marker"),
+            Some("The issue isn't X. It's Y."), Some("State directly: Y is the real issue."),
+            3,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_rules_markdown(&rules);
+
+        assert!(md.contains("**Rule: No negative parallelism** [must-fix]"));
+        assert!(md.contains("- When to apply: Any sentence with isn't X, it's Y"));
+        assert!(md.contains("- Why: AI slop marker"));
+        assert!(md.contains("- Signal: seen 3 time(s)"));
+        assert!(md.contains("Before: \"The issue isn't X. It's Y.\""));
+        assert!(md.contains("After: \"State directly: Y is the real issue.\""));
+    }
+
+    // --- generate_writing_guard_py tests ---
+
+    #[test]
+    fn hook_has_autogen_header() {
+        let py = generate_writing_guard_py(&[]);
+        assert!(py.contains("AUTO-GENERATED by Margin"));
+        assert!(py.contains("Do not edit manually"));
+    }
+
+    #[test]
+    fn hook_has_fail_open() {
+        let py = generate_writing_guard_py(&[]);
+        assert!(py.contains("fail-open"));
+        assert!(py.contains("except Exception"));
+    }
+
+    #[test]
+    fn hook_uses_raw_strings_for_embedded_json() {
+        let py = generate_writing_guard_py(&[]);
+        assert!(py.contains(r#"KILL_WORDS = json.loads(r""#));
+        assert!(py.contains(r#"SLOP_PATTERNS = json.loads(r""#));
+    }
+
+    #[test]
+    fn hook_includes_kill_words() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "kill-words", "demonstrating", "must-fix");
+        insert_rule(&conn, "r2", "general", "kill-words", "leveraging", "must-fix");
+        // This should NOT appear (wrong category)
+        insert_rule(&conn, "r3", "general", "tone", "Be direct", "must-fix");
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains("demonstrating"));
+        assert!(py.contains("leveraging"));
+        // KILL_WORDS should be loaded from JSON
+        assert!(py.contains("KILL_WORDS = json.loads("));
+    }
+
+    #[test]
+    fn hook_includes_slop_patterns() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "ai-slop", "Negative parallelism detected", "should-fix",
+            None, None,
+            Some(r"(?:The (?:issue|problem) isn't .{5,60}\. It's )"),
+            None, 1,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains("SLOP_PATTERNS = json.loads("));
+        assert!(py.contains("Negative parallelism detected"));
+    }
+
+    #[test]
+    fn hook_handles_special_chars_in_rules() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "kill-words", "it's \"tricky\"", "must-fix");
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        // Should produce valid Python — the JSON handles escaping
+        assert!(py.contains("KILL_WORDS = json.loads("));
+        // Verify the JSON is parseable
+        let kill_line = py.lines()
+            .find(|l| l.starts_with("KILL_WORDS = json.loads("))
+            .unwrap();
+        let json_str = &kill_line["KILL_WORDS = json.loads(r\"\"\"".len()..kill_line.len() - "\"\"\")".len()];
+        let parsed: Vec<String> = serde_json::from_str(json_str).unwrap();
+        assert_eq!(parsed, vec!["it's \"tricky\""]);
+    }
+
+    #[test]
+    fn hook_get_extension_has_single_empty_path_guard() {
+        let py = generate_writing_guard_py(&[]);
+        assert_eq!(py.matches("if not path:").count(), 1);
+    }
+
+    #[test]
+    fn resolver_returns_typed_error_when_margin_cli_is_missing() {
+        let home = tempfile::tempdir().unwrap();
+        let err = resolve_margin_cli_from_path(home.path(), "/usr/bin:/bin")
+            .expect_err("missing CLI should return an actionable resolver error");
+
+        assert!(err.contains("Could not resolve margin CLI"));
+        assert!(err.contains("$HOME/.local/bin/margin"));
+    }
+
+    #[test]
+    fn bundled_cli_is_found_beside_the_app_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("margin");
+        assert_eq!(bundled_cli_beside(&exe), None);
+
+        fs::write(dir.path().join("margin-cli"), "").unwrap();
+        assert_eq!(bundled_cli_beside(&exe), Some(dir.path().join("margin-cli")));
+    }
+
+    #[test]
+    fn agent_integration_is_off_for_a_new_user() {
+        let home = tempfile::tempdir().unwrap();
+        assert!(!agent_integration_enabled(home.path()));
+    }
+
+    #[test]
+    fn agent_integration_stays_on_for_users_with_an_existing_guard() {
+        let home = tempfile::tempdir().unwrap();
+        let hooks = home.path().join(".claude").join("hooks");
+        fs::create_dir_all(&hooks).unwrap();
+        fs::write(hooks.join("writing_guard.py"), "").unwrap();
+        assert!(agent_integration_enabled(home.path()));
+    }
+
+    #[test]
+    fn agent_integration_setting_overrides_the_existing_guard() {
+        let home = tempfile::tempdir().unwrap();
+        let hooks = home.path().join(".claude").join("hooks");
+        fs::create_dir_all(&hooks).unwrap();
+        fs::write(hooks.join("writing_guard.py"), "").unwrap();
+
+        write_agent_integration(home.path(), false).unwrap();
+        assert!(!agent_integration_enabled(home.path()));
+
+        write_agent_integration(home.path(), true).unwrap();
+        assert!(agent_integration_enabled(home.path()));
+    }
+
+    // --- update_rule tests ---
+
+    #[test]
+    fn update_rule_changes_rule_text() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        update_rule(&conn, "r1", Some("Be very direct"), None, None, None, None, None, None).unwrap();
+
+        let text: String = conn
+            .query_row("SELECT rule_text FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(text, "Be very direct");
+    }
+
+    #[test]
+    fn update_rule_changes_severity() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        update_rule(&conn, "r1", None, Some("must-fix"), None, None, None, None, None).unwrap();
+
+        let sev: String = conn
+            .query_row("SELECT severity FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sev, "must-fix");
+    }
+
+    #[test]
+    fn update_rule_changes_multiple_fields() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        update_rule(
+            &conn, "r1",
+            Some("Be concise"),
+            Some("must-fix"),
+            Some("Always"),
+            Some("Clarity"),
+            Some("Long sentence"),
+            Some("Short"),
+            Some("A note"),
+        ).unwrap();
+
+        let (text, sev, when, why): (String, String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT rule_text, severity, when_to_apply, why FROM writing_rules WHERE id = 'r1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(text, "Be concise");
+        assert_eq!(sev, "must-fix");
+        assert_eq!(when, Some("Always".to_string()));
+        assert_eq!(why, Some("Clarity".to_string()));
+    }
+
+    #[test]
+    fn update_rule_nonexistent_fails() {
+        let conn = setup_db();
+        let result = update_rule(&conn, "nonexistent", Some("text"), None, None, None, None, None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn update_rule_updates_timestamp() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        let old_ts: i64 = conn
+            .query_row("SELECT updated_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+
+        update_rule(&conn, "r1", Some("Be very direct"), None, None, None, None, None, None).unwrap();
+
+        let new_ts: i64 = conn
+            .query_row("SELECT updated_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(new_ts > old_ts);
+    }
+
+    // --- delete_rule tests (soft-archive: the row survives, hidden from reads) ---
+
+    #[test]
+    fn delete_rule_archives_row() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+        insert_rule(&conn, "r2", "email", "tone", "Be brief", "should-fix");
+
+        delete_rule(&conn, "r1").unwrap();
+
+        // Row survives with archived_at stamped — provenance is preserved.
+        let archived: Option<i64> = conn
+            .query_row("SELECT archived_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(archived.is_some());
+        // ...but it is invisible to every normal read.
+        assert_eq!(fetch_writing_rules(&conn, None).unwrap().len(), 1);
+        assert!(fetch_writing_rules(&conn, Some("general")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn unarchive_rule_restores_row() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        delete_rule(&conn, "r1").unwrap();
+        unarchive_rule(&conn, "r1").unwrap();
+
+        assert_eq!(fetch_writing_rules(&conn, None).unwrap().len(), 1);
+        // Double-unarchive and archive-of-archived both fail cleanly.
+        assert!(unarchive_rule(&conn, "r1").is_err());
+        assert!(delete_rule(&conn, "r1").is_ok());
+        assert!(delete_rule(&conn, "r1").is_err());
+    }
+
+    #[test]
+    fn delete_rule_nonexistent_fails() {
+        let conn = setup_db();
+        let result = delete_rule(&conn, "nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn unified_profile_includes_voice_calibration_section() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "voice-calibration", "Never end casual messages with periods", "must-fix");
+        insert_rule(&conn, "r2", "general", "editorial", "Read aloud test", "should-fix");
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_profile_markdown(&rules, &[]);
+
+        assert!(md.contains("## Voice Calibration"));
+        assert!(md.contains("Never end casual messages with periods"));
+        // Editorial rules should be in the Writing Rules section, not voice calibration
+        assert!(md.contains("# Writing Rules"));
+        assert!(md.contains("Read aloud test"));
+    }
+
+    #[test]
+    fn unified_profile_groups_voice_rules_by_register() {
+        let conn = setup_db();
+        // Universal rule
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v1', 'general', 'voice-calibration', 'Hedges 3.6x more than declares', 'must-fix', 'manual', 1, 'all', 1000, 1000)",
+            [],
+        ).unwrap();
+        // Casual rule
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v2', 'general', 'voice-calibration', 'Almost never end messages with periods', 'must-fix', 'manual', 1, 'casual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_profile_markdown(&rules, &[]);
+
+        assert!(md.contains("### Universal (all registers)"));
+        assert!(md.contains("Hedges 3.6x more than declares"));
+        assert!(md.contains("### Casual register (slack, outreach, email, general chat)"));
+        assert!(md.contains("Almost never end messages with periods"));
+        // Should have the professional scoping note since there are casual rules
+        assert!(md.contains("### Professional register"));
+        assert!(md.contains("DO NOT apply"));
+
+        // Universal should come before casual
+        let uni_pos = md.find("### Universal").unwrap();
+        let cas_pos = md.find("### Casual register").unwrap();
+        assert!(uni_pos < cas_pos);
+    }
+
+    #[test]
+    fn unified_profile_casual_rules_are_not_duplicated() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v1', 'general', 'voice-calibration', 'Casual rule A', 'must-fix', 'manual', 1, 'casual', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, register, created_at, updated_at)
+             VALUES ('v2', 'general', 'voice-calibration', 'Casual rule B', 'must-fix', 'manual', 1, 'casual', 1000, 1000)",
+            [],
+        ).unwrap();
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_profile_markdown(&rules, &[]);
+
+        assert_eq!(md.matches("- **Casual rule A**").count(), 1);
+        assert_eq!(md.matches("- **Casual rule B**").count(), 1);
+    }
+
+    #[test]
+    fn unified_profile_includes_corrections_and_rules() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        let corrections = vec![
+            CorrectionRecord {
+                original_text: "Good writing here.".to_string(),
+                notes: vec!["Nice rhythm".to_string()],
+                highlight_color: "green".to_string(),
+                document_title: Some("Essay".to_string()),
+                document_id: "doc1".to_string(),
+                created_at: 1000,
+                writing_type: None,
+                polarity: Some("positive".to_string()),
+                feedback_type: None,
+            },
+            CorrectionRecord {
+                original_text: "Bad pattern here.".to_string(),
+                notes: vec!["Fix this".to_string()],
+                highlight_color: "yellow".to_string(),
+                document_title: Some("Essay".to_string()),
+                document_id: "doc1".to_string(),
+                created_at: 2000,
+                writing_type: None,
+                polarity: Some("corrective".to_string()),
+                feedback_type: None,
+            },
+        ];
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_profile_markdown(&rules, &corrections);
+
+        // All sections present
+        assert!(md.contains("## Writing Samples"));
+        assert!(md.contains("Good writing here."));
+        assert!(md.contains("## Corrections"));
+        assert!(md.contains("Bad pattern here."));
+        assert!(md.contains("# Writing Rules"));
+        assert!(md.contains("Be direct"));
+    }
+
+    #[test]
+    fn unified_profile_samples_before_corrections() {
+        let corrections = vec![
+            CorrectionRecord {
+                original_text: "Positive text.".to_string(),
+                notes: vec!["nice".to_string()],
+                highlight_color: "green".to_string(),
+                document_title: None,
+                document_id: "d1".to_string(),
+                created_at: 1000,
+                writing_type: None,
+                polarity: Some("positive".to_string()),
+                feedback_type: None,
+            },
+            CorrectionRecord {
+                original_text: "Corrective text.".to_string(),
+                notes: vec!["fix".to_string()],
+                highlight_color: "yellow".to_string(),
+                document_title: None,
+                document_id: "d1".to_string(),
+                created_at: 2000,
+                writing_type: None,
+                polarity: Some("corrective".to_string()),
+                feedback_type: None,
+            },
+        ];
+
+        let md = generate_writing_profile_markdown(&[], &corrections);
+        let samples_pos = md.find("## Writing Samples").unwrap();
+        let corrections_pos = md.find("## Corrections").unwrap();
+        assert!(samples_pos < corrections_pos, "Writing Samples must appear before Corrections");
+    }
+
+    #[test]
+    fn unified_profile_unicode_truncation_does_not_panic() {
+        let emoji_text = "🎉".repeat(250);
+        let corrections = vec![CorrectionRecord {
+            original_text: emoji_text,
+            notes: vec![],
+            highlight_color: "yellow".to_string(),
+            document_title: None,
+            document_id: "d1".to_string(),
+            created_at: 1000,
+            writing_type: None,
+            polarity: Some("positive".to_string()),
+            feedback_type: None,
+        }];
+
+        // Should not panic — truncation must respect char boundaries
+        let md = generate_writing_profile_markdown(&[], &corrections);
+        assert!(md.contains("## Writing Samples"));
+        assert!(md.contains("🎉"));
+    }
+
+    // --- mark_reviewed / mark_unreviewed tests ---
+
+    #[test]
+    fn mark_reviewed_sets_timestamp() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+        insert_rule(&conn, "r2", "email", "tone", "Be brief", "should-fix");
+
+        let updated = mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        let reviewed: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(reviewed.is_some());
+
+        // r2 should still be NULL
+        let r2_reviewed: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r2'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(r2_reviewed, None);
+    }
+
+    #[test]
+    fn mark_unreviewed_clears_timestamp() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        // Mark reviewed first
+        mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+        let reviewed: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(reviewed.is_some());
+
+        // Now mark unreviewed
+        let updated = mark_unreviewed(&conn, &["r1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        let cleared: Option<i64> = conn
+            .query_row("SELECT reviewed_at FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cleared, None);
+    }
+
+    #[test]
+    fn mark_reviewed_promotes_candidate_and_marks_source_corrections() {
+        // Mirrors cli/db/rules.go AcceptCandidateRule: candidate rows flip
+        // source to 'synthesis' and their synthesized-from corrections get
+        // synthesized_at stamped.
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, created_at, updated_at)
+             VALUES ('cand1', 'general', 'kill-words', 'leverage', 'must-fix', 'synthesis-candidate', 2, 'synthesized-from:h1, h2', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text one', '[]', 'yellow', 1),
+                    ('c2', 'h2', 'd1', 's1', 'text two', '[]', 'yellow', 2),
+                    ('c3', 'h3', 'd1', 's1', 'text three', '[]', 'yellow', 3)",
+            [],
+        ).unwrap();
+
+        let updated = mark_reviewed(&conn, &["cand1".to_string()]).unwrap();
+        assert_eq!(updated, 1);
+
+        let (source, reviewed): (String, Option<i64>) = conn
+            .query_row(
+                "SELECT source, reviewed_at FROM writing_rules WHERE id = 'cand1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(source, "synthesis");
+        assert!(reviewed.is_some());
+
+        let synth: Vec<(String, Option<i64>)> = conn
+            .prepare("SELECT highlight_id, synthesized_at FROM corrections ORDER BY highlight_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert!(synth[0].1.is_some(), "h1 should be marked synthesized");
+        assert!(synth[1].1.is_some(), "h2 should be marked synthesized");
+        assert!(synth[2].1.is_none(), "h3 is unrelated and must stay NULL");
+    }
+
+    #[test]
+    fn mark_reviewed_does_not_overwrite_existing_synthesized_at() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, created_at, updated_at)
+             VALUES ('cand1', 'general', 'kill-words', 'leverage', 'must-fix', 'synthesis-candidate', 1, 'synthesized-from:h1', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at, synthesized_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text', '[]', 'yellow', 1, 555)",
+            [],
+        ).unwrap();
+
+        mark_reviewed(&conn, &["cand1".to_string()]).unwrap();
+
+        let synth: i64 = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth, 555, "existing synthesized_at must be preserved");
+    }
+
+    #[test]
+    fn mark_reviewed_leaves_non_candidate_source_unchanged() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+
+        mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+
+        let source: String = conn
+            .query_row("SELECT source FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(source, "manual");
+    }
+
+    #[test]
+    fn mark_unreviewed_demotes_promoted_rule_back_to_candidate() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        conn.execute(
+            "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, created_at, updated_at)
+             VALUES ('cand1', 'general', 'kill-words', 'leverage', 'must-fix', 'synthesis-candidate', 1, 'synthesized-from:h1', 1000, 1000)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text', '[]', 'yellow', 1)",
+            [],
+        ).unwrap();
+
+        mark_reviewed(&conn, &["cand1".to_string()]).unwrap();
+        let stamped: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(stamped.is_some(), "accept should stamp provenance corrections");
+
+        mark_unreviewed(&conn, &["cand1".to_string()]).unwrap();
+
+        let (source, reviewed): (String, Option<i64>) = conn
+            .query_row(
+                "SELECT source, reviewed_at FROM writing_rules WHERE id = 'cand1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        // Demoted rules are gated again: unreviewed synthesis-candidate rows
+        // are excluded by unreviewedCandidateFilter.
+        assert_eq!(source, "synthesis-candidate");
+        assert_eq!(reviewed, None);
+        // The provenance correction re-enters the synthesis queue — otherwise
+        // a demoted-then-rejected candidate would orphan it forever.
+        let synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth, None);
+    }
+
+    #[test]
+    fn provenance_ids_end_at_semicolon() {
+        // MCP writes `synthesized-from:h1,h2; free text` — the free text must
+        // not glue onto the last id or that correction is never stamped.
+        let ids: Vec<&str> = parse_synthesized_from("synthesized-from:h1,h2; agent note here").collect();
+        assert_eq!(ids, ["h1", "h2"]);
+        let ids: Vec<&str> = parse_synthesized_from("synthesized-from:h1,h2\nmulti-line note").collect();
+        assert_eq!(ids, ["h1", "h2"]);
+        let ids: Vec<&str> = parse_synthesized_from("synthesized-from:h1 , h2").collect();
+        assert_eq!(ids, ["h1", "h2"]);
+    }
+
+    #[test]
+    fn mark_unreviewed_keeps_stamp_when_another_rule_claims_correction() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+        // Two accepted rules share the same provenance correction.
+        for id in ["r1", "r2"] {
+            conn.execute(
+                "INSERT INTO writing_rules (id, writing_type, category, rule_text, severity, source, signal_count, notes, reviewed_at, created_at, updated_at)
+                 VALUES (?1, 'general', 'kill-words', ?1, 'must-fix', 'synthesis', 1, 'synthesized-from:h1', 1234, 1000, 1000)",
+                [id],
+            ).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO corrections (id, highlight_id, document_id, session_id, original_text, notes_json, highlight_color, created_at, synthesized_at)
+             VALUES ('c1', 'h1', 'd1', 's1', 'text', '[]', 'yellow', 1, 999)",
+            [],
+        ).unwrap();
+
+        mark_unreviewed(&conn, &["r1".to_string()]).unwrap();
+
+        let synth: Option<i64> = conn
+            .query_row("SELECT synthesized_at FROM corrections WHERE highlight_id = 'h1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(synth, Some(999), "still claimed by accepted rule r2");
+    }
+
+    #[test]
+    fn mark_unreviewed_keeps_manual_source() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "tone", "Be direct", "should-fix");
+        mark_reviewed(&conn, &["r1".to_string()]).unwrap();
+        mark_unreviewed(&conn, &["r1".to_string()]).unwrap();
+
+        let source: String = conn
+            .query_row("SELECT source FROM writing_rules WHERE id = 'r1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(source, "manual");
+    }
+
+    #[test]
+    fn mark_reviewed_empty_returns_zero() {
+        let conn = setup_db();
+        let updated = mark_reviewed(&conn, &[]).unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn mark_unreviewed_empty_returns_zero() {
+        let conn = setup_db();
+        let updated = mark_unreviewed(&conn, &[]).unwrap();
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn fetch_all_corrections_for_profile_excludes_backfilled_session_rows() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+
+        conn.execute(
+            "INSERT INTO corrections
+                (id, highlight_id, document_id, session_id, original_text, notes_json,
+                 document_title, highlight_color, created_at)
+             VALUES
+                ('c1', '__backfill_marker__', 'd1', '__backfilled__', 'marker', '[]', 'Doc', 'yellow', 1),
+                ('c2', 'h-backfilled', 'd1', '__backfilled__', 'legacy', '[]', 'Doc', 'yellow', 2),
+                ('c3', 'h-live', 'd1', 'session-1', 'current', '[]', 'Doc', 'yellow', 3)",
+            [],
+        )
+        .unwrap();
+
+        let corrections = fetch_all_corrections_for_profile(&conn).unwrap();
+
+        assert_eq!(corrections.len(), 1);
+        assert_eq!(corrections[0].original_text, "current");
+    }
+
+    #[test]
+    fn fetch_all_corrections_for_profile_is_not_capped_at_2000() {
+        let conn = setup_db();
+        create_corrections_table(&conn);
+
+        let tx = conn.unchecked_transaction().unwrap();
+        for i in 0..2005 {
+            tx.execute(
+                "INSERT INTO corrections
+                    (id, highlight_id, document_id, session_id, original_text, notes_json,
+                     document_title, highlight_color, created_at)
+                 VALUES (?1, ?2, 'd1', 'session-live', ?3, '[]', 'Doc', 'yellow', ?4)",
+                rusqlite::params![
+                    format!("c{i}"),
+                    format!("h{i}"),
+                    format!("text{i}"),
+                    i as i64,
+                ],
+            )
+            .unwrap();
+        }
+        tx.commit().unwrap();
+
+        let corrections = fetch_all_corrections_for_profile(&conn).unwrap();
+
+        assert_eq!(corrections.len(), 2005);
+    }
+
+    // --- heading-patterns tests ---
+
+    #[test]
+    fn hook_includes_heading_patterns() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "heading-patterns",
+            "Section headings must not start with 'The'", "must-fix",
+            None, None,
+            Some(r"(?:^|:\s*)[Tt]he\b"),
+            Some("## An uncomfortable timeline"),
+            1,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains("HEADING_PATTERNS = json.loads("));
+        assert!(py.contains("heading_text"));
+        assert!(py.contains("[Tt]he"));
+    }
+
+    #[test]
+    fn hook_excludes_non_must_fix_heading_patterns() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "heading-patterns",
+            "Some rule", "should-fix",
+            None, None, Some("^foo"), None, 1,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains(r#"HEADING_PATTERNS = json.loads(r"""[]""")"#));
+    }
+
+    #[test]
+    fn hook_heading_patterns_empty_when_no_rules() {
+        let conn = setup_db();
+        insert_rule(&conn, "r1", "general", "kill-words", "leverage", "must-fix");
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let py = generate_writing_guard_py(&rules);
+
+        assert!(py.contains(r#"HEADING_PATTERNS = json.loads(r"""[]""")"#));
+    }
+
+    #[test]
+    fn profile_skips_before_for_heading_patterns() {
+        let conn = setup_db();
+        insert_full_rule(
+            &conn, "r1", "general", "heading-patterns",
+            "No headings starting with The", "must-fix",
+            None, None,
+            Some(r"(?:^|:\s*)[Tt]he\b"),
+            Some("## An uncomfortable timeline"),
+            1,
+        );
+
+        let rules = fetch_writing_rules(&conn, None).unwrap();
+        let md = generate_writing_rules_markdown(&rules);
+
+        assert!(!md.contains(r"(?:^|:\s*)[Tt]he\b"));
+        assert!(md.contains("## An uncomfortable timeline"));
+    }
+
+}

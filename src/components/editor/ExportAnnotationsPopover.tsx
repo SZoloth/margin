@@ -1,0 +1,410 @@
+import { useEffect, useState, useRef } from "react";
+import type { ExportResult } from "@/types/export";
+import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
+import { WRITING_TYPES } from "@/lib/writing-types";
+
+interface ExportAnnotationsPopoverProps {
+  isOpen: boolean;
+  onExport: (writingType: string | null) => Promise<ExportResult>;
+  onClose: () => void;
+  persistCorrections: boolean;
+  hasMarginNotes?: boolean;
+  onOpenSettings: () => void;
+  onRetag?: (highlightIds: string[], writingType: string) => void;
+}
+
+export function ExportAnnotationsPopover({
+  isOpen,
+  onExport,
+  onClose,
+  persistCorrections,
+  hasMarginNotes = false,
+  onOpenSettings,
+  onRetag,
+}: ExportAnnotationsPopoverProps) {
+  const [result, setResult] = useState<ExportResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [writingType, setWritingType] = useState<string>("general");
+  const { isMounted, isVisible } = useAnimatedPresence(isOpen, 200);
+
+  const showWritingTypeSelector = persistCorrections && hasMarginNotes;
+
+  // Reset state when popover opens
+  useEffect(() => {
+    if (isOpen) {
+      setResult(null);
+      setErrorMessage(null);
+      setExporting(false);
+    }
+  }, [isOpen]);
+
+  // Escape to close
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  const onExportRef = useRef(onExport);
+  onExportRef.current = onExport;
+  const cancelledRef = useRef(false);
+
+  const runExport = async (wt: string | null) => {
+    setExporting(true);
+    try {
+      const res = await onExportRef.current(wt);
+      if (!cancelledRef.current) {
+        setResult(res);
+        setErrorMessage(null);
+      }
+    } catch (err) {
+      console.error("Export failed:", err);
+      if (!cancelledRef.current) {
+        setResult(null);
+        setErrorMessage("Export failed. Please try again.");
+      }
+    } finally {
+      if (!cancelledRef.current) setExporting(false);
+    }
+  };
+
+  // Auto-export when popover opens — but only when corrections aren't being
+  // persisted. When they are, the writing type must be chosen first so it
+  // lands on the saved rows rather than silently defaulting.
+  useEffect(() => {
+    if (!isOpen || showWritingTypeSelector) return;
+
+    cancelledRef.current = false;
+    void runExport(null);
+
+    return () => { cancelledRef.current = true; };
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isMounted) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
+    >
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.3)",
+          opacity: isVisible ? 1 : 0,
+          transition: `opacity ${isVisible ? "200ms var(--ease-entrance)" : "150ms var(--ease-exit)"}`,
+        }}
+      />
+
+      {/* Popover */}
+      <div
+        role="dialog"
+        aria-label="Export annotations"
+        style={{
+          position: "relative",
+          backgroundColor: "var(--color-page)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "20px 24px",
+          minWidth: "min(320px, calc(100vw - 32px))",
+          maxWidth: "min(400px, calc(100vw - 32px))",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "scale(1) translateY(0)" : "scale(0.97) translateY(4px)",
+          transition: isVisible
+            ? "opacity 200ms var(--ease-entrance), transform 200ms var(--ease-entrance)"
+            : "opacity 150ms var(--ease-exit), transform 150ms var(--ease-exit)",
+        }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--color-text-secondary)",
+            fontSize: "var(--text-lg)",
+            lineHeight: 1,
+            padding: "2px 6px",
+            borderRadius: "var(--radius-sm)",
+          }}
+        >
+          ×
+        </button>
+
+        {exporting ? (
+          <div
+            style={{
+              textAlign: "center",
+              color: "var(--color-text-primary)",
+              fontSize: "var(--text-base)",
+              fontWeight: 500,
+              padding: "8px 0",
+            }}
+          >
+            Exporting...
+          </div>
+        ) : errorMessage ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--color-text-primary)",
+                fontSize: "var(--text-base)",
+                fontWeight: 500,
+              }}
+            >
+              <span style={{ color: "var(--color-danger, #d33)" }}>×</span>
+              Export failed
+            </div>
+            <div style={{ color: "var(--color-text-secondary)", fontSize: "var(--text-sm)" }}>
+              {errorMessage}
+            </div>
+          </div>
+        ) : result ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--color-text-primary)",
+                fontSize: "var(--text-base)",
+                fontWeight: 500,
+              }}
+            >
+              <span style={{ color: "var(--color-accent, #4a9)" }}>✓</span>
+              {result.sentToClaude ? "Sent to Claude" : "Copied to clipboard"}
+            </div>
+
+            {/* Stats */}
+            <div
+              style={{
+                color: "var(--color-text-secondary)",
+                fontSize: "var(--text-sm)",
+              }}
+            >
+              {result.highlightCount} {result.highlightCount === 1 ? "annotation" : "annotations"}
+              {result.noteCount > 0 && (
+                <> · {result.noteCount} {result.noteCount === 1 ? "note" : "notes"}</>
+              )}
+              {result.correctionCount !== undefined && (
+                <>
+                  {" "}· {result.correctionCount} {result.correctionCount === 1 ? "correction" : "corrections"}
+                  {result.promptCount ? `, ${result.promptCount} ${result.promptCount === 1 ? "prompt" : "prompts"} skipped` : ""}
+                </>
+              )}
+            </div>
+
+            {/* Snippets */}
+            {result.snippets.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {result.snippets.map((snippet, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      borderLeft: "2px solid var(--color-border)",
+                      paddingLeft: 10,
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-text-secondary)",
+                      lineHeight: 1.5,
+                      fontStyle: "italic",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {snippet}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Writing type tag — re-tags persisted corrections */}
+            {result.correctionsSaved && showWritingTypeSelector && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+                  Tagged as
+                </span>
+                {WRITING_TYPES.map((wt) => (
+                  <button
+                    key={wt.value}
+                    type="button"
+                    onClick={() => {
+                      setWritingType(wt.value);
+                      onRetag?.(result.correctionHighlightIds ?? [], wt.value);
+                    }}
+                    style={{
+                      padding: "2px 8px",
+                      fontSize: "var(--text-xs)",
+                      fontFamily: "var(--font-sans)",
+                      fontWeight: writingType === wt.value ? 600 : 400,
+                      color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                      backgroundColor: writingType === wt.value ? "var(--hover-bg)" : "transparent",
+                      border: writingType === wt.value ? "1px solid var(--color-border)" : "1px solid transparent",
+                      borderRadius: "var(--radius-sm)",
+                      cursor: "pointer",
+                      transition: "all 150ms ease",
+                    }}
+                  >
+                    {wt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Corrections save location */}
+            {result.correctionsSaved && (
+              <div
+                style={{
+                  fontSize: "var(--text-xs)",
+                  color: "var(--color-text-tertiary)",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                Corrections saved to {result.correctionsFile}
+              </div>
+            )}
+
+            {/* Save failed hint */}
+            {persistCorrections && !result.correctionsSaved && result.noteCount > 0 && (
+              <div
+                style={{
+                  fontSize: "var(--text-xs)",
+                  color: "var(--color-text-tertiary)",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                Could not save feedback locally
+              </div>
+            )}
+
+            {/* Prompt to enable local save */}
+            {!persistCorrections && result.noteCount > 0 && (
+              <div
+                style={{
+                  fontSize: "var(--text-xs)",
+                  color: "var(--color-text-tertiary)",
+                  borderTop: "1px solid var(--color-border)",
+                  paddingTop: 10,
+                }}
+              >
+                Want to save feedback locally?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenSettings();
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "var(--color-accent, #4a9)",
+                    fontSize: "var(--text-xs)",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: 2,
+                  }}
+                >
+                  Turn on in Settings
+                </button>
+              </div>
+            )}
+          </div>
+        ) : showWritingTypeSelector ? (
+          /* Pre-export: choose the writing type before corrections are persisted. */
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div
+              style={{
+                color: "var(--color-text-primary)",
+                fontSize: "var(--text-base)",
+                fontWeight: 500,
+              }}
+            >
+              Export annotations
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+                Tag as
+              </span>
+              {WRITING_TYPES.map((wt) => (
+                <button
+                  key={wt.value}
+                  type="button"
+                  onClick={() => setWritingType(wt.value)}
+                  style={{
+                    padding: "2px 8px",
+                    fontSize: "var(--text-xs)",
+                    fontFamily: "var(--font-sans)",
+                    fontWeight: writingType === wt.value ? 600 : 400,
+                    color: writingType === wt.value ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                    backgroundColor: writingType === wt.value ? "var(--hover-bg)" : "transparent",
+                    border: writingType === wt.value ? "1px solid var(--color-border)" : "1px solid transparent",
+                    borderRadius: "var(--radius-sm)",
+                    cursor: "pointer",
+                    transition: "all 150ms ease",
+                  }}
+                >
+                  {wt.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => void runExport(writingType)}
+              style={{
+                alignSelf: "flex-start",
+                padding: "6px 14px",
+                fontSize: "var(--text-sm)",
+                fontWeight: 500,
+                color: "var(--color-page)",
+                backgroundColor: "var(--color-text-primary)",
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                cursor: "pointer",
+              }}
+            >
+              Export
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}

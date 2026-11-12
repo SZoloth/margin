@@ -1,0 +1,824 @@
+use crate::commands::now_millis;
+use crate::commands::feedback::sync_continuous_feedback;
+use crate::db::migrations::DbPool;
+use crate::db::models::{Highlight, MarginNote};
+use rusqlite::Connection;
+use uuid::Uuid;
+
+fn touch_document(conn: &Connection, document_id: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE documents SET last_opened_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_millis(), document_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn document_id_for_highlight(conn: &Connection, highlight_id: &str) -> Result<String, String> {
+    conn.query_row(
+        "SELECT document_id FROM highlights WHERE id = ?1",
+        rusqlite::params![highlight_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn document_id_for_margin_note(conn: &Connection, note_id: &str) -> Result<String, String> {
+    conn.query_row(
+        "SELECT h.document_id FROM margin_notes mn JOIN highlights h ON mn.highlight_id = h.id WHERE mn.id = ?1",
+        rusqlite::params![note_id],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+// === Inner functions (testable with &Connection) ===
+
+#[allow(clippy::too_many_arguments)]
+fn insert_highlight(
+    conn: &Connection,
+    id: &str,
+    document_id: &str,
+    color: &str,
+    text_content: &str,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<&str>,
+    suffix_context: Option<&str>,
+    now: i64,
+) -> Result<(), String> {
+    if text_content.trim().is_empty() {
+        return Err("empty highlight text is not allowed".to_string());
+    }
+
+    conn.execute(
+        "INSERT INTO highlights
+            (id, document_id, color, text_content, from_pos, to_pos,
+             prefix_context, suffix_context, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![id, document_id, color, text_content, from_pos, to_pos, prefix_context, suffix_context, now, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn fetch_highlights(conn: &Connection, document_id: &str) -> Result<Vec<Highlight>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, document_id, color, text_content, from_pos, to_pos,
+                    prefix_context, suffix_context, created_at, updated_at, exported_at
+             FROM highlights
+             WHERE document_id = ?1
+             ORDER BY from_pos",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let results = stmt
+        .query_map([document_id], Highlight::from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string());
+    results
+}
+
+#[allow(clippy::too_many_arguments)]
+fn update_highlight_fields(
+    conn: &Connection,
+    id: &str,
+    color: &str,
+    text_content: &str,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<&str>,
+    suffix_context: Option<&str>,
+    now: i64,
+) -> Result<(), String> {
+    if text_content.trim().is_empty() {
+        return Err("empty highlight text is not allowed".to_string());
+    }
+    conn.execute(
+        "UPDATE highlights SET color = ?1, text_content = ?2, from_pos = ?3, to_pos = ?4,
+             prefix_context = ?5, suffix_context = ?6, updated_at = ?7
+         WHERE id = ?8",
+        rusqlite::params![color, text_content, from_pos, to_pos, prefix_context, suffix_context, now, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn remove_highlight(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM highlights WHERE id = ?1", rusqlite::params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(test)]
+fn insert_margin_note(
+    conn: &Connection,
+    id: &str,
+    highlight_id: &str,
+    content: &str,
+    now: i64,
+) -> Result<(), String> {
+    insert_margin_note_with_intent(conn, id, highlight_id, content, "correction", now)
+}
+
+fn insert_margin_note_with_intent(
+    conn: &Connection,
+    id: &str,
+    highlight_id: &str,
+    content: &str,
+    intent: &str,
+    now: i64,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO margin_notes (id, highlight_id, content, intent, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![id, highlight_id, content, intent, now, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn fetch_margin_notes(conn: &Connection, document_id: &str) -> Result<Vec<MarginNote>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT mn.id, mn.highlight_id, mn.content, mn.intent, mn.created_at, mn.updated_at
+             FROM margin_notes mn
+             JOIN highlights h ON mn.highlight_id = h.id
+             WHERE h.document_id = ?1
+             ORDER BY h.from_pos",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let results = stmt
+        .query_map([document_id], MarginNote::from_row)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string());
+    results
+}
+
+fn set_margin_note_content(conn: &Connection, id: &str, content: &str, now: i64) -> Result<(), String> {
+    conn.execute(
+        "UPDATE margin_notes SET content = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![content, now, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn remove_margin_note(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM margin_notes WHERE id = ?1",
+        rusqlite::params![id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn bulk_update_highlight_positions(conn: &Connection, updates: &[(String, i64, i64)]) -> Result<(), String> {
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    for (id, from_pos, to_pos) in updates {
+        tx.execute(
+            "UPDATE highlights SET from_pos = ?1, to_pos = ?2, updated_at = ?3 WHERE id = ?4",
+            rusqlite::params![from_pos, to_pos, now_millis(), id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn remove_all_highlights_for_document(conn: &Connection, document_id: &str) -> Result<usize, String> {
+    conn.execute(
+        "DELETE FROM highlights WHERE document_id = ?1",
+        rusqlite::params![document_id],
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn bulk_mark_highlights_exported(conn: &Connection, highlight_ids: &[String], now: i64) -> Result<usize, String> {
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let mut count = 0usize;
+    for id in highlight_ids {
+        let rows = tx
+            .execute(
+                "UPDATE highlights SET exported_at = ?1, updated_at = ?1 WHERE id = ?2",
+                rusqlite::params![now, id],
+            )
+            .map_err(|e| e.to_string())?;
+        count += rows;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(count)
+}
+
+// === Tauri command handlers ===
+
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn create_highlight(
+    state: tauri::State<'_, DbPool>,
+    document_id: String,
+    color: String,
+    text_content: String,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<String>,
+    suffix_context: Option<String>,
+) -> Result<Highlight, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let id = Uuid::new_v4().to_string();
+    let now = now_millis();
+
+    insert_highlight(
+        &conn, &id, &document_id, &color, &text_content,
+        from_pos, to_pos,
+        prefix_context.as_deref(), suffix_context.as_deref(),
+        now,
+    )?;
+
+    touch_document(&conn, &document_id)?;
+
+    Ok(Highlight {
+        id,
+        document_id,
+        color,
+        text_content,
+        from_pos,
+        to_pos,
+        prefix_context,
+        suffix_context,
+        created_at: now,
+        updated_at: now,
+        exported_at: None,
+    })
+}
+
+#[tauri::command]
+pub async fn get_highlights(state: tauri::State<'_, DbPool>, document_id: String) -> Result<Vec<Highlight>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    fetch_highlights(&conn, &document_id)
+}
+
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn update_highlight(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    color: String,
+    text_content: String,
+    from_pos: i64,
+    to_pos: i64,
+    prefix_context: Option<String>,
+    suffix_context: Option<String>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let now = now_millis();
+
+    // Verify the row exists before reporting success — a recolor against a
+    // stale id must fail loudly rather than silently updating zero rows.
+    let doc_id = document_id_for_highlight(&conn, &id)?;
+    update_highlight_fields(
+        &conn,
+        &id,
+        &color,
+        &text_content,
+        from_pos,
+        to_pos,
+        prefix_context.as_deref(),
+        suffix_context.as_deref(),
+        now,
+    )?;
+    touch_document(&conn, &doc_id)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_highlight(state: tauri::State<'_, DbPool>, id: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+
+    let doc_id = document_id_for_highlight(&conn, &id)?;
+    remove_highlight(&conn, &id)?;
+    touch_document(&conn, &doc_id)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn create_margin_note(
+    state: tauri::State<'_, DbPool>,
+    highlight_id: String,
+    content: String,
+    intent: Option<String>,
+    capture_feedback: Option<bool>,
+) -> Result<MarginNote, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let id = Uuid::new_v4().to_string();
+    let now = now_millis();
+    let intent = intent.unwrap_or_else(|| "correction".to_string());
+    if !matches!(intent.as_str(), "correction" | "note" | "prompt") {
+        return Err(format!(
+            "invalid note intent: {intent:?} (expected \"correction\", \"note\", or \"prompt\")"
+        ));
+    }
+
+    insert_margin_note_with_intent(&tx, &id, &highlight_id, &content, &intent, now)?;
+
+    let doc_id = document_id_for_highlight(&tx, &highlight_id)?;
+    if intent == "correction" && capture_feedback.unwrap_or(false) {
+        sync_continuous_feedback(&tx, &highlight_id, None, None, now)?;
+    }
+    touch_document(&tx, &doc_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
+
+    Ok(MarginNote {
+        id,
+        highlight_id,
+        content,
+        intent,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub async fn get_margin_notes(state: tauri::State<'_, DbPool>, document_id: String) -> Result<Vec<MarginNote>, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    fetch_margin_notes(&conn, &document_id)
+}
+
+#[tauri::command]
+pub async fn update_margin_note(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    content: String,
+    capture_feedback: Option<bool>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let now = now_millis();
+
+    let highlight_id: String = tx.query_row(
+        "SELECT highlight_id FROM margin_notes WHERE id = ?1",
+        [&id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    let doc_id = document_id_for_margin_note(&tx, &id)?;
+    set_margin_note_content(&tx, &id, &content, now)?;
+    if capture_feedback.unwrap_or(false) {
+        sync_continuous_feedback(&tx, &highlight_id, None, None, now)?;
+    }
+    touch_document(&tx, &doc_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_margin_note(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    capture_feedback: Option<bool>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let now = now_millis();
+
+    let highlight_id: String = tx.query_row(
+        "SELECT highlight_id FROM margin_notes WHERE id = ?1",
+        [&id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    let doc_id = document_id_for_margin_note(&tx, &id)?;
+    remove_margin_note(&tx, &id)?;
+    if capture_feedback.unwrap_or(false) {
+        sync_continuous_feedback(&tx, &highlight_id, None, None, now)?;
+    }
+    touch_document(&tx, &doc_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_highlight_positions(
+    state: tauri::State<'_, DbPool>,
+    updates: Vec<(String, i64, i64)>,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    bulk_update_highlight_positions(&conn, &updates)
+}
+
+#[tauri::command]
+pub async fn delete_all_highlights_for_document(
+    state: tauri::State<'_, DbPool>,
+    document_id: String,
+) -> Result<usize, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    remove_all_highlights_for_document(&conn, &document_id)
+}
+
+#[tauri::command]
+pub async fn mark_highlights_exported(
+    state: tauri::State<'_, DbPool>,
+    highlight_ids: Vec<String>,
+) -> Result<usize, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let now = now_millis();
+    bulk_mark_highlights_exported(&conn, &highlight_ids, now)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn schema_sql() -> &'static str {
+        "PRAGMA foreign_keys=ON;
+         CREATE TABLE documents (
+             id TEXT PRIMARY KEY,
+             source TEXT NOT NULL,
+             file_path TEXT,
+             keep_local_id TEXT,
+             title TEXT,
+             author TEXT,
+             url TEXT,
+             word_count INTEGER DEFAULT 0,
+             last_opened_at INTEGER NOT NULL,
+             created_at INTEGER NOT NULL,
+             UNIQUE(file_path),
+             UNIQUE(keep_local_id)
+         );
+         CREATE TABLE highlights (
+             id TEXT PRIMARY KEY,
+             document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+             color TEXT NOT NULL DEFAULT 'yellow',
+             text_content TEXT NOT NULL,
+             from_pos INTEGER NOT NULL,
+             to_pos INTEGER NOT NULL,
+             prefix_context TEXT,
+             suffix_context TEXT,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL,
+             exported_at INTEGER
+         );
+         CREATE INDEX idx_highlights_document ON highlights(document_id);
+         CREATE TABLE margin_notes (
+             id TEXT PRIMARY KEY,
+             highlight_id TEXT NOT NULL REFERENCES highlights(id) ON DELETE CASCADE,
+             content TEXT NOT NULL,
+             intent TEXT NOT NULL DEFAULT 'correction' CHECK(intent IN ('correction', 'note', 'prompt')),
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL
+         );
+         CREATE INDEX idx_margin_notes_highlight ON margin_notes(highlight_id);"
+    }
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(schema_sql()).unwrap();
+        conn
+    }
+
+    fn insert_doc(conn: &Connection, id: &str) {
+        conn.execute(
+            "INSERT INTO documents (id, source, title, last_opened_at, created_at)
+             VALUES (?1, 'file', 'Test Doc', 1000, 1000)",
+            rusqlite::params![id],
+        )
+        .unwrap();
+    }
+
+    fn highlight_count(conn: &Connection) -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM highlights", [], |r| r.get(0)).unwrap()
+    }
+
+    fn note_count(conn: &Connection) -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM margin_notes", [], |r| r.get(0)).unwrap()
+    }
+
+    // === Highlight tests ===
+
+    #[test]
+    fn insert_and_fetch_highlights() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        insert_highlight(&conn, "h1", "doc1", "yellow", "hello world", 0, 11, Some("pre"), Some("suf"), 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "second", 20, 26, None, None, 1001).unwrap();
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights.len(), 2);
+        assert_eq!(highlights[0].id, "h1");
+        assert_eq!(highlights[0].text_content, "hello world");
+        assert_eq!(highlights[0].prefix_context.as_deref(), Some("pre"));
+        assert_eq!(highlights[1].id, "h2");
+        assert_eq!(highlights[1].color, "green");
+    }
+
+    #[test]
+    fn fetch_highlights_ordered_by_from_pos() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        insert_highlight(&conn, "h2", "doc1", "yellow", "later", 50, 55, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h1", "doc1", "yellow", "earlier", 10, 17, None, None, 1001).unwrap();
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights[0].from_pos, 10);
+        assert_eq!(highlights[1].from_pos, 50);
+    }
+
+    #[test]
+    fn fetch_highlights_scoped_to_document() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_doc(&conn, "doc2");
+
+        insert_highlight(&conn, "h1", "doc1", "yellow", "in doc1", 0, 7, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc2", "yellow", "in doc2", 0, 7, None, None, 1000).unwrap();
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights.len(), 1);
+        assert_eq!(highlights[0].document_id, "doc1");
+    }
+
+    #[test]
+    fn insert_highlight_rejects_whitespace_text_content() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let err = insert_highlight(&conn, "h1", "doc1", "yellow", " \n\t", 0, 3, None, None, 1000)
+            .expect_err("whitespace-only highlights should be rejected");
+
+        assert!(err.contains("empty highlight text"));
+        assert_eq!(highlight_count(&conn), 0);
+    }
+
+    #[test]
+    fn update_highlight_fields_updates_all_anchor_fields() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "old text", 0, 8, Some("op"), Some("os"), 1000).unwrap();
+
+        update_highlight_fields(&conn, "h1", "green", "new text", 5, 13, Some("np"), Some("ns"), 2000).unwrap();
+
+        let h = fetch_highlights(&conn, "doc1").unwrap()[0].clone();
+        assert_eq!(h.color, "green");
+        assert_eq!(h.text_content, "new text");
+        assert_eq!(h.from_pos, 5);
+        assert_eq!(h.to_pos, 13);
+        assert_eq!(h.prefix_context.as_deref(), Some("np"));
+        assert_eq!(h.suffix_context.as_deref(), Some("ns"));
+        assert_eq!(h.created_at, 1000);
+        assert_eq!(h.updated_at, 2000);
+    }
+
+    #[test]
+    fn update_highlight_fields_rejects_empty_text() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+
+        let err = update_highlight_fields(&conn, "h1", "green", "  ", 0, 4, None, None, 2000)
+            .expect_err("empty text should be rejected");
+        assert!(err.contains("empty highlight text"));
+    }
+
+    #[test]
+    fn delete_highlight_removes_it() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+        assert_eq!(highlight_count(&conn), 1);
+
+        remove_highlight(&conn, "h1").unwrap();
+        assert_eq!(highlight_count(&conn), 0);
+    }
+
+    #[test]
+    fn delete_highlight_cascades_to_margin_notes() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "my note", 1000).unwrap();
+        assert_eq!(note_count(&conn), 1);
+
+        remove_highlight(&conn, "h1").unwrap();
+        assert_eq!(note_count(&conn), 0);
+    }
+
+    #[test]
+    fn delete_document_cascades_to_highlights_and_notes() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "my note", 1000).unwrap();
+
+        conn.execute("DELETE FROM documents WHERE id = 'doc1'", []).unwrap();
+        assert_eq!(highlight_count(&conn), 0);
+        assert_eq!(note_count(&conn), 0);
+    }
+
+    // === Margin Note tests ===
+
+    #[test]
+    fn insert_and_fetch_margin_notes() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+
+        insert_margin_note(&conn, "n1", "h1", "first note", 1000).unwrap();
+        insert_margin_note(&conn, "n2", "h1", "second note", 1001).unwrap();
+
+        let notes = fetch_margin_notes(&conn, "doc1").unwrap();
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].content, "first note");
+        assert_eq!(notes[0].highlight_id, "h1");
+    }
+
+    #[test]
+    fn fetch_margin_notes_ordered_by_highlight_position() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h2", "doc1", "yellow", "later", 50, 55, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h1", "doc1", "yellow", "earlier", 10, 17, None, None, 1000).unwrap();
+
+        insert_margin_note(&conn, "n2", "h2", "note on later", 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "note on earlier", 1001).unwrap();
+
+        let notes = fetch_margin_notes(&conn, "doc1").unwrap();
+        assert_eq!(notes[0].content, "note on earlier");
+        assert_eq!(notes[1].content, "note on later");
+    }
+
+    #[test]
+    fn update_margin_note_changes_content_and_timestamp() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "original", 1000).unwrap();
+
+        set_margin_note_content(&conn, "n1", "updated", 2000).unwrap();
+
+        let notes = fetch_margin_notes(&conn, "doc1").unwrap();
+        assert_eq!(notes[0].content, "updated");
+        assert_eq!(notes[0].updated_at, 2000);
+        assert_eq!(notes[0].created_at, 1000);
+    }
+
+    #[test]
+    fn delete_margin_note_removes_it() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "note", 1000).unwrap();
+        assert_eq!(note_count(&conn), 1);
+
+        remove_margin_note(&conn, "n1").unwrap();
+        assert_eq!(note_count(&conn), 0);
+    }
+
+    #[test]
+    fn document_id_for_highlight_returns_correct_doc() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+
+        assert_eq!(document_id_for_highlight(&conn, "h1").unwrap(), "doc1");
+    }
+
+    #[test]
+    fn document_id_for_margin_note_returns_correct_doc() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "note", 1000).unwrap();
+
+        assert_eq!(document_id_for_margin_note(&conn, "n1").unwrap(), "doc1");
+    }
+
+    #[test]
+    fn empty_document_returns_no_highlights() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert!(highlights.is_empty());
+    }
+
+    #[test]
+    fn empty_document_returns_no_margin_notes() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let notes = fetch_margin_notes(&conn, "doc1").unwrap();
+        assert!(notes.is_empty());
+    }
+
+    // === Batch delete tests ===
+
+    #[test]
+    fn remove_all_highlights_for_document_clears_all() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_doc(&conn, "doc2");
+
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text1", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "text2", 10, 15, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "h1", "note on h1", 1000).unwrap();
+
+        insert_highlight(&conn, "h3", "doc2", "blue", "text3", 0, 5, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n2", "h3", "note on h3", 1000).unwrap();
+
+        let deleted = remove_all_highlights_for_document(&conn, "doc1").unwrap();
+        assert_eq!(deleted, 2);
+
+        assert!(fetch_highlights(&conn, "doc1").unwrap().is_empty());
+        assert!(fetch_margin_notes(&conn, "doc1").unwrap().is_empty());
+
+        assert_eq!(fetch_highlights(&conn, "doc2").unwrap().len(), 1);
+        assert_eq!(fetch_margin_notes(&conn, "doc2").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_bulk_update_highlight_positions() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "first", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "second", 10, 16, None, None, 1000).unwrap();
+
+        let updates = vec![
+            ("h1".to_string(), 100i64, 105i64),
+            ("h2".to_string(), 200i64, 206i64),
+        ];
+        bulk_update_highlight_positions(&conn, &updates).unwrap();
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights[0].from_pos, 100);
+        assert_eq!(highlights[0].to_pos, 105);
+        assert_eq!(highlights[1].from_pos, 200);
+        assert_eq!(highlights[1].to_pos, 206);
+        assert!(highlights[0].updated_at > highlights[0].created_at);
+    }
+
+    #[test]
+    fn remove_all_highlights_for_document_empty_is_noop() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let deleted = remove_all_highlights_for_document(&conn, "doc1").unwrap();
+        assert_eq!(deleted, 0);
+    }
+
+    // === Mark exported tests ===
+
+    #[test]
+    fn mark_highlights_exported_sets_exported_at() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text1", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "text2", 10, 15, None, None, 1000).unwrap();
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert!(highlights[0].exported_at.is_none());
+        assert!(highlights[1].exported_at.is_none());
+
+        let ids = vec!["h1".to_string()];
+        let count = bulk_mark_highlights_exported(&conn, &ids, 5000).unwrap();
+        assert_eq!(count, 1);
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights[0].exported_at, Some(5000));
+        assert!(highlights[1].exported_at.is_none());
+    }
+
+    #[test]
+    fn mark_highlights_exported_updates_multiple() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "h1", "doc1", "yellow", "text1", 0, 5, None, None, 1000).unwrap();
+        insert_highlight(&conn, "h2", "doc1", "green", "text2", 10, 15, None, None, 1000).unwrap();
+
+        let ids = vec!["h1".to_string(), "h2".to_string()];
+        let count = bulk_mark_highlights_exported(&conn, &ids, 5000).unwrap();
+        assert_eq!(count, 2);
+
+        let highlights = fetch_highlights(&conn, "doc1").unwrap();
+        assert_eq!(highlights[0].exported_at, Some(5000));
+        assert_eq!(highlights[1].exported_at, Some(5000));
+    }
+
+    #[test]
+    fn mark_highlights_exported_nonexistent_id_returns_zero() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+
+        let ids = vec!["nonexistent".to_string()];
+        let count = bulk_mark_highlights_exported(&conn, &ids, 5000).unwrap();
+        assert_eq!(count, 0);
+    }
+}

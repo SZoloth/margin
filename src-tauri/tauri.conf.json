@@ -1,0 +1,65 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickel-org/nickel.rs/master/schema.json",
+  "productName": "Margin",
+  "version": "1.17.1",
+  "identifier": "com.samzoloth.margin",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "titleBarStyle": "Overlay"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "createUpdaterArtifacts": true,
+    "externalBin": ["binaries/margin-cli", "binaries/margin-mcp"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown",
+          "mdown",
+          "mkd"
+        ],
+        "mimeType": "text/markdown",
+        "rank": "Default"
+      }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBM0IwQ0QwMEVFNkYyQjgKUldTNDh1WU8wQXc3dW9LOXBrUzN0NGw4a1crVHVSajRDd25aU1B5d2FFMk9pd0FmOW9KcWdZcncK",
+      "endpoints": [
+        "https://github.com/SZoloth/margin/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
