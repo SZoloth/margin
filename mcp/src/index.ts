@@ -46,6 +46,7 @@ import {
   getTheses,
   updateThesisStatus,
 } from "./tools/thesis.js";
+import { createDraftReview, getDraftReview, draftReviewStats } from "./tools/drafts.js";
 
 const server = new McpServer({
   name: "margin",
@@ -865,6 +866,58 @@ server.tool(
     }
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }),
+);
+
+// --- Draft Review Tools ---
+
+function draftToolResult(result: object): ToolResult {
+  if ("error" in result) {
+    return { content: [{ type: "text", text: String(result.error) }], isError: true };
+  }
+  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+}
+
+server.tool(
+  "margin_review_draft",
+  "Hand a finished draft Sam will send as himself (outreach, cover letter, email...) to Margin so he can edit it there and his edits are captured. Writes the draft to ~/.margin/drafts/<id>.md and opens it in the Margin app. After calling: if opened is true, tell Sam the draft is open in Margin, ask him to edit it, save with Cmd+S, and tell you when he's done. If opened is false, give him the returned path to open in Margin himself. When he says he's done, call margin_get_draft_review with the returned id.",
+  {
+    text: z.string().describe("The full draft text (Markdown), exactly as you would hand it to Sam"),
+    writing_type: z.string().describe("Writing type, e.g. outreach, cover-letter, email, email-hiring, slack, general"),
+    title: z.string().describe("Short title for the draft, e.g. 'Acme intro'; used in the draft id"),
+  },
+  async (params) => {
+    try {
+      return draftToolResult(await createDraftReview(params));
+    } catch (err) {
+      return draftToolResult({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+);
+
+server.tool(
+  "margin_get_draft_review",
+  "Call after Sam says he has finished editing a draft from margin_review_draft. Reads his saved version, compares it with your original, and stores the result (safe to call again; it recomputes). Returns final_text, still_claude (share of the final words that are unchanged from your draft), kept_of_draft (share of your words that survived), and changes as before/after pairs. Hand Sam final_text so he can paste it where he sends it. If unchanged is true, he sent your draft as written (or forgot to save; ask if unsure).",
+  { draft_id: z.string().describe("The id returned by margin_review_draft") },
+  async ({ draft_id }) => {
+    try {
+      return draftToolResult(getDraftReview(draft_id));
+    } catch (err) {
+      return draftToolResult({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+);
+
+server.tool(
+  "margin_draft_review_stats",
+  "Report, per writing type, how many drafts went through Margin review, how many were reviewed, median still_claude and kept_of_draft, and (with 4+ reviewed) the earlier-half vs later-half median still_claude. Also lists ids of drafts never checked with margin_get_draft_review. Numbers say little below about ten drafts of a type.",
+  { writing_type: z.string().optional().describe("Only report this writing type") },
+  async ({ writing_type }) => {
+    try {
+      return draftToolResult(draftReviewStats(undefined, writing_type));
+    } catch (err) {
+      return draftToolResult({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
 );
 
 // --- Start server ---

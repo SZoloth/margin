@@ -64,7 +64,7 @@ const VALID_SEVERITIES = ["must-fix", "should-fix", "nice-to-fix"] as const;
  * ValidWritingTypes (cli/db/rules.go). Mirrored by the writing_type CHECK
  * on writing_rules (src-tauri/src/db/migrations.rs).
  */
-const VALID_WRITING_TYPES = [
+export const VALID_WRITING_TYPES = [
   "general", "email", "prd", "blog", "cover-letter",
   "resume", "slack", "pitch", "outreach", "text",
   "case-study", "email-hiring", "email-friend", "social-post", "text-friend",
