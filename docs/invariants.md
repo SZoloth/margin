@@ -15,6 +15,7 @@
 - Generated artifacts such as `~/.margin/writing-rules.md` and `~/.claude/hooks/writing_guard.py` are derived outputs and must not become the primary source of truth.
 - Rule metadata such as `writing_type`, `register`, and `signal_count` must survive round-trips across app, MCP, and exports.
 - One unsynthesized correction row represents the current editable signal for a highlight. Feedback after synthesis creates a new event.
+- Learn-mode progress (caret, per-character mask, characters typed, accuracy, elapsed time) lives in the local storage key `margin-learn-progress`, keyed by document id and passage. It is not written to SQLite and it is not sent over the network. A passage whose text has changed discards its saved mask.
 
 ## Behavioral Invariants
 

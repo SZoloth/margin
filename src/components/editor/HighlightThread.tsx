@@ -16,6 +16,8 @@ interface HighlightThreadProps {
   onRecolor?: (highlightId: string, color: string) => void;
   /** Ban the highlighted phrase as a Hard rule. Rejects with the reason it failed. */
   onNeverWrite?: (highlight: Highlight) => Promise<void>;
+  /** Type this highlight in Learn mode. */
+  onLearn?: () => void;
   onClose: () => void;
   anchorRect: DOMRect | null;
   autoFocusNew?: boolean;
@@ -148,6 +150,7 @@ export function HighlightThread({
   onDeleteHighlight,
   onRecolor,
   onNeverWrite,
+  onLearn,
   onClose,
   anchorRect,
   autoFocusNew,
@@ -576,8 +579,15 @@ export function HighlightThread({
           ) : (
             <span />
           )}
-          <span className="thread-hint">
-            ⌘↵ save{notes.length === 0 ? " · Esc discards" : ""}
+          <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {onLearn && (
+              <button type="button" className="note-action-btn text-[length:var(--text-sm)]" onClick={onLearn}>
+                Learn
+              </button>
+            )}
+            <span className="thread-hint">
+              ⌘↵ save{notes.length === 0 ? " · Esc discards" : ""}
+            </span>
           </span>
         </div>
       </div>

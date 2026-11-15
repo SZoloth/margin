@@ -88,7 +88,10 @@ class HookFirstSequencer extends BaseSequencer {
         rel.includes("browser-stubs.test") ||
         rel.includes("diff-engine.test") ||
         rel.includes("TabBar.test") ||
-        rel.includes("ReadingSection.test")
+        rel.includes("ReadingSection.test") ||
+        // LearnMode.test renders no TipTap. Its window key listener and
+        // localStorage round-trip get flaky after the heavy editor tests.
+        rel.includes("LearnMode.test")
       ) {
         earlyLight.push(f);
       } else if (

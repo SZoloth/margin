@@ -39,6 +39,7 @@ interface CommandPaletteProps {
   onOpenRules?: () => void;
   onCloseTab?: () => void;
   onOpenFind?: () => void;
+  onLearn?: () => void;
 }
 
 type Column = "files" | "actions";
@@ -103,6 +104,7 @@ export function CommandPalette({
   onOpenRules,
   onCloseTab,
   onOpenFind,
+  onLearn,
 }: CommandPaletteProps) {
   const presence = useAnimatedPresence(isOpen, 150);
   const [query, setQuery] = useState("");
@@ -133,6 +135,7 @@ export function CommandPalette({
     ...(onCloseTab ? [{ id: "close", label: "Close tab", shortcut: ["⌘", "W"], onAction: () => { onClose(); onCloseTab(); } }] : []),
     ...(onExport ? [{ id: "export", label: "Export annotations", shortcut: ["⌘", "⇧", "E"], onAction: () => { onClose(); onExport(); } }] : []),
     ...(onOpenFind ? [{ id: "find", label: "Find in document", shortcut: ["⌘", "F"], onAction: () => { onClose(); onOpenFind(); } }] : []),
+    ...(onLearn ? [{ id: "learn", label: "Learn this text", shortcut: ["⌘", "⇧", "L"], onAction: () => { onClose(); onLearn(); } }] : []),
     ...(onOpenRules ? [{ id: "rules", label: "Writing rules", shortcut: ["⌘", "⇧", "M"], onAction: () => { onClose(); onOpenRules(); } }] : []),
     { id: "settings", label: "Settings", shortcut: ["⌘", ","], onAction: () => { onClose(); onOpenSettings(); } },
   ];

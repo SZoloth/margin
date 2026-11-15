@@ -18,6 +18,8 @@ interface SelectionToolbarProps {
   onOpenHighlight: () => void;
   onRemoveHighlight: () => void;
   onNeverWrite: () => void;
+  /** Type this selection in Learn mode. */
+  onLearn?: () => void;
 }
 
 type Mode = "new" | "existing" | "copy-only";
@@ -45,6 +47,7 @@ export function SelectionToolbar({
   onOpenHighlight,
   onRemoveHighlight,
   onNeverWrite,
+  onLearn,
 }: SelectionToolbarProps) {
   const [shown, setShown] = useState<Shown | null>(null);
   const [copied, setCopied] = useState(false);
@@ -256,7 +259,12 @@ export function SelectionToolbar({
           </button>
         </>
       )}
-      {shown.mode !== "copy-only" && <span className="selection-toolbar-sep" aria-hidden="true" />}
+      {onLearn && (
+        <button type="button" className="selection-toolbar-btn" onClick={run(onLearn)} title="Learn (⌘⇧L)">
+          Learn
+        </button>
+      )}
+      {(shown.mode !== "copy-only" || onLearn) && <span className="selection-toolbar-sep" aria-hidden="true" />}
       <button type="button" className="selection-toolbar-btn" onClick={copy} title="Copy (⌘C)">
         {copied ? "Copied" : "Copy"}
       </button>

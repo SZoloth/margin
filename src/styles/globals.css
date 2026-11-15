@@ -6,6 +6,7 @@
 @import "./tabs.css";
 @import "./toc.css";
 @import "./diff.css";
+@import "./learn.css";
 
 @theme {
   --color-highlight-yellow: #f5ebb0;

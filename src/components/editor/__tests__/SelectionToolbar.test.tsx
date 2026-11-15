@@ -220,6 +220,19 @@ describe("SelectionToolbar", () => {
     expect(h.onRemoveHighlight).toHaveBeenCalledTimes(1);
   });
 
+  it("Learn types the selection", async () => {
+    const editor = createMockEditor();
+    const h = handlers();
+    const onLearn = vi.fn();
+    render(<SelectionToolbar editor={editor} canNeverWrite onLearn={onLearn} {...h} />);
+    await drag(editor);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Learn" }));
+    });
+    expect(onLearn).toHaveBeenCalledTimes(1);
+    expect(toolbar()).toBeNull();
+  });
+
   it("offers only Copy where highlights aren't allowed (code)", async () => {
     vi.mocked(allowedMarkRanges).mockReturnValue([]);
     const editor = createMockEditor();

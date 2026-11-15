@@ -58,3 +58,4 @@ Related docs:
 - This repo is the Tauri app and its MCP/server surfaces.
 - `MarginOS-Swift` is a separate repo now; the `Margin/` directory here is stale and should not drive implementation decisions.
 - Browser automation assumptions do not apply to the main app because the UI runs in a Tauri webview, not a normal browser tab.
+- Learn mode types a passage over a dimmed copy of it. Progress (caret, mask, characters typed, accuracy, time) stays in the local storage key `margin-learn-progress`, keyed by document and passage. It does not enter SQLite and it is not sent over the network.

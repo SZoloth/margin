@@ -50,6 +50,25 @@ describe("CommandPalette Writing rules action", () => {
   });
 });
 
+describe("CommandPalette Learn action", () => {
+  it("starts Learn mode from the palette", async () => {
+    const onLearn = vi.fn();
+    render(
+      <CommandPalette
+        isOpen
+        onClose={vi.fn()}
+        recentDocs={[]}
+        onSelectRecentDoc={vi.fn()}
+        onOpenFilePath={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onLearn={onLearn}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("option", { name: /Learn this text/ }));
+    expect(onLearn).toHaveBeenCalled();
+  });
+});
+
 describe("renderSnippet", () => {
   it("keeps FTS <mark> tags as real elements", () => {
     expect(renderSnippet("the <mark>quick</mark> fox")).toBe(

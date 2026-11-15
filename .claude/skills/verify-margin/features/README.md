@@ -8,5 +8,6 @@ One file per user-facing feature that `drive.mjs` can drive. Each file says what
 | Highlight, recolor, margin note | `highlight-and-note` | [highlight-and-note.md](highlight-and-note.md) |
 | Select and copy without highlighting | `select-and-copy` | [select-and-copy.md](select-and-copy.md) |
 | Highlight only, toolbar inside a highlight | `highlight-only` | [highlight-only.md](highlight-only.md) |
+| Learn mode | `learn-mode` | [learn-mode.md](learn-mode.md) |
 
 Not yet mapped: the rules manager in Settings, search, tabs, export, the rule bench. Add a journey before you change one of them.

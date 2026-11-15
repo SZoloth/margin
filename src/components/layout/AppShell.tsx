@@ -29,6 +29,7 @@ interface AppShellProps {
   findBarOpen: boolean;
   onCloseFindBar: () => void;
   onOpenFind?: () => void;
+  onLearn?: () => void;
   // Onboarding
   welcomeBar?: React.ReactNode;
   hasSampleContent?: boolean;
@@ -57,6 +58,7 @@ export function AppShell({
   findBarOpen,
   onCloseFindBar,
   onOpenFind,
+  onLearn,
   welcomeBar,
   hasSampleContent,
   tocElement,
@@ -279,6 +281,7 @@ export function AppShell({
         onOpenRules={onOpenRules}
         onCloseTab={tabs.length > 0 && activeTabId ? () => onCloseTab(activeTabId) : undefined}
         onOpenFind={onOpenFind}
+        onLearn={onLearn}
       />
 
       {/* Dev mode indicator */}
