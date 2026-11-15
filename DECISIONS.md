@@ -283,4 +283,4 @@ Settings had seven pages in three different layouts. Two of them were thin: Writ
 
 **Not in scope.** Shared margins, a general chat companion for reading, a notes vault.
 
-**Risk.** This is the largest scope Margin has taken on, with no outside users yet. The voice test on sent mail runs first, because its result decides what the agent loads.
+**Order.** The voice test on sent mail runs first, because its result decides what the agent loads.
