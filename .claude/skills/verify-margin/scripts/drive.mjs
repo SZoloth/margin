@@ -150,6 +150,105 @@ const journeys = {
     if (marks > 0) throw new Error(`${marks} highlight(s) on the page after select and copy`);
   },
 
+  async "learn-mode"(ctx) {
+    // Walden, "Where I Lived, and What I Lived For" (Thoreau, 1854, public domain).
+    const first = "I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived. I did not wish to live what was not life, living is so dear; nor did I wish to practise resignation, unless it was quite necessary.";
+    const second = "I wanted to live deep and suck out all the marrow of life, to live so sturdily and Spartan-like as to put to rout all that was not life, to cut a broad swath and shave close, to drive life into a corner, and reduce it to its lowest terms.";
+    const mod = process.platform === "darwin" ? "Meta" : "Control";
+    const page = ctx.page;
+
+    await page.locator(".ProseMirror").click();
+    await page.keyboard.press(`${mod}+a`);
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type("# Walden", { delay: 20 });
+    await page.keyboard.press("Enter");
+    const heading = (await page.locator(".ProseMirror h1").textContent())?.trim();
+    if (heading !== "Walden") throw new Error(`expected a Walden heading, got ${JSON.stringify(heading)}`);
+    await page.keyboard.insertText(first);
+    await page.keyboard.press("Enter");
+    await page.keyboard.insertText(second);
+
+    await page.keyboard.press(`${mod}+Shift+L`);
+    const learn = page.getByRole("dialog", { name: "Learn Walden" });
+    await learn.waitFor();
+    await page.waitForTimeout(100);
+    await ctx.shot("ready");
+
+    // A wrong letter is underlined and does not stop the letters after it.
+    await page.keyboard.type("I went to the Xoods", { delay: 12 });
+    await page.locator(".learn-miss").waitFor();
+    const missed = await page.locator(".learn-miss").first().textContent();
+    if (missed !== "w") throw new Error(`miss showed ${JSON.stringify(missed)}, expected the source letter w`);
+    const matched = await page.locator(".learn-match").allTextContents();
+    if (!matched.join("").includes("I went to the")) throw new Error("typed letters did not brighten");
+    if (!matched.join("").includes("oods")) throw new Error("letters after the mistake did not match");
+    await ctx.shot("mistake");
+
+    // The mask is written on a short debounce, under whatever id the open document has.
+    await page.waitForFunction(() => {
+      const raw = localStorage.getItem("margin-learn-progress");
+      if (!raw) return false;
+      return Object.values(JSON.parse(raw)).some((doc) => doc.document?.mask?.includes("0") && doc.document.charactersTyped > 0);
+    });
+
+    await page.keyboard.press("Escape");
+    await learn.waitFor({ state: "hidden" });
+    await page.waitForFunction(() => {
+      const editor = document.querySelector(".ProseMirror");
+      const sel = window.getSelection();
+      if (!editor || !sel?.anchorNode || !editor.contains(sel.anchorNode)) return false;
+      const range = document.createRange();
+      range.setStart(editor, 0);
+      try {
+        range.setEnd(sel.anchorNode, sel.anchorOffset);
+      } catch {
+        return false;
+      }
+      return range.toString().includes("I went");
+    });
+    await ctx.shot("returned");
+
+    await page.keyboard.press(`${mod}+Shift+L`);
+    await learn.waitFor();
+    if ((await page.locator(".learn-miss").count()) < 1) throw new Error("the saved mistake was not restored");
+    await ctx.shot("resumed");
+    await page.keyboard.press("Escape");
+    await learn.waitFor({ state: "hidden" });
+
+    const bar = await selectionToolbar(page, "essential facts");
+    await bar.getByRole("button", { name: "Learn" }).click();
+    await learn.waitFor();
+    const selectionText = await page.locator(".learn-column").innerText();
+    if (!selectionText.includes("essential facts")) throw new Error(`selection passage: ${selectionText}`);
+    if (selectionText.includes("I went to the woods")) throw new Error("selection learn opened the whole document");
+    await ctx.shot("selection");
+    await page.keyboard.press("Escape");
+    await learn.waitFor({ state: "hidden" });
+
+    const noteBar = await selectionToolbar(page, "marrow of life");
+    await noteBar.getByRole("button", { name: "Note" }).click();
+    const thread = page.getByRole("dialog", { name: "Highlight notes" });
+    await thread.waitFor();
+    await thread.getByRole("button", { name: "Learn" }).click();
+    await learn.waitFor();
+    const highlightText = await page.locator(".learn-column").innerText();
+    if (!highlightText.includes("marrow of life")) throw new Error(`highlight passage: ${highlightText}`);
+    if (highlightText.includes("Spartan-like")) throw new Error("highlight learn showed more than the highlight");
+    await ctx.shot("highlight");
+    ctx.expectCall("create_highlight", (a) => JSON.stringify(a).includes("marrow of life"));
+    await page.keyboard.press("Escape");
+    await learn.waitFor({ state: "hidden" });
+
+    await page.keyboard.press(`${mod}+k`);
+    await page.getByRole("option", { name: "Learn this text" }).click();
+    await learn.waitFor();
+    const whole = await page.locator(".learn-column").innerText();
+    if (!whole.includes("I went to the woods") || !whole.includes("marrow of life")) {
+      throw new Error(`palette did not open the document: ${whole.slice(0, 180)}`);
+    }
+    await ctx.shot("palette");
+  },
+
   async "highlight-only"(ctx) {
     const bar = await selectionToolbar(ctx.page, "fast-paced landscape");
     await bar.getByRole("button", { name: "Highlight" }).click();

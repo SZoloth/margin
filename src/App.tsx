@@ -71,6 +71,8 @@ import { WelcomeBar } from "@/components/onboarding/WelcomeBar";
 import { OnboardingToast } from "@/components/onboarding/OnboardingToast";
 import { GuardOffer } from "@/components/onboarding/GuardOffer";
 import { RuleCaughtChip } from "@/components/editor/RuleCaughtChip";
+import { LearnMode } from "@/components/editor/LearnMode";
+import { rangeLaunch, wholeDocumentLaunch, type LearnLaunch } from "@/lib/learn-launch";
 
 const showUIFork = import.meta.env.MODE !== "production";
 
@@ -115,6 +117,7 @@ export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const toc = useTableOfContents(editor, doc.currentDoc?.id);
   const [showSettings, setShowSettings] = useState(false);
+  const [learn, setLearn] = useState<(LearnLaunch & { documentId: string }) | null>(null);
   const [settingsSection, setSettingsSection] = useState<Section | undefined>();
   const openWritingRules = useCallback(() => {
     setSettingsSection("style-memory");
@@ -1515,6 +1518,79 @@ export default function App() {
     };
   }, [onboarding.step, onboarding.isFirstRun]);
 
+  // Learn mode: type the open document, or the selection when there is one.
+  // A highlight uses its own anchor so a drifted mark still has words to type.
+  const openLearn = useCallback((request: { kind: "context" } | { kind: "highlight"; highlight: Highlight }) => {
+    const ed = editorRef.current;
+    if (!ed || ed.isDestroyed || showSettings) return;
+    const map = buildDocTextMap(ed.state.doc, "\n");
+    const first = ed.state.doc.firstChild;
+    const heading =
+      first && first.type.name === "heading" && first.attrs.level === 1 ? first.textContent : null;
+    const docTitle = doc.currentDoc?.title ?? null;
+    const workTitle = heading?.trim() || docTitle?.trim() || "Untitled";
+
+    let launch: LearnLaunch | null = null;
+    if (request.kind === "highlight") {
+      const h = request.highlight;
+      const from = docPosToFlat(map, Math.min(h.from_pos, h.to_pos));
+      const to = docPosToFlat(map, Math.max(h.from_pos, h.to_pos));
+      const slice = map.flat.slice(from, to);
+      const needle = h.text_content.trim().slice(0, 24);
+      const drifted = needle.length > 0 && !slice.includes(needle);
+      if (drifted) {
+        launch = rangeLaunch(h.text_content, 0, h.text_content.length, workTitle);
+        if (launch) launch = { ...launch, flatFrom: from, mapCaret: false };
+      } else {
+        launch = rangeLaunch(map.flat, from, to, workTitle);
+      }
+    } else {
+      const { from, to, empty } = ed.state.selection;
+      if (!empty) {
+        launch = rangeLaunch(map.flat, docPosToFlat(map, from), docPosToFlat(map, to), workTitle);
+      }
+      if (!launch) launch = wholeDocumentLaunch(map.flat, heading, docTitle);
+    }
+    if (!launch) return;
+    setFindBarOpen(false);
+    setShowExportPopover(false);
+    setFocusHighlightId(null);
+    setAnchorRect(null);
+    setAutoFocusNew(false);
+    setLearn({ ...launch, documentId: doc.currentDoc?.id ?? "draft" });
+  }, [doc.currentDoc, showSettings]);
+
+  const exitLearn = useCallback((sourceIndex: number) => {
+    const launch = learn;
+    setLearn(null);
+    const ed = editorRef.current;
+    if (!launch || !ed || ed.isDestroyed) return;
+    const map = buildDocTextMap(ed.state.doc, "\n");
+    const flat = launch.mapCaret
+      ? Math.max(0, Math.min(map.flat.length, launch.flatFrom + sourceIndex))
+      : Math.max(0, Math.min(map.flat.length, launch.flatFrom));
+    const pos = flatToDocPos(map, flat, "next");
+    const leftFrom = ed.state.selection.from;
+    const leftTo = ed.state.selection.to;
+    // The overlay's focused field is removed on the next paint. Place the
+    // reader caret after that, or the browser drops the selection with it.
+    // Skip when the selection has already moved: a drag in that gap owns it.
+    window.setTimeout(() => {
+      const current = editorRef.current;
+      if (!current || current.isDestroyed) return;
+      const sel = current.state.selection;
+      if (sel.from !== leftFrom || sel.to !== leftTo) return;
+      current.chain().setTextSelection(pos).scrollIntoView().focus().run();
+    }, 0);
+  }, [learn]);
+
+  const learnDocIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const id = doc.currentDoc?.id ?? null;
+    if (learnDocIdRef.current !== undefined && learnDocIdRef.current !== id) setLearn(null);
+    learnDocIdRef.current = id;
+  }, [doc.currentDoc?.id]);
+
   // Export annotations: Cmd+Shift+E
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -1549,6 +1625,9 @@ export default function App() {
         case "find":
           redispatch("f", "KeyF", false);
           break;
+        case "learn":
+          redispatch("L", "KeyL", true);
+          break;
         case "style-memory":
           redispatch("m", "KeyM", true);
           break;
@@ -1575,6 +1654,24 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Learn this text: Cmd+Shift+L. A selection types that passage; otherwise the document.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey || e.code !== "KeyL") return;
+      if (showSettings || learn) return;
+      const target = e.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        const typing = tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
+        if (typing && !target.closest(".ProseMirror")) return;
+      }
+      e.preventDefault();
+      openLearn({ kind: "context" });
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showSettings, learn, openLearn]);
 
   // Find in document: Cmd+F
   useEffect(() => {
@@ -1824,6 +1921,7 @@ export default function App() {
       findBarOpen={findBarOpen}
       onCloseFindBar={() => setFindBarOpen(false)}
       onOpenFind={() => setFindBarOpen(true)}
+      onLearn={doc.content.trim() ? () => openLearn({ kind: "context" }) : undefined}
       welcomeBar={
         onboarding.step === "welcome" && !onboarding.welcomeDismissed ? (
           <WelcomeBar visible onDismiss={onboarding.dismissWelcome} />
@@ -1840,7 +1938,35 @@ export default function App() {
         ) : undefined
       }
       readerControls={
-        <ReaderControls settings={settings} setSetting={setSetting} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {doc.content.trim() && (
+            <button
+              type="button"
+              onClick={() => openLearn({ kind: "context" })}
+              aria-label="Learn this text"
+              title="Learn this text (⌘⇧L)"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: 28,
+                padding: "0 10px",
+                border: "1px solid var(--color-border)",
+                backgroundColor: "transparent",
+                color: "var(--color-text-secondary)",
+                borderRadius: 6,
+                cursor: "pointer",
+                flexShrink: 0,
+                fontSize: 13,
+                fontFamily: "var(--font-sans)",
+                lineHeight: 1,
+              }}
+            >
+              Learn
+            </button>
+          )}
+          <ReaderControls settings={settings} setSetting={setSetting} />
+        </div>
       }
       marginIndicators={
         editor && annotations.isLoaded ? (
@@ -1902,6 +2028,7 @@ export default function App() {
         onOpenHighlight={handleOpenSelectedHighlight}
         onRemoveHighlight={() => void handleRemoveHighlights()}
         onNeverWrite={() => void handleSelectionNeverWrite()}
+        onLearn={() => openLearn({ kind: "context" })}
       />
 
       {diffReview.mode === "reviewing" && (
@@ -1965,6 +2092,10 @@ export default function App() {
             onDeleteHighlight={handleDeleteHighlight}
             onRecolor={handleRecolor}
             onNeverWrite={doc.currentDoc ? handleNeverWrite : undefined}
+            onLearn={() => {
+              const h = lastHighlightRef.current?.highlight;
+              if (h) openLearn({ kind: "highlight", highlight: h });
+            }}
             onClose={() => {
               // A highlight made by Note and left without one is removed;
               // highlights made on purpose stay, notes or not.
@@ -2193,6 +2324,15 @@ export default function App() {
         </div>
       )}
     </AppShell>
+      {learn && (
+        <LearnMode
+          title={learn.title}
+          text={learn.text}
+          documentId={learn.documentId}
+          passageKey={learn.passageKey}
+          onExit={exitLearn}
+        />
+      )}
       {showUIFork && <UIFork />}
     </>
   );

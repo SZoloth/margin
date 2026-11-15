@@ -168,6 +168,9 @@ pub fn run() {
             let find_item = MenuItemBuilder::with_id("find", "Find in Document…")
                 .accelerator("Cmd+F")
                 .build(app)?;
+            let learn_item = MenuItemBuilder::with_id("learn", "Learn This Text")
+                .accelerator("Cmd+Shift+L")
+                .build(app)?;
             let style_memory_item = MenuItemBuilder::with_id("style-memory", "Style Memory")
                 .accelerator("Cmd+Shift+M")
                 .build(app)?;
@@ -203,6 +206,7 @@ pub fn run() {
                 .build()?;
             let view_menu = SubmenuBuilder::new(app, "View")
                 .item(&find_item)
+                .item(&learn_item)
                 .item(&style_memory_item)
                 .separator()
                 .fullscreen()
