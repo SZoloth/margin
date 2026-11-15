@@ -259,9 +259,28 @@ Settings had seven pages in three different layouts. Two of them were thin: Writ
 **Context.** Two outside approaches pull Margin in opposite directions. Mike Taylor (Every) has Claude draft and tunes a voice skill until a blind judge picks its drafts as closer to what he published; there, the share of a draft that survives his edits should rise. Thomas Ptacek's rule is never to keep a word the model suggests and to use the model only to flag problems; there, that share should stay near zero. Sam's own style guide defaults to Ptacek's rule, while draft review (`mcp/src/tools/drafts.ts`) assumes Claude drafts. Research: `references/every-and-pr-references-2026-11-15.md` in the project files.
 
 **Decision.**
-- Outreach and cover letters: Claude drafts, Sam edits in Margin, and "still Claude's" should rise over time. This is where a judge and an optimizer (Mike Taylor's loop) get built first.
+- Outreach, cover letters, blog posts and general writing: Claude drafts, Sam edits in Margin, and "still Claude's" should rise over time. A judge and an optimizer (Mike Taylor's loop) get built for outreach and cover letters first, because those have the most sent examples.
 - Essays and State of Sam: Sam writes, and Margin flags problems without supplying wording. "Still Claude's" is not a goal for these types.
 
 **Why.** It matches how Sam already works: Claude drafts his outreach, and he writes his essays.
 
-**Not decided yet.** Where blog, general and other types fall, and whether a correction becomes a durable rule only after it wins on held-out drafts.
+**Not decided yet.** Whether a correction becomes a durable rule only after it wins on held-out drafts.
+
+## ADR-011: Margin is a writing harness for people and agents
+
+**Date:** 2026-11-15 · **Status:** direction accepted by Sam; scope below is proposed
+
+**Context.** Margin has been a reader that captures corrections. Draft review (ADR-010's Claude-drafts mode) depends on Claude calling a tool from another app and Sam editing the result in Margin. In its first three days no draft went through it. Every Reader, Moss, Proof and several open-source readers put an agent next to the text. An earlier recommendation was to skip that because it is a commodity. Sam's call: so many tools shipping it is a reason to have it, and Margin should cover reading, writing and editing for both people and agents.
+
+**Decision.** Margin becomes the place where a draft is written and edited, by Sam or by an agent, as well as read.
+
+**Why it fits the product.** When the brief, the agent's draft and Sam's edits all happen in one place, every piece yields a before/after pair with no extra step. Capture stops depending on a habit. The agent panel is not a differentiator on its own, since others ship one. What others don't do is record who wrote each change and test, on held-out pieces, whether what was learned makes the next draft closer to what Sam sends.
+
+**Proposed scope, smallest first.**
+1. Drive the Claude Code or Codex sign-in already on the Mac. No model runtime and no API key in Margin.
+2. An agent's change arrives as a proposed edit in the existing diff review, never applied silently. In flag-only types (ADR-010) the agent may comment and may not propose wording.
+3. Every accepted, rejected or rewritten change is saved as a pair with its brief.
+
+**Not in scope.** Shared margins, a general chat companion for reading, a notes vault.
+
+**Risk.** This is the largest scope Margin has taken on, with no outside users yet. The voice test on sent mail runs first, because its result decides what the agent loads.
