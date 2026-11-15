@@ -251,3 +251,17 @@ Settings had seven pages in three different layouts. Two of them were thin: Writ
 
 - The set-state-during-render warning on load is still there.
 - At 1280×720 the note card can cover the paragraph beside the selection. That gets its own PR.
+
+## ADR-010: Who writes depends on the writing type
+
+**Date:** 2026-11-15 · **Status:** accepted (Sam picked "Split by type")
+
+**Context.** Two outside approaches pull Margin in opposite directions. Mike Taylor (Every) has Claude draft and tunes a voice skill until a blind judge picks its drafts as closer to what he published; there, the share of a draft that survives his edits should rise. Thomas Ptacek's rule is never to keep a word the model suggests and to use the model only to flag problems; there, that share should stay near zero. Sam's own style guide defaults to Ptacek's rule, while draft review (`mcp/src/tools/drafts.ts`) assumes Claude drafts. Research: `references/every-and-pr-references-2026-11-15.md` in the project files.
+
+**Decision.**
+- Outreach and cover letters: Claude drafts, Sam edits in Margin, and "still Claude's" should rise over time. This is where a judge and an optimizer (Mike Taylor's loop) get built first.
+- Essays and State of Sam: Sam writes, and Margin flags problems without supplying wording. "Still Claude's" is not a goal for these types.
+
+**Why.** It matches how Sam already works: Claude drafts his outreach, and he writes his essays.
+
+**Not decided yet.** Where blog, general and other types fall, and whether a correction becomes a durable rule only after it wins on held-out drafts.
