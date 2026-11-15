@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Public repo: keep private history out
+
+This is the public, MIT-licensed repo. Its history starts at one commit, `f1bac0f`. The maintainer keeps a separate private repo with Margin's full earlier history and personal writing research. Never add that repo as a remote here, never push a branch from a clone of it to this repo, and keep personal notes, drafts and eval data out of this tree.
+
+`scripts/guard/public-history-guard.sh` enforces the history part. CI fails any push whose history reaches a root commit other than `f1bac0f`, and the same script works as a git pre-push hook (`ln -s ../../scripts/guard/public-history-guard.sh .git/hooks/pre-push`). CI only catches a leak after the commits reach GitHub, so the hook is the real guard.
+
 ## What this is
 
 Margin is a writing quality system disguised as a reading app. The surface is a desktop app where you read, highlight, and annotate — but the actual product is underneath: it captures editorial judgment from reading, synthesizes corrections into enforceable writing rules, and mechanically prevents Claude from writing patterns you've flagged.

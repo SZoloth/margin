@@ -1,5 +1,11 @@
 # Agent Instructions
 
+## Public repo: keep private history out
+
+This is the public, MIT-licensed repo. Its history starts at one commit, `f1bac0f`. The maintainer keeps a separate private repo with Margin's full earlier history and personal writing research. Never add that repo as a remote here, never push a branch from a clone of it to this repo, and keep personal notes, drafts and eval data out of this tree.
+
+`scripts/guard/public-history-guard.sh` enforces the history part. CI fails any push whose history reaches a root commit other than `f1bac0f`, and the same script works as a git pre-push hook (`ln -s ../../scripts/guard/public-history-guard.sh .git/hooks/pre-push`). CI only catches a leak after the commits reach GitHub, so the hook is the real guard.
+
 ## Start Here
 
 Read these files before substantial work:
