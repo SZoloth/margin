@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  public-history:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: History starts at the public root commit
+        run: sh scripts/guard/public-history-guard.sh --check HEAD
+
   frontend:
     runs-on: ubuntu-latest
     permissions:
