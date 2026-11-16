@@ -303,6 +303,6 @@ Settings had seven pages in three different layouts. Two of them were thin: Writ
 
 **Why A.** B is the layout several tools already ship, and a chat makes it easy for wording to reach an essay. C carries authorship by colour alone and has no place for a reason or a held-back change. D suits outreach only.
 
-**What would change this.** Fewer than five outreach pieces finished in Margin in the two weeks after the first slice ships means the harness has draft review's problem, and the rest is not built.
+**What would change this.** The premise that Sam will start pieces in Margin is untested; nothing forces him to. Two weeks after the first slice ships, fewer than five outreach pieces that were copied out of Margin and then appear in his sent mail means the harness has draft review's problem, and the rest is not built.
 
 **Not decided.** Which direction Sam picks; whether to build any of it; the questions listed at the end of the spec.

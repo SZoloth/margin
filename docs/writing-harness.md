@@ -8,6 +8,8 @@ Margin learns from corrections, and it has received none since March. Draft revi
 
 So the agent beside the text is the smaller half of this spec. Two moments decide whether Margin captures anything: how a piece starts, and how it leaves.
 
+**This premise may be wrong.** A translator has to deliver from the tool. Nothing makes Sam start a piece in Margin; he can still draft in a chat and paste into Gmail. Eight months without a correction also fits "Sam doesn't want this step" as well as it fits "the tool sat in the wrong place". The harness only wins if starting in Margin is the shorter path: today a note takes a chat, a copy, a paste into Gmail and edits there; here it should take a brief, one review and one copy. And if the real obstacle to outreach is deciding to send, a better drafting surface does not remove it. The first slice exists to find out, which is why the order below stops after it.
+
 ## One setting, three positions
 
 ADR-010's three modes are one setting: what Claude is allowed to put on the page. The writing type sets it. The interface has no mode picker.
@@ -20,8 +22,8 @@ ADR-010's three modes are one setting: what Claude is allowed to put on the page
 
 Each limit is enforced by the shape of what Claude returns, the way the writing guard enforces rules at the tool and not in the prompt:
 
-- In essay types the reply format has no field for replacement text. A flag is a location, a message and the check it came from.
-- In materials types an item has a kind and a length cap (a phrase up to 12 words, a blurb up to 40). A longer item is dropped before Sam sees it.
+- In essay types the reply format has no field for replacement text. A flag is a location, a message and the check it came from. The message is free text, so it can still smuggle wording ("try X instead"). Two local checks close that: a flag is dropped if its message quotes anything that is not in Sam's passage, and at finish Margin compares the final text with every message Claude sent on that piece and reports any shared run of four or more words.
+- In materials types every item has a kind and a length cap (a phrase up to 12 words, a point, question or connection up to 30, a blurb up to 40). A longer item is dropped before Sam sees it.
 - In draft types a change is always a proposal. See "Changes to existing code" for the auto-accept that has to go.
 
 One override exists: on a single piece, Sam can let Claude draft a type it normally doesn't. Margin records that the setting was moved, so the numbers for that type stay clean.
@@ -37,7 +39,7 @@ Every piece has the same four steps. Only step 3 differs.
 **2. Claude works.** Margin runs the Claude Code that is already signed in on the Mac (`claude -p`, with no tools, in a scratch folder, given the brief, the text and one short skill for that writing type). There is no model runtime and no API key in Margin. If Claude Code is missing or signed out, Margin says so and names the fix.
 
 **3. Sam works.**
-- *Outreach, cover letter.* Claude's draft fills the page. Claude's words are a lighter ink until Sam changes them. Sam edits directly, or asks for a change ("shorter") and reviews each proposed change: keep, undo, or rewrite it himself.
+- *Outreach, cover letter.* Claude's draft fills the page. Claude's words are a lighter ink until Sam changes them. Sam edits directly, or asks for a change ("shorter") and reviews each proposed change: keep, undo, or rewrite it himself. Sam can keep typing while a proposal waits. A proposal is tied to its "before" text: if Sam edits inside that text, the proposal is withdrawn and saved as "rewritten"; if he edits elsewhere, it is found again by its text, as highlights are.
 - *Blog post, general.* Sam writes. Claude's items sit beside the paragraph they relate to. A phrase or blurb is pulled in as text. A point, question or connection is dropped in as a prompt, a marked line Sam writes over. Any item can be marked not useful.
 - *Essay.* Sam writes. Up to five flags appear, each tied to a passage. Sam fixes the passage or marks the flag "not a problem".
 
@@ -65,6 +67,8 @@ A before/after pair for the eval is then (brief, Claude's output, final). A chec
 - **Blog and general: share of items used, and share of the final piece that traces to an item.** The second should stay low. If it climbs, the type has drifted into drafting. A point Sam absorbed without dropping it in is invisible to this count. That undercount is accepted; asking Sam to report it by hand is the kind of habit that already failed.
 - **Essays: words from Claude must be zero.** The useful number is per check: right or wrong on Sam's essays. An earlier benchmark in this project found a plain Claude editor barely better than chance at predicting Sam's verdicts, which is why flags are capped at five and every "not a problem" is kept.
 
+The word-level comparison has known errors. If Sam deletes a sentence and retypes the same words, they count as Claude's, which is right for "what share of what he sent did Claude write" and wrong for "what did he touch". If he moves a sentence, part of it counts as new.
+
 None of these means much below about ten finished pieces of a type.
 
 ## Local fact check
@@ -76,8 +80,9 @@ Borrowed from Ink. When Claude proposes a change, Margin extracts names, numbers
 This follows ADR-011's note on order: the voice test decides what the skill contains. The spec assumes its likely outcome and changes if the test says otherwise.
 
 - Claude reads one short skill per writing type. It does not read the rules file.
-- Each correction becomes a yes/no check tied to the passage it was made on. Checks run on Claude's output and on Sam's essays. Claude never reads them.
-- A check that keeps being answered "not a problem" is retired.
+- Each correction becomes a yes/no check tied to the passage it was made on. The source is the corrections already in Sam's database, which stopped in March; new ones come from rewritten proposals and from flags. Checks run on Claude's output and on Sam's essays. Claude never reads them.
+- Essay flags do not wait for checks. Until checks exist, a flag comes from Claude's own read and is labelled that way.
+- A check that keeps being answered "not a problem" is retired. That answer is a manual step, and manual steps are what failed before. It is kept because it is also how Sam clears a flag from the page.
 
 ## Changes to existing code
 
@@ -106,7 +111,7 @@ Each step needs Sam's go-ahead. Estimates are guesses.
 3. **Essay flags** (a few days): reuses margin notes; depends on checks existing.
 4. **Materials** (about a week): the newest interaction and the least evidence, so it goes last.
 
-**When to stop.** If fewer than five outreach pieces are finished in Margin in the two weeks after step 1 ships, the harness has the same problem draft review had, and steps 2 to 4 don't get built.
+**Review point.** Two weeks after step 1 ships, count the outreach pieces that were copied out of Margin and then appear in Sam's sent mail (a read-only match, done by hand at the review, not built into the app). Copies alone don't count, because testing the build produces copies. Fewer than five means the harness has the problem draft review had, and steps 2 to 4 don't get built. Five is too few to say anything about draft quality; it only answers whether Sam uses it.
 
 ## Open questions
 
