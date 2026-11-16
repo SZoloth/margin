@@ -1,6 +1,6 @@
 # Writing harness: product spec
 
-Status: proposal, 16 Nov 2026. Nothing here is built. It follows ADR-010 (who writes depends on the writing type) and ADR-011 (Margin is a writing harness for people and agents), and ADR-012 records the choices it proposes. The four UX directions are a clickable page in the project files, `harness/harness-directions.html`.
+Status: direction A chosen 15 Nov 2026 (ADR-012); nothing here is built, and building needs Sam's go-ahead. It follows ADR-010 (who writes depends on the writing type) and ADR-011 (Margin is a writing harness for people and agents), and ADR-012 records the choices it proposes. The four UX directions are a clickable page in the project files, `harness/harness-directions.html`.
 
 ## The problem this has to solve
 
@@ -89,7 +89,7 @@ This follows ADR-011's note on order: the voice test decides what the skill cont
 - `useDiffReview` auto-accepts any change under 5% of the text (`AUTO_ACCEPT_THRESHOLD`). That suits a file edited outside Margin. It breaks ADR-011's rule that an agent's change is never applied silently, and a one-word change to a number is under 5%. Agent changes must skip it.
 - The diff review makes the editor read-only while a review is open. In draft types Sam needs to keep typing with a proposal pending.
 - Draft review's files under `~/.margin/drafts` become rows in SQLite, with the schema in the Rust migrations. This is a data-layer change under `docs/evals.md`.
-- At 1280×720 the note card can cover the paragraph beside it (noted in ADR-008). Direction A depends on that being fixed.
+- At 1280×720 the note card can cover the paragraph beside it (noted in ADR-008). Direction A depends on that being fixed. A's rule that one note is open at a time, with the rest as one-line stubs, is part of the fix.
 
 ## Cut
 
