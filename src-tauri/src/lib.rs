@@ -72,7 +72,6 @@ pub fn run() {
             commands::files::open_file_dialog,
             commands::files::read_file,
             commands::files::save_file,
-            commands::files::list_markdown_files,
             commands::files::rename_file,
             commands::documents::get_recent_documents,
             commands::documents::upsert_document,

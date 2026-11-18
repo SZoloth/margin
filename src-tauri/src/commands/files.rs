@@ -61,25 +61,6 @@ pub async fn save_file(state: tauri::State<'_, DbPool>, path: String, content: S
     save_file_inner(&conn, &path, &content)
 }
 
-#[tauri::command]
-pub async fn list_markdown_files(dir: String) -> Result<Vec<FileEntry>, String> {
-    let root = Path::new(&dir);
-    if !root.is_dir() {
-        return Err(format!("'{}' is not a directory", dir));
-    }
-
-    let mut entries = collect_markdown_entries(root)?;
-
-    // Sort: directories first, then alphabetically by name (case-insensitive)
-    entries.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
-
-    Ok(entries)
-}
-
 fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: String) -> Result<Document, String> {
     let new_name = new_name.trim().to_string();
     if new_name.is_empty() {

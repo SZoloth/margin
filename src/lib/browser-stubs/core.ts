@@ -181,7 +181,6 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     a.path === BROWSER_SAMPLE_PATH && firstRunSample !== null ? firstRunSample : sampleMarkdown,
   open_file_dialog: () => null,
   save_file: () => undefined,
-  list_markdown_files: () => [],
   upsert_document: (a) => a.doc ?? sampleDocument,
   rename_file: (a) => a.doc ?? sampleDocument,
 
