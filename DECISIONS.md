@@ -285,3 +285,28 @@ Settings had seven pages in three different layouts. Two of them were thin: Writ
 **Not in scope.** Shared margins, a general chat companion for reading, a notes vault.
 
 **Order.** The voice test on sent mail runs first, because its result decides what the agent loads.
+
+## ADR-012: The harness is one margin, and the writing type sets what Claude may put in it
+
+**Date:** 2026-11-16 · **Status:** direction accepted (Sam delegated the choice on 15 Nov: "make the call"); building any of it still needs his go-ahead
+
+**Context.** ADR-010 gave three modes and ADR-011 put an agent beside the text. Four directions were mocked as one clickable page, each running the same outreach note, blog post and essay: Claude in the margin as notes (A), a side panel with a conversation (B), everything in the text with Claude's words in a lighter ink (C), and a queue of pieces to finish (D). The spec is `docs/writing-harness.md`.
+
+**Decision.**
+- **The three modes are one setting with three positions**: what Claude may put on the page. The writing type sets it and the interface has no mode picker. Each limit is enforced by the shape of Claude's reply (an essay flag has no field for wording; a materials item has a length cap), as the writing guard enforces rules at the tool.
+- **Direction A is the base.** A proposed change, an offered item and a flag are the same object: a margin note with an author and a set of allowed actions. It reuses the margin note and the diff review.
+- **From C, the lighter ink** for Claude's words in draft types, computed by comparing the text with Claude's last version.
+- **From D, the finish action.** "Copy to send" ends a piece, saves the records and shows a receipt. The queue is left out.
+- **A piece starts with a brief and ends with a finish action**, and both are designed before the agent. Draft review showed that capture fails when Margin is a detour.
+- **One note is open at a time.** The others collapse to one-line stubs that open on focus. Tested in the mockup with five flags on two paragraphs: the stubs fit beside the text, and five open cards in direction B fill the whole panel.
+- **Outreach is built first and alone.** The blog and essay screens stay sketches until the outreach slice passes its review.
+- **Agent changes skip the diff review's auto-accept** (changes under 5% of the text are applied without review today).
+- **A local fact check holds back any agent change that drops a name, number, date, quote or link.**
+
+**Why A.** B is the layout several tools already ship, and a chat makes it easy for wording to reach an essay. C carries authorship by colour alone and has no place for a reason or a held-back change. D suits outreach only.
+
+**What would change this.** The premise that Sam will start pieces in Margin is untested; nothing forces him to. Two weeks after the first slice ships, fewer than five outreach pieces that were copied out of Margin and then appear in his sent mail means the harness has draft review's problem, and the rest is not built.
+
+**Given up by choosing A.** A long back-and-forth with Claude (one ask line, one turn at a time), and reading every note at once (stubs hide their text until focused). Unanchored offers on an empty page stack at the top of the margin, five at most.
+
+**Not decided.** Whether and when to build the outreach slice; the questions listed at the end of the spec.
