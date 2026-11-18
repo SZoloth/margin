@@ -151,7 +151,7 @@ The bundled MCP server (`@margin/mcp-server`) runs via stdio and gives Claude re
 
 **Setup:** Open Settings in Margin and click "Connect to Claude Desktop". This writes the server config to `~/Library/Application Support/Claude/claude_desktop_config.json`.
 
-**Export bridge:** When you click "Send to Claude" in the export popover, Margin POSTs annotations to `127.0.0.1:24784/export`. Claude receives them through the `margin_wait_for_export` tool — no copy-paste needed.
+**Export bridge:** When you click "Send to Claude" in the export popover, Margin POSTs annotations to the MCP server's loopback bridge (`127.0.0.1:24784/export` by default). The server writes its port and a per-session token to `~/.margin/mcp-port` (owner-only); requests without that token, or from a browser page, are refused. Claude receives them through the `margin_wait_for_export` tool — no copy-paste needed.
 
 ## Auto-updates
 

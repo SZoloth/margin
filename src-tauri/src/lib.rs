@@ -66,12 +66,12 @@ pub fn run() {
         ))
         .manage(Mutex::new(watcher::FileWatcher::new()))
         .manage(PendingOpenFiles(Mutex::new(OpenFileQueue::default())))
+        .manage(commands::file_access::FileGrants::default())
         .invoke_handler(tauri::generate_handler![
             commands::search::index_all_documents,
             commands::files::open_file_dialog,
             commands::files::read_file,
             commands::files::save_file,
-            commands::files::list_markdown_files,
             commands::files::rename_file,
             commands::documents::get_recent_documents,
             commands::documents::upsert_document,
@@ -93,6 +93,8 @@ pub fn run() {
             commands::keep_local::keep_local_list_items,
             commands::keep_local::keep_local_get_item,
             commands::keep_local::keep_local_get_content,
+            commands::mcp_bridge::mcp_bridge_status,
+            commands::mcp_bridge::mcp_bridge_send,
             commands::search::index_document,
             commands::search::search_documents,
             commands::search::remove_document_index,
@@ -235,6 +237,12 @@ pub fn run() {
                 if let Ok(path) = url.to_file_path() {
                     if let Some(path_str) = path.to_str() {
                         let path_string = path_str.to_string();
+                        // Finder "Open With" is a user choice; let the webview open it.
+                        if let Some(grants) =
+                            app_handle.try_state::<commands::file_access::FileGrants>()
+                        {
+                            grants.grant(&path_string);
+                        }
 
                         let emit_now = app_handle
                             .try_state::<PendingOpenFiles>()

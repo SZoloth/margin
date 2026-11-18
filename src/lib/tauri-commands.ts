@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 export function startWindowDrag(): void {
   getCurrentWindow().startDragging().catch(() => {});
 }
-import type { Document, FileEntry } from "@/types/document";
+import type { Document } from "@/types/document";
 import type { CorrectionInput, CorrectionRecord, CorrectionDetail, DocumentCorrections } from "@/types/annotations";
 import type { PersistedTab } from "@/types/tab";
 import type { WritingType } from "@/lib/writing-types";
@@ -19,10 +19,6 @@ export async function readFile(path: string): Promise<string> {
 
 export async function saveFile(path: string, content: string): Promise<void> {
   return invoke<void>("save_file", { path, content });
-}
-
-export async function listMarkdownFiles(dir: string): Promise<FileEntry[]> {
-  return invoke<FileEntry[]>("list_markdown_files", { dir });
 }
 
 export async function getRecentDocuments(limit?: number): Promise<Document[]> {

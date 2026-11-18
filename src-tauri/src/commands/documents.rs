@@ -1,3 +1,4 @@
+use crate::commands::file_access::{check_known, FileGrants};
 use crate::db::migrations::DbPool;
 use crate::db::models::Document;
 use rusqlite::Connection;
@@ -103,10 +104,23 @@ pub async fn get_recent_documents(state: tauri::State<'_, DbPool>, limit: Option
         .collect())
 }
 
+/// Recording a path makes it readable and writable later, so a new path must
+/// be one Rust handed to the webview (see `file_access`).
+fn upsert_document_checked(conn: &Connection, grants: &FileGrants, doc: Document) -> Result<Document, String> {
+    if let Some(ref fp) = doc.file_path {
+        check_known(conn, grants, fp)?;
+    }
+    upsert_document_inner(conn, doc)
+}
+
 #[tauri::command]
-pub async fn upsert_document(state: tauri::State<'_, DbPool>, doc: Document) -> Result<Document, String> {
+pub async fn upsert_document(
+    state: tauri::State<'_, DbPool>,
+    grants: tauri::State<'_, FileGrants>,
+    doc: Document,
+) -> Result<Document, String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    upsert_document_inner(&conn, doc)
+    upsert_document_checked(&conn, &grants, doc)
 }
 
 #[cfg(test)]
@@ -149,6 +163,41 @@ mod tests {
             last_opened_at,
             created_at: 1000,
         }
+    }
+
+    #[test]
+    fn checked_upsert_refuses_to_record_an_unknown_path() {
+        let conn = setup_db();
+        let grants = FileGrants::default();
+        let doc = make_doc("d1", "file", Some("/Users/me/CLAUDE.md"), None, 1000);
+        assert!(upsert_document_checked(&conn, &grants, doc).is_err());
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM documents", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn checked_upsert_refuses_to_repoint_an_existing_id_at_an_unknown_path() {
+        let conn = setup_db();
+        let grants = FileGrants::default();
+        grants.grant("/Users/me/notes.md");
+        upsert_document_checked(&conn, &grants, make_doc("d1", "file", Some("/Users/me/notes.md"), None, 1000))
+            .unwrap();
+        let moved = make_doc("d1", "file", Some("/Users/me/CLAUDE.md"), None, 2000);
+        assert!(upsert_document_checked(&conn, &grants, moved).is_err());
+    }
+
+    #[test]
+    fn checked_upsert_allows_granted_recorded_and_pathless_docs() {
+        let conn = setup_db();
+        let grants = FileGrants::default();
+        grants.grant("/Users/me/picked.md");
+        upsert_document_checked(&conn, &grants, make_doc("d1", "file", Some("/Users/me/picked.md"), None, 1000))
+            .unwrap();
+        // Later sessions: no grant, but the path is recorded.
+        upsert_document_checked(&conn, &FileGrants::default(), make_doc("d1", "file", Some("/Users/me/picked.md"), None, 2000))
+            .unwrap();
+        upsert_document_checked(&conn, &grants, make_doc("k1", "keep-local", None, Some("kl-1"), 1000))
+            .unwrap();
     }
 
     #[test]

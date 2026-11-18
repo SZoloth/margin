@@ -76,10 +76,14 @@ pub(crate) fn create_never_rule(
 }
 
 #[tauri::command]
-pub async fn write_first_run_sample(content: String) -> Result<String, String> {
+pub async fn write_first_run_sample(
+    grants: tauri::State<'_, crate::commands::file_access::FileGrants>,
+    content: String,
+) -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Could not determine home directory")?;
-    let path = write_sample(&home, &content)?;
-    Ok(path.to_string_lossy().to_string())
+    let path = write_sample(&home, &content)?.to_string_lossy().to_string();
+    grants.grant(&path);
+    Ok(path)
 }
 
 #[tauri::command]

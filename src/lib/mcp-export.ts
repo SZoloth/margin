@@ -1,19 +1,14 @@
+import { invoke } from "@tauri-apps/api/core";
+
+/** Best-effort send to the MCP export bridge. Rust holds the bridge token, so the webview never sees it. */
 export async function sendToMcpServer(
   markdown: string,
 ): Promise<{ sent: boolean; error?: string }> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch("http://127.0.0.1:24784/export", {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: markdown,
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (res.ok) return { sent: true };
-    return { sent: false, error: `HTTP ${res.status}` };
+    await invoke<void>("mcp_bridge_send", { markdown });
+    return { sent: true };
   } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : "Unknown error" };
+    if (err instanceof Error) return { sent: false, error: err.message };
+    return { sent: false, error: typeof err === "string" ? err : "Unknown error" };
   }
 }

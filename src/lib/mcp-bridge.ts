@@ -5,21 +5,14 @@ import {
   exists,
 } from "@tauri-apps/plugin-fs";
 import { dirname, homeDir, join, resourceDir } from "@tauri-apps/api/path";
-
-const BRIDGE_URL = "http://127.0.0.1:24784";
-const STATUS_TIMEOUT_MS = 1500;
+import { invoke } from "@tauri-apps/api/core";
 
 // ── Connection check ─────────────────────────────────────
 
 export async function checkMcpConnection(): Promise<boolean> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
-    const res = await fetch(`${BRIDGE_URL}/status`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    return res.ok;
+    // Rust reads the bridge's port and token from ~/.margin/mcp-port.
+    return await invoke<boolean>("mcp_bridge_status");
   } catch {
     return false;
   }

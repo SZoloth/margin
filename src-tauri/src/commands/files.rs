@@ -1,3 +1,4 @@
+use crate::commands::file_access::{check_known, check_writable, FileGrants};
 use crate::db::migrations::DbPool;
 use crate::db::models::Document;
 use serde::Serialize;
@@ -13,7 +14,7 @@ pub struct FileEntry {
 }
 
 #[tauri::command]
-pub async fn open_file_dialog() -> Result<Option<String>, String> {
+pub async fn open_file_dialog(grants: tauri::State<'_, FileGrants>) -> Result<Option<String>, String> {
     let output = Command::new("osascript")
         .arg("-e")
         .arg(r#"POSIX path of (choose file of type {"md","markdown","txt"} with prompt "Open Markdown File")"#)
@@ -30,36 +31,34 @@ pub async fn open_file_dialog() -> Result<Option<String>, String> {
         return Ok(None);
     }
 
+    grants.grant(&path);
     Ok(Some(path))
 }
 
-#[tauri::command]
-pub async fn read_file(path: String) -> Result<String, String> {
-    fs::read_to_string(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
+fn read_file_inner(conn: &rusqlite::Connection, grants: &FileGrants, path: &str) -> Result<String, String> {
+    check_known(conn, grants, path)?;
+    fs::read_to_string(path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
+}
+
+fn save_file_inner(conn: &rusqlite::Connection, path: &str, content: &str) -> Result<(), String> {
+    check_writable(conn, path)?;
+    fs::write(path, content).map_err(|e| format!("Failed to write file '{}': {}", path, e))
 }
 
 #[tauri::command]
-pub async fn save_file(path: String, content: String) -> Result<(), String> {
-    fs::write(&path, &content).map_err(|e| format!("Failed to write file '{}': {}", path, e))
+pub async fn read_file(
+    state: tauri::State<'_, DbPool>,
+    grants: tauri::State<'_, FileGrants>,
+    path: String,
+) -> Result<String, String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    read_file_inner(&conn, &grants, &path)
 }
 
 #[tauri::command]
-pub async fn list_markdown_files(dir: String) -> Result<Vec<FileEntry>, String> {
-    let root = Path::new(&dir);
-    if !root.is_dir() {
-        return Err(format!("'{}' is not a directory", dir));
-    }
-
-    let mut entries = collect_markdown_entries(root)?;
-
-    // Sort: directories first, then alphabetically by name (case-insensitive)
-    entries.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
-
-    Ok(entries)
+pub async fn save_file(state: tauri::State<'_, DbPool>, path: String, content: String) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    save_file_inner(&conn, &path, &content)
 }
 
 fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: String) -> Result<Document, String> {
@@ -93,6 +92,9 @@ fn rename_file_inner(conn: &rusqlite::Connection, old_path: String, new_name: St
     if !old.exists() {
         return Err(format!("Source file does not exist: {}", old_path));
     }
+
+    // Only an open (recorded) document may be renamed; checked before disk is touched.
+    check_writable(conn, &old_path)?;
 
     // Rename on disk first — atomic on macOS (rename(2))
     fs::rename(&old_path, &new_path)
@@ -211,6 +213,76 @@ mod tests {
         )
         .unwrap();
         conn
+    }
+
+    // === read_file / save_file scoping ===
+
+    fn record(conn: &Connection, path: &str) {
+        conn.execute(
+            "INSERT INTO documents (id, source, file_path) VALUES (?1, 'file', ?2)",
+            rusqlite::params![uuid::Uuid::new_v4().to_string(), path],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn read_file_rejects_paths_not_granted_or_recorded() {
+        let dir = make_test_dir("scope_read_reject");
+        let secret = dir.join("secret.md");
+        fs::write(&secret, "secret").unwrap();
+        let err = read_file_inner(&setup_db(), &FileGrants::default(), secret.to_str().unwrap())
+            .unwrap_err();
+        assert!(err.contains("only open Markdown"), "{err}");
+    }
+
+    #[test]
+    fn read_file_allows_granted_and_recorded_markdown() {
+        let dir = make_test_dir("scope_read_allow");
+        let picked = dir.join("picked.md");
+        let recent = dir.join("recent.md");
+        fs::write(&picked, "picked").unwrap();
+        fs::write(&recent, "recent").unwrap();
+        let conn = setup_db();
+        record(&conn, recent.to_str().unwrap());
+        let grants = FileGrants::default();
+        grants.grant(picked.to_str().unwrap());
+        assert_eq!(read_file_inner(&conn, &grants, picked.to_str().unwrap()).unwrap(), "picked");
+        assert_eq!(read_file_inner(&conn, &grants, recent.to_str().unwrap()).unwrap(), "recent");
+    }
+
+    #[test]
+    fn read_file_rejects_non_markdown_even_when_recorded() {
+        let dir = make_test_dir("scope_read_nonmd");
+        let rc = dir.join(".zshrc");
+        fs::write(&rc, "export X=1").unwrap();
+        let conn = setup_db();
+        record(&conn, rc.to_str().unwrap());
+        assert!(read_file_inner(&conn, &FileGrants::default(), rc.to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn save_file_writes_only_recorded_markdown() {
+        let dir = make_test_dir("scope_save");
+        let open = dir.join("open.md");
+        let other = dir.join("CLAUDE.md");
+        let conn = setup_db();
+        record(&conn, open.to_str().unwrap());
+        save_file_inner(&conn, open.to_str().unwrap(), "saved").unwrap();
+        assert_eq!(fs::read_to_string(&open).unwrap(), "saved");
+        assert!(save_file_inner(&conn, other.to_str().unwrap(), "pwned").is_err());
+        assert!(!other.exists());
+    }
+
+    #[test]
+    fn rename_refuses_unrecorded_source_without_touching_disk() {
+        let dir = make_test_dir("scope_rename");
+        let rc = dir.join("secrets.md");
+        fs::write(&rc, "x").unwrap();
+        let conn = setup_db();
+        let err = rename_file_inner(&conn, rc.to_string_lossy().to_string(), "moved".into()).unwrap_err();
+        assert!(err.contains("only open Markdown"), "{err}");
+        assert!(rc.exists());
+        assert!(!dir.join("moved.md").exists());
     }
 
     // === collect_markdown_entries tests ===
@@ -459,38 +531,17 @@ mod tests {
         let old = dir.join("old.md");
         fs::write(&old, "# old").unwrap();
         let old_str = old.to_string_lossy().to_string();
+        let new_str = dir.join("new.md").to_string_lossy().to_string();
 
-        // Create a DB without the documents table so the UPDATE fails
-        let conn = Connection::open_in_memory().unwrap();
+        // Another document already records new.md (file gone from disk), so
+        // the UPDATE hits UNIQUE(file_path) after the disk rename.
+        let conn = setup_db();
+        record(&conn, &old_str);
+        record(&conn, &new_str);
 
         let result = rename_file_inner(&conn, old_str.clone(), "new.md".to_string());
-        assert!(result.is_err());
         assert!(result.unwrap_err().contains("rolled back"));
-
-        // Verify the file was renamed back to the original name
         assert!(old.exists(), "original file should be restored after rollback");
         assert!(!dir.join("new.md").exists(), "new file should not exist after rollback");
-    }
-
-    #[test]
-    fn rename_rolls_back_when_no_document_row_matches_old_path() {
-        let dir = make_test_dir("rename_missing_db_row");
-        let old = dir.join("old.md");
-        fs::write(&old, "# old").unwrap();
-        let conn = setup_db();
-
-        let result =
-            rename_file_inner(&conn, old.to_string_lossy().to_string(), "new.md".to_string());
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("rolled back"));
-
-        // File should be rolled back to the original name
-        assert!(old.exists(), "original file should be restored after rollback");
-        assert!(
-            !dir.join("new.md").exists(),
-            "new file should not exist after rollback"
-        );
     }
 }

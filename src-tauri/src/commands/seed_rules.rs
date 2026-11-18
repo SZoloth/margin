@@ -165,7 +165,13 @@ fn extract_json_array(text: &str) -> Option<&str> {
 /// LLM command for in-app generation. Override with MARGIN_LLM_CMD —
 /// any `stdin → stdout` generator works (same contract as the eval
 /// harness's MARGIN_EVAL_CMD). Default keeps the Claude Code path.
-const DEFAULT_LLM_CMD: &str = "claude --print --model sonnet";
+///
+/// The prompt carries a third-party style guide, so the default runs as a
+/// plain text generator: no built-in tools, no MCP servers, and no user,
+/// project or local settings (which could auto-approve tools or add hooks).
+/// A MARGIN_LLM_CMD override is the user's own command and is run as given.
+const DEFAULT_LLM_CMD: &str =
+    r#"claude --print --model sonnet --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence"#;
 
 fn parse_llm_command(spec: &str) -> Result<(String, Vec<String>), String> {
     let parts = shlex::split(spec)
@@ -506,6 +512,22 @@ mod tests {
         let (prog, args) = parse_llm_command("poolside --system 'be brief'").unwrap();
         assert_eq!(prog, "poolside");
         assert_eq!(args, vec!["--system", "be brief"]);
+    }
+
+    /// The guide is third-party text. The default extractor must run with no
+    /// tools, no MCP servers and none of the user's settings (which could
+    /// auto-approve tools), so instructions inside the guide can't act.
+    #[test]
+    fn default_llm_command_runs_without_tools_mcp_or_user_settings() {
+        let (prog, args) = parse_llm_command(DEFAULT_LLM_CMD).unwrap();
+        assert_eq!(prog, "claude");
+        let has_pair = |flag: &str, value: &str| {
+            args.windows(2).any(|w| w[0] == flag && w[1] == value)
+        };
+        assert!(has_pair("--tools", ""), "tools not disabled: {args:?}");
+        assert!(has_pair("--setting-sources", ""), "user settings still load: {args:?}");
+        assert!(args.iter().any(|a| a == "--strict-mcp-config"), "MCP servers still load: {args:?}");
+        assert!(args.iter().any(|a| a == "--print"));
     }
 
     #[test]
