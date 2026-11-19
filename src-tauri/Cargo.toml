@@ -1,6 +1,6 @@
 [package]
 name = "margin"
-version = "1.17.4"
+version = "1.18.0"
 description = "A local markdown reader and editor"
 authors = ["Sam Zoloth"]
 license = "MIT"
