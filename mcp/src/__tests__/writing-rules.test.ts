@@ -565,16 +565,13 @@ describe("getWritingProfileMarkdown", () => {
     expect(md).toContain("Filler phrase; Cut entirely");
   });
 
-  it("produces Unclassified section with 120-char truncation and 'flagged' for empty notes", () => {
-    const longText = "A".repeat(150);
+  it("leaves untagged corrections out of the profile", () => {
     const md = getWritingProfileMarkdown([], [
-      { originalText: longText, notes: [], polarity: null },
+      { originalText: "Untagged planning note", notes: ["NOT FEEDBACK, A REQUEST"], polarity: null },
     ]);
 
-    expect(md).toContain("## Unclassified");
-    // Truncated to 120 chars + ellipsis
-    expect(md).toContain("A".repeat(120) + "\u2026");
-    expect(md).toContain("flagged");
+    expect(md).not.toContain("## Unclassified");
+    expect(md).not.toContain("Untagged planning note");
   });
 });
 

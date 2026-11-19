@@ -93,11 +93,16 @@ func TestFormatProfileMarkdown(t *testing.T) {
 		"— natural tone",
 		"## Corrections",
 		"**Bad example here** → too formal",
-		"## Unclassified",
-		"Untagged example → flagged",
 	} {
 		if !strings.Contains(examples, check) {
 			t.Errorf("general.md missing %q\n\nFull output:\n%s", check, examples)
+		}
+	}
+
+	// Untagged corrections are noise until tagged: keep them out.
+	for _, gone := range []string{"## Unclassified", "Untagged example"} {
+		if strings.Contains(examples, gone) {
+			t.Errorf("general.md should not contain %q", gone)
 		}
 	}
 
@@ -236,6 +241,18 @@ func TestCategoryLabel(t *testing.T) {
 		got := categoryLabel(tt.input)
 		if got != tt.expected {
 			t.Errorf("categoryLabel(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestUntaggedOnlyTypeGetsNoFile(t *testing.T) {
+	email := "email"
+	files := FormatProfileFiles(nil, []db.CorrectionRecord{
+		{OriginalText: "planning note", Notes: []string{"NOT FEEDBACK"}, WritingType: &email},
+	})
+	for path := range files {
+		if strings.HasSuffix(path, "email.md") {
+			t.Errorf("untagged-only type should not get a file, got %s", path)
 		}
 	}
 }

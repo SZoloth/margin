@@ -390,7 +390,7 @@ export function getWritingProfileMarkdown(
   // Corrections by polarity
   const positive = corrections.filter((c) => c.polarity === "positive");
   const corrective = corrections.filter((c) => c.polarity === "corrective");
-  const unclassified = corrections.filter((c) => c.polarity !== "positive" && c.polarity !== "corrective");
+  // Untagged corrections stay out until tagged.
 
   if (positive.length > 0) {
     lines.push("", "---", "", "## Writing Samples", "");
@@ -408,16 +408,6 @@ export function getWritingProfileMarkdown(
     for (const c of corrective) {
       const snippet = truncate(c.originalText, 200);
       lines.push("", `- **${snippet}** → ${c.notes.join("; ")}`);
-    }
-  }
-
-  if (unclassified.length > 0) {
-    lines.push("", "---", "", "## Unclassified", "");
-    lines.push("_These annotations haven't been tagged as positive or corrective yet._");
-    for (const c of unclassified) {
-      const snippet = truncate(c.originalText, 120);
-      const note = c.notes.length === 0 ? "flagged" : c.notes.join("; ");
-      lines.push("", `- ${snippet} → ${note}`);
     }
   }
 
