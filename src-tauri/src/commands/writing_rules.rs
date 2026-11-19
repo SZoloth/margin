@@ -286,13 +286,13 @@ fn generate_writing_profile_markdown(
     // --- Writing samples (positive polarity corrections) ---
     let mut positive: Vec<&CorrectionRecord> = Vec::new();
     let mut corrective: Vec<&CorrectionRecord> = Vec::new();
-    let mut unclassified: Vec<&CorrectionRecord> = Vec::new();
 
+    // Untagged corrections stay out until tagged.
     for c in corrections {
         match c.polarity.as_deref() {
             Some("positive") => positive.push(c),
             Some("corrective") => corrective.push(c),
-            _ => unclassified.push(c),
+            _ => {}
         }
     }
 
@@ -324,21 +324,6 @@ fn generate_writing_profile_markdown(
             lines.push(String::new());
             let snippet = truncate_with_ellipsis(&c.original_text, 200);
             lines.push(format!("- **{}** → {}", snippet, c.notes.join("; ")));
-        }
-    }
-
-    if !unclassified.is_empty() {
-        lines.push(String::new());
-        lines.push("---".to_string());
-        lines.push(String::new());
-        lines.push("## Unclassified".to_string());
-        lines.push(String::new());
-        lines.push("_These annotations haven't been tagged as positive or corrective yet._".to_string());
-        for c in &unclassified {
-            lines.push(String::new());
-            let snippet = truncate_with_ellipsis(&c.original_text, 120);
-            let note = if c.notes.is_empty() { "flagged".to_string() } else { c.notes.join("; ") };
-            lines.push(format!("- {} → {}", snippet, note));
         }
     }
 
@@ -1804,6 +1789,24 @@ mod tests {
         assert!(md.contains("Bad pattern here."));
         assert!(md.contains("# Writing Rules"));
         assert!(md.contains("Be direct"));
+    }
+
+    #[test]
+    fn unified_profile_leaves_out_untagged_corrections() {
+        let corrections = vec![CorrectionRecord {
+            original_text: "Untagged planning note".to_string(),
+            notes: vec!["NOT FEEDBACK, A REQUEST".to_string()],
+            highlight_color: "yellow".to_string(),
+            document_title: None,
+            document_id: "d1".to_string(),
+            created_at: 1000,
+            writing_type: None,
+            polarity: None,
+            feedback_type: None,
+        }];
+        let md = generate_writing_profile_markdown(&[], &corrections);
+        assert!(!md.contains("## Unclassified"));
+        assert!(!md.contains("Untagged planning note"));
     }
 
     #[test]

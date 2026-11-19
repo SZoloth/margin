@@ -170,15 +170,15 @@ func formatRulesSection(rules []db.WritingRule) []string {
 }
 
 func formatExamples(corrections []db.CorrectionRecord) []string {
-	var positive, corrective, unclassified []db.CorrectionRecord
+	// Untagged corrections stay out until tagged: they include test notes and
+	// planning notes that are not writing feedback, and synthesis already skips them.
+	var positive, corrective []db.CorrectionRecord
 	for _, c := range corrections {
 		switch {
 		case c.Polarity != nil && *c.Polarity == "positive":
 			positive = append(positive, c)
 		case c.Polarity != nil && *c.Polarity == "corrective":
 			corrective = append(corrective, c)
-		default:
-			unclassified = append(unclassified, c)
 		}
 	}
 
@@ -200,18 +200,6 @@ func formatExamples(corrections []db.CorrectionRecord) []string {
 		for _, c := range corrective {
 			snippet := truncateUnicode(c.OriginalText, 200)
 			lines = append(lines, "", fmt.Sprintf("- **%s** → %s", snippet, strings.Join(c.Notes, "; ")))
-		}
-	}
-	if len(unclassified) > 0 {
-		lines = append(lines, "", "## Unclassified", "")
-		lines = append(lines, "_These annotations haven't been tagged as positive or corrective yet._")
-		for _, c := range unclassified {
-			snippet := truncateUnicode(c.OriginalText, 120)
-			note := "flagged"
-			if len(c.Notes) > 0 {
-				note = strings.Join(c.Notes, "; ")
-			}
-			lines = append(lines, "", fmt.Sprintf("- %s → %s", snippet, note))
 		}
 	}
 	return lines
@@ -257,6 +245,9 @@ func FormatProfileFiles(rules []db.WritingRule, corrections []db.CorrectionRecor
 	}
 	typeExamples := make(map[string][]db.CorrectionRecord)
 	for _, c := range corrections {
+		if c.Polarity == nil || (*c.Polarity != "positive" && *c.Polarity != "corrective") {
+			continue // untagged: left out of the profile until tagged
+		}
 		wt := generalExamplesType
 		if c.WritingType != nil && *c.WritingType != "" {
 			wt = *c.WritingType

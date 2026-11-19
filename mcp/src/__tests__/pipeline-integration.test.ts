@@ -158,6 +158,8 @@ describe("full pipeline: feedback → synthesis → rules → export", () => {
     });
     expect(corrResult).not.toHaveProperty("error");
     if ("error" in corrResult) throw new Error(corrResult.error);
+    // Only tagged corrections reach the profile.
+    expect(setCorrectionPolarity(db, corrResult.highlight_id, "corrective")).toEqual({ success: true });
 
     db.prepare(
       `INSERT INTO corrections
