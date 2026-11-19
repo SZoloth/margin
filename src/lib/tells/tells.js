@@ -1,4 +1,4 @@
-// Vendored from Tells (github.com/SZoloth/tells), version 0.1.0, MIT.
+// Vendored from Tells (github.com/SZoloth/tells), version 0.2.0, MIT.
 // tells.js is copied unchanged below this header. tells.json is the upstream
 // rules/tells.json with the per-rule and top-level "qa" fields removed, since
 // those numbers come from a private eval corpus. LICENSE and NOTICE sit beside
@@ -72,8 +72,9 @@ export function scan(engine, text, { tiers = DEFAULT_TIERS, limit = 500, overlap
       if (++n > limit) break;
     }
   }
-  // One mark per span: when rules overlap, keep the longer match, then the earlier rule.
-  raw.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
+  // One mark per span: when rules overlap, keep the longer match, then a rule that offers a fix,
+  // then the earlier rule.
+  raw.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start) || !!b.rule.fix - !!a.rule.fix);
   const matches = [];
   let lastEnd = -1;
   for (const hit of raw) {

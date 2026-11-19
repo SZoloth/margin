@@ -96,7 +96,7 @@ describe("AI tells lens", () => {
     expect(rule).toMatchObject({
       source: "tells",
       ruleText: "stock phrase: 'I wanted to reach out'",
-      exampleAfter: "[just reach out]",
+      exampleAfter: "just reach out",
     });
     expect(tellAsWritingRule("mine")).toBeNull();
   });
