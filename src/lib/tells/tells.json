@@ -1,0 +1,3761 @@
+{
+ "name": "tells",
+ "version": "0.2.0",
+ "about": "Phrases and sentence shapes that make prose read machine-made. Each rule is a candidate for a reader to judge, not proof of who wrote the text.",
+ "credits": [
+  "declauding linter by Oskar Austegard (MIT): https://github.com/oaustegard/claude-skills",
+  "Sam Zoloth's kill-word list and Margin writing rules: https://szoloth.com"
+ ],
+ "rules": [
+  {
+   "id": "negation-first-001",
+   "category": "negation-first",
+   "pattern": "\\b(?:is|it's|its|was|it was)\\s+not\\s+(?:that\\s+)?[^.;]{2,60}[.;—-]\\s*(?:it|that)\\s+(?:is|was|'s)\\b",
+   "flags": "gim",
+   "note": "is-not / it-is pair",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "negation-first-002",
+   "category": "negation-first",
+   "pattern": "\\bnot\\s+because\\b[^.]{0,80}—\\s*because\\b",
+   "flags": "gim",
+   "note": "not-because / because",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "negation-first-003",
+   "category": "negation-first",
+   "pattern": "\\b(?:doesn't|does not|didn't|did not)\\s+just\\b[^.]{0,60}\\b(?:it|they)\\b",
+   "flags": "gim",
+   "note": "doesn't just X, it Y's",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "negation-first-004",
+   "category": "negation-first",
+   "pattern": "\\bthe\\s+(?:problem|failure|issue|point|question|bug|risk)\\s+(?:wasn't|isn't|was not|is not)\\b",
+   "flags": "gim",
+   "note": "the problem wasn't X",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "negation-first-005",
+   "category": "negation-first",
+   "pattern": "[.!?]\\s+Not\\s+\\w+[^.]{0,60}\\.",
+   "flags": "gim",
+   "note": "trailing 'Not X.' fragment",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "negation-first-006",
+   "category": "negation-first",
+   "pattern": ",\\s*not\\s+[a-z][^.]{0,40}\\.\\s*$",
+   "flags": "gim",
+   "note": "X, not Y closer",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "negation-first-007",
+   "category": "negation-first",
+   "pattern": "\\b(?:is|are|was|were)\\s+[a-z]{3,20},\\s*not\\s+[a-z]{3,20}\\.",
+   "flags": "gim",
+   "note": "X is A, not B — mid-paragraph, check the reader was holding B",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "significance-001",
+   "category": "significance",
+   "pattern": "\\bthe\\s+(?:real|actual|true|useful|interesting|important|key)\\s+(?:question|problem|issue|point|reason|answer|finding|story|move|tool|test|variable|number|fix|heuristic|lesson|insight|takeaway|culprit|cause|trap|trick|win)\\b",
+   "flags": "gim",
+   "note": "the real/actual X",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-002",
+   "category": "significance",
+   "pattern": "\\bthe\\s+(?:part|thing|bit|piece|detail)\\s+(?:that|which)\\b",
+   "flags": "gim",
+   "note": "the part that — designation; the reader decides what matters",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-003",
+   "category": "significance",
+   "pattern": "\\bthe\\s+(?:one|leg|row|line|number|question)\\s+that\\s+(?:matters|counts|transfers|makes the point|does the work|answers|explains)\\b",
+   "flags": "gim",
+   "note": "the X that matters",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-004",
+   "category": "significance",
+   "pattern": "\\b(?:here'?s|this is)\\s+(?:the thing|where it gets interesting|what)\\b",
+   "flags": "gim",
+   "note": "here's the thing",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-005",
+   "category": "significance",
+   "pattern": "\\bhere(?:'?s|\\s+is)\\s+(?:the|a|my|one)\\s+(?:twist|catch|kicker|rub|surprising|interesting|best|worst)\\b",
+   "flags": "gim",
+   "note": "staged reveal — 'here's the twist/catch/kicker'",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-006",
+   "category": "significance",
+   "pattern": "\\b(?:that|this|it)(?:'?s|\\s+(?:is|was))\\s+the\\s+part\\b",
+   "flags": "gim",
+   "note": "that's the part — the reader decides which part",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-007",
+   "category": "significance",
+   "pattern": "\\bmy\\s+favou?rite\\s+part\\s+of\\b",
+   "flags": "gim",
+   "note": "gesturing at a favoured detail instead of stating it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-008",
+   "category": "significance",
+   "pattern": "\\band\\s+(?:that'?s|it has)\\s+(?:the interesting part|a name here)\\b",
+   "flags": "gim",
+   "note": "manufactured reveal",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-009",
+   "category": "significance",
+   "pattern": "\\bthe\\s+(?:one|only)\\s+thing\\s+(?:nobody|no one)\\b",
+   "flags": "gim",
+   "note": "the one thing nobody",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-010",
+   "category": "significance",
+   "pattern": "\\b(?:most|more)\\s+(?:interesting|telling|revealing|surprising)\\s+(?:part|thing|number|finding)\\b",
+   "flags": "gim",
+   "note": "significance tag",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-011",
+   "category": "significance",
+   "pattern": "\\bNobody\\s+(?:had\\s+)?(?:checked|noticed|asked|mentioned|said|told|saw|knew|looked|realized|realised|caught|tried|bothered|thought)\\b",
+   "flags": "gim",
+   "note": "unfalsifiable 'nobody' claim — earned only with a named mechanism",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "agency-001",
+   "category": "agency",
+   "pattern": "\\b(?:the\\s+)?(?:table|chart|graph|data|numbers?|median|mean|metric|figure|plot|log|code|result|headline)\\s+(?:shows?|hides?|tells?|reveals?|says?|proves?|admits?|knows?|wants?)\\b",
+   "flags": "gim",
+   "note": "inanimate subject acting",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "agency-002",
+   "category": "agency",
+   "pattern": "\\b(?:is|are|was|were)\\s+doing\\s+the\\s+work\\b",
+   "flags": "gim",
+   "note": "X is doing the work",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "agency-003",
+   "category": "agency",
+   "pattern": "(?<!\\bI )(?<!\\byou )(?<!\\bwe )(?<!\\bthey )\\b(?:earns?|demands?|buys?|deserves?)\\s+(?:its|their|the)\\s+\\w+",
+   "flags": "gim",
+   "note": "abstraction earning something",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "agency-004",
+   "category": "agency",
+   "pattern": "\\b(?:truncation|quantization|rescoring|compression|optimization|abstraction|complexity|scalability)\\s+(?:cuts?|adds?|breaks?|solves?|reranks?|is a concern)\\b",
+   "flags": "gim",
+   "note": "nominalization as agent",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "agency-005",
+   "category": "agency",
+   "pattern": "\\b(?:about to|going to)\\s+discover\\b",
+   "flags": "gim",
+   "note": "tool personified",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "agency-006",
+   "category": "agency",
+   "pattern": "\\b(?:it|this|that|which|the\\s+[a-z_]+)(?:\\s+[a-z_]+)?\\s+(?:bites|promises|forgets|misunderstands|pretends|hopes|swallows)\\b",
+   "flags": "gim",
+   "note": "animate verb on an inanimate subject — say what happens (entry 4)",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "deferred-noun-001",
+   "category": "deferred-noun",
+   "pattern": "\\bOne\\s+thing\\s+(?:is|isn't|is not|that)\\b",
+   "flags": "gim",
+   "note": "One thing ...",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "deferred-noun-002",
+   "category": "deferred-noun",
+   "pattern": "\\bThe\\s+(?:second|third|fourth|fifth|sixth|seventh|other|last)\\s+(?:is|isn't|is not|does|doesn't)\\b\\s*[.,]",
+   "flags": "gim",
+   "note": "pointer instead of name",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "deferred-noun-003",
+   "category": "deferred-noun",
+   "pattern": "\\bThere\\s+(?:was|is)\\s+(?:just\\s+)?one\\s+(?:problem|catch|issue|wrinkle)\\b",
+   "flags": "gim",
+   "note": "there was just one problem",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "announce-001",
+   "category": "announce",
+   "pattern": "^(?:One|Two|Three|Four|A single|The one)\\s+[a-z][\\w -]{2,30},\\s+(?:not|un\\w+|left|stated|worth|flagged|still|so far)\\b[^.:;]{0,25}[:.]",
+   "flags": "gim",
+   "note": "counted label announcing the content it precedes",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "announce-002",
+   "category": "announce",
+   "pattern": "\\b(?:One|Two|Three|Four)\\s+things?\\s+(?:I|we)\\s+(?:did|didn'?t|have|haven'?t|will|won'?t)\\b[^.:;]{0,20}[:.]",
+   "flags": "gim",
+   "note": "announcing a list of what you did before doing it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "announce-003",
+   "category": "announce",
+   "pattern": "\\band\\s+worth\\s+(?:saying|noting|restating|repeating|mentioning|a\\s+look)\\b[^.]{0,25}:",
+   "flags": "gim",
+   "note": "'and worth saying why' — say why",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "announce-004",
+   "category": "announce",
+   "pattern": "^(?:One|Two|Three|Four)\\s+[a-z][\\w -]{2,25}\\s+(?:left\\s+(?:alone|aside|open|unfixed)|unresolved|unfixed|untouched|not\\s+fixed)\\s*[.:]",
+   "flags": "gim",
+   "note": "counted label with a participle qualifier, no comma",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "announce-005",
+   "category": "announce",
+   "pattern": "^The\\s+\\w+,\\s+(?:worth|stated|noted|flagged|measured|left)\\s+\\w+[^.:;]{0,45}:",
+   "flags": "gim",
+   "note": "appositive caption before the content",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "locator-001",
+   "category": "locator",
+   "pattern": "\\bthe\\s+(?:seam|hinge|joint|fault[- ]line|crux|linchpin|leg|place)\\s+where\\b",
+   "flags": "gim",
+   "note": "structural-metaphor locator",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "locator-002",
+   "category": "locator",
+   "pattern": "\\bload[- ]bearing\\b",
+   "flags": "gim",
+   "note": "load-bearing as metaphor",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-001",
+   "category": "staging",
+   "pattern": "\\b(?:but\\s+)?here'?s\\s+where\\s+it\\s+gets\\b",
+   "flags": "gim",
+   "note": "here's where it gets",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-002",
+   "category": "staging",
+   "pattern": "\\bwhat\\s+(?:I|we|you)\\s+(?:didn't|did not)\\s+(?:realize|know|expect)\\b",
+   "flags": "gim",
+   "note": "movie-trailer voiceover",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-003",
+   "category": "staging",
+   "pattern": "\\bthis\\s+is\\s+the\\s+story\\s+of\\b",
+   "flags": "gim",
+   "note": "trailer opener",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-004",
+   "category": "staging",
+   "pattern": "\\band\\s+that'?s\\s+(?:when|where|why)\\b",
+   "flags": "gim",
+   "note": "and that's when",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-005",
+   "category": "staging",
+   "pattern": "^\\s*(?:So|Then|And)\\s+(?:the|here|now)\\b[^.\\n]{0,40}:\\s*$",
+   "flags": "gim",
+   "note": "colon-staged section lead",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-006",
+   "category": "staging",
+   "pattern": "\\bthe\\s+(?:defensible|honest|short|real)\\s+(?:statement|answer|version)\\s*:",
+   "flags": "gim",
+   "note": "noun-phrase colon stage",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "em-dash-001",
+   "category": "em-dash",
+   "pattern": "—\\s*[^—\\n]{3,90}[.!?]\\s*$",
+   "flags": "gim",
+   "note": "clause after a dash running to the end of the sentence — dash as drum roll",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "triad-001",
+   "category": "triad",
+   "pattern": "\\b(?!who\\b|which\\b|that\\b|when\\b)(\\w+(?:\\s+\\w+){0,2}),\\s+(?!who\\b|which\\b|that\\b|when\\b|obviously\\b|however\\b)(\\w+(?:\\s+\\w+){0,2}),\\s+and\\s+(?!who\\b|which\\b|that\\b|when\\b)(\\w+(?:\\s+\\w+){0,2})\\b",
+   "flags": "gim",
+   "note": "three parallel items — check the content has three, not two padded or five truncated",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "rhetorical-q-001",
+   "category": "rhetorical-q",
+   "pattern": "^\\s*(?:So\\s+)?(?:how|why|what|where|when|does|is|can|should)\\b[^?\\n]{0,70}\\?\\s*$",
+   "flags": "gim",
+   "note": "standalone rhetorical question — check if you answer your own question next",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "self-grading-001",
+   "category": "self-grading",
+   "pattern": "\\b(?:earned,?\\s+not\\s+asserted|not\\s+a\\s+relabel|to be clear,\\s*this is)\\b",
+   "flags": "gim",
+   "note": "grading own rigor",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "self-grading-002",
+   "category": "self-grading",
+   "pattern": "\\b(?:that|this)\\s+is\\s+what\\s+the\\s+(?:data|numbers?|table|evidence)\\s+shows?\\b",
+   "flags": "gim",
+   "note": "that is what the data shows",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "self-grading-003",
+   "category": "self-grading",
+   "pattern": "\\b(?:it'?s|it is)\\s+(?:worth|important)\\s+(?:noting|mentioning|pointing out)\\b",
+   "flags": "gim",
+   "note": "worth noting",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "self-grading-004",
+   "category": "self-grading",
+   "pattern": "\\ba\\s+distinction\\s+worth\\b",
+   "flags": "gim",
+   "note": "grading the distinction",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "self-grading-005",
+   "category": "self-grading",
+   "pattern": "\\bgenuinely\\s+(?:useful|interesting|hard|novel|different|new|considered|rigorous|surprising|original|important)\\b",
+   "flags": "gim",
+   "note": "intensifier as self-grade",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "humility-001",
+   "category": "humility",
+   "pattern": "\\b(?:better|sharper|cleaner)\\s+than\\s+mine\\b",
+   "flags": "gim",
+   "note": "ranking others above yourself",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "humility-002",
+   "category": "humility",
+   "pattern": "\\b(?:this\\s+might\\s+be\\s+a\\s+small\\s+thing|probably\\s+nobody\\s+cares|not\\s+sure\\s+this\\s+is\\s+worth)\\b",
+   "flags": "gim",
+   "note": "apologizing for the piece",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "humility-003",
+   "category": "humility",
+   "pattern": "\\bclassic\\s+me\\b",
+   "flags": "gim",
+   "note": "self-deprecation as performance",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "throat-clearing-001",
+   "category": "throat-clearing",
+   "pattern": "\\b(?:in this (?:post|article|piece),?\\s*(?:I|we)'?ll|I want to talk about|let me explain|first,? some background|before I get into)\\b",
+   "flags": "gim",
+   "note": "preamble",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "throat-clearing-002",
+   "category": "throat-clearing",
+   "pattern": "\\b(?:let me|I'?ll)\\s+(?:consult|check|search|pull up|recall)\\s+my\\b",
+   "flags": "gim",
+   "note": "AI self-narration",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "rtfm-001",
+   "category": "rtfm",
+   "pattern": "\\b(?:it turns out|I finally (?:discovered|realized|found)|hidden in the|buried in the (?:docs|api))\\b",
+   "flags": "gim",
+   "note": "RTFM as revelation",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "rtfm-002",
+   "category": "rtfm",
+   "pattern": "(?:^|[.!?\\u2013\\u2014]\\s+)Turns\\s+out\\b",
+   "flags": "gim",
+   "note": "bare 'Turns out' opener — a casual reveal bolted to a tidy conclusion",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "dev-cliche-001",
+   "category": "dev-cliche",
+   "pattern": "\\b(?:footgun|shot itself in the foot|rabbit hole|yak[- ]shav\\w*|belt[- ]and[- ]suspenders|moving the needle|first[- ]class citizen|under the hood|just works|sane defaults|almost killed it|batteries[- ]included|zero[- ]config(?:uration)?)\\b",
+   "flags": "gim",
+   "note": "generic developer vocabulary",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "dev-cliche-002",
+   "category": "dev-cliche",
+   "pattern": "\\b(?:hold|holds|held|fit|fits)\\s+(?:it\\s+)?in\\s+your\\s+head\\b",
+   "flags": "gim",
+   "note": "dev-blog boilerplate for simplicity — say how big it is",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "slop-001",
+   "category": "slop",
+   "pattern": "\\b(?:delve|tapestry|testament to|navigate the complexities|in today'?s fast[- ]paced|realm of|robust|seamless|leverage|utilize|crucial|pivotal|myriad|plethora|elevate|unlock the|harness the|embark|dive deep|at the end of the day)\\b",
+   "flags": "gim",
+   "note": "slop vocabulary",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "editorializing-001",
+   "category": "editorializing",
+   "pattern": "\\b(?:collapse[sd]?|catastrophic|dramatic(?:ally)?|brutal|staggering|remarkable|impressive)\\b",
+   "flags": "gim",
+   "note": "check the number justifies the adjective",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "editorializing-002",
+   "category": "editorializing",
+   "pattern": "\\b(?:finally|belatedly|ultimately|eventually|inevitably),\\s+(?:finally|belatedly|ultimately|eventually|inevitably),?\\s",
+   "flags": "gim",
+   "note": "doubled adverb — one of them is the verdict",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "time-inflation-001",
+   "category": "time-inflation",
+   "pattern": "\\b(?:a (?:month|few months|while) ago|for a long time|all year|recently|these days)\\b",
+   "flags": "gim",
+   "note": "ground the duration or drop it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "aphorism-001",
+   "category": "aphorism",
+   "pattern": "\\bthe\\s+kind\\s+of\\s+\\w+\\s+that\\b[^.]{0,60}\\band\\s+is\\s+not\\b",
+   "flags": "gim",
+   "note": "X that looks like Y and is not",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "aphorism-002",
+   "category": "aphorism",
+   "pattern": "\\bthe\\s+\\w+\\s+that\\s+looks\\s+like\\s+\\w+",
+   "flags": "gim",
+   "note": "X that looks like Y",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "aphorism-003",
+   "category": "aphorism",
+   "pattern": "\\b(?:by\\s+a\\s+wide\\s+margin|was\\s+the\\s+move)\\b",
+   "flags": "gim",
+   "note": "quotable closer",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "aphorism-004",
+   "category": "aphorism",
+   "pattern": "\\bthe\\s+(?:entire|whole)\\s+\\w+\\s+of\\s+the\\s+thing\\b",
+   "flags": "gim",
+   "note": "quotable closer",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-007",
+   "category": "staging",
+   "pattern": "\\b(?:here|this)\\s+is\\s+what\\s+[^.]{0,60}\\blooks?\\s+like\\b",
+   "flags": "gim",
+   "note": "here is what X looks like",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-008",
+   "category": "staging",
+   "pattern": "\\bthen\\s+the\\s+(?:useful|real|interesting)\\s+question\\b",
+   "flags": "gim",
+   "note": "heralding your own question",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-009",
+   "category": "staging",
+   "pattern": "\\b(?:Here|This)\\s+is\\s+what\\s+[^.\\n]{0,60}:",
+   "flags": "gim",
+   "note": "announces a list before giving it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-010",
+   "category": "staging",
+   "pattern": "\\bwhich\\s+(?:was|is)\\s+this\\s*:",
+   "flags": "gim",
+   "note": "withheld payload — the colon buys a beat",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "staging-011",
+   "category": "staging",
+   "pattern": "\\bthat'?s\\s+not\\s+quite\\s+right\\b",
+   "flags": "gim",
+   "note": "self-correcting opener — the correction is the sentence; the error was supplied",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "copula-001",
+   "category": "copula",
+   "pattern": "\\b(?:serves?|stands?|acts?)\\s+as\\s+(?:a|an|the)\\b",
+   "flags": "gim",
+   "note": "serves as — use is",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "copula-002",
+   "category": "copula",
+   "pattern": "\\bboasts?\\s+(?:a|an|the|over|more than|some|\\d)",
+   "flags": "gim",
+   "note": "boasts — use has",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "copula-003",
+   "category": "copula",
+   "pattern": "\\b(?:it|which|that|the\\s+\\w+)\\s+features\\s+(?:a|an|the|over|\\d)",
+   "flags": "gim",
+   "note": "features — use has",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "copula-004",
+   "category": "copula",
+   "pattern": "\\b(?:represents?|represented|marks?|marked)\\s*(?:,\\s*[^,\\n]{0,45},)?\\s*(?:a|an|the)\\s+(?:kind|sort|type)\\s+of\\b",
+   "flags": "gim",
+   "note": "represents a kind of X — use is",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "copula-005",
+   "category": "copula",
+   "pattern": "\\b(?:represents|represented|marks|marked)\\s*(?:,\\s*[^,\\n]{0,45},)?\\s*(?:a|an|the)\\s+(?:shift|turning point|milestone|step|departure|moment|horizon|threshold)\\b",
+   "flags": "gim",
+   "note": "represents a shift",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "participle-001",
+   "category": "participle",
+   "pattern": ",\\s*(?:highlight|underscor|emphasiz|reflect|symboliz|showcas|ensur|foster|cultivat|encompass|solidif|cement|underlin)\\w*ing\\b",
+   "flags": "gim",
+   "note": "participle tail asserting significance",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "participle-002",
+   "category": "participle",
+   "pattern": ",\\s*contributing\\s+to\\b",
+   "flags": "gim",
+   "note": "participle tail asserting significance",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "participle-003",
+   "category": "participle",
+   "pattern": ",\\s+\\w{3,}ing\\b[^.!?\\n]{0,70}[.!?]",
+   "flags": "gim",
+   "note": "participle tail at sentence end — cut it, or make the claim its own sentence",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "false-range-001",
+   "category": "false-range",
+   "pattern": "\\bfrom\\s+[^,.;]{3,45}\\s+to\\s+[^,.;]{3,45},\\s*from\\s+",
+   "flags": "gim",
+   "note": "stacked from-X-to-Y ranges",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "false-range-002",
+   "category": "false-range",
+   "pattern": "\\b(?:everything|anything|ranging)\\s+from\\b[^.]{0,60}\\bto\\b",
+   "flags": "gim",
+   "note": "false range — list the items",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "false-range-003",
+   "category": "false-range",
+   "pattern": "^From\\s+the\\s+[^,.;\\n]{3,45}\\s+to\\s+the\\s+[^,.;\\n]{3,45},",
+   "flags": "gim",
+   "note": "sentence-initial from-X-to-Y — check X and Y are endpoints of something",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "list-shape-001",
+   "category": "list-shape",
+   "pattern": "^\\s*[-*+]\\s+\\*\\*[^*\\n]{2,45}\\*\\*\\s*:",
+   "flags": "gim",
+   "note": "inline-header bullet — the label restates the item",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "list-shape-002",
+   "category": "list-shape",
+   "pattern": "^\\s*[-*+]\\s+\\*\\*[^*\\n]{2,45}:\\*\\*",
+   "flags": "gim",
+   "note": "inline-header bullet — the label restates the item",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "list-shape-003",
+   "category": "list-shape",
+   "pattern": "^\\s*[-*+]\\s+\\*\\*(\\w{4,})[^*\\n]{0,44}\\*\\*\\s*:?\\s+(?:the|a|an)?\\s*\\1\\b",
+   "flags": "gim",
+   "note": "the bold label restates the item — an outline showing through the prose",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "chatbot-001",
+   "category": "chatbot",
+   "pattern": "\\b(?:great|excellent|good)\\s+question\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-002",
+   "category": "chatbot",
+   "pattern": "\\byou'?re\\s+absolutely\\s+right\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-003",
+   "category": "chatbot",
+   "pattern": "\\bI\\s+hope\\s+this\\s+helps\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-004",
+   "category": "chatbot",
+   "pattern": "\\blet\\s+me\\s+know\\s+if\\s+you'?d\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-005",
+   "category": "chatbot",
+   "pattern": "\\b(?:would|do)\\s+you\\s+(?:like|want)\\s+me\\s+to\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-006",
+   "category": "chatbot",
+   "pattern": "\\bwant\\s+me\\s+to\\s+(?:give|show|expand|continue|explain)\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-007",
+   "category": "chatbot",
+   "pattern": "\\b(?:should|shall)\\s+I\\s+continue\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-008",
+   "category": "chatbot",
+   "pattern": "^\\s*(?:Certainly|Of course|Absolutely)[!,]",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "chatbot-009",
+   "category": "chatbot",
+   "pattern": "\\bhere\\s+is\\s+an\\s+overview\\s+of\\b",
+   "flags": "gim",
+   "note": "chatbot residue",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "filler-001",
+   "category": "filler",
+   "pattern": "\\bin\\s+order\\s+to\\b",
+   "flags": "gim",
+   "note": "in order to — use to",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-002",
+   "category": "filler",
+   "pattern": "\\bdue\\s+to\\s+the\\s+fact\\s+that\\b",
+   "flags": "gim",
+   "note": "due to the fact that — use because",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-003",
+   "category": "filler",
+   "pattern": "\\bat\\s+this\\s+point\\s+in\\s+time\\b",
+   "flags": "gim",
+   "note": "at this point in time — use now",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-004",
+   "category": "filler",
+   "pattern": "\\bin\\s+the\\s+event\\s+that\\b",
+   "flags": "gim",
+   "note": "in the event that — use if",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-005",
+   "category": "filler",
+   "pattern": "\\bhas\\s+the\\s+ability\\s+to\\b",
+   "flags": "gim",
+   "note": "has the ability to — use can",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-006",
+   "category": "filler",
+   "pattern": "\\bit\\s+is\\s+important\\s+to\\s+note\\s+that\\b",
+   "flags": "gim",
+   "note": "delete the frame, keep the claim",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-007",
+   "category": "filler",
+   "pattern": "\\b(?:could|might|may|can)\\s+(?:potentially|possibly|arguably|conceivably)\\b",
+   "flags": "gim",
+   "note": "stacked hedges — one carries the uncertainty",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-008",
+   "category": "filler",
+   "pattern": "\\bpotentially\\s+possibly\\b",
+   "flags": "gim",
+   "note": "stacked hedges",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-009",
+   "category": "filler",
+   "pattern": "\\bin\\s+its\\s+own\\s+way,?\\s+a\\s+kind\\s+of\\b",
+   "flags": "gim",
+   "note": "double hedge on a plain noun",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "gap-fill-001",
+   "category": "gap-fill",
+   "pattern": "\\bmaintains?\\s+a\\s+low\\s+profile\\b",
+   "flags": "gim",
+   "note": "stock filler for an absent source",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "gap-fill-002",
+   "category": "gap-fill",
+   "pattern": "\\bkeeps?\\s+(?:personal\\s+)?details?\\s+private\\b",
+   "flags": "gim",
+   "note": "stock filler for an absent source",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "gap-fill-003",
+   "category": "gap-fill",
+   "pattern": "\\b(?:is|are)\\s+not\\s+publicly\\s+available\\b",
+   "flags": "gim",
+   "note": "say what is not known, or cut",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "gap-fill-004",
+   "category": "gap-fill",
+   "pattern": "\\bbased\\s+on\\s+(?:the\\s+)?available\\s+information\\b",
+   "flags": "gim",
+   "note": "meta-sentence about the search, not the subject",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "gap-fill-005",
+   "category": "gap-fill",
+   "pattern": "\\bas\\s+of\\s+my\\s+last\\s+(?:update|training)\\b",
+   "flags": "gim",
+   "note": "knowledge-cutoff disclaimer",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "gap-fill-006",
+   "category": "gap-fill",
+   "pattern": "\\bdetails\\s+(?:about|are)[^.]{0,50}\\b(?:limited|scarce|not\\s+extensively)\\b",
+   "flags": "gim",
+   "note": "meta-sentence about the search",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "gap-fill-007",
+   "category": "gap-fill",
+   "pattern": "\\bit\\s+is\\s+believed\\s+that\\b",
+   "flags": "gim",
+   "note": "unsourced guess",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "gap-fill-008",
+   "category": "gap-fill",
+   "pattern": "\\blikely\\s+(?:grew\\s+up|studied|began|started|attended)\\b",
+   "flags": "gim",
+   "note": "unsourced guess about a person",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "diff-anchored-001",
+   "category": "diff-anchored",
+   "pattern": "\\b(?:was|were)\\s+added\\s+to\\s+(?:replace|fix|handle|support)\\b",
+   "flags": "gim",
+   "note": "documents the change, not the thing",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "diff-anchored-002",
+   "category": "diff-anchored",
+   "pattern": "\\bthe\\s+(?:previous|old|former)\\s+(?:approach|implementation|version|behaviour|behavior|method)\\b",
+   "flags": "gim",
+   "note": "documents the change, not the thing",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "diff-anchored-003",
+   "category": "diff-anchored",
+   "pattern": "\\bhas\\s+(?:since\\s+)?been\\s+(?:updated|changed|replaced|refactored)\\s+to\\b",
+   "flags": "gim",
+   "note": "documents the change, not the thing",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "diff-anchored-004",
+   "category": "diff-anchored",
+   "pattern": "\\bwe\\s+now\\s+(?:use|do|call|store|write)\\b",
+   "flags": "gim",
+   "note": "documents the change, not the thing",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "subjectless-001",
+   "category": "subjectless",
+   "pattern": "\\bNo\\s+\\w+(?:\\s+\\w+){0,2}\\s+(?:needed|required)\\s*[.!]",
+   "flags": "gim",
+   "note": "subjectless claim — name the actor",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "subjectless-002",
+   "category": "subjectless",
+   "pattern": "\\b(?:is|are)\\s+\\w+ed\\s+automatically\\b",
+   "flags": "gim",
+   "note": "subjectless claim — who does it?",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "aphorism-005",
+   "category": "aphorism",
+   "pattern": ",\\s*so\\s+(?:a|an|the|it|they|you)\\s+[^.]{0,50}\\bnever\\b[^.]{0,40}\\.",
+   "flags": "gim",
+   "note": "welded epigram — second clause restates the first as a maxim",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "aphorism-006",
+   "category": "aphorism",
+   "pattern": ",\\s*and\\s+(?:the|its)\\s+(?:failure|error|cost|risk|difference|effect|result|damage|loss)\\s+[^.]{0,40}\\bis\\b[^.]{0,30}\\.",
+   "flags": "gim",
+   "note": "welded epigram — second clause generalizes the first",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "aphorism-007",
+   "category": "aphorism",
+   "pattern": ",\\s*(?:so|and)\\s+nothing\\s+\\w+s\\b[^.]{0,40}\\.",
+   "flags": "gim",
+   "note": "welded epigram — 'and nothing X's' closer",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "spec-ese-001",
+   "category": "spec-ese",
+   "pattern": "(?:^|[.!?]\\s+)That\\s+(?:child|session|process|container|job|worker|request|instance|delegate)\\b(?!'s)",
+   "flags": "gim",
+   "note": "demonstrative subject for a thing already named — use 'it'",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "spec-ese-002",
+   "category": "spec-ese",
+   "pattern": "\\bdoes\\s+not\\s+itself\\b",
+   "flags": "gim",
+   "note": "reflexive-emphatic formality",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "spec-ese-003",
+   "category": "spec-ese",
+   "pattern": "\\b(?:idles?|sits?|waits?)\\s+awaiting\\b",
+   "flags": "gim",
+   "note": "latinate state verb plus participle tail",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "spec-ese-004",
+   "category": "spec-ese",
+   "pattern": "\\bawaiting\\s+(?:input|instructions|a\\s+\\w+|the\\s+\\w+)\\b",
+   "flags": "gim",
+   "note": "awaiting — say what the reader has to do",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "spec-ese-005",
+   "category": "spec-ese",
+   "pattern": "\\b(?:holds|carries|comprises|obtains)\\s+no\\s+\\w+",
+   "flags": "gim",
+   "note": "latinate state verb — say what is not there",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "spec-ese-006",
+   "category": "spec-ese",
+   "pattern": "\\bnever\\s+carries\\s+a\\b",
+   "flags": "gim",
+   "note": "latinate state verb for a permission or flag",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "announce-006",
+   "category": "announce",
+   "pattern": "^[^.\\n]{10,90},\\s*plus\\s+the\\s+\\w+",
+   "flags": "gim",
+   "note": "'X, plus Y' standfirst — a contents list shaped as a sentence",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "announce-007",
+   "category": "announce",
+   "pattern": ",\\s*(?:plus|and)\\s+the\\s+\\w+\\s+(?:the|that|which)\\s+\\w+\\s+(?:leaves?|skips?|misses?|omits?)\\b",
+   "flags": "gim",
+   "note": "coy reduced relative — name what is in it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "hyphenation-001",
+   "category": "hyphenation",
+   "pattern": "\\b(?:is|are|was|were|feels?|seems?)\\s+(?:high-quality|cross-functional|data-driven|end-to-end|real-time|long-term|well-known|client-facing|decision-making|third-party|open-source)\\b",
+   "flags": "gim",
+   "note": "drop the hyphen after the noun",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "flat-certainty-001",
+   "category": "flat-certainty",
+   "pattern": "\\b(?:plainly|quietly|outright|merely|provably|demonstrably|empirically|vacuously|adversarially|legitimately|structurally)\\s+(?=\\w)",
+   "flags": "gim",
+   "note": "flat-certainty adverb — say what makes it true, or cut it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "flat-certainty-002",
+   "category": "flat-certainty",
+   "pattern": "\\b(?:is|are|was|were|reads?|remains?|stays?)\\s+(?:plainly|quietly|merely|genuinely|outright)\\b",
+   "flags": "gim",
+   "note": "adverb asserting the reader's reaction",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "flat-certainty-003",
+   "category": "flat-certainty",
+   "pattern": "\\b(?:deliberately|genuinely|honestly|routinely|silently|identically|precisely)\\s+\\w+(?:ed|ing|s)\\b",
+   "flags": "gim",
+   "note": "flat-certainty adverb on a verb — check it names a contrast the reader can check",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "juridical-001",
+   "category": "juridical",
+   "pattern": "\\b(?:the\\s+)?\\w+\\s+(?:refuses|declines|admits|rules|ratifies|sanctions|honou?rs|forbids|governs|decides|settles)\\s+(?:the|a|an|any|no|that|it)\\b",
+   "flags": "gim",
+   "note": "juridical verb — name the mechanism and its exit condition",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "juridical-002",
+   "category": "juridical",
+   "pattern": "\\b(?:a|the|its|this|that|one)\\s+(?:refusal|ruling|verdict|precedent|carve-out|remedy|obligation|standing|grounds)\\b",
+   "flags": "gim",
+   "note": "juridical noun for a program state",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "juridical-003",
+   "category": "juridical",
+   "pattern": "\\b(?:has|have|had|lacks?|without|no)\\s+standing\\b",
+   "flags": "gim",
+   "note": "standing — say what the caller is missing",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "verification-001",
+   "category": "verification",
+   "pattern": "\\b(?:byte|bit)-(?:identical|exact|identity|for-byte)\\b",
+   "flags": "gim",
+   "note": "verification compound — put the diff or the number beside it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "verification-002",
+   "category": "verification",
+   "pattern": "\\bbyte-for-byte\\b",
+   "flags": "gim",
+   "note": "verification compound — put the diff beside it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "verification-003",
+   "category": "verification",
+   "pattern": "\\bmutation-(?:checked|verified|tested|proof)\\b",
+   "flags": "gim",
+   "note": "mutation compound — say what the run killed and what survived",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "verification-004",
+   "category": "verification",
+   "pattern": "\\b(?:live|hand|cross|independently|adversarially)-(?:verified|checked|tested|confirmed|audited)\\b",
+   "flags": "gim",
+   "note": "verification compound — state what was run and what came back",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "verification-005",
+   "category": "verification",
+   "pattern": "\\bre-(?:derived?|derives|deriving|verified|verifies|measured|measures|checked|confirmed|read|reads)\\b",
+   "flags": "gim",
+   "note": "re- prefix claims a second pass — say what the second pass did differently",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "verification-006",
+   "category": "verification",
+   "pattern": "\\broot-caused\\b",
+   "flags": "gim",
+   "note": "root-caused — name the cause",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "privative-001",
+   "category": "privative",
+   "pattern": "\\b(?:is|are|was|were|remains?|stays?|left|leaves?)\\s+(?:ungated|unguarded|unwired|uncapped|unbuilt|unparseable|unverifiable|unmeasured|unresolvable|vacuous|inert)\\b",
+   "flags": "gim",
+   "note": "privative coinage — say what is missing, and where",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "privative-002",
+   "category": "privative",
+   "pattern": "\\b(?:an?|the|three|two|several|most|all)\\s+(?:ungated|unguarded|unwired|uncapped|unbuilt|unmeasured|unverifiable)\\s+\\w+",
+   "flags": "gim",
+   "note": "privative coinage naming a thing by what was not done to it",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "exhaustive-001",
+   "category": "exhaustive",
+   "pattern": "\\bnothing\\s+(?:in|else|about|here|there)\\b[^.]{0,60}\\b(?:does|is|can|could|would|varies|reaches|touches|explains)\\b",
+   "flags": "gim",
+   "note": "exhaustive negation — state the scope you checked",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "exhaustive-002",
+   "category": "exhaustive",
+   "pattern": "\\bnowhere\\s+(?:else|in|for|to)\\b",
+   "flags": "gim",
+   "note": "nowhere — a universal over an unnamed search",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "exhaustive-003",
+   "category": "exhaustive",
+   "pattern": "\\b(?:no|not\\s+a\\s+single)\\s+(?:path|caller|branch|test|case|line|file)\\s+\\w+s\\b",
+   "flags": "gim",
+   "note": "universal negative — bound it to a set the reader can see",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "exhaustive-004",
+   "category": "exhaustive",
+   "pattern": "\\bcan\\s+never\\b|\\bwill\\s+never\\b|\\bnever\\s+(?:fires|happens|reaches|runs|returns)\\b",
+   "flags": "gim",
+   "note": "never — an absolute is the most expensive claim and the cheapest to assert",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "candour-001",
+   "category": "candour",
+   "pattern": "\\bI\\s+(?:will\\s+not|won'?t)\\s+pretend\\b",
+   "flags": "gim",
+   "note": "announced sincerity — show it instead",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "candour-002",
+   "category": "candour",
+   "pattern": "\\b(?:I'?ll|let'?s|to)\\s+be\\s+(?:honest|clear|blunt|real)\\b",
+   "flags": "gim",
+   "note": "announced sincerity — the sentence after this is the one you meant to write",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "candour-003",
+   "category": "candour",
+   "pattern": "(?:^|[.!?\\u2013\\u2014]\\s+)(?:honestly|look|truthfully|frankly)\\s*,",
+   "flags": "gim",
+   "note": "confiding opener — delete it and keep the sentence",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "candour-004",
+   "category": "candour",
+   "pattern": "\\b(?:you\\s+)?(?:do\\s+not|don'?t)\\s+(?:have\\s+to\\s+)?take\\s+my\\s+word\\s+for\\b",
+   "flags": "gim",
+   "note": "invitation to verify with nothing to verify against — link the thing",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "reversal-001",
+   "category": "reversal",
+   "pattern": "[;:,]\\s+[^.;:!?\\n]{2,50}\\s(?:did|does|do|was|were|is|are|has|have|had|can|could|would|will)(?:n'?t|\\s+not)\\s*[.;]",
+   "flags": "gim",
+   "note": "clause landing on a bare auxiliary — say what the second half claims",
+   "fix": null,
+   "source": "declauding",
+   "tier": "flag"
+  },
+  {
+   "id": "reversal-002",
+   "category": "reversal",
+   "pattern": "[.!?]\\s+[A-Z][^.;:!?\\n]{2,40}\\s(?:did|does|was|were|is|are|has|have|had|can|could|would|will)(?:n'?t|\\s+not)\\s*\\.",
+   "flags": "gim",
+   "note": "sentence landing on a bare auxiliary — the verb is elided and the beat is doing the work",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "reversal-003",
+   "category": "reversal",
+   "pattern": "\\b(?:maybe|perhaps)\\s+\\w+[^.!?\\n]{0,40}\\s(?:would|could|might|should|did|had|was|is)(?:n'?t)\\s+(?:have\\s*)?\\.",
+   "flags": "gim",
+   "note": "speculative reversal on a stranded auxiliary",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "retroactive-001",
+   "category": "retroactive",
+   "pattern": "\\b(?:that|this|which)(?:'?s|\\s+(?:is|was))\\s+why\\b[^.!?\\n]{0,80}?\\b(?:matter(?:s|ed)|count(?:s|ed))\\b",
+   "flags": "gim",
+   "note": "grading a passage the reader has already read",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "totalizing-001",
+   "category": "totalizing",
+   "pattern": "(?<!here)(?:\\b(?:is|was|are|were)|'?s)\\s+the\\s+(?:whole|entire)\\s+(?:point|game|thing|trick|pitch|idea|story|premise|argument|bug|business\\s+model)\\b",
+   "flags": "gim",
+   "note": "the whole point — claims a total where a part was shown",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "totalizing-002",
+   "category": "totalizing",
+   "pattern": "\\bthe\\s+(?:whole|entire)\\s+(?:point|game|trick|pitch|premise|argument|business\\s+model)\\s+(?:is|was)\\b",
+   "flags": "gim",
+   "note": "the whole point is — the flipped twin",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "totalizing-003",
+   "category": "totalizing",
+   "pattern": "\\bhere(?:'?s|\\s+is)\\s+the\\s+(?:whole|entire)\\s+\\w+",
+   "flags": "gim",
+   "note": "here's the whole X — a total announced, not shown",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "totalizing-004",
+   "category": "totalizing",
+   "pattern": "\\bthe\\s+only\\s+[\\w'-]+(?:\\s+[\\w'-]+){0,2}?\\s+(?:I|you|we|they)\\s+(?:trust|need|needs|want|wants|use|uses|care|believe)\\b",
+   "flags": "gim",
+   "note": "narrowing superlative over an unnamed set",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "totalizing-005",
+   "category": "totalizing",
+   "pattern": "\\bthe\\s+only\\s+[\\w'-]+\\s+that\\s+(?:matters|counts|works|survives)\\b",
+   "flags": "gim",
+   "note": "narrowing superlative — name the set or drop the only",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "obituary-001",
+   "category": "obituary",
+   "pattern": "\\blong\\s+live\\s+\\w+",
+   "flags": "gim",
+   "note": "obituary headline — name what changed",
+   "fix": null,
+   "source": "declauding",
+   "tier": "hint"
+  },
+  {
+   "id": "kill-word-001",
+   "category": "kill-word",
+   "pattern": "\\bdelve\\b",
+   "flags": "gi",
+   "note": "'delve' reads machine-made",
+   "fix": "look at / examine / explore",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-002",
+   "category": "kill-word",
+   "pattern": "\\bdelves\\b",
+   "flags": "gi",
+   "note": "'delves' reads machine-made",
+   "fix": "looks at / examines / explores",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-003",
+   "category": "kill-word",
+   "pattern": "\\bdelving\\b",
+   "flags": "gi",
+   "note": "'delving' reads machine-made",
+   "fix": "looking at / examining / exploring",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-004",
+   "category": "kill-word",
+   "pattern": "\\btapestry\\b",
+   "flags": "gi",
+   "note": "'tapestry' reads machine-made",
+   "fix": "delete or be specific",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-005",
+   "category": "kill-word",
+   "pattern": "\\bpivotal\\b",
+   "flags": "gi",
+   "note": "'pivotal' reads machine-made",
+   "fix": "important / key / [delete]",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-006",
+   "category": "kill-word",
+   "pattern": "\\btestament\\b",
+   "flags": "gi",
+   "note": "'testament' reads machine-made",
+   "fix": "delete or show the evidence",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-007",
+   "category": "kill-word",
+   "pattern": "\\bmultifaceted\\b",
+   "flags": "gi",
+   "note": "'multifaceted' reads machine-made",
+   "fix": "be specific about which facets",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-008",
+   "category": "kill-word",
+   "pattern": "\\bintricate\\b",
+   "flags": "gi",
+   "note": "'intricate' reads machine-made",
+   "fix": "describe the complexity",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-009",
+   "category": "kill-word",
+   "pattern": "\\bnuanced\\b",
+   "flags": "gi",
+   "note": "'nuanced' reads machine-made",
+   "fix": "show the nuance instead",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-010",
+   "category": "kill-word",
+   "pattern": "\\brealm\\b",
+   "flags": "gi",
+   "note": "'realm' reads machine-made",
+   "fix": "field / area / [delete]",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-011",
+   "category": "kill-word",
+   "pattern": "\\blandscape\\b",
+   "flags": "gi",
+   "note": "'landscape' reads machine-made",
+   "fix": "delete or be specific",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "kill-word-012",
+   "category": "kill-word",
+   "pattern": "\\bunderscore\\b",
+   "flags": "gi",
+   "note": "'underscore' reads machine-made",
+   "fix": "show / prove / [delete]",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-013",
+   "category": "kill-word",
+   "pattern": "\\bunderscores\\b",
+   "flags": "gi",
+   "note": "'underscores' reads machine-made",
+   "fix": "show / prove / [delete]",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-014",
+   "category": "kill-word",
+   "pattern": "\\bunderscored\\b",
+   "flags": "gi",
+   "note": "'underscored' reads machine-made",
+   "fix": "show / prove / [delete]",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-015",
+   "category": "kill-word",
+   "pattern": "\\bunderscoring\\b",
+   "flags": "gi",
+   "note": "'underscoring' reads machine-made",
+   "fix": "show / prove / [delete]",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-016",
+   "category": "kill-word",
+   "pattern": "\\bfoster\\b",
+   "flags": "gi",
+   "note": "'foster' reads machine-made",
+   "fix": "create / build / enable",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-017",
+   "category": "kill-word",
+   "pattern": "\\bfosters\\b",
+   "flags": "gi",
+   "note": "'fosters' reads machine-made",
+   "fix": "creates / builds / enables",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-018",
+   "category": "kill-word",
+   "pattern": "\\bfostering\\b",
+   "flags": "gi",
+   "note": "'fostering' reads machine-made",
+   "fix": "creating / building / enabling",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-019",
+   "category": "kill-word",
+   "pattern": "\\bfostered\\b",
+   "flags": "gi",
+   "note": "'fostered' reads machine-made",
+   "fix": "created / built / enabled",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-020",
+   "category": "kill-word",
+   "pattern": "\\bleverage\\b",
+   "flags": "gi",
+   "note": "'leverage' reads machine-made",
+   "fix": "use",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-021",
+   "category": "kill-word",
+   "pattern": "\\bleverages\\b",
+   "flags": "gi",
+   "note": "'leverages' reads machine-made",
+   "fix": "uses",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-022",
+   "category": "kill-word",
+   "pattern": "\\bleveraging\\b",
+   "flags": "gi",
+   "note": "'leveraging' reads machine-made",
+   "fix": "using",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-023",
+   "category": "kill-word",
+   "pattern": "\\bleveraged\\b",
+   "flags": "gi",
+   "note": "'leveraged' reads machine-made",
+   "fix": "used",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-024",
+   "category": "kill-word",
+   "pattern": "\\brobust\\b",
+   "flags": "gi",
+   "note": "'robust' reads machine-made",
+   "fix": "describe what makes it strong",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-025",
+   "category": "kill-word",
+   "pattern": "\\bseamless\\b",
+   "flags": "gi",
+   "note": "'seamless' reads machine-made",
+   "fix": "describe the experience",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-026",
+   "category": "kill-word",
+   "pattern": "\\bseamlessly\\b",
+   "flags": "gi",
+   "note": "'seamlessly' reads machine-made",
+   "fix": "describe how",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-027",
+   "category": "kill-word",
+   "pattern": "\\bgroundbreaking\\b",
+   "flags": "gi",
+   "note": "'groundbreaking' reads machine-made",
+   "fix": "show what ground was broken",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-028",
+   "category": "kill-word",
+   "pattern": "\\binnovative\\b",
+   "flags": "gi",
+   "note": "'innovative' reads machine-made",
+   "fix": "show what is new",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-029",
+   "category": "kill-word",
+   "pattern": "\\bcutting\\-edge\\b",
+   "flags": "gi",
+   "note": "'cutting-edge' reads machine-made",
+   "fix": "describe the technology",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-030",
+   "category": "kill-word",
+   "pattern": "\\bstate\\-of\\-the\\-art\\b",
+   "flags": "gi",
+   "note": "'state-of-the-art' reads machine-made",
+   "fix": "describe what is advanced",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-031",
+   "category": "kill-word",
+   "pattern": "\\bholistic\\b",
+   "flags": "gi",
+   "note": "'holistic' reads machine-made",
+   "fix": "be specific",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-032",
+   "category": "kill-word",
+   "pattern": "\\bsynergy\\b",
+   "flags": "gi",
+   "note": "'synergy' reads machine-made",
+   "fix": "delete or be specific",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-033",
+   "category": "kill-word",
+   "pattern": "\\butilize\\b",
+   "flags": "gi",
+   "note": "'utilize' reads machine-made",
+   "fix": "use",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-034",
+   "category": "kill-word",
+   "pattern": "\\butilizes\\b",
+   "flags": "gi",
+   "note": "'utilizes' reads machine-made",
+   "fix": "uses",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-035",
+   "category": "kill-word",
+   "pattern": "\\butilizing\\b",
+   "flags": "gi",
+   "note": "'utilizing' reads machine-made",
+   "fix": "using",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "kill-word-036",
+   "category": "kill-word",
+   "pattern": "\\butilized\\b",
+   "flags": "gi",
+   "note": "'utilized' reads machine-made",
+   "fix": "used",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "stock-phrase-001",
+   "category": "stock-phrase",
+   "pattern": "\\bfolks\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'folks'",
+   "fix": "people / y'all / everyone",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "stock-phrase-002",
+   "category": "stock-phrase",
+   "pattern": "\\bfeel\\s+free\\s+to\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'feel free to'",
+   "fix": "just tell them they can",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "stock-phrase-003",
+   "category": "stock-phrase",
+   "pattern": "\\breach\\s+out\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'reach out'",
+   "fix": "use a specific verb: email, call, DM, text",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "stock-phrase-004",
+   "category": "stock-phrase",
+   "pattern": "\\btouch\\s+base\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'touch base'",
+   "fix": "delete",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "stock-phrase-005",
+   "category": "stock-phrase",
+   "pattern": "\\bcircle\\s+back\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'circle back'",
+   "fix": "delete",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "stock-phrase-006",
+   "category": "stock-phrase",
+   "pattern": "\\bapologies\\s+for\\s+the\\s+delay\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'apologies for the delay'",
+   "fix": "just respond",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "stock-phrase-007",
+   "category": "stock-phrase",
+   "pattern": "\\bI\\s+wanted\\s+to\\s+reach\\s+out\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'I wanted to reach out'",
+   "fix": "just reach out",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "stock-phrase-008",
+   "category": "stock-phrase",
+   "pattern": "\\bI\\s+am\\s+writing\\s+to\\b",
+   "flags": "gi",
+   "note": "stock phrase: 'I am writing to'",
+   "fix": "start with the point",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-001",
+   "category": "transition",
+   "pattern": "\\bMoreover\\b",
+   "flags": "gi",
+   "note": "padding transition: 'Moreover'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-002",
+   "category": "transition",
+   "pattern": "\\bFurthermore\\b",
+   "flags": "gi",
+   "note": "padding transition: 'Furthermore'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-003",
+   "category": "transition",
+   "pattern": "\\bAdditionally\\b",
+   "flags": "gi",
+   "note": "padding transition: 'Additionally'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "transition-004",
+   "category": "transition",
+   "pattern": "\\bIt's\\s+important\\s+to\\s+note\\b",
+   "flags": "gi",
+   "note": "padding transition: 'It's important to note'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-005",
+   "category": "transition",
+   "pattern": "\\bIt\\s+is\\s+important\\s+to\\s+note\\b",
+   "flags": "gi",
+   "note": "padding transition: 'It is important to note'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-006",
+   "category": "transition",
+   "pattern": "\\bIt\\s+should\\s+be\\s+noted\\s+that\\b",
+   "flags": "gi",
+   "note": "padding transition: 'It should be noted that'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-007",
+   "category": "transition",
+   "pattern": "\\bFor\\s+the\\s+purpose\\s+of\\b",
+   "flags": "gi",
+   "note": "padding transition: 'For the purpose of'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "transition-008",
+   "category": "transition",
+   "pattern": "\\bWith\\s+regard\\s+to\\b",
+   "flags": "gi",
+   "note": "padding transition: 'With regard to'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-009",
+   "category": "transition",
+   "pattern": "\\bIn\\s+terms\\s+of\\b",
+   "flags": "gi",
+   "note": "padding transition: 'In terms of'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "transition-010",
+   "category": "transition",
+   "pattern": "\\bAs\\s+a\\s+matter\\s+of\\s+fact\\b",
+   "flags": "gi",
+   "note": "padding transition: 'As a matter of fact'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "transition-011",
+   "category": "transition",
+   "pattern": "\\bThat\\s+being\\s+said\\b",
+   "flags": "gi",
+   "note": "padding transition: 'That being said'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "transition-012",
+   "category": "transition",
+   "pattern": "\\bHaving\\s+said\\s+that\\b",
+   "flags": "gi",
+   "note": "padding transition: 'Having said that'",
+   "fix": "cut it, or use a plain connective",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-010",
+   "category": "chatbot",
+   "pattern": "Great\\s+question!",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-011",
+   "category": "chatbot",
+   "pattern": "I\\s+hope\\s+this\\s+helps",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-012",
+   "category": "chatbot",
+   "pattern": "Let\\s+me\\s+know\\s+if",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "off"
+  },
+  {
+   "id": "chatbot-013",
+   "category": "chatbot",
+   "pattern": "Certainly!",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-014",
+   "category": "chatbot",
+   "pattern": "Absolutely!",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "chatbot-015",
+   "category": "chatbot",
+   "pattern": "You're\\s+right\\s+that",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-016",
+   "category": "chatbot",
+   "pattern": "As\\s+of\\s+my\\s+knowledge\\s+cutoff",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-017",
+   "category": "chatbot",
+   "pattern": "Based\\s+on\\s+available\\s+information",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-018",
+   "category": "chatbot",
+   "pattern": "I'd\\s+be\\s+happy\\s+to",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "chatbot-019",
+   "category": "chatbot",
+   "pattern": "Of\\s+course!",
+   "flags": "gi",
+   "note": "chatbot residue",
+   "fix": "delete it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-012",
+   "category": "significance",
+   "pattern": "\\bmarking\\s+a\\s+pivotal\\s+moment\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-013",
+   "category": "significance",
+   "pattern": "\\ba\\s+testament\\s+to\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-014",
+   "category": "significance",
+   "pattern": "\\bunderscores\\s+the\\s+importance\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-015",
+   "category": "significance",
+   "pattern": "\\bplays\\s+a\\s+crucial\\s+role\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-016",
+   "category": "significance",
+   "pattern": "\\bhas\\s+long\\s+been\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-017",
+   "category": "significance",
+   "pattern": "\\bcontinues\\s+to\\s+shape\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-018",
+   "category": "significance",
+   "pattern": "\\breflects\\s+broader\\s+trends\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-019",
+   "category": "significance",
+   "pattern": "\\bsolidified\\s+its\\s+position\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-020",
+   "category": "significance",
+   "pattern": "\\bsignaling\\s+a\\s+shift\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "significance-021",
+   "category": "significance",
+   "pattern": "\\bmarks\\s+a\\s+significant\\b",
+   "flags": "gi",
+   "note": "significance inflation",
+   "fix": "show the evidence instead of labeling it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-001",
+   "category": "vague-attribution",
+   "pattern": "\\bhas\\s+been\\s+described\\s+as\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-002",
+   "category": "vague-attribution",
+   "pattern": "\\bis\\s+of\\s+interest\\s+to\\s+researchers\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-003",
+   "category": "vague-attribution",
+   "pattern": "\\bexperts\\s+suggest\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-004",
+   "category": "vague-attribution",
+   "pattern": "\\bstudies\\s+show\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-005",
+   "category": "vague-attribution",
+   "pattern": "\\bsome\\s+argue\\s+that\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-006",
+   "category": "vague-attribution",
+   "pattern": "\\baccording\\s+to\\s+sources\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-007",
+   "category": "vague-attribution",
+   "pattern": "\\bobservers\\s+note\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-008",
+   "category": "vague-attribution",
+   "pattern": "\\bcritics\\s+contend\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-009",
+   "category": "vague-attribution",
+   "pattern": "\\bit\\s+is\\s+widely\\s+believed\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-010",
+   "category": "vague-attribution",
+   "pattern": "\\bconventional\\s+wisdom\\s+holds\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-011",
+   "category": "vague-attribution",
+   "pattern": "\\bscholars\\s+have\\s+noted\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "vague-attribution-012",
+   "category": "vague-attribution",
+   "pattern": "\\befforts\\s+are\\s+ongoing\\b",
+   "flags": "gi",
+   "note": "vague attribution",
+   "fix": "name the source",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "conclusion-tag-001",
+   "category": "conclusion-tag",
+   "pattern": "\\bIn\\s+conclusion\\b",
+   "flags": "gi",
+   "note": "conclusion tag",
+   "fix": "cut it; end on the point",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "conclusion-tag-002",
+   "category": "conclusion-tag",
+   "pattern": "\\bIn\\s+summary\\b",
+   "flags": "gi",
+   "note": "conclusion tag",
+   "fix": "cut it; end on the point",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "conclusion-tag-003",
+   "category": "conclusion-tag",
+   "pattern": "\\bTo\\s+summarize\\b",
+   "flags": "gi",
+   "note": "conclusion tag",
+   "fix": "cut it; end on the point",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "filler-intensifier-001",
+   "category": "filler-intensifier",
+   "pattern": "\\bactually\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'actually'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-intensifier-002",
+   "category": "filler-intensifier",
+   "pattern": "\\bvery\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'very'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "off"
+  },
+  {
+   "id": "filler-intensifier-003",
+   "category": "filler-intensifier",
+   "pattern": "\\breally\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'really'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-intensifier-004",
+   "category": "filler-intensifier",
+   "pattern": "\\bquite\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'quite'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "filler-intensifier-005",
+   "category": "filler-intensifier",
+   "pattern": "\\bsomewhat\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'somewhat'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-intensifier-006",
+   "category": "filler-intensifier",
+   "pattern": "\\bbasically\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'basically'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-intensifier-007",
+   "category": "filler-intensifier",
+   "pattern": "\\bliterally\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'literally'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-intensifier-008",
+   "category": "filler-intensifier",
+   "pattern": "\\bobviously\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'obviously'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "hint"
+  },
+  {
+   "id": "filler-intensifier-009",
+   "category": "filler-intensifier",
+   "pattern": "\\bclearly\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'clearly'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "filler-intensifier-010",
+   "category": "filler-intensifier",
+   "pattern": "\\bgenuinely\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'genuinely'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "filler-intensifier-011",
+   "category": "filler-intensifier",
+   "pattern": "\\bexactly\\b",
+   "flags": "gi",
+   "note": "filler intensifier: 'exactly'",
+   "fix": "cut it",
+   "source": "ai-slop-check",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-001",
+   "category": "margin-ai-slop",
+   "pattern": "\\bas\\s+previously\\s+mentioned\\b",
+   "flags": "gi",
+   "note": "AI back-reference — trust the reader's memory or restructure",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-002",
+   "category": "margin-ai-slop",
+   "pattern": "\\bproactive\\b",
+   "flags": "gi",
+   "note": "AI buzzword — describe the actual anticipatory action",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-003",
+   "category": "margin-ai-slop",
+   "pattern": "\\bactionable\\b",
+   "flags": "gi",
+   "note": "AI buzzword — describe what can be done with it",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-004",
+   "category": "margin-ai-slop",
+   "pattern": "\\bproactively\\b",
+   "flags": "gi",
+   "note": "AI buzzword — describe what's being anticipated",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-005",
+   "category": "margin-ai-slop",
+   "pattern": "\\binnovation\\b",
+   "flags": "gi",
+   "note": "AI buzzword — name the specific new thing",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-006",
+   "category": "margin-ai-slop",
+   "pattern": "\\binsights\\b",
+   "flags": "gi",
+   "note": "AI buzzword — say what was actually learned",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-007",
+   "category": "margin-ai-slop",
+   "pattern": "\\bultimately\\b",
+   "flags": "gi",
+   "note": "AI conclusion crutch — restructure or cut",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-008",
+   "category": "margin-ai-slop",
+   "pattern": "\\bto\\s+put\\s+it\\s+simply\\b",
+   "flags": "gi",
+   "note": "AI condescension — just state it simply",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-009",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit's\\s+important\\s+to\\s+remember\\b",
+   "flags": "gi",
+   "note": "AI condescension — just state the point",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-010",
+   "category": "margin-ai-slop",
+   "pattern": "\\bremember\\s+that\\b",
+   "flags": "gi",
+   "note": "AI condescension — reader doesn't need to be told to remember",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-011",
+   "category": "margin-ai-slop",
+   "pattern": "\\bnewfound\\b",
+   "flags": "gi",
+   "note": "AI discovery language — be specific about what changed",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-012",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit\\s+cannot\\s+be\\s+overstated\\b",
+   "flags": "gi",
+   "note": "AI emphasis that overstates — just make the point",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-013",
+   "category": "margin-ai-slop",
+   "pattern": "\\bunderpins\\b",
+   "flags": "gi",
+   "note": "AI essay verb — use 'supports' or restructure",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-014",
+   "category": "margin-ai-slop",
+   "pattern": "\\band\\s+robust\\b",
+   "flags": "gi",
+   "note": "AI filler adjective pair — cut or be specific about robustness",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-015",
+   "category": "margin-ai-slop",
+   "pattern": "\\bever\\-evolving\\b",
+   "flags": "gi",
+   "note": "AI filler adjective — cut or be specific about what changed",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-016",
+   "category": "margin-ai-slop",
+   "pattern": "\\bin\\s+the\\s+world\\s+of\\b",
+   "flags": "gi",
+   "note": "AI filler opener — cut and start with the subject",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-017",
+   "category": "margin-ai-slop",
+   "pattern": "\\bbest\\s+practices\\b",
+   "flags": "gi",
+   "note": "AI filler — name the specific practices",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-018",
+   "category": "margin-ai-slop",
+   "pattern": "\\bin\\s+the\\s+realm\\s+of\\b",
+   "flags": "gi",
+   "note": "AI filler — replace with 'in' or cut entirely",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-019",
+   "category": "margin-ai-slop",
+   "pattern": "\\bamidst\\b",
+   "flags": "gi",
+   "note": "AI formality — use 'amid' or 'during'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-020",
+   "category": "margin-ai-slop",
+   "pattern": "\\bshall\\b",
+   "flags": "gi",
+   "note": "AI formality — use 'will' or restructure",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-021",
+   "category": "margin-ai-slop",
+   "pattern": "\\bthere\\s+are\\s+a\\s+few\\s+considerations\\b",
+   "flags": "gi",
+   "note": "AI hedging — just list the considerations",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-022",
+   "category": "margin-ai-slop",
+   "pattern": "\\byou\\s+may\\s+want\\s+to\\b",
+   "flags": "gi",
+   "note": "AI hedging — state the recommendation",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-023",
+   "category": "margin-ai-slop",
+   "pattern": "\\bunwavering\\b",
+   "flags": "gi",
+   "note": "AI intensity word — show consistency through evidence",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-024",
+   "category": "margin-ai-slop",
+   "pattern": "\\bembark\\b",
+   "flags": "gi",
+   "note": "AI journey language — just describe the action",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-025",
+   "category": "margin-ai-slop",
+   "pattern": "\\bspearheading\\b",
+   "flags": "gi",
+   "note": "AI leadership verb — say 'leading' or describe the role",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-026",
+   "category": "margin-ai-slop",
+   "pattern": "\\bdeep\\s+dive\\b",
+   "flags": "gi",
+   "note": "AI marketing for 'analysis' — say 'analysis'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-027",
+   "category": "margin-ai-slop",
+   "pattern": "\\ba\\s+deep\\s+dive\\b",
+   "flags": "gi",
+   "note": "AI marketing for 'analysis' — say 'analysis' or 'examination'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-028",
+   "category": "margin-ai-slop",
+   "pattern": "\\bdesigned\\s+to\\s+enhance\\b",
+   "flags": "gi",
+   "note": "AI marketing phrase — say what it actually does",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-029",
+   "category": "margin-ai-slop",
+   "pattern": "\\bunleash\\b",
+   "flags": "gi",
+   "note": "AI marketing verb — say 'enable' or 'use'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-030",
+   "category": "margin-ai-slop",
+   "pattern": "\\belevate\\b",
+   "flags": "gi",
+   "note": "AI marketing verb — say 'improve' or be specific",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-031",
+   "category": "margin-ai-slop",
+   "pattern": "\\bharness\\b",
+   "flags": "gi",
+   "note": "AI marketing verb — say 'use' or 'apply'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-032",
+   "category": "margin-ai-slop",
+   "pattern": "\\btailored\\b",
+   "flags": "gi",
+   "note": "AI marketing word — say 'customized' or 'specific to'",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-033",
+   "category": "margin-ai-slop",
+   "pattern": "\\bunlock\\s+the\\s+potential\\b",
+   "flags": "gi",
+   "note": "AI marketing — say what's actually enabled",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-034",
+   "category": "margin-ai-slop",
+   "pattern": "\\bas\\s+a\\s+professional\\b",
+   "flags": "gi",
+   "note": "AI padding — reader knows the context",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-035",
+   "category": "margin-ai-slop",
+   "pattern": "\\bmeticulous\\b",
+   "flags": "gi",
+   "note": "AI precision theater — show the care through details",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-036",
+   "category": "margin-ai-slop",
+   "pattern": "\\bunlock\\s+the\\s+secrets\\b",
+   "flags": "gi",
+   "note": "AI promotional language — describe what's actually learned",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-037",
+   "category": "margin-ai-slop",
+   "pattern": "\\bunveil\\s+the\\s+secrets\\b",
+   "flags": "gi",
+   "note": "AI promotional language — describe what's revealed",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-038",
+   "category": "margin-ai-slop",
+   "pattern": "\\bmastering\\b",
+   "flags": "gi",
+   "note": "AI promotional — 'learning' or 'understanding' is more honest",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-039",
+   "category": "margin-ai-slop",
+   "pattern": "\\bcomprehensive\\b",
+   "flags": "gi",
+   "note": "AI scope inflation — be specific about what's covered",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-040",
+   "category": "margin-ai-slop",
+   "pattern": "\\bfrom\\s+a\\s+broader\\s+perspective\\b",
+   "flags": "gi",
+   "note": "AI scope inflation — just make the broader point",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-041",
+   "category": "margin-ai-slop",
+   "pattern": "\\bpalpable\\b",
+   "flags": "gi",
+   "note": "AI sensory inflation — show the tension through evidence",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-042",
+   "category": "margin-ai-slop",
+   "pattern": "\\bstands\\s+as\\s+a\\s+beacon\\b",
+   "flags": "gi",
+   "note": "AI significance cliche — show don't tell",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-043",
+   "category": "margin-ai-slop",
+   "pattern": "\\bcrucial\\b",
+   "flags": "gi",
+   "note": "AI significance inflation — 'important' or cut entirely",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-044",
+   "category": "margin-ai-slop",
+   "pattern": "\\brevolutionize\\b",
+   "flags": "gi",
+   "note": "AI significance inflation — show don't tell",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-045",
+   "category": "margin-ai-slop",
+   "pattern": "\\btransformative\\b",
+   "flags": "gi",
+   "note": "AI significance inflation — show the transformation",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-046",
+   "category": "margin-ai-slop",
+   "pattern": "\\bat\\s+the\\s+forefront\\b",
+   "flags": "gi",
+   "note": "AI significance positioning — show leadership through evidence",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-047",
+   "category": "margin-ai-slop",
+   "pattern": "\\bvital\\b",
+   "flags": "gi",
+   "note": "AI significance word — 'important' or cut",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-048",
+   "category": "margin-ai-slop",
+   "pattern": "\\btake\\s+it\\s+to\\s+the\\s+next\\s+level\\b",
+   "flags": "gi",
+   "note": "AI significance — describe the actual improvement",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-049",
+   "category": "margin-ai-slop",
+   "pattern": "\\bin\\s+today's\\s+digital\\s+era\\b",
+   "flags": "gi",
+   "note": "AI temporal filler — cut entirely",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-050",
+   "category": "margin-ai-slop",
+   "pattern": "\\btoday's\\s+digital\\s+age\\b",
+   "flags": "gi",
+   "note": "AI temporal filler — cut entirely, reader knows when they live",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-051",
+   "category": "margin-ai-slop",
+   "pattern": "\\bin\\s+an\\s+era\\s+of\\b",
+   "flags": "gi",
+   "note": "AI temporal filler — cut or be specific",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-052",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit's\\s+crucial\\s+to\\b",
+   "flags": "gi",
+   "note": "AI throat-clearing with significance inflation — just say it",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-053",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit\\s+bears\\s+mentioning\\b",
+   "flags": "gi",
+   "note": "AI throat-clearing — just mention it",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-054",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit\\s+should\\s+be\\s+noted\\b",
+   "flags": "gi",
+   "note": "AI throat-clearing — just state the point",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-055",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit's\\s+essential\\s+to\\b",
+   "flags": "gi",
+   "note": "AI throat-clearing — just state what should be done",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-056",
+   "category": "margin-ai-slop",
+   "pattern": "\\bdive\\s+into\\b",
+   "flags": "gi",
+   "note": "AI transition crutch — just start the analysis",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-057",
+   "category": "margin-ai-slop",
+   "pattern": "\\bon\\s+the\\s+other\\s+hand\\b",
+   "flags": "gi",
+   "note": "AI transition crutch — restructure for contrast",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-058",
+   "category": "margin-ai-slop",
+   "pattern": "\\bat\\s+its\\s+core\\b",
+   "flags": "gi",
+   "note": "AI transition filler — just state the essential point",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-059",
+   "category": "margin-ai-slop",
+   "pattern": "\\btake\\s+a\\s+dive\\s+into\\b",
+   "flags": "gi",
+   "note": "AI transition — just begin the analysis",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-060",
+   "category": "margin-ai-slop",
+   "pattern": "\\bintricacies\\b",
+   "flags": "gi",
+   "note": "AI vagueness — name the specific complexities",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-061",
+   "category": "margin-ai-slop",
+   "pattern": "\\badvancements\\b",
+   "flags": "gi",
+   "note": "AI vagueness — name the specific improvements",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-062",
+   "category": "margin-ai-slop",
+   "pattern": "\\bnuances\\b",
+   "flags": "gi",
+   "note": "AI vagueness — name the specific subtleties",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-063",
+   "category": "margin-ai-slop",
+   "pattern": "\\bcountless\\b",
+   "flags": "gi",
+   "note": "AI vagueness — use a real number or 'many'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-064",
+   "category": "margin-ai-slop",
+   "pattern": "\\bresilience\\b",
+   "flags": "gi",
+   "note": "AI virtue word — show resilience through specifics",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-065",
+   "category": "margin-ai-slop",
+   "pattern": "\\blow\\-hanging\\s+fruit\\b",
+   "flags": "gi",
+   "note": "Business cliche — name the easy wins",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-066",
+   "category": "margin-ai-slop",
+   "pattern": "\\bmove\\s+the\\s+needle\\b",
+   "flags": "gi",
+   "note": "Business cliche — say what changed and by how much",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-067",
+   "category": "margin-ai-slop",
+   "pattern": "\\bstakeholders\\b",
+   "flags": "gi",
+   "note": "Business jargon — name who's affected",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-068",
+   "category": "margin-ai-slop",
+   "pattern": "\\bat\\s+the\\s+end\\s+of\\s+the\\s+day\\b",
+   "flags": "gi",
+   "note": "Cliche filler — restructure or cut",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-069",
+   "category": "margin-ai-slop",
+   "pattern": "is the kind of \\w+ that\\b",
+   "flags": "gi",
+   "note": "Cut the 'is the kind of [noun] that...' construction — replace it with a specific, personal reason tied to ...",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-070",
+   "category": "margin-ai-slop",
+   "pattern": "\\bkaleidoscope\\b",
+   "flags": "gi",
+   "note": "Dead metaphor — be specific about variety",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-071",
+   "category": "margin-ai-slop",
+   "pattern": "\\bthink\\s+outside\\s+the\\s+box\\b",
+   "flags": "gi",
+   "note": "Dead metaphor — describe the creative approach",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-072",
+   "category": "margin-ai-slop",
+   "pattern": "\\bsymphony\\b",
+   "flags": "gi",
+   "note": "Dead metaphor — name what's harmonizing",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-073",
+   "category": "margin-ai-slop",
+   "pattern": "\\bactionable\\s+insights\\b",
+   "flags": "gi",
+   "note": "Double AI buzzword — say what was learned and what to do",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-074",
+   "category": "margin-ai-slop",
+   "pattern": "\\bwhen\\s+it\\s+comes\\s+to\\b",
+   "flags": "gi",
+   "note": "Filler phrase — cut and start with the subject",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-075",
+   "category": "margin-ai-slop",
+   "pattern": "\\bthe\\s+fact\\s+that\\b",
+   "flags": "gi",
+   "note": "Filler — usually deletable",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-ai-slop-076",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit\\s+is\\s+advisable\\b",
+   "flags": "gi",
+   "note": "Hedging — state the recommendation directly",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-077",
+   "category": "margin-ai-slop",
+   "pattern": "\\bit\\s+goes\\s+without\\s+saying\\b",
+   "flags": "gi",
+   "note": "If it goes without saying, don't say it",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-078",
+   "category": "margin-ai-slop",
+   "pattern": "\\bneedless\\s+to\\s+say\\b",
+   "flags": "gi",
+   "note": "If it's needless, don't say it",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-079",
+   "category": "margin-ai-slop",
+   "pattern": "^[-*] \\*\\*[^*\\n]+:\\*\\*",
+   "flags": "gim",
+   "note": "Inline-header bullet lists ('- **Label:** restates the label...') are an AI formatting tell.",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-080",
+   "category": "margin-ai-slop",
+   "pattern": "^No \\w+( \\w+)?\\.( No \\w+( \\w+)?\\.)+",
+   "flags": "gim",
+   "note": "Manufactured punchlines: runs of clipped 'No X. No Y.' fragments stacked for false emphasis.",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-081",
+   "category": "margin-ai-slop",
+   "pattern": "not\\s+[^,.;]{3,60},\\s*it'?s\\b",
+   "flags": "gi",
+   "note": "Never write negative parallelism ('X isn't A. It's B', 'you don't need X — you need Y', 'X works for A. It ...",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-082",
+   "category": "margin-ai-slop",
+   "pattern": "\\bgame\\s+changer\\b",
+   "flags": "gi",
+   "note": "Significance inflation — show the impact instead",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-ai-slop-083",
+   "category": "margin-ai-slop",
+   "pattern": "\\bcomplexities\\b",
+   "flags": "gi",
+   "note": "Vagueness — name the specific complications",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-001",
+   "category": "margin-kill-word",
+   "pattern": "\\becosystem\\b",
+   "flags": "gi",
+   "note": "AI buzzword for 'system' — use 'system' or name it",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-002",
+   "category": "margin-kill-word",
+   "pattern": "\\bparadigm\\s+shift\\b",
+   "flags": "gi",
+   "note": "AI buzzword — describe the actual change",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-003",
+   "category": "margin-kill-word",
+   "pattern": "\\bempower\\b",
+   "flags": "gi",
+   "note": "AI marketing verb — say 'enable' or 'let'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-004",
+   "category": "margin-kill-word",
+   "pattern": "\\bstreamline\\b",
+   "flags": "gi",
+   "note": "AI marketing verb — say 'simplify' or describe the improvement",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-005",
+   "category": "margin-kill-word",
+   "pattern": "\\bempowering\\b",
+   "flags": "gi",
+   "note": "AI marketing — 'enabling' or describe the actual capability",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-006",
+   "category": "margin-kill-word",
+   "pattern": "\\bjourney\\b",
+   "flags": "gi",
+   "note": "AI metaphor for any process — name the actual process",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-kill-word-007",
+   "category": "margin-kill-word",
+   "pattern": "\\butilization\\b",
+   "flags": "gi",
+   "note": "AI nominalization — 'use' is the same word",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-008",
+   "category": "margin-kill-word",
+   "pattern": "\\bshowcasing\\b",
+   "flags": "gi",
+   "note": "AI presentation verb — say 'showing' or 'demonstrating'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-009",
+   "category": "margin-kill-word",
+   "pattern": "\\bplethora\\b",
+   "flags": "gi",
+   "note": "AI vagueness — use 'many' or a number",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-010",
+   "category": "margin-kill-word",
+   "pattern": "\\bmyriad\\b",
+   "flags": "gi",
+   "note": "AI vagueness — use a number or 'many'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-011",
+   "category": "margin-kill-word",
+   "pattern": "\\bdelved\\b",
+   "flags": "gi",
+   "note": "AI-signature verb form — use 'examined', 'explored'",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-012",
+   "category": "margin-kill-word",
+   "pattern": "\\b(exactly|genuinely|actually)\\b",
+   "flags": "gi",
+   "note": "Cut filler intensifier adverbs — 'exactly,' 'genuinely,' 'actually' — they add emphasis without adding info...",
+   "fix": null,
+   "source": "margin",
+   "tier": "hint"
+  },
+  {
+   "id": "margin-kill-word-013",
+   "category": "margin-kill-word",
+   "pattern": "\\brich\\s+tapestry\\b",
+   "flags": "gi",
+   "note": "Dead compound metaphor — be specific about interconnection",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-014",
+   "category": "margin-kill-word",
+   "pattern": "\\btapestries\\b",
+   "flags": "gi",
+   "note": "Dead metaphor plural — be specific",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-015",
+   "category": "margin-kill-word",
+   "pattern": "\\bnavigate\\s+the\\s+complexities\\b",
+   "flags": "gi",
+   "note": "Double AI tell — name the actual challenges",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-016",
+   "category": "margin-kill-word",
+   "pattern": "\\btestament\\s+to\\b",
+   "flags": "gi",
+   "note": "Significance inflation — let the evidence speak",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-017",
+   "category": "margin-kill-word",
+   "pattern": "\\brevolutionary\\b",
+   "flags": "gi",
+   "note": "Significance inflation — show the change",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "margin-kill-word-018",
+   "category": "margin-kill-word",
+   "pattern": "\\bnavigating\\b",
+   "flags": "gi",
+   "note": "Vague action verb — say what's actually being done",
+   "fix": null,
+   "source": "margin",
+   "tier": "flag"
+  },
+  {
+   "id": "opener-001",
+   "category": "opener",
+   "pattern": "\\bI\\s+hope\\s+(?:this|my)\\s+(?:email|message|note)\\s+finds\\s+you\\s+well\\b",
+   "flags": "gi",
+   "note": "stock email opener",
+   "fix": "start with why you're writing",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "opener-002",
+   "category": "opener",
+   "pattern": "\\bI\\s+hope\\s+you(?:'re|\\s+are)\\s+(?:doing\\s+)?well\\b",
+   "flags": "gi",
+   "note": "stock email opener",
+   "fix": "start with why you're writing",
+   "source": "tells",
+   "tier": "hint"
+  },
+  {
+   "id": "opener-003",
+   "category": "opener",
+   "pattern": "\\bI\\s+came\\s+across\\s+your\\s+(?:profile|work|company|post)\\b",
+   "flags": "gi",
+   "note": "stock cold opener",
+   "fix": "say what you saw and what it made you think",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "opener-004",
+   "category": "opener",
+   "pattern": "\\b(?:truly|really|deeply)\\s+resonate[sd]?\\b",
+   "flags": "gi",
+   "note": "claimed resonance with nothing behind it",
+   "fix": "name the specific thing and why it matters to you",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "negation-first-008",
+   "category": "negation-first",
+   "pattern": "\\b(?:is|are|was|isn't|aren't|wasn't)\\s+(?:not\\s+)?just\\s+(?:a|an|another|the)\\s+[^,.;]{2,40}[,;—–-]\\s*(?:it|they|this|we)(?:'s|'re|\\s+is|\\s+are)\\b",
+   "flags": "gi",
+   "note": "'not just X, it's Y' pivot",
+   "fix": "say what it is",
+   "source": "tells",
+   "tier": "hint"
+  },
+  {
+   "id": "slop-002",
+   "category": "slop",
+   "pattern": "\\bempower(?:s|ed|ing|ment)?\\b",
+   "flags": "gi",
+   "note": "marketing verb",
+   "fix": "say what people can now do",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "slop-003",
+   "category": "slop",
+   "pattern": "\\b(?:unlock|unleash|realize)\\s+(?:the\\s+|your\\s+|their\\s+)?(?:full\\s+)?potential\\b",
+   "flags": "gi",
+   "note": "potential-unlocking cliché",
+   "fix": "say what changes, with a number if you have one",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "slop-004",
+   "category": "slop",
+   "pattern": "\\bin\\s+today'?s\\s+(?:fast[- ]paced|ever[- ]changing|rapidly\\s+evolving|digital|competitive)\\s+(?:world|landscape|environment|market|age|era)\\b",
+   "flags": "gi",
+   "note": "era-setting opener",
+   "fix": "cut it; start with the point",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "slop-005",
+   "category": "slop",
+   "pattern": "\\bgame[- ]chang(?:er|ing)\\b",
+   "flags": "gi",
+   "note": "hype phrase",
+   "fix": "say what changes",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "slop-006",
+   "category": "slop",
+   "pattern": "\\b(?:seamless(?:ly)?|frictionless)\\s+(?:experience|integration|workflow)s?\\b",
+   "flags": "gi",
+   "note": "smoothness claim",
+   "fix": "say what step goes away",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "closer-001",
+   "category": "closer",
+   "pattern": "\\b(?:looking\\s+forward\\s+to\\s+(?:hearing\\s+from\\s+you|connecting)|excited\\s+to\\s+(?:connect|explore))\\b",
+   "flags": "gi",
+   "note": "stock closer",
+   "fix": "end with the one question you want answered",
+   "source": "tells",
+   "tier": "flag"
+  },
+  {
+   "id": "closer-002",
+   "category": "closer",
+   "pattern": "\\bwould\\s+(?:you\\s+)?(?:love|be\\s+happy)\\s+to\\s+(?:connect|chat|explore)\\b",
+   "flags": "gi",
+   "note": "stock closer",
+   "fix": "propose a specific time or a specific question",
+   "source": "tells",
+   "tier": "flag"
+  }
+ ]
+}

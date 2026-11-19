@@ -249,6 +249,38 @@ const journeys = {
     await ctx.shot("palette");
   },
 
+  async "ai-tells"(ctx) {
+    const page = ctx.page;
+    const tells = page.locator('.ProseMirror .rule-violation[data-rule-id^="tells:"]');
+    await page.locator(".ProseMirror p").last().click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.insertText("I wanted to reach out to delve into the rich tapestry of logistics.");
+    await page.waitForTimeout(900); // the rescan runs 600ms after the last edit
+    const marked = await tells.evaluateAll((els) => els.map((el) => el.textContent));
+    for (const phrase of ["I wanted to reach out", "rich tapestry"]) {
+      if (!marked.includes(phrase)) throw new Error(`"${phrase}" not marked; marked: ${JSON.stringify(marked)}`);
+    }
+    await ctx.shot("marked");
+    await tells.filter({ hasText: "I wanted to reach out" }).first().click();
+    const card = page.getByRole("dialog", { name: /AI tell/ });
+    await card.waitFor();
+    await card.getByText("[just reach out]", { exact: false }).waitFor();
+    await ctx.shot("card");
+    await page.keyboard.press("Escape");
+    await page.mouse.move(720, 4); // the toolbar shows when the pointer reaches the top edge
+    await page.getByRole("button", { name: "Reading settings" }).click();
+    const toggle = page.getByRole("switch", { name: "AI tells" });
+    await toggle.click();
+    await page.waitForTimeout(200);
+    if ((await tells.count()) > 0) throw new Error(`${await tells.count()} tells still marked with the lens off`);
+    await ctx.shot("lens-off");
+    await toggle.click();
+    await page.waitForTimeout(200);
+    if ((await tells.count()) === 0) throw new Error("tells did not come back with the lens on");
+    await ctx.shot("lens-on");
+  },
+
   async "highlight-only"(ctx) {
     const bar = await selectionToolbar(ctx.page, "fast-paced landscape");
     await bar.getByRole("button", { name: "Highlight" }).click();

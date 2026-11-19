@@ -8,6 +8,7 @@ export interface Settings {
   lineSpacing: "compact" | "default" | "relaxed";
   readerWidth: "narrow" | "default" | "wide";
   defaultHighlightColor: "yellow" | "green" | "blue" | "pink" | "orange";
+  aiTells: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lineSpacing: "default",
   readerWidth: "default",
   defaultHighlightColor: "yellow",
+  aiTells: true,
 };
 
 const STORAGE_KEY = "margin-settings";

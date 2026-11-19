@@ -42,6 +42,28 @@ describe("ReaderControls", () => {
     }
   });
 
+  it("turns the AI tells lens off and on", async () => {
+    vi.useFakeTimers();
+    try {
+      const setSetting = vi.fn();
+      renderControls(setSetting);
+
+      await act(async () => {
+        screen.getByRole("button", { name: "Reading settings" }).click();
+        vi.runAllTimers();
+      });
+
+      const toggle = screen.getByRole("switch", { name: "AI tells" });
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      await act(async () => {
+        toggle.click();
+      });
+      expect(setSetting).toHaveBeenCalledWith("aiTells", false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("closes on Escape", async () => {
     vi.useFakeTimers();
     try {

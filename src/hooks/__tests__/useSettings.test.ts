@@ -32,6 +32,7 @@ const DEFAULTS = {
   lineSpacing: "default",
   readerWidth: "default",
   defaultHighlightColor: "yellow",
+  aiTells: true,
 };
 
 describe("useSettings", () => {

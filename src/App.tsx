@@ -12,12 +12,12 @@ import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { RuleViolationPopover } from "@/components/editor/RuleViolationPopover";
 import {
-  scanDocForRules,
   setRuleScanFlash,
   setRuleScanFresh,
   setRuleScanMatches,
   setRuleScanOpen,
 } from "@/components/editor/extensions/rule-scan";
+import { scanDocForMatches, tellAsWritingRule, isTellRuleId } from "@/components/editor/extensions/tells-scan";
 import { ExportAnnotationsPopover } from "@/components/editor/ExportAnnotationsPopover";
 import { useDocument } from "@/hooks/useDocument";
 import { useHighlightShortcut } from "@/hooks/useHighlightShortcut";
@@ -892,6 +892,8 @@ export default function App() {
   // corrections come back as underlines in the text being read.
   const writingRulesRef = useRef<WritingRule[]>([]);
   writingRulesRef.current = writingRules;
+  const aiTellsRef = useRef(settings.aiTells);
+  aiTellsRef.current = settings.aiTells;
   useEffect(() => {
     let cancelled = false;
     getWritingRules()
@@ -961,7 +963,7 @@ export default function App() {
     let timer: number | null = null;
     const runScan = () => {
       if (editor.isDestroyed) return;
-      const matches = scanDocForRules(editor.state.doc, writingRulesRef.current);
+      const matches = scanDocForMatches(editor.state.doc, writingRulesRef.current, { aiTells: aiTellsRef.current });
       let tr = setRuleScanMatches(editor.state.tr, matches);
       const fresh = freshRuleIdRef.current;
       if (fresh) {
@@ -990,7 +992,7 @@ export default function App() {
       editor.off("transaction", onTransaction);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [editor, writingRules, refreshCaught]);
+  }, [editor, writingRules, settings.aiTells, refreshCaught]);
 
   useEffect(() => {
     const onRuleViolation = (e: Event) => {
@@ -1016,7 +1018,7 @@ export default function App() {
         setRulePopover(null);
         return;
       }
-      const rule = writingRulesRef.current.find((r) => r.id === ruleId);
+      const rule = writingRulesRef.current.find((r) => r.id === ruleId) ?? tellAsWritingRule(ruleId);
       if (rule)
         setRulePopover({
           rule,
@@ -2127,7 +2129,8 @@ export default function App() {
           to={rulePopover.to}
           matched={rulePopover.matched}
           allRanges={rulePopover.allRanges}
-          onApply={(from, to, replacement) => {
+          // A tell's fix is advice ("cut it"), not replacement text.
+          onApply={isTellRuleId(rulePopover.rule.id) ? undefined : (from, to, replacement) => {
             const ed = editorRef.current;
             if (!ed || ed.isDestroyed) return;
             // Apply only if the flagged text still sits at the same range —
@@ -2141,13 +2144,13 @@ export default function App() {
             ed.chain().focus().insertContentAt({ from, to }, fixed).run();
             const rescan = setRuleScanMatches(
               ed.state.tr,
-              scanDocForRules(ed.state.doc, writingRulesRef.current),
+              scanDocForMatches(ed.state.doc, writingRulesRef.current, { aiTells: aiTellsRef.current }),
             );
             rescan.setMeta("addToHistory", false);
             ed.view.dispatch(rescan);
             setRulePopover(null);
           }}
-          onApplyAll={(replacement) => {
+          onApplyAll={isTellRuleId(rulePopover.rule.id) ? undefined : (replacement) => {
             const ed = editorRef.current;
             if (!ed || ed.isDestroyed) return;
             // Walk ranges back-to-front so earlier positions stay valid.
@@ -2161,7 +2164,7 @@ export default function App() {
             ed.view.dispatch(tr);
             const rescan = setRuleScanMatches(
               ed.state.tr,
-              scanDocForRules(ed.state.doc, writingRulesRef.current),
+              scanDocForMatches(ed.state.doc, writingRulesRef.current, { aiTells: aiTellsRef.current }),
             );
             rescan.setMeta("addToHistory", false);
             ed.view.dispatch(rescan);
