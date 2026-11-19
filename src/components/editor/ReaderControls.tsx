@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { Settings } from "@/hooks/useSettings";
 import { useAnimatedPresence } from "@/hooks/useAnimatedPresence";
 import { SegmentedControl } from "@/components/settings/SegmentedControl";
+import { ToggleSwitch } from "@/components/settings/ToggleSwitch";
 import {
   FONT_FAMILY_OPTIONS,
   FONT_SIZE_OPTIONS,
@@ -188,6 +189,14 @@ export function ReaderControls({ settings, setSetting }: ReaderControlsProps) {
                 value={settings.readerWidth}
                 onChange={(v) => setSetting("readerWidth", v)}
                 ariaLabel="Reader width"
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span id="reader-controls-ai-tells" style={rowLabel}>AI tells</span>
+              <ToggleSwitch
+                checked={settings.aiTells}
+                onChange={(v) => setSetting("aiTells", v)}
+                ariaLabelledBy="reader-controls-ai-tells"
               />
             </div>
             <div

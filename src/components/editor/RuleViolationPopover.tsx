@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import type { WritingRule } from "@/lib/tauri-commands";
 import { displayRuleText } from "@/components/style-memory/rules-model";
+import { TELLS_SOURCE } from "./extensions/tells-scan";
 
 interface Props {
   rule: WritingRule;
@@ -29,8 +30,16 @@ const SEVERITY_LABEL: Record<string, string> = {
   "nice-to-fix": "Nice to fix",
 };
 
+function severityLabel(rule: WritingRule): string {
+  if (rule.source === TELLS_SOURCE) return "AI tell";
+  return SEVERITY_LABEL[rule.severity] ?? rule.severity;
+}
+
 function categoryLabel(category: string): string {
-  return category.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return category
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/\bAi\b/g, "AI");
 }
 
 /**
@@ -223,7 +232,7 @@ export function RuleViolationPopover({
         ? "var(--color-text-tertiary)"
         : "var(--color-warning)";
 
-  const ariaLabel = `${SEVERITY_LABEL[rule.severity] ?? rule.severity}: “${matched}”`;
+  const ariaLabel = `${severityLabel(rule)}: “${matched}”`;
   const popoverWidth = 300;
   const laneFits = laneX !== null && laneX + popoverWidth <= window.innerWidth - 8;
   // Marginalia never covers its subject — when the lane can't fit the card
@@ -391,7 +400,7 @@ function RuleCardBody({
         <span
           className={`rule-violation-popover-severity rule-violation-popover-severity--${rule.severity}`}
         >
-          {SEVERITY_LABEL[rule.severity] ?? rule.severity}
+          {severityLabel(rule)}
         </span>
         <span className="rule-violation-popover-category">
           {categoryLabel(rule.category)}
@@ -415,7 +424,9 @@ function RuleCardBody({
             </button>
           ) : (
             <div className="rule-violation-popover-suggestion">
-              Try: “{rule.exampleAfter}”
+              {rule.source === TELLS_SOURCE
+                ? `Try: ${rule.exampleAfter}`
+                : `Try: “${rule.exampleAfter}”`}
             </div>
           )}
           {onApply && onApplyAll && total > 1 && (
