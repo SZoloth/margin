@@ -268,4 +268,30 @@ describe("useAnnotations", () => {
       });
     });
   });
+
+  describe("mergeHighlightInto", () => {
+    it("moves the merged highlight's notes to the survivor instead of dropping them", async () => {
+      mockInvoke.mockResolvedValue(undefined);
+      const { result } = renderHook(() => useAnnotations());
+      act(() => {
+        result.current.restoreFromCache(
+          "doc-1",
+          [fakeHighlight("keep", "doc-1"), fakeHighlight("gone", "doc-1")],
+          [fakeNote("n1", "keep"), fakeNote("n2", "gone")] as never,
+        );
+      });
+
+      await act(async () => {
+        await result.current.mergeHighlightInto("gone", "keep");
+      });
+
+      expect(mockInvoke).toHaveBeenCalledWith("merge_highlight_into", { sourceId: "gone", targetId: "keep" });
+      expect(result.current.highlights.map((h) => h.id)).toEqual(["keep"]);
+      expect(result.current.marginNotes.map((n) => [n.id, n.highlight_id])).toEqual([
+        ["n1", "keep"],
+        ["n2", "keep"],
+      ]);
+    });
+  });
 });
+
