@@ -112,6 +112,47 @@ fn remove_highlight(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Fold one highlight into another on the same document: its notes move to
+/// the survivor, then the row is deleted. Used when a new highlight covers
+/// several existing ones, so their notes never cascade away with the row.
+fn merge_highlight(conn: &Connection, source_id: &str, target_id: &str, now: i64) -> Result<String, String> {
+    if source_id == target_id {
+        return Err("cannot merge a highlight into itself".to_string());
+    }
+    let source_doc = document_id_for_highlight(conn, source_id)?;
+    let target_doc = document_id_for_highlight(conn, target_id)?;
+    if source_doc != target_doc {
+        return Err("highlights belong to different documents".to_string());
+    }
+    conn.execute(
+        "UPDATE margin_notes SET highlight_id = ?2, updated_at = ?3 WHERE highlight_id = ?1",
+        rusqlite::params![source_id, target_id, now],
+    )
+    .map_err(|e| e.to_string())?;
+    // The source's live feedback row now describes notes that moved; drop it
+    // and rebuild the survivor's from its full set of notes.
+    let dropped = conn
+        .execute(
+            "DELETE FROM corrections
+             WHERE highlight_id = ?1 AND synthesized_at IS NULL AND session_id = 'continuous'",
+            rusqlite::params![source_id],
+        )
+        .map_err(|e| e.to_string())?;
+    let target_has_feedback: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM corrections
+             WHERE highlight_id = ?1 AND synthesized_at IS NULL AND session_id = 'continuous')",
+            rusqlite::params![target_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    remove_highlight(conn, source_id)?;
+    if dropped > 0 || target_has_feedback {
+        sync_continuous_feedback(conn, target_id, None, None, now)?;
+    }
+    Ok(source_doc)
+}
+
 #[cfg(test)]
 fn insert_margin_note(
     conn: &Connection,
@@ -308,6 +349,20 @@ pub async fn delete_highlight(state: tauri::State<'_, DbPool>, id: String) -> Re
 }
 
 #[tauri::command]
+pub async fn merge_highlight_into(
+    state: tauri::State<'_, DbPool>,
+    source_id: String,
+    target_id: String,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let doc_id = merge_highlight(&tx, &source_id, &target_id, now_millis())?;
+    touch_document(&tx, &doc_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn create_margin_note(
     state: tauri::State<'_, DbPool>,
     highlight_id: String,
@@ -474,7 +529,17 @@ mod tests {
              created_at INTEGER NOT NULL,
              updated_at INTEGER NOT NULL
          );
-         CREATE INDEX idx_margin_notes_highlight ON margin_notes(highlight_id);"
+         CREATE INDEX idx_margin_notes_highlight ON margin_notes(highlight_id);
+         CREATE TABLE corrections (
+             id TEXT PRIMARY KEY, highlight_id TEXT NOT NULL, document_id TEXT NOT NULL,
+             session_id TEXT NOT NULL, original_text TEXT NOT NULL, prefix_context TEXT,
+             suffix_context TEXT, extended_context TEXT, notes_json TEXT NOT NULL,
+             document_title TEXT, document_source TEXT NOT NULL, document_path TEXT,
+             category TEXT, highlight_color TEXT NOT NULL, created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL, writing_type TEXT, polarity TEXT,
+             synthesized_at INTEGER, feedback_type TEXT, suggested_edit TEXT,
+             accepted_at INTEGER, rationale TEXT
+         );"
     }
 
     fn setup_db() -> Connection {
@@ -820,5 +885,66 @@ mod tests {
         let ids = vec!["nonexistent".to_string()];
         let count = bulk_mark_highlights_exported(&conn, &ids, 5000).unwrap();
         assert_eq!(count, 0);
+    }
+
+    // === Merge tests ===
+
+    fn notes_for(conn: &Connection, highlight_id: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT content FROM margin_notes WHERE highlight_id = ?1 ORDER BY id")
+            .unwrap();
+        stmt.query_map([highlight_id], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+    }
+
+    #[test]
+    fn merging_highlights_keeps_every_note() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "keep", "doc1", "yellow", "one", 0, 3, None, None, 1000).unwrap();
+        insert_highlight(&conn, "gone", "doc1", "yellow", "two", 4, 7, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "keep", "first", 1000).unwrap();
+        insert_margin_note(&conn, "n2", "gone", "second", 1000).unwrap();
+        insert_margin_note(&conn, "n3", "gone", "third", 1000).unwrap();
+
+        merge_highlight(&conn, "gone", "keep", 2000).unwrap();
+
+        assert_eq!(highlight_count(&conn), 1);
+        assert_eq!(notes_for(&conn, "keep"), vec!["first", "second", "third"]);
+    }
+
+    #[test]
+    fn merging_moves_live_feedback_to_the_survivor() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_highlight(&conn, "keep", "doc1", "yellow", "one", 0, 3, None, None, 1000).unwrap();
+        insert_highlight(&conn, "gone", "doc1", "yellow", "two", 4, 7, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n2", "gone", "too vague", 1000).unwrap();
+        sync_continuous_feedback(&conn, "gone", None, None, 1000).unwrap();
+
+        merge_highlight(&conn, "gone", "keep", 2000).unwrap();
+
+        let rows: Vec<(String, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT highlight_id, notes_json FROM corrections WHERE session_id = 'continuous'")
+                .unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "keep");
+        assert!(rows[0].1.contains("too vague"));
+    }
+
+    #[test]
+    fn merging_across_documents_is_refused() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_doc(&conn, "doc2");
+        insert_highlight(&conn, "a", "doc1", "yellow", "one", 0, 3, None, None, 1000).unwrap();
+        insert_highlight(&conn, "b", "doc2", "yellow", "two", 0, 3, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n1", "a", "note", 1000).unwrap();
+
+        assert!(merge_highlight(&conn, "a", "b", 2000).is_err());
+        assert_eq!(notes_for(&conn, "a"), vec!["note"]);
+        assert_eq!(highlight_count(&conn), 2);
     }
 }

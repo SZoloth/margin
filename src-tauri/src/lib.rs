@@ -79,6 +79,7 @@ pub fn run() {
             commands::annotations::get_highlights,
             commands::annotations::update_highlight,
             commands::annotations::delete_highlight,
+            commands::annotations::merge_highlight_into,
             commands::annotations::create_margin_note,
             commands::annotations::get_margin_notes,
             commands::annotations::update_margin_note,

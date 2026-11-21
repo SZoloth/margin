@@ -224,6 +224,13 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     highlights = highlights.filter((h) => h.id !== a.id);
   },
 
+  merge_highlight_into: (a) => {
+    for (const n of marginNotes) {
+      if (n.highlight_id === a.sourceId) n.highlight_id = a.targetId as string;
+    }
+    highlights = highlights.filter((h) => h.id !== a.sourceId);
+  },
+
   delete_all_highlights_for_document: (a) => {
     highlights = highlights.filter((h) => h.document_id !== a.documentId);
   },

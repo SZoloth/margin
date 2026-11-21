@@ -1089,9 +1089,11 @@ export default function App() {
           ids.push(highlightId);
           markOps.push({ from: range.from, to: range.to, color, id: highlightId });
 
-          // Other fully-covered rows: their marks are overwritten — delete them.
+          // Other fully-covered rows: their marks are overwritten. Fold each
+          // into the new highlight so their notes move over instead of
+          // cascading away with the row.
           for (const deadId of plan.deleteIds) {
-            await annotationsRef.current.deleteHighlight(deadId);
+            await annotationsRef.current.mergeHighlightInto(deadId, highlightId);
             knownIds.delete(deadId);
           }
 

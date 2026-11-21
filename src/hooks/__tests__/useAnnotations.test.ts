@@ -276,7 +276,7 @@ describe("useAnnotations", () => {
       act(() => {
         result.current.restoreFromCache(
           "doc-1",
-          [fakeHighlight("keep", "doc-1"), fakeHighlight("gone", "doc-1")],
+          [fakeHighlight("keep", "doc-1"), fakeHighlight("gone", "doc-1")] as never,
           [fakeNote("n1", "keep"), fakeNote("n2", "gone")] as never,
         );
       });
