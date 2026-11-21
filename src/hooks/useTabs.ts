@@ -28,6 +28,8 @@ export interface UseTabsReturn {
   cancelCloseTab: () => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   getCachedTab: (id: string) => TabCache | undefined;
+  /** The open tab holding this document or file, if any. */
+  findTabFor: (q: { documentId?: string; filePath?: string }) => string | null;
   snapshotActive: () => void;
   updateActiveTabDirty: (isDirty: boolean) => void;
   updateActiveTabTitle: (title: string) => void;
@@ -160,6 +162,7 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
                 document: doc,
                 content,
                 filePath: doc.file_path ?? null,
+                isDirty: false,
                 highlights: [],
                 marginNotes: [],
                 annotationsLoaded: false,
@@ -187,6 +190,7 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
       document: data.document,
       content: data.content,
       filePath: data.filePath,
+      isDirty: data.isDirty,
       highlights: data.highlights,
       marginNotes: data.marginNotes,
       annotationsLoaded: data.annotationsLoaded,
@@ -194,10 +198,33 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
     });
   }, []);
 
+  // A tab whose cache carries unsaved edits. The active tab's live edits are
+  // in the editor, not the cache, so it never counts here.
+  const holdsDraft = (tab: Tab) =>
+    tab.id !== activeTabIdRef.current &&
+    (tab.isDirty || tabCaches.current.get(tab.id)?.isDirty === true);
+
+  const findTabFor = useCallback(
+    ({ documentId, filePath }: { documentId?: string; filePath?: string }): string | null => {
+      const match = tabs.find(
+        (t) =>
+          (documentId !== undefined && t.documentId === documentId) ||
+          (filePath !== undefined && tabCaches.current.get(t.id)?.filePath === filePath),
+      );
+      return match?.id ?? null;
+    },
+    [tabs],
+  );
+
   const openTab = useCallback((doc: Document, content: string, filePath: string | null) => {
     // Check for existing tab with same document
     setTabs((prev) => {
       const existing = prev.find((t) => t.documentId === doc.id);
+      if (existing && holdsDraft(existing)) {
+        setActiveTabId(existing.id);
+        persistTabs(prev, existing.id);
+        return prev;
+      }
       if (existing) {
         setActiveTabId(existing.id);
         // Update cache with fresh content
@@ -205,13 +232,16 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
           document: doc,
           content,
           filePath,
+          isDirty: false,
           highlights: [],
           marginNotes: [],
           annotationsLoaded: false,
           scrollPosition: 0,
         });
         persistTabs(prev, existing.id);
-        return prev.map((t) => t.id === existing.id ? { ...t, title: doc.title ?? "Untitled", isDirty: false } : t);
+        // A fresh load from disk is clean; the active tab keeps its live flag.
+        const isDirty = existing.id === activeTabIdRef.current ? existing.isDirty : false;
+        return prev.map((t) => t.id === existing.id ? { ...t, title: doc.title ?? "Untitled", isDirty } : t);
       }
 
       const newTab: Tab = {
@@ -226,6 +256,7 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
         document: doc,
         content,
         filePath,
+        isDirty: false,
         highlights: [],
         marginNotes: [],
         annotationsLoaded: false,
@@ -244,29 +275,40 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
       const currentActiveId = activeTabIdRef.current;
       // Dedup: if doc is already open, just switch to it
       const existing = prev.find((t) => t.documentId === doc.id);
+      if (existing && holdsDraft(existing)) {
+        setActiveTabId(existing.id);
+        persistTabs(prev, existing.id);
+        return prev;
+      }
       if (existing) {
         setActiveTabId(existing.id);
         tabCaches.current.set(existing.id, {
           document: doc,
           content,
           filePath,
+          isDirty: false,
           highlights: [],
           marginNotes: [],
           annotationsLoaded: false,
           scrollPosition: 0,
         });
         persistTabs(prev, existing.id);
-        return prev.map((t) => t.id === existing.id ? { ...t, title: doc.title ?? "Untitled", isDirty: false } : t);
+        // A fresh load from disk is clean; the active tab keeps its live flag.
+        const isDirty = existing.id === activeTabIdRef.current ? existing.isDirty : false;
+        return prev.map((t) => t.id === existing.id ? { ...t, title: doc.title ?? "Untitled", isDirty } : t);
       }
 
-      // Replace the active tab's content
+      // Replace the active tab's content, unless it holds unsaved edits:
+      // then the document opens in a new tab and the draft stays put.
       if (currentActiveId) {
         const activeIdx = prev.findIndex((t) => t.id === currentActiveId);
-        if (activeIdx !== -1) {
+        const active = prev[activeIdx];
+        if (active && !active.isDirty) {
           tabCaches.current.set(currentActiveId, {
             document: doc,
             content,
             filePath,
+            isDirty: false,
             highlights: [],
             marginNotes: [],
             annotationsLoaded: false,
@@ -292,6 +334,7 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
         document: doc,
         content,
         filePath,
+        isDirty: false,
         highlights: [],
         marginNotes: [],
         annotationsLoaded: false,
@@ -437,6 +480,7 @@ export function useTabs({ snapshotFn, onFileMissing, onLastTabClosed }: UseTabsO
     cancelCloseTab,
     reorderTabs,
     getCachedTab,
+    findTabFor,
     snapshotActive,
     updateActiveTabDirty,
     updateActiveTabTitle,

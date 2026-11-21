@@ -269,7 +269,7 @@ export default function App() {
       prevDocIdRef.current = cache.document.id;
     }
 
-    doc.restoreFromCache(cache.document, cache.content, cache.filePath, false);
+    doc.restoreFromCache(cache.document, cache.content, cache.filePath, cache.isDirty);
 
     if (cache.annotationsLoaded) {
       annotations.restoreFromCache(cache.document!.id, cache.highlights, cache.marginNotes);
@@ -1880,6 +1880,13 @@ export default function App() {
         return;
       }
 
+      // Already open in another tab: show it and its draft, don't reload.
+      const openTabId = tabsHook.findTabFor({ documentId: recentDoc.id });
+      if (openTabId) {
+        tabsHook.switchTab(openTabId);
+        return;
+      }
+
       // Snapshot current tab BEFORE changing the document —
       // after openRecentDocument, live state will reflect the new doc
       tabsHook.snapshotActive();
@@ -1912,6 +1919,12 @@ export default function App() {
       onSelectRecentDoc={handleSelectRecentDoc}
       onExport={() => setShowExportPopover(true)}
       onOpenFilePath={(path: string, newTab: boolean) => {
+        // Already open: show that tab and its draft instead of reloading from disk.
+        const openTabId = tabsHook.findTabFor({ filePath: path });
+        if (openTabId) {
+          tabsHook.switchTab(openTabId);
+          return;
+        }
         openAsNewTabRef.current = newTab;
         tabsHook.snapshotActive();
         void doc.openFilePath(path);

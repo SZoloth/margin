@@ -7,6 +7,7 @@ function cache(content: string, filePath: string | null): TabCache {
     document: null,
     content,
     filePath,
+    isDirty: true,
     highlights: [],
     marginNotes: [],
     annotationsLoaded: false,
