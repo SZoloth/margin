@@ -418,10 +418,10 @@ func GenerateWritingGuardPy(rules []db.WritingRule) string {
 		if r.Severity == "must-fix" && r.Category == "kill-words" {
 			killWords = append(killWords, r.RuleText)
 		}
-		if r.Category == "heading-patterns" && r.Severity == "must-fix" && r.ExampleBefore != nil {
+		if r.Category == "heading-patterns" && r.Severity == "must-fix" && r.ExampleBefore != nil && isSafePattern(*r.ExampleBefore) {
 			headingPatterns = append(headingPatterns, [2]string{*r.ExampleBefore, r.RuleText})
 		}
-		if r.DetectionPattern != nil && *r.DetectionPattern != "" {
+		if r.DetectionPattern != nil && *r.DetectionPattern != "" && isSafePattern(*r.DetectionPattern) {
 			if r.Category == "prohibition" {
 				hardPatterns = append(hardPatterns, [2]string{*r.DetectionPattern, r.RuleText})
 			} else {
