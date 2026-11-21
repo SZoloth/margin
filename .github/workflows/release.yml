@@ -99,7 +99,8 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN_PATH
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        # v0.6.2. Pinned to a commit: this step gets the updater and Apple signing secrets.
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: "Developer ID Application: Samuel Zoloth (R2N63SHFK7)"
