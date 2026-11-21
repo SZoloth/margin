@@ -88,8 +88,9 @@ ${diff_content}"
 
 # --- Invoke Claude Code CLI ---
 
-# Use --print for non-interactive single-shot output
-claude_output=$(echo "$review_prompt" | claude --print 2>/dev/null) || {
+# --print for single-shot output. The prompt holds the diff, which anyone
+# opening a PR writes, so run with no tools, no MCP servers and no settings.
+claude_output=$(echo "$review_prompt" | claude --print --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence 2>/dev/null) || {
   echo '{"status":"warn","findings":[{"file":".harness/adapters/claude-code.sh","line":0,"severity":"warning","message":"Claude Code CLI invocation failed","rule":"adapter-error"}],"reviewed_at":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","adapter":"claude-code"}'
   exit 0
 }

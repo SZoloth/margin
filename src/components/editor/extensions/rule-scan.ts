@@ -1,4 +1,5 @@
 import { Extension } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
@@ -149,6 +150,46 @@ function buildDecorations(state: EditorState, matches: RuleMatch[], s: DecoState
   return DecorationSet.create(state.doc, decos);
 }
 
+/**
+ * Carry matches across an edit so clicks between scans see where each match
+ * now sits. A match whose text the edit touched is dropped until the next
+ * scan finds it again.
+ */
+function mapMatches(matches: RuleMatch[], tr: Transaction): RuleMatch[] {
+  const mapped: RuleMatch[] = [];
+  for (const m of matches) {
+    const from = tr.mapping.mapResult(m.from, 1);
+    const to = tr.mapping.mapResult(m.to, -1);
+    if (from.deletedAcross || to.deletedAcross || to.pos - from.pos !== m.to - m.from) continue;
+    mapped.push({ ...m, from: from.pos, to: to.pos });
+  }
+  return mapped;
+}
+
+/**
+ * Replace every current match of one rule in a single undoable step. Scans
+ * the live document rather than trusting ranges captured when a card opened,
+ * so an edit in between can't redirect the replacement onto other text.
+ */
+export function replaceAllRuleMatches(
+  editor: Editor,
+  ruleId: string,
+  scan: (doc: PMNode) => RuleMatch[],
+  replacementFor: (current: string) => string,
+): number {
+  const ranges = scan(editor.state.doc)
+    .filter((m) => m.ruleId === ruleId)
+    .sort((a, b) => b.from - a.from);
+  if (ranges.length === 0) return 0;
+  let tr = editor.state.tr;
+  for (const r of ranges) {
+    tr = tr.insertText(replacementFor(tr.doc.textBetween(r.from, r.to, "", "")), r.from, r.to);
+  }
+  tr.setMeta("addToHistory", true);
+  editor.view.dispatch(tr);
+  return ranges.length;
+}
+
 /** Dispatch updated matches into the scan plugin. */
 export function setRuleScanMatches(tr: Transaction, matches: RuleMatch[]): Transaction {
   return tr.setMeta(ruleScanKey, { ...(tr.getMeta(ruleScanKey) ?? {}), matches } satisfies RuleScanMeta);
@@ -211,7 +252,7 @@ export const RuleScan = Extension.create({
               r ? { from: tr.mapping.map(r.from), to: tr.mapping.map(r.to) } : null;
             return {
               set: old.set.map(tr.mapping, tr.doc),
-              matches: old.matches,
+              matches: mapMatches(old.matches, tr),
               open: mapRange(old.open),
               fresh: old.fresh,
               flash: mapRange(old.flash),

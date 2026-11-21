@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { getSchema } from "@tiptap/core";
+import { Editor, getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import { scanDocForRules } from "../extensions/rule-scan";
+import { RuleScan, replaceAllRuleMatches, scanDocForRules, setRuleScanMatches } from "../extensions/rule-scan";
 import type { WritingRule } from "@/lib/tauri-commands";
 
 const schema = getSchema([StarterKit]);
@@ -127,6 +127,53 @@ describe("RuleScan fresh and flash", () => {
     expect(after.some((s) => s.classList.contains("rule-violation--fresh"))).toBe(false);
     expect(after[1]!.hasAttribute("data-flash")).toBe(true);
     expect(after[0]!.hasAttribute("data-flash")).toBe(false);
+    editor.destroy();
+  });
+});
+
+describe("rule matches after an edit, before the next scan", () => {
+  function editorWithMatches(html: string) {
+    const editor = new Editor({ extensions: [StarterKit, RuleScan], content: html });
+    const tr = setRuleScanMatches(editor.state.tr, scanDocForRules(editor.state.doc, [rule({})]));
+    editor.view.dispatch(tr);
+    return editor;
+  }
+
+  it("a click reports the ranges where the matches now sit", () => {
+    const editor = editorWithMatches("<p>leverage once and leverage twice</p>");
+    editor.view.dispatch(editor.state.tr.insertText("We now ", 1));
+
+    let detail: { allRanges: { from: number; to: number }[] } | null = null;
+    const onViolation = (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    };
+    window.addEventListener("margin:rule-violation", onViolation);
+    const span = editor.view.dom.querySelector(".rule-violation") as HTMLElement;
+    const pos = editor.view.posAtDOM(span, 0);
+    editor.view.someProp("handleClick", (f) =>
+      f(editor.view, pos, { target: span } as unknown as MouseEvent),
+    );
+    window.removeEventListener("margin:rule-violation", onViolation);
+
+    expect(detail).not.toBeNull();
+    const texts = detail!.allRanges.map((r) => editor.state.doc.textBetween(r.from, r.to));
+    expect(texts).toEqual(["leverage", "leverage"]);
+    editor.destroy();
+  });
+
+  it("Replace All rewrites only the rule's current matches", () => {
+    const editor = editorWithMatches("<p>leverage once and leverage twice</p>");
+    editor.view.dispatch(editor.state.tr.insertText("Do not touch ", 1));
+
+    const count = replaceAllRuleMatches(
+      editor,
+      "r1",
+      (d) => scanDocForRules(d, [rule({})]),
+      () => "use",
+    );
+
+    expect(count).toBe(2);
+    expect(editor.getText()).toBe("Do not touch use once and use twice");
     editor.destroy();
   });
 });

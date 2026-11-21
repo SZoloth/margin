@@ -207,3 +207,36 @@ describe("useDocument — isLoading with overlapping loads", () => {
     expect(result.current.isLoading).toBe(false);
   });
 });
+
+describe("useDocument — failed writes", () => {
+  it("reports failure and keeps the document dirty when the write fails", async () => {
+    const { saveFile } = await import("@/lib/tauri-commands");
+    vi.mocked(saveFile).mockRejectedValueOnce(new Error("read-only file system"));
+
+    const { result } = renderHook(() => useDocument());
+    act(() => {
+      result.current.restoreFromCache(makeTestDoc(), "unsaved edits", TEST_PATH, true);
+    });
+
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.saveCurrentFile();
+    });
+
+    expect(saved).toBe(false);
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  it("reports success after a write", async () => {
+    const { result } = renderHook(() => useDocument());
+    act(() => {
+      result.current.restoreFromCache(makeTestDoc(), "edits", TEST_PATH, true);
+    });
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.saveCurrentFile();
+    });
+    expect(saved).toBe(true);
+    expect(result.current.isDirty).toBe(false);
+  });
+});

@@ -29,6 +29,28 @@ describe("CommandPalette browse action", () => {
       expect(onOpenFilePath).toHaveBeenCalledWith("/Users/reader/Documents/notes.md", false),
     );
   });
+
+  it("opens the chosen file in a new tab when the palette was opened from the new-tab button", async () => {
+    openFileDialog.mockResolvedValue("/Users/reader/Documents/other.md");
+    const onOpenFilePath = vi.fn();
+    render(
+      <CommandPalette
+        isOpen
+        openForNewTab
+        onClose={vi.fn()}
+        recentDocs={[]}
+        onSelectRecentDoc={vi.fn()}
+        onOpenFilePath={onOpenFilePath}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("option", { name: /Browse files/ }));
+
+    await waitFor(() =>
+      expect(onOpenFilePath).toHaveBeenCalledWith("/Users/reader/Documents/other.md", true),
+    );
+  });
 });
 
 describe("CommandPalette Writing rules action", () => {

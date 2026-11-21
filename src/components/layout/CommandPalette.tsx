@@ -125,7 +125,7 @@ export function CommandPalette({
       label: "Browse files…",
       shortcut: [],
       onAction: () => {
-        const asNewTab = isNewTabMode;
+        const asNewTab = openForNewTab || isNewTabMode;
         onClose();
         openFileDialog()
           .then((path) => { if (path) onOpenFilePath(path, asNewTab); })

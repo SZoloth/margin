@@ -5,37 +5,39 @@ interface TextSegment {
   text: string;
 }
 
+/**
+ * Text nodes carrying the highlight, grouped into runs that sit next to each
+ * other in the document. Unmarked text, an inline node or a block boundary
+ * between two fragments starts a new run, so a match can never reach across
+ * content that isn't part of the highlight.
+ */
+function contiguousRuns(segments: TextSegment[]): TextSegment[][] {
+  const runs: TextSegment[][] = [];
+  for (const segment of segments) {
+    const run = runs[runs.length - 1];
+    const last = run?.[run.length - 1];
+    if (run && last && last.from + last.text.length === segment.from) {
+      run.push(segment);
+    } else {
+      runs.push([segment]);
+    }
+  }
+  return runs;
+}
+
 function findReplacementRange(
-  segments: TextSegment[],
+  runs: TextSegment[][],
   matchText: string,
 ): { from: number; to: number } | null {
-  const combinedText = segments.map((segment) => segment.text).join("");
-  const matchStart = combinedText.indexOf(matchText);
-  if (matchStart === -1) return null;
-
-  const matchEnd = matchStart + matchText.length;
-  let consumed = 0;
-  let from: number | null = null;
-  let to: number | null = null;
-
-  for (const segment of segments) {
-    const segmentStart = consumed;
-    const segmentEnd = consumed + segment.text.length;
-
-    if (from == null && matchStart < segmentEnd) {
-      from = segment.from + (matchStart - segmentStart);
-    }
-
-    if (matchEnd <= segmentEnd) {
-      to = segment.from + (matchEnd - segmentStart);
-      break;
-    }
-
-    consumed = segmentEnd;
+  for (const run of runs) {
+    const start = run[0];
+    if (!start) continue;
+    const index = run.map((segment) => segment.text).join("").indexOf(matchText);
+    if (index === -1) continue;
+    const from = start.from + index;
+    return { from, to: from + matchText.length };
   }
-
-  if (from == null || to == null) return null;
-  return { from, to };
+  return null;
 }
 
 export function applyAcceptedCorrection(
@@ -44,6 +46,7 @@ export function applyAcceptedCorrection(
   matchText: string,
   suggestedEdit: string,
 ): boolean {
+  if (!matchText) return false;
   const targetSegments: TextSegment[] = [];
 
   editor.state.doc.descendants((node, pos) => {
@@ -64,8 +67,11 @@ export function applyAcceptedCorrection(
 
   if (targetSegments.length === 0) return false;
 
-  const range = findReplacementRange(targetSegments, matchText);
+  const range = findReplacementRange(contiguousRuns(targetSegments), matchText);
   if (!range) return false;
+  if (editor.state.doc.textBetween(range.from, range.to, "\n", "\n") !== matchText) {
+    return false;
+  }
 
   editor.view.dispatch(
     editor.state.tr.insertText(suggestedEdit, range.from, range.to),

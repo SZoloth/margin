@@ -76,4 +76,34 @@ describe("applyAcceptedCorrection", () => {
 
     expect(editorRef!.getHTML()).toBe(before);
   });
+
+  it("refuses a match that spans unmarked text between two fragments of the highlight", async () => {
+    let editorRef: Editor | null = null;
+
+    render(
+      <Reader
+        content={`<p><mark data-color="yellow" data-highlight-id="h-1">alpha </mark>KEEP THIS <mark data-color="yellow" data-highlight-id="h-1">beta</mark></p>`}
+        onUpdate={() => {}}
+        isLoading={false}
+        onEditorReady={(editor) => {
+          editorRef = editor;
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(editorRef).toBeTruthy();
+    });
+
+    const before = editorRef!.getHTML();
+
+    act(() => {
+      expect(
+        applyAcceptedCorrection(editorRef!, "h-1", "alpha beta", "gamma"),
+      ).toBe(false);
+    });
+
+    expect(editorRef!.getHTML()).toBe(before);
+    expect(editorRef!.getText()).toContain("KEEP THIS");
+  });
 });

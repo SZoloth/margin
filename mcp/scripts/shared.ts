@@ -174,9 +174,16 @@ export function cleanEnv(): NodeJS.ProcessEnv {
  * The generator command for eval runs. Override with MARGIN_EVAL_CMD —
  * e.g. `poolside` (free local model) when the Claude CLI is unavailable.
  * Any `stdin → stdout` command works.
+ *
+ * Prompts carry rule text and document samples, so the default runs as a
+ * plain text generator: no built-in tools, no MCP servers, and no user,
+ * project or local settings. Mirrors DEFAULT_LLM_CMD in seed_rules.rs.
  */
+const DEFAULT_EVAL_CMD =
+  `claude --print --model sonnet --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence`;
+
 export function evalCmd(): string {
-  return process.env.MARGIN_EVAL_CMD ?? "claude --print --model sonnet";
+  return process.env.MARGIN_EVAL_CMD ?? DEFAULT_EVAL_CMD;
 }
 
 /**
