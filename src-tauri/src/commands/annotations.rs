@@ -665,6 +665,22 @@ mod tests {
     }
 
     #[test]
+    fn delete_refuses_a_highlight_from_another_document() {
+        let conn = setup_db();
+        insert_doc(&conn, "doc1");
+        insert_doc(&conn, "doc2");
+        insert_highlight(&conn, "h2", "doc2", "yellow", "text", 0, 4, None, None, 1000).unwrap();
+        insert_margin_note(&conn, "n2", "h2", "keep me", 1000).unwrap();
+
+        assert!(delete_highlight_in(&conn, "h2", Some("doc1")).is_err());
+        assert_eq!(highlight_count(&conn), 1);
+        assert_eq!(note_count(&conn), 1);
+
+        assert_eq!(delete_highlight_in(&conn, "h2", Some("doc2")).unwrap(), "doc2");
+        assert_eq!(highlight_count(&conn), 0);
+    }
+
+    #[test]
     fn delete_highlight_cascades_to_margin_notes() {
         let conn = setup_db();
         insert_doc(&conn, "doc1");

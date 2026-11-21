@@ -293,5 +293,23 @@ describe("useAnnotations", () => {
       ]);
     });
   });
+  describe("deleteHighlight", () => {
+    it("tells the backend which document the highlight must belong to", async () => {
+      mockInvoke.mockImplementation((command: unknown) => {
+        const cmd = String(command);
+        if (cmd === "get_highlights" || cmd === "get_margin_notes") return Promise.resolve([]);
+        if (cmd === "delete_highlight") return Promise.resolve();
+        throw new Error(`Unexpected invoke: ${cmd}`);
+      });
+      const { result } = renderHook(() => useAnnotations());
+      await act(async () => {
+        await result.current.loadAnnotations("doc1");
+      });
+      await act(async () => {
+        await result.current.deleteHighlight("foreign-id");
+      });
+      expect(mockInvoke).toHaveBeenCalledWith("delete_highlight", { id: "foreign-id", documentId: "doc1" });
+    });
+  });
 });
 
