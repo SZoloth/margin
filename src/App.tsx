@@ -377,7 +377,7 @@ export default function App() {
     doc.registerContentProvider(() => {
       const ed = editorRef.current;
       if (!ed || ed.isDestroyed) return null;
-      return serializeEditorMarkdown(ed);
+      return serializeEditorMarkdown(ed) ?? false;
     });
     return () => doc.registerContentProvider(null);
   }, [doc.registerContentProvider]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2031,6 +2031,7 @@ export default function App() {
           content={diffReview.reviewContent ?? doc.content}
           onUpdate={handleEditorUpdate}
           onDirtyEdit={doc.markDirty}
+          reviewMarks={diffReview.reviewContent !== null}
           isLoading={doc.isLoading}
           onEditorReady={handleEditorReady}
         />

@@ -214,3 +214,20 @@ describe("Reader — what counts as an edit", () => {
     expect(hasDiffMark).toBe(true);
   });
 });
+
+describe("Reader — formatting is an edit", () => {
+  it("bolding text marks the document dirty", async () => {
+    let editorRef: Editor | null = null;
+    const onDirtyEdit = vi.fn();
+    render(
+      <Reader content="hello world" onUpdate={() => {}} onDirtyEdit={onDirtyEdit} isLoading={false}
+        onEditorReady={(ed) => { editorRef = ed; }} />,
+    );
+    await waitFor(() => expect(editorRef).toBeTruthy());
+    const bold = editorRef!.state.schema.marks.bold!;
+    act(() => {
+      editorRef!.view.dispatch(editorRef!.state.tr.addMark(1, 6, bold.create()));
+    });
+    expect(onDirtyEdit).toHaveBeenCalled();
+  });
+});

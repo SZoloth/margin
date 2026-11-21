@@ -3,8 +3,20 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 const diffClickKey = new PluginKey("diffClick");
 
-export const DiffMark = Mark.create({
+export interface DiffMarkOptions {
+  /**
+   * Whether a diff review is building the document. Outside a review,
+   * <ins>/<del> with a change id are the file's own content, not review marks.
+   */
+  isReviewing: () => boolean;
+}
+
+export const DiffMark = Mark.create<DiffMarkOptions>({
   name: "diffMark",
+
+  addOptions() {
+    return { isReviewing: () => false };
+  },
 
   addAttributes() {
     return {
@@ -28,9 +40,10 @@ export const DiffMark = Mark.create({
   },
 
   parseHTML() {
+    const reviewing = () => (this.options.isReviewing() ? null : false);
     return [
-      { tag: "ins[data-change-id]" },
-      { tag: "del[data-change-id]" },
+      { tag: "ins[data-change-id]", getAttrs: reviewing },
+      { tag: "del[data-change-id]", getAttrs: reviewing },
     ];
   },
 
