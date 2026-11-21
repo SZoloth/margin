@@ -105,7 +105,9 @@ export function buildDiffReviewMarkup(
     const text = diff[1];
 
     if (op === EQUAL) {
-      parts.push(text);
+      // Unchanged text keeps its HTML, but only generated tags may carry a
+      // change id: a document's own would act as a review control.
+      parts.push(text.replace(/data-change-id/gi, "data-source-change-id"));
       i++;
       continue;
     }
@@ -181,7 +183,9 @@ export function applyDiffDecisions(
     const text = diff[1];
 
     if (op === EQUAL) {
-      parts.push(text);
+      // Unchanged text keeps its HTML, but only generated tags may carry a
+      // change id: a document's own would act as a review control.
+      parts.push(text.replace(/data-change-id/gi, "data-source-change-id"));
       i++;
       continue;
     }

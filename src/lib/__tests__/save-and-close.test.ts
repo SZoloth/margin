@@ -7,6 +7,7 @@ function cache(content: string, filePath: string | null): TabCache {
     document: null,
     content,
     filePath,
+    isDirty: true,
     highlights: [],
     marginNotes: [],
     annotationsLoaded: false,
@@ -61,6 +62,13 @@ describe("saveAndCloseTab", () => {
   it("keeps a background tab open when its draft can't be found", async () => {
     const d = deps({ tabId: "t-2", cached: undefined });
     expect(await saveAndCloseTab(d)).toBe(false);
+    expect(d.close).not.toHaveBeenCalled();
+  });
+
+  it("keeps a background article tab open: its text has nowhere to be written", async () => {
+    const d = deps({ tabId: "t-2", cached: cache("edited article", null) });
+    expect(await saveAndCloseTab(d)).toBe(false);
+    expect(d.saveFile).not.toHaveBeenCalled();
     expect(d.close).not.toHaveBeenCalled();
   });
 });

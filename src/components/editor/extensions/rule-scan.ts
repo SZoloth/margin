@@ -57,7 +57,7 @@ function compileRule(rule: WritingRule): CompiledMatcher | null {
 
   try {
     if (rule.detectionPattern) {
-      return { rule, regex: new RegExp(rule.detectionPattern, "gi") };
+      return userRegex(rule, rule.detectionPattern);
     }
     if (rule.category === "kill-words") {
       return { rule, regex: new RegExp(escapeRegExp(rule.ruleText), "gi") };
@@ -67,13 +67,64 @@ function compileRule(rule: WritingRule): CompiledMatcher | null {
         return { rule, regex: new RegExp(escapeRegExp(rule.exampleBefore), "gi") };
       }
       if (rule.category === "ai-slop" || rule.category === "heading-patterns") {
-        return { rule, regex: new RegExp(rule.exampleBefore, "gi") };
+        return userRegex(rule, rule.exampleBefore);
       }
     }
   } catch {
     return null;
   }
   return null;
+}
+
+const MAX_PATTERN_LENGTH = 500;
+
+/**
+ * Rule patterns run on the editor thread, where one runaway match freezes the
+ * app. Patterns that can backtrack exponentially are skipped: too long, a
+ * backreference, or a quantified group that itself holds a quantifier, such as
+ * (a+)+ or (?:a*)*. The CLI applies the same check before writing the guard
+ * hook (cli/profile/safe_pattern.go).
+ */
+function userRegex(rule: WritingRule, pattern: string): CompiledMatcher | null {
+  if (!isSafePattern(pattern)) return null;
+  return { rule, regex: new RegExp(pattern, "gi") };
+}
+
+export function isSafePattern(pattern: string): boolean {
+  if (pattern.length > MAX_PATTERN_LENGTH) return false;
+  if (/\\[1-9]|\\k</.test(pattern)) return false;
+  // For each open group: has it seen a quantifier inside?
+  const groups: boolean[] = [];
+  let inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i]!;
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (inClass) {
+      if (c === "]") inClass = false;
+      continue;
+    }
+    if (c === "[") {
+      inClass = true;
+    } else if (c === "(") {
+      groups.push(false);
+    } else if (c === ")") {
+      const quantifiedInside = groups.pop() ?? false;
+      const next = pattern[i + 1];
+      const quantifiedGroup = next === "*" || next === "+" || next === "{";
+      if (quantifiedInside && quantifiedGroup) return false;
+      if (quantifiedInside || quantifiedGroup) markQuantified(groups);
+    } else if (c === "*" || c === "+" || c === "{") {
+      markQuantified(groups);
+    }
+  }
+  return true;
+}
+
+function markQuantified(groups: boolean[]) {
+  if (groups.length > 0) groups[groups.length - 1] = true;
 }
 
 function escapeRegExp(s: string): string {

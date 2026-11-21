@@ -4,6 +4,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { ExportBridge, wrapUntrustedExport } from "./export-bridge.js";
+import { annotatedDocumentsPrompt, readingSummaryPrompt, reviewAnnotationsPrompt, writingFeedbackPrompt } from "./prompts.js";
 import { openReadDb, openWriteDb, nowMillis } from "./db.js";
 import { marginCliCommand, startExportBridge } from "./startup.js";
 import {
@@ -577,7 +578,7 @@ server.prompt(
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `Review the annotations for "${title}".\n\nAnnotations:\n${JSON.stringify(annotations, null, 2)}\n\nPlease identify key themes, patterns, and notable highlights. What are the main ideas being annotated?`,
+              text: reviewAnnotationsPrompt(title, annotations),
             },
           }],
         };
@@ -597,7 +598,7 @@ server.prompt(
           role: "user" as const,
           content: {
             type: "text" as const,
-            text: `Here are my annotated documents:\n${JSON.stringify(docsWithAnnotations, null, 2)}\n\nPlease identify themes across my reading and annotations. Which documents share common topics? What patterns do you see in what I'm highlighting?`,
+            text: annotatedDocumentsPrompt(docsWithAnnotations),
           },
         }],
       };
@@ -629,7 +630,7 @@ server.prompt(
           role: "user" as const,
           content: {
             type: "text" as const,
-            text: `Analyze my writing corrections and rules${writing_type ? ` for "${writing_type}" writing` : ""}.\n\nSummary:\n${JSON.stringify(summary, null, 2)}\n\nRecent corrections:\n${JSON.stringify(corrections.slice(0, 50), null, 2)}\n\nWriting rules:\n${rulesMarkdown}\n\nWhat patterns do you see in my corrections? Are there themes in my positive signals (patterns to keep) vs corrective signals (patterns to fix)? Which rules am I violating most? What should I focus on improving?`,
+            text: writingFeedbackPrompt({ writingType: writing_type, summary, corrections: corrections.slice(0, 50), rulesMarkdown }),
           },
         }],
       };
@@ -668,7 +669,7 @@ server.prompt(
           role: "user" as const,
           content: {
             type: "text" as const,
-            text: `Here are my 20 most recent documents:\n${JSON.stringify(docsWithCounts, null, 2)}\n\nSummarize my recent reading activity. What am I reading most? Which documents have the most annotations? Any patterns in the types of content I'm engaging with?`,
+            text: readingSummaryPrompt(docsWithCounts),
           },
         }],
       };

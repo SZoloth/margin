@@ -126,10 +126,17 @@ export function createWritingRule(
   // not overwrite it — otherwise the earlier source corrections are never
   // stamped synthesized and resurface in the queue forever.
   const existing = db
-    .prepare("SELECT notes FROM writing_rules WHERE writing_type = ? AND category = ? AND rule_text = ?")
-    .get(params.writing_type, params.category, params.rule_text) as { notes: string | null } | undefined;
+    .prepare("SELECT id, notes FROM writing_rules WHERE writing_type = ? AND category = ? AND rule_text = ?")
+    .get(params.writing_type, params.category, params.rule_text) as { id: string; notes: string | null } | undefined;
   const notes = mergeProvenanceNotes(existing?.notes ?? null, params.synthesized_from, params.notes);
 
+  if (existing && params.synthesized_from?.length) {
+    // A candidate hasn't been reviewed, so it may only add signal and
+    // provenance to a rule that exists — never change what the rule
+    // enforces. Same as InsertCandidateRules in cli/db/rules.go.
+    db.prepare("UPDATE writing_rules SET signal_count = signal_count + ?, notes = ?, updated_at = ? WHERE id = ?")
+      .run(signalCount, notes, now, existing.id);
+  } else {
   db.prepare(
     `INSERT INTO writing_rules (id, writing_type, category, rule_text, when_to_apply, why, severity, example_before, example_after, source, signal_count, notes, created_at, updated_at, register, polarity)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -155,6 +162,7 @@ export function createWritingRule(
     source, signalCount, notes, now, now,
     params.register ?? null, params.polarity ?? null,
   );
+  }
 
   return db
     .prepare(

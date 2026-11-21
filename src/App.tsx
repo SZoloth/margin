@@ -41,6 +41,7 @@ import { createAnchor, resolveAnchor, buildDocTextMap, docPosToFlat, flatToDocPo
 import { allowedMarkRanges, planHighlightOverlap, collectMarkIdsInRange, rangeFullyMarked } from "@/lib/highlight-ranges";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
 import { saveAndCloseTab } from "@/lib/save-and-close";
+import { restoreHighlightWithNotes } from "@/lib/restore-highlight";
 import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
@@ -269,7 +270,7 @@ export default function App() {
       prevDocIdRef.current = cache.document.id;
     }
 
-    doc.restoreFromCache(cache.document, cache.content, cache.filePath, false);
+    doc.restoreFromCache(cache.document, cache.content, cache.filePath, cache.isDirty);
 
     if (cache.annotationsLoaded) {
       annotations.restoreFromCache(cache.document!.id, cache.highlights, cache.marginNotes);
@@ -377,7 +378,7 @@ export default function App() {
     doc.registerContentProvider(() => {
       const ed = editorRef.current;
       if (!ed || ed.isDestroyed) return null;
-      return serializeEditorMarkdown(ed);
+      return serializeEditorMarkdown(ed) ?? false;
     });
     return () => doc.registerContentProvider(null);
   }, [doc.registerContentProvider]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -816,39 +817,18 @@ export default function App() {
       onUndo: async () => {
         // Re-create the highlight — use refs to avoid stale closures
         try {
-          const currentEditor = editorRef.current;
-          const restored = await annotationsRef.current.createHighlight({
-            documentId: highlight.document_id,
-            color: highlight.color,
-            textContent: highlight.text_content,
-            fromPos: highlight.from_pos,
-            toPos: highlight.to_pos,
-            prefixContext: highlight.prefix_context,
-            suffixContext: highlight.suffix_context,
+          const restored = await restoreHighlightWithNotes({
+            highlight,
+            notes: notesSnapshot,
+            editor: editorRef.current,
+            currentDocId: currentDocRef.current?.id ?? null,
+            dispatch: dispatchPreservingScroll,
+            annotations: annotationsRef.current,
           });
-          // Re-apply mark in editor
-          if (currentEditor) {
-            const restoreMarkType = currentEditor.state.schema.marks.highlight;
-            if (restoreMarkType) {
-              const restoreTr = currentEditor.state.tr;
-              restoreTr.addMark(
-                highlight.from_pos,
-                highlight.to_pos,
-                restoreMarkType.create({ color: highlight.color, highlightId: restored.id }),
-              );
-              dispatchPreservingScroll(currentEditor, restoreTr);
-            }
+          // Re-open the thread, if its document is still the one on screen
+          if (currentDocRef.current?.id === highlight.document_id) {
+            setFocusHighlightId(restored.id);
           }
-          // Restore the notes — the judgment is the precious part
-          for (const n of notesSnapshot) {
-            await annotationsRef.current.createMarginNoteWithIntent(
-              restored.id,
-              n.content,
-              n.intent,
-            );
-          }
-          // Re-open the thread
-          setFocusHighlightId(restored.id);
         } catch (err) {
           console.error("Failed to undo highlight delete:", err);
           setErrorToast({ message: `Could not restore highlight: ${err instanceof Error ? err.message : String(err)}`, id: ++errorIdRef.current });
@@ -1109,9 +1089,11 @@ export default function App() {
           ids.push(highlightId);
           markOps.push({ from: range.from, to: range.to, color, id: highlightId });
 
-          // Other fully-covered rows: their marks are overwritten — delete them.
+          // Other fully-covered rows: their marks are overwritten. Fold each
+          // into the new highlight so their notes move over instead of
+          // cascading away with the row.
           for (const deadId of plan.deleteIds) {
-            await annotationsRef.current.deleteHighlight(deadId);
+            await annotationsRef.current.mergeHighlightInto(deadId, highlightId);
             knownIds.delete(deadId);
           }
 
@@ -1375,8 +1357,9 @@ export default function App() {
     }
 
     try {
-      for (const id of ids) {
-        await annotationsRef.current.deleteHighlight(id);
+      // Only rows this document owns: ids in marks can come from file markup.
+      for (const h of removed) {
+        await annotationsRef.current.deleteHighlight(h.id);
       }
     } catch (err) {
       console.error("Failed to remove highlight:", err);
@@ -1426,38 +1409,15 @@ export default function App() {
           ? "Highlight and notes deleted"
           : `${removed.length} highlights and their notes deleted`,
       onUndo: async () => {
-        const currentEditor = editorRef.current;
         for (const h of removed) {
           try {
-            const restored = await annotationsRef.current.createHighlight({
-              documentId: h.document_id,
-              color: h.color,
-              textContent: h.text_content,
-              fromPos: h.from_pos,
-              toPos: h.to_pos,
-              prefixContext: h.prefix_context,
-              suffixContext: h.suffix_context,
+            await restoreHighlightWithNotes({
+              highlight: h,
+              notes: notesSnapshot.get(h.id) ?? [],
+              editor: editorRef.current,
+              currentDocId: currentDocRef.current?.id ?? null,
+              annotations: annotationsRef.current,
             });
-            if (currentEditor && !currentEditor.isDestroyed) {
-              const mt = currentEditor.state.schema.marks.highlight;
-              if (mt) {
-                const restoreTr = currentEditor.state.tr;
-                restoreTr.addMark(
-                  h.from_pos,
-                  h.to_pos,
-                  mt.create({ color: h.color, highlightId: restored.id }),
-                );
-                currentEditor.view.dispatch(restoreTr);
-              }
-            }
-            // Restore the notes — the judgment is the precious part
-            for (const n of notesSnapshot.get(h.id) ?? []) {
-              await annotationsRef.current.createMarginNoteWithIntent(
-                restored.id,
-                n.content,
-                n.intent,
-              );
-            }
           } catch (err) {
             console.error("Failed to undo highlight delete:", err);
             setErrorToast({
@@ -1880,6 +1840,13 @@ export default function App() {
         return;
       }
 
+      // Already open in another tab: show it and its draft, don't reload.
+      const openTabId = tabsHook.findTabFor({ documentId: recentDoc.id });
+      if (openTabId) {
+        tabsHook.switchTab(openTabId);
+        return;
+      }
+
       // Snapshot current tab BEFORE changing the document —
       // after openRecentDocument, live state will reflect the new doc
       tabsHook.snapshotActive();
@@ -1912,6 +1879,12 @@ export default function App() {
       onSelectRecentDoc={handleSelectRecentDoc}
       onExport={() => setShowExportPopover(true)}
       onOpenFilePath={(path: string, newTab: boolean) => {
+        // Already open: show that tab and its draft instead of reloading from disk.
+        const openTabId = tabsHook.findTabFor({ filePath: path });
+        if (openTabId) {
+          tabsHook.switchTab(openTabId);
+          return;
+        }
         openAsNewTabRef.current = newTab;
         tabsHook.snapshotActive();
         void doc.openFilePath(path);
@@ -2018,6 +1991,7 @@ export default function App() {
           content={diffReview.reviewContent ?? doc.content}
           onUpdate={handleEditorUpdate}
           onDirtyEdit={doc.markDirty}
+          reviewMarks={diffReview.reviewContent !== null}
           isLoading={doc.isLoading}
           onEditorReady={handleEditorReady}
         />

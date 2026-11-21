@@ -6,7 +6,8 @@ import {
   getDocument,
   readDocument,
 } from "../tools/documents.js";
-import { writeFileSync, mkdtempSync, rmSync } from "fs";
+import { writeFileSync, mkdtempSync, rmSync, symlinkSync } from "fs";
+import { execFileSync } from "child_process";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -127,6 +128,35 @@ describe("readDocument", () => {
     insertDoc("d1", "file", { filePath: "/nonexistent/path.md" });
     const result = readDocument(db, "d1");
     expect(result).toHaveProperty("error");
+  });
+
+  it("refuses a recorded path that became a named pipe instead of hanging", () => {
+    const filePath = join(tmpDir, "pipe.md");
+    execFileSync("mkfifo", [filePath]);
+    insertDoc("d1", "file", { filePath });
+    const result = readDocument(db, "d1");
+    expect(result).toHaveProperty("error");
+  });
+
+  it("refuses a recorded path that now links to a non-document file", () => {
+    const secret = join(tmpDir, "id_rsa");
+    writeFileSync(secret, "PRIVATE KEY");
+    const filePath = join(tmpDir, "notes.md");
+    symlinkSync(secret, filePath);
+    insertDoc("d1", "file", { filePath });
+    const result = readDocument(db, "d1");
+    expect(result).toHaveProperty("error");
+    expect(JSON.stringify(result)).not.toContain("PRIVATE KEY");
+  });
+
+  it("still reads a recorded path that links to another Markdown file", () => {
+    const target = join(tmpDir, "real.md");
+    writeFileSync(target, "# Linked");
+    const filePath = join(tmpDir, "alias.md");
+    symlinkSync(target, filePath);
+    insertDoc("d1", "file", { filePath });
+    const result = readDocument(db, "d1");
+    expect(result).toEqual({ content: "# Linked" });
   });
 
   it("errors for unknown document ID", () => {

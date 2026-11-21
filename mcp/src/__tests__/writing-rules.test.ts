@@ -397,6 +397,45 @@ describe("createWritingRule", () => {
     }
   });
 
+  it("a synthesis candidate matching an approved rule can't change what the rule enforces", () => {
+    createWritingRule(db, {
+      rule_text: "Lead with the outcome",
+      writing_type: "email",
+      category: "structure",
+      severity: "nice-to-fix",
+      why: "approved why",
+      example_before: "approved before",
+      source: "manual",
+    });
+    const result = createWritingRule(db, {
+      rule_text: "Lead with the outcome",
+      writing_type: "email",
+      category: "structure",
+      severity: "must-fix",
+      why: "candidate why",
+      when_to_apply: "candidate scope",
+      example_before: "candidate before",
+      example_after: "candidate after",
+      register: "casual",
+      polarity: "positive",
+      synthesized_from: ["h7"],
+    });
+
+    expect(result).not.toHaveProperty("error");
+    if (!("error" in result)) {
+      expect(result.source).toBe("manual");
+      expect(result.severity).toBe("nice-to-fix");
+      expect(result.why).toBe("approved why");
+      expect(result.whenToApply).toBeNull();
+      expect(result.exampleBefore).toBe("approved before");
+      expect(result.exampleAfter).toBeNull();
+      expect(result.register).toBeNull();
+      expect(result.polarity).toBeNull();
+      expect(result.signalCount).toBe(2);
+      expect(result.notes).toBe("synthesized-from:h7");
+    }
+  });
+
   it("unions provenance on upsert conflict instead of overwriting", () => {
     createWritingRule(db, {
       rule_text: "Lead with the outcome",

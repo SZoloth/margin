@@ -48,6 +48,18 @@ describe("scanDocForRules", () => {
     expect(d.textBetween(matches[0]!.from, matches[0]!.to)).toBe("leverage");
   });
 
+  it("skips rule patterns that backtrack catastrophically instead of freezing", () => {
+    const d = doc([p(`${"a".repeat(30)}!`)]);
+    const started = performance.now();
+    const matches = scanDocForRules(d, [
+      rule({ id: "nested", detectionPattern: "(a+)+$", category: "tone" }),
+      rule({ id: "star", category: "ai-slop", exampleBefore: "(?:a*)*b" }),
+      rule({ id: "plain", detectionPattern: "a{3}!", category: "tone" }),
+    ]);
+    expect(performance.now() - started).toBeLessThan(250);
+    expect(matches.map((m) => m.ruleId)).toEqual(["plain"]);
+  });
+
   it("finds detection_pattern regex matches", () => {
     const d = doc([p("it was very quickly done")]);
     const matches = scanDocForRules(d, [

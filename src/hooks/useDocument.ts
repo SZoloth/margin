@@ -24,6 +24,8 @@ function countWords(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
+export type ContentProvider = () => string | null | false;
+
 export interface UseDocumentReturn {
   currentDoc: Document | null;
   recentDocs: Document[];
@@ -44,7 +46,11 @@ export interface UseDocumentReturn {
   renameDocFile: (doc: Document, newName: string) => Promise<void>;
   setContent: (newContent: string) => void;
   markDirty: () => void;
-  registerContentProvider: (fn: (() => string | null) | null) => void;
+  /**
+   * The provider returns the editor's Markdown, null when there's no editor,
+   * or false when the editor's content can't be written as Markdown.
+   */
+  registerContentProvider: (fn: ContentProvider | null) => void;
   setContentExternal: (newContent: string) => void;
   restoreFromCache: (doc: Document | null, content: string, filePath: string | null, isDirty: boolean) => void;
 }
@@ -86,6 +92,14 @@ export function useDocument(): UseDocumentReturn {
   // the window are suppressed (handles multiple FS events per save).
   const selfSaveRef = useRef<{ path: string; until: number } | null>(null);
 
+  // Every edit bumps the revision. A save clears the dirty flag only if no
+  // edit landed and no other document opened while its write was in flight.
+  const revisionRef = useRef(0);
+  const currentDocIdRef = useRef<string | null>(null);
+  currentDocIdRef.current = currentDoc?.id ?? null;
+  const filePathRef = useRef<string | null>(null);
+  filePathRef.current = filePath;
+
   const isSelfSave = useCallback((path: string): boolean => {
     const entry = selfSaveRef.current;
     if (!entry) return false;
@@ -122,18 +136,22 @@ export function useDocument(): UseDocumentReturn {
 
   // User edit — marks dirty
   const setContent = useCallback((newContent: string) => {
+    revisionRef.current += 1;
     setContentState(newContent);
     setIsDirty(true);
   }, []);
 
   // Cheap immediate dirty signal — the editor emits serialized content on a
   // debounce, but save paths key off isDirty and must see edits instantly.
-  const markDirty = useCallback(() => setIsDirty(true), []);
+  const markDirty = useCallback(() => {
+    revisionRef.current += 1;
+    setIsDirty(true);
+  }, []);
 
   // Save paths pull content straight from the editor when available, so a
   // pending debounce can never make Cmd+S (or quit-save) write stale text.
-  const contentProviderRef = useRef<(() => string | null) | null>(null);
-  const registerContentProvider = useCallback((fn: (() => string | null) | null) => {
+  const contentProviderRef = useRef<ContentProvider | null>(null);
+  const registerContentProvider = useCallback((fn: ContentProvider | null) => {
     contentProviderRef.current = fn;
   }, []);
 
@@ -298,57 +316,56 @@ export function useDocument(): UseDocumentReturn {
     }
   }, [currentDoc, refreshRecentDocs]);
 
-  const writeToDisk = useCallback(async (path: string, body: string): Promise<string | null> => {
-    // Strip any <mark> tags that TipTap's serializer may leak into markdown
-    const clean = body.replace(/<\/?mark[^>]*>/g, "");
+  const writeToDisk = useCallback(async (path: string, body: string): Promise<boolean> => {
     // Mark this path as self-saved for 1s so the file watcher skips the reload
     selfSaveRef.current = { path, until: Date.now() + 1000 };
     try {
-      await saveFileCommand(path, clean);
-      return clean;
+      await saveFileCommand(path, body);
+      return true;
     } catch (err) {
       selfSaveRef.current = null;
       reportError(`Could not save "${basename(path)}"`, err);
-      return null;
+      return false;
     }
   }, []);
-
-  const saveFileContent = useCallback(
-    async (path: string, body: string) => (await writeToDisk(path, body)) !== null,
-    [writeToDisk],
-  );
 
   const saveCurrentFile = useCallback(async (): Promise<boolean> => {
     if (!isDirty) return true;
 
-    // Keep-local articles have no file path — annotations are already in SQLite,
-    // so just clear the dirty flag.
+    // Keep-local articles have no file to write. Annotations are already in
+    // SQLite and don't make a document dirty, so dirty means the text changed.
     if (!filePath) {
-      setIsDirty(false);
-      return true;
+      reportError(`Margin can't save edits to an article's text. Copy them out before you close "${currentDoc?.title ?? "the article"}".`);
+      return false;
     }
 
     const fresh = contentProviderRef.current?.() ?? null;
+    if (fresh === false) {
+      reportError(`Finish the review before saving "${basename(filePath)}".`);
+      return false;
+    }
     const body = fresh ?? content;
     if (fresh !== null && fresh !== content) {
       setContentState(fresh);
     }
-    const clean = await writeToDisk(filePath, body);
-    if (clean === null) return false;
-    setIsDirty(false);
+    const revision = revisionRef.current;
+    const docId = currentDoc?.id ?? null;
+    const savedPath = filePath;
+    if (!(await writeToDisk(savedPath, body))) return false;
+    const stillCurrent = currentDocIdRef.current === docId && filePathRef.current === savedPath;
+    if (stillCurrent && revisionRef.current === revision) setIsDirty(false);
 
     if (currentDoc) {
       try {
-        const updated: Document = {
+        const saved = await upsertDocument({
           ...currentDoc,
-          word_count: countWords(clean),
+          word_count: countWords(body),
           last_opened_at: Date.now(),
-        };
-        const saved = await upsertDocument(updated);
-        setCurrentDoc(saved);
+        });
+        if (currentDocIdRef.current === saved.id) setCurrentDoc(saved);
         refreshRecentDocs();
       } catch (err) {
-        reportError(`Saved "${basename(filePath)}" but could not update its details`, err);
+        reportError(`Saved "${basename(savedPath)}" but could not update its details`, err);
       }
     }
     return true;
@@ -393,7 +410,7 @@ export function useDocument(): UseDocumentReturn {
     openRecentDocument,
     openKeepLocalArticle,
     saveCurrentFile,
-    saveFileContent,
+    saveFileContent: writeToDisk,
     isSelfSave,
     refreshRecentDocs,
     renameDocFile,

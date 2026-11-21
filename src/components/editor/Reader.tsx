@@ -14,6 +14,8 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
+import type { Transaction } from "@tiptap/pm/state";
+import { AddMarkStep, RemoveMarkStep } from "@tiptap/pm/transform";
 import { MultiColorHighlight } from "./extensions/highlight";
 import { MarginNote } from "./extensions/margin-note";
 import { DiffMark } from "./extensions/diff-mark";
@@ -49,9 +51,23 @@ interface ReaderProps {
   onEditorReady?: (editor: Editor) => void;
   /** Called synchronously on every edit, before the debounced serialization. */
   onDirtyEdit?: () => void;
+  /** A diff review is showing; its <ins>/<del> markup becomes diff marks. */
+  reviewMarks?: boolean;
 }
 
-export function Reader({ content, onUpdate, isLoading, onEditorReady, onDirtyEdit }: ReaderProps) {
+// Annotation marks serialize to nothing, so adding or removing them leaves
+// the file unchanged. Formatting marks (bold, links) do change it.
+const ANNOTATION_MARKS = new Set(["highlight", "marginNote"]);
+
+function changesOnlyAnnotations(tr: Transaction): boolean {
+  return tr.steps.every(
+    (step) =>
+      (step instanceof AddMarkStep || step instanceof RemoveMarkStep) &&
+      ANNOTATION_MARKS.has(step.mark.type.name),
+  );
+}
+
+export function Reader({ content, onUpdate, isLoading, onEditorReady, onDirtyEdit, reviewMarks = false }: ReaderProps) {
   const isExternalUpdate = useRef(false);
   const lastEmittedMarkdownRef = useRef<string | null>(null);
   const emitTimerRef = useRef<number | null>(null);
@@ -59,6 +75,8 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady, onDirtyEdi
   onUpdateRef.current = onUpdate;
   const onDirtyEditRef = useRef(onDirtyEdit);
   onDirtyEditRef.current = onDirtyEdit;
+  const reviewMarksRef = useRef(reviewMarks);
+  reviewMarksRef.current = reviewMarks;
 
   const editor = useEditor({
     extensions: [
@@ -76,7 +94,7 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady, onDirtyEdi
       Image.configure({ inline: false, allowBase64: true }),
       MultiColorHighlight.configure({ multicolor: true }),
       MarginNote,
-      DiffMark,
+      DiffMark.configure({ isReviewing: () => reviewMarksRef.current }),
       RuleScan,
       Search,
       Markdown.configure({
@@ -99,8 +117,9 @@ export function Reader({ content, onUpdate, isLoading, onEditorReady, onDirtyEdi
         spellcheck: "false",
       },
     },
-    onUpdate: ({ editor: ed }) => {
+    onUpdate: ({ editor: ed, transaction }) => {
       if (isExternalUpdate.current) return;
+      if (changesOnlyAnnotations(transaction)) return;
       // Dirty flag is cheap and must be immediate (save/unsaved-dialog key
       // off it). Serialization walks and re-emits the whole document, so it
       // runs on a trailing debounce instead of every keystroke — on long

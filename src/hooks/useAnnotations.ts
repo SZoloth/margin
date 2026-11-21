@@ -33,6 +33,8 @@ export interface UseAnnotationsReturn {
   /** Bulk-sync stored positions after re-anchoring marks to the edited doc. */
   updatePositions: (updates: [string, number, number][]) => Promise<void>;
   deleteHighlight: (id: string) => Promise<void>;
+  /** Fold `sourceId` into `targetId`: its notes move over, then it's deleted. */
+  mergeHighlightInto: (sourceId: string, targetId: string) => Promise<void>;
 
   createMarginNote: (highlightId: string, content: string) => Promise<MarginNote>;
   createMarginNoteWithIntent: (
@@ -171,9 +173,18 @@ export function useAnnotations(
   );
 
   const deleteHighlight = useCallback(async (id: string) => {
-    await invoke("delete_highlight", { id });
+    await invoke("delete_highlight", { id, documentId: currentDocumentIdRef.current });
     setHighlights((prev) => prev.filter((h) => h.id !== id));
     setMarginNotes((prev) => prev.filter((n) => n.highlight_id !== id));
+    onMutate?.();
+  }, [onMutate]);
+
+  const mergeHighlightInto = useCallback(async (sourceId: string, targetId: string) => {
+    await invoke("merge_highlight_into", { sourceId, targetId });
+    setHighlights((prev) => prev.filter((h) => h.id !== sourceId));
+    setMarginNotes((prev) =>
+      prev.map((n) => (n.highlight_id === sourceId ? { ...n, highlight_id: targetId } : n)),
+    );
     onMutate?.();
   }, [onMutate]);
 
@@ -255,6 +266,7 @@ export function useAnnotations(
     updateHighlight,
     updatePositions,
     deleteHighlight,
+    mergeHighlightInto,
     createMarginNote,
     createMarginNoteWithIntent,
     updateMarginNote,

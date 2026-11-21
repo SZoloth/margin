@@ -156,3 +156,78 @@ describe("Reader — cursor stability", () => {
     });
   });
 });
+
+describe("Reader — what counts as an edit", () => {
+  async function mount(content: string, extra: { reviewMarks?: boolean } = {}) {
+    let editorRef: Editor | null = null;
+    const onDirtyEdit = vi.fn();
+    render(
+      <Reader
+        content={content}
+        onUpdate={() => {}}
+        onDirtyEdit={onDirtyEdit}
+        isLoading={false}
+        onEditorReady={(ed) => { editorRef = ed; }}
+        {...extra}
+      />,
+    );
+    await waitFor(() => expect(editorRef).toBeTruthy());
+    return { editor: editorRef!, onDirtyEdit };
+  }
+
+  it("highlighting text is not an edit to the document", async () => {
+    const { editor, onDirtyEdit } = await mount("hello world");
+    const markType = editor.state.schema.marks.highlight!;
+    act(() => {
+      editor.view.dispatch(
+        editor.state.tr.addMark(1, 6, markType.create({ color: "yellow", highlightId: "h1" })),
+      );
+    });
+    expect(onDirtyEdit).not.toHaveBeenCalled();
+    expect(editor.storage.markdown.getMarkdown()).not.toContain("<mark");
+  });
+
+  it("typing is an edit", async () => {
+    const { editor, onDirtyEdit } = await mount("hello world");
+    act(() => {
+      editor.view.dispatch(editor.state.tr.insertText("!", 12));
+    });
+    expect(onDirtyEdit).toHaveBeenCalled();
+  });
+
+  it("review markup in an ordinary file stays plain content", async () => {
+    const { editor } = await mount('<p>keep <ins data-change-id="x1">this</ins></p>');
+    let hasDiffMark = false;
+    editor.state.doc.descendants((n) => {
+      if (n.marks.some((m) => m.type.name === "diffMark")) hasDiffMark = true;
+    });
+    expect(hasDiffMark).toBe(false);
+    expect(editor.getText()).toContain("keep this");
+  });
+
+  it("review markup becomes diff marks during a review", async () => {
+    const { editor } = await mount('<p>keep <ins data-change-id="x1">this</ins></p>', { reviewMarks: true });
+    let hasDiffMark = false;
+    editor.state.doc.descendants((n) => {
+      if (n.marks.some((m) => m.type.name === "diffMark")) hasDiffMark = true;
+    });
+    expect(hasDiffMark).toBe(true);
+  });
+});
+
+describe("Reader — formatting is an edit", () => {
+  it("bolding text marks the document dirty", async () => {
+    let editorRef: Editor | null = null;
+    const onDirtyEdit = vi.fn();
+    render(
+      <Reader content="hello world" onUpdate={() => {}} onDirtyEdit={onDirtyEdit} isLoading={false}
+        onEditorReady={(ed) => { editorRef = ed; }} />,
+    );
+    await waitFor(() => expect(editorRef).toBeTruthy());
+    const bold = editorRef!.state.schema.marks.bold!;
+    act(() => {
+      editorRef!.view.dispatch(editorRef!.state.tr.addMark(1, 6, bold.create()));
+    });
+    expect(onDirtyEdit).toHaveBeenCalled();
+  });
+});

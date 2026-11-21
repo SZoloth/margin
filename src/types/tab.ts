@@ -13,6 +13,8 @@ export interface TabCache {
   document: Document | null;
   content: string;
   filePath: string | null;
+  /** Unsaved edits in `content`. A tab move must never drop them. */
+  isDirty: boolean;
   highlights: Highlight[];
   marginNotes: MarginNote[];
   annotationsLoaded: boolean;

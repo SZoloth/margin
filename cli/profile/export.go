@@ -353,12 +353,12 @@ func writeProfileFiles(marginDir string, rules []db.WritingRule, corrections []d
 			continue
 		}
 		path := filepath.Join(marginDir, rel)
-		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		if err := writeFileAtomic(path, []byte(body), 0644); err != nil {
 			return fmt.Errorf("failed to write %s: %w", path, err)
 		}
 	}
 	entryPath := filepath.Join(marginDir, ProfileEntryFile)
-	if err := os.WriteFile(entryPath, []byte(files[ProfileEntryFile]), 0644); err != nil {
+	if err := writeFileAtomic(entryPath, []byte(files[ProfileEntryFile]), 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", entryPath, err)
 	}
 	existing, err := os.ReadDir(typeDir)
@@ -418,10 +418,10 @@ func GenerateWritingGuardPy(rules []db.WritingRule) string {
 		if r.Severity == "must-fix" && r.Category == "kill-words" {
 			killWords = append(killWords, r.RuleText)
 		}
-		if r.Category == "heading-patterns" && r.Severity == "must-fix" && r.ExampleBefore != nil {
+		if r.Category == "heading-patterns" && r.Severity == "must-fix" && r.ExampleBefore != nil && isSafePattern(*r.ExampleBefore) {
 			headingPatterns = append(headingPatterns, [2]string{*r.ExampleBefore, r.RuleText})
 		}
-		if r.DetectionPattern != nil && *r.DetectionPattern != "" {
+		if r.DetectionPattern != nil && *r.DetectionPattern != "" && isSafePattern(*r.DetectionPattern) {
 			if r.Category == "prohibition" {
 				hardPatterns = append(hardPatterns, [2]string{*r.DetectionPattern, r.RuleText})
 			} else {
@@ -645,6 +645,10 @@ func AgentIntegrationEnabled(home string) bool {
 // target="codex": writes ~/.margin/writing-rules.md and ~/.codex/AGENTS.md.
 // Skips writing_guard.py — Codex uses prompt-level instructions instead of a hook.
 func ExportProfile(dbPath string, target string) error {
+	return withExportLock(func() error { return exportProfile(dbPath, target) })
+}
+
+func exportProfile(dbPath string, target string) error {
 	d, err := db.OpenRead(dbPath)
 	if err != nil {
 		return err
@@ -690,7 +694,7 @@ func ExportProfile(dbPath string, target string) error {
 
 	if target == "codex" {
 		// Codex target: update AGENTS.md instead of writing the Claude hook.
-		return ExportCodex(dbPath)
+		return exportCodex(dbPath)
 	}
 
 	// Default (Claude) target: write writing_guard.py.
@@ -698,7 +702,7 @@ func ExportProfile(dbPath string, target string) error {
 	hooksDir := filepath.Join(home, ".claude", "hooks")
 	os.MkdirAll(hooksDir, 0755)
 	guardPath := filepath.Join(hooksDir, "writing_guard.py")
-	if err := os.WriteFile(guardPath, []byte(guardPy), 0755); err != nil {
+	if err := writeFileAtomic(guardPath, []byte(guardPy), 0755); err != nil {
 		return fmt.Errorf("failed to write %s: %w", guardPath, err)
 	}
 

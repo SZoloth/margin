@@ -112,6 +112,25 @@ describe("browser mock invoke", () => {
     expect(after.some((h) => h.id === created.id)).toBe(false);
   });
 
+  it("merges one highlight into another, keeping its notes", async () => {
+    const keep = (await mockInvoke("create_highlight", {
+      documentId: "doc-m", color: "yellow", textContent: "one", fromPos: 0, toPos: 3,
+      prefixContext: null, suffixContext: null,
+    })) as { id: string };
+    const gone = (await mockInvoke("create_highlight", {
+      documentId: "doc-m", color: "yellow", textContent: "two", fromPos: 4, toPos: 7,
+      prefixContext: null, suffixContext: null,
+    })) as { id: string };
+    await mockInvoke("create_margin_note", { highlightId: gone.id, content: "kept note" });
+
+    await mockInvoke("merge_highlight_into", { sourceId: gone.id, targetId: keep.id });
+
+    const highlights = (await mockInvoke("get_highlights", { documentId: "doc-m" })) as Array<{ id: string }>;
+    expect(highlights.map((h) => h.id)).toEqual([keep.id]);
+    const notes = (await mockInvoke("get_margin_notes", { documentId: "doc-m" })) as Array<{ highlight_id: string; content: string }>;
+    expect(notes.find((n) => n.content === "kept note")?.highlight_id).toBe(keep.id);
+  });
+
   it("CRUDs margin notes in memory", async () => {
     const created = (await mockInvoke("create_margin_note", {
       highlightId: "hl-1",

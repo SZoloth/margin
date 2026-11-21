@@ -1,4 +1,5 @@
 import type { TabCache } from "@/types/tab";
+import { reportError } from "@/lib/error-bus";
 
 export interface SaveAndCloseArgs {
   tabId: string;
@@ -28,8 +29,9 @@ export async function saveAndCloseTab({
   } else if (!cached) {
     saved = false;
   } else if (cached.filePath === null) {
-    // Keep-local articles have no file; same as saving the active one.
-    saved = true;
+    // Keep-local articles have no file to write their text to.
+    reportError(`Margin can't save edits to an article's text. Copy them out before you close "${cached.document?.title ?? "the article"}".`);
+    saved = false;
   } else {
     saved = await saveFile(cached.filePath, cached.content);
   }

@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { randomBytes } from "crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { VALID_WRITING_TYPES } from "./writing-rules.js";
@@ -174,6 +174,18 @@ export function compareDrafts(draft: string, final: string): DraftComparison | {
 
 // --- Files ---
 
+// Drafts and their untouched originals are private writing: owner-only, and
+// folders made by an older version are tightened on the next write.
+function ensurePrivateDir(dir: string) {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  chmodSync(dir, 0o700);
+}
+
+function writePrivate(path: string, data: string) {
+  writeFileSync(path, data, { mode: 0o600 });
+  chmodSync(path, 0o600);
+}
+
 function paths(baseDir: string, id: string) {
   return {
     draft: join(baseDir, `${id}.md`),
@@ -239,10 +251,11 @@ export async function createDraftReview(
     review: null,
   };
   try {
-    mkdirSync(join(baseDir, ".claude"), { recursive: true });
-    writeFileSync(p.original, params.text);
-    writeFileSync(p.manifest, JSON.stringify(manifest, null, 2));
-    writeFileSync(p.draft, params.text);
+    ensurePrivateDir(baseDir);
+    ensurePrivateDir(join(baseDir, ".claude"));
+    writePrivate(p.original, params.text);
+    writePrivate(p.manifest, JSON.stringify(manifest, null, 2));
+    writePrivate(p.draft, params.text);
   } catch (err) {
     return { error: `Could not write draft: ${errorMessage(err)}` };
   }
@@ -280,7 +293,7 @@ export function getDraftReview(id: string, deps?: DraftDeps): DraftReviewResult 
 
   const review: DraftReview = { checked_at: now(), ...comparison };
   try {
-    writeFileSync(p.manifest, JSON.stringify({ ...manifest, review }, null, 2));
+    writePrivate(p.manifest, JSON.stringify({ ...manifest, review }, null, 2));
   } catch (err) {
     return { error: `Could not save review: ${errorMessage(err)}` };
   }

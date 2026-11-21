@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, statSync, mkdirSync, chmodSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
@@ -69,6 +69,23 @@ describe("createDraftReview", () => {
     expect(readFileSync(join(baseDir, ".claude", `${res.id}.md`), "utf8")).toBe(DRAFT);
     const manifest = JSON.parse(readFileSync(join(baseDir, ".claude", `${res.id}.json`), "utf8")) as DraftManifest;
     expect(manifest).toEqual({ id: res.id, title: "Acme intro", writing_type: "outreach", created_at: clock, review: null });
+  });
+
+  it("keeps drafts, originals and manifests readable by the owner only", async () => {
+    const dir = join(baseDir, "drafts");
+    mkdirSync(join(dir, ".claude"), { recursive: true });
+    chmodSync(dir, 0o755);
+    chmodSync(join(dir, ".claude"), 0o755);
+    const res = await createDraftReview({ text: DRAFT, writing_type: "outreach", title: "Acme intro" }, { ...deps, baseDir: dir });
+    if ("error" in res) throw new Error(res.error);
+    const mode = (p: string) => statSync(p).mode & 0o777;
+    expect(mode(dir)).toBe(0o700);
+    expect(mode(join(dir, ".claude"))).toBe(0o700);
+    expect(mode(res.path)).toBe(0o600);
+    expect(mode(join(dir, ".claude", `${res.id}.md`))).toBe(0o600);
+    expect(mode(join(dir, ".claude", `${res.id}.json`))).toBe(0o600);
+    getDraftReview(res.id, { ...deps, baseDir: dir });
+    expect(mode(join(dir, ".claude", `${res.id}.json`))).toBe(0o600);
   });
 
   it("reports opened false when the opener fails", async () => {
