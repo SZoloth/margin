@@ -40,6 +40,7 @@ import type { SnapshotData } from "@/hooks/useTabs";
 import { createAnchor, resolveAnchor, buildDocTextMap, docPosToFlat, flatToDocPos } from "@/lib/text-anchoring";
 import { allowedMarkRanges, planHighlightOverlap, collectMarkIdsInRange, rangeFullyMarked } from "@/lib/highlight-ranges";
 import { applyAcceptedCorrection } from "@/lib/apply-accepted-correction";
+import { saveAndCloseTab } from "@/lib/save-and-close";
 import { HIGHLIGHT_COLORS } from "@/lib/highlight-colors";
 import { buildCorrectionExportInputs, formatAnnotationsMarkdown, getExtendedContext } from "@/lib/export-annotations";
 import { serializeEditorMarkdown } from "@/lib/serialize-editor";
@@ -2231,8 +2232,14 @@ export default function App() {
             onCancel={tabsHook.cancelCloseTab}
             onCloseWithoutSaving={() => tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!)}
             onSaveAndClose={async () => {
-              await doc.saveCurrentFile();
-              tabsHook.forceCloseTab(tabsHook.pendingCloseTabId!);
+              await saveAndCloseTab({
+                tabId: tab.id,
+                activeTabId: tabsHook.activeTabId,
+                cached: tabsHook.getCachedTab(tab.id),
+                saveActive: doc.saveCurrentFile,
+                saveFile: doc.saveFileContent,
+                close: tabsHook.forceCloseTab,
+              });
             }}
           />
         );

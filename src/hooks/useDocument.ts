@@ -35,7 +35,10 @@ export interface UseDocumentReturn {
   openFilePath: (path: string) => Promise<void>;
   openRecentDocument: (doc: Document) => Promise<void>;
   openKeepLocalArticle: (doc: Document, markdown: string) => Promise<void>;
-  saveCurrentFile: () => Promise<void>;
+  /** Resolves false when the write failed; the document stays dirty. */
+  saveCurrentFile: () => Promise<boolean>;
+  /** Write a non-active tab's draft to its file. Resolves false on failure. */
+  saveFileContent: (path: string, body: string) => Promise<boolean>;
   isSelfSave: (path: string) => boolean;
   refreshRecentDocs: () => void;
   renameDocFile: (doc: Document, newName: string) => Promise<void>;
@@ -295,30 +298,47 @@ export function useDocument(): UseDocumentReturn {
     }
   }, [currentDoc, refreshRecentDocs]);
 
-  const saveCurrentFile = useCallback(async () => {
-    if (!isDirty) return;
+  const writeToDisk = useCallback(async (path: string, body: string): Promise<string | null> => {
+    // Strip any <mark> tags that TipTap's serializer may leak into markdown
+    const clean = body.replace(/<\/?mark[^>]*>/g, "");
+    // Mark this path as self-saved for 1s so the file watcher skips the reload
+    selfSaveRef.current = { path, until: Date.now() + 1000 };
+    try {
+      await saveFileCommand(path, clean);
+      return clean;
+    } catch (err) {
+      selfSaveRef.current = null;
+      reportError(`Could not save "${basename(path)}"`, err);
+      return null;
+    }
+  }, []);
+
+  const saveFileContent = useCallback(
+    async (path: string, body: string) => (await writeToDisk(path, body)) !== null,
+    [writeToDisk],
+  );
+
+  const saveCurrentFile = useCallback(async (): Promise<boolean> => {
+    if (!isDirty) return true;
 
     // Keep-local articles have no file path — annotations are already in SQLite,
     // so just clear the dirty flag.
     if (!filePath) {
       setIsDirty(false);
-      return;
+      return true;
     }
 
-    try {
-      const fresh = contentProviderRef.current?.() ?? null;
-      const body = fresh ?? content;
-      if (fresh !== null && fresh !== content) {
-        setContentState(fresh);
-      }
-      // Strip any <mark> tags that TipTap's serializer may leak into markdown
-      const clean = body.replace(/<\/?mark[^>]*>/g, "");
-      // Mark this path as self-saved for 1s so the file watcher skips the reload
-      selfSaveRef.current = { path: filePath, until: Date.now() + 1000 };
-      await saveFileCommand(filePath, clean);
-      setIsDirty(false);
+    const fresh = contentProviderRef.current?.() ?? null;
+    const body = fresh ?? content;
+    if (fresh !== null && fresh !== content) {
+      setContentState(fresh);
+    }
+    const clean = await writeToDisk(filePath, body);
+    if (clean === null) return false;
+    setIsDirty(false);
 
-      if (currentDoc) {
+    if (currentDoc) {
+      try {
         const updated: Document = {
           ...currentDoc,
           word_count: countWords(clean),
@@ -327,11 +347,12 @@ export function useDocument(): UseDocumentReturn {
         const saved = await upsertDocument(updated);
         setCurrentDoc(saved);
         refreshRecentDocs();
+      } catch (err) {
+        reportError(`Saved "${basename(filePath)}" but could not update its details`, err);
       }
-    } catch (err) {
-      reportError(`Could not save "${basename(filePath)}"`, err);
     }
-  }, [filePath, isDirty, content, currentDoc, refreshRecentDocs]);
+    return true;
+  }, [filePath, isDirty, content, currentDoc, refreshRecentDocs, writeToDisk]);
 
   const restoreFromCache = useCallback((
     cachedDoc: Document | null,
@@ -372,6 +393,7 @@ export function useDocument(): UseDocumentReturn {
     openRecentDocument,
     openKeepLocalArticle,
     saveCurrentFile,
+    saveFileContent,
     isSelfSave,
     refreshRecentDocs,
     renameDocFile,
