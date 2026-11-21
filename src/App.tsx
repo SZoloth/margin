@@ -12,6 +12,7 @@ import { ReaderControls } from "@/components/editor/ReaderControls";
 import { HighlightThread } from "@/components/editor/HighlightThread";
 import { RuleViolationPopover } from "@/components/editor/RuleViolationPopover";
 import {
+  replaceAllRuleMatches,
   setRuleScanFlash,
   setRuleScanFresh,
   setRuleScanMatches,
@@ -2153,15 +2154,12 @@ export default function App() {
           onApplyAll={isTellRuleId(rulePopover.rule.id) ? undefined : (replacement) => {
             const ed = editorRef.current;
             if (!ed || ed.isDestroyed) return;
-            // Walk ranges back-to-front so earlier positions stay valid.
-            const ranges = [...rulePopover.allRanges].sort((a, b) => b.from - a.from);
-            let tr = ed.state.tr;
-            for (const r of ranges) {
-              const current = tr.doc.textBetween(r.from, r.to, "", "");
-              tr = tr.insertText(preserveCase(current, replacement), r.from, r.to);
-            }
-            tr.setMeta("addToHistory", true);
-            ed.view.dispatch(tr);
+            replaceAllRuleMatches(
+              ed,
+              rulePopover.rule.id,
+              (d) => scanDocForMatches(d, writingRulesRef.current, { aiTells: aiTellsRef.current }),
+              (current) => preserveCase(current, replacement),
+            );
             const rescan = setRuleScanMatches(
               ed.state.tr,
               scanDocForMatches(ed.state.doc, writingRulesRef.current, { aiTells: aiTellsRef.current }),
