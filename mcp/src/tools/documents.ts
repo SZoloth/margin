@@ -1,5 +1,14 @@
 import type Database from "better-sqlite3";
-import { readFileSync, statSync } from "fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readSync,
+  realpathSync,
+} from "fs";
+import { extname } from "path";
 
 export interface DocumentRecord {
   id: string;
@@ -22,6 +31,44 @@ export interface SearchResult {
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB safety limit
+
+// Same list as DOCUMENT_EXTENSIONS in src-tauri/src/commands/file_access.rs.
+const DOCUMENT_EXTENSIONS = new Set([".md", ".markdown", ".mdown", ".mkd", ".txt"]);
+
+function isDocumentPath(path: string): boolean {
+  return DOCUMENT_EXTENSIONS.has(extname(path).toLowerCase());
+}
+
+/**
+ * Reads a recorded document without trusting what is at the path now: a link
+ * must still lead to a document file, the opened descriptor must be a regular
+ * file (a pipe would block forever), and at most 5 MB is read from it.
+ */
+function readRecordedFile(path: string): { content: string } | { error: string } {
+  if (lstatSync(path).isSymbolicLink() && !isDocumentPath(realpathSync(path))) {
+    return { error: `Refusing to read ${path}: it links to a file that isn't a document.` };
+  }
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) {
+      return { error: `Refusing to read ${path}: it isn't a regular file.` };
+    }
+    const buf = Buffer.alloc(MAX_FILE_SIZE + 1);
+    let total = 0;
+    for (;;) {
+      const n = readSync(fd, buf, total, buf.length - total, null);
+      if (n === 0) break;
+      total += n;
+      if (total > MAX_FILE_SIZE) {
+        return { error: "File too large. Maximum supported size is 5MB." };
+      }
+    }
+    return { content: buf.subarray(0, total).toString("utf-8") };
+  } finally {
+    closeSync(fd);
+  }
+}
 
 export function listDocuments(
   db: Database.Database,
@@ -68,14 +115,7 @@ export function readDocument(
     };
   }
   try {
-    const stat = statSync(doc.file_path);
-    if (stat.size > MAX_FILE_SIZE) {
-      return {
-        error: `File too large (${(stat.size / 1024 / 1024).toFixed(1)}MB). Maximum supported size is 5MB.`,
-      };
-    }
-    const content = readFileSync(doc.file_path, "utf-8");
-    return { content };
+    return readRecordedFile(doc.file_path);
   } catch (e) {
     return {
       error: `Failed to read file at ${doc.file_path}: ${e instanceof Error ? e.message : String(e)}`,
