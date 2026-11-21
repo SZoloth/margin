@@ -41,3 +41,6 @@ src-tauri/binaries/
 mcp/scripts/regression/
 mcp/scripts/autoresearch/*.tsv
 mcp/scripts/autoresearch/*-eval.json
+
+# match skill compare pages
+.match/

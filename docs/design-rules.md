@@ -23,6 +23,10 @@ Shared craft rules for Sam's UI repos, confirmed by Sam on 2026-11-12. Read them
 14. Respect the numbers: 100 ms / 300 ms / 1 s response thresholds, 44 pt minimum hit targets, 4.5:1 text contrast, and 45 to 90 characters per line of body text.
 15. Give uppercase and small text extra letter-spacing, and tighten large display type.
 
+## Skills
+
+Vendored design skills live in `.claude/skills/` (see its README): `find-animation-opportunities` before adding motion, `defaults` and `color` as a QA pass, `match` when working from a reference.
+
 ## Constraints
 
 This repo's constraints live in code, not here: `src/styles/globals.css` (palette, fonts, radii) and `docs/motion-spec.md` (motion budget). If a change needs a value that isn't there, ask Sam before adding one.
