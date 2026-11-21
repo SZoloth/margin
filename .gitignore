@@ -9,6 +9,12 @@ target/
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/verify-margin/
+!.claude/skills/README.md
+!.claude/skills/LICENSE-*
+!.claude/skills/color/
+!.claude/skills/defaults/
+!.claude/skills/find-animation-opportunities/
+!.claude/skills/match/
 playground/
 tsconfig.tsbuildinfo
 .env
@@ -41,3 +47,6 @@ src-tauri/binaries/
 mcp/scripts/regression/
 mcp/scripts/autoresearch/*.tsv
 mcp/scripts/autoresearch/*-eval.json
+
+# match skill compare pages
+.match/
