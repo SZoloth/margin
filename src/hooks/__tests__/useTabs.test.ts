@@ -683,4 +683,90 @@ describe("useTabs", () => {
       expect(snapshotCalls).toBe(1);
     });
   });
+
+  // ── Unsaved drafts survive tab moves ──────────────────────────
+
+  describe("unsaved drafts", () => {
+    function dirtySnapshot(content: string): () => SnapshotData {
+      return () => ({
+        document: null,
+        content,
+        filePath: null,
+        isDirty: true,
+        highlights: [],
+        marginNotes: [],
+        annotationsLoaded: false,
+        scrollPosition: 0,
+      });
+    }
+
+    it("a tab's cache keeps its dirty flag when you switch away", async () => {
+      const { result } = renderHook(() => useTabs({ snapshotFn: dirtySnapshot("edited A") }));
+      await flushMount();
+      act(() => result.current.openTab(makeDoc("a"), "A", "/tmp/a.md"));
+      act(() => result.current.openTab(makeDoc("b"), "B", "/tmp/b.md"));
+      const [tabA, tabB] = result.current.tabs;
+      act(() => result.current.switchTab(tabA!.id));
+      expect(result.current.getCachedTab(tabB!.id)!.isDirty).toBe(true);
+      expect(result.current.getCachedTab(tabB!.id)!.content).toBe("edited A");
+    });
+
+    it("reopening a document whose tab holds an unsaved draft keeps the draft", async () => {
+      let snapshot = { content: "", isDirty: false };
+      const snapshotFn = (): SnapshotData => ({
+        document: null,
+        content: snapshot.content,
+        filePath: "/tmp/a.md",
+        isDirty: snapshot.isDirty,
+        highlights: [],
+        marginNotes: [],
+        annotationsLoaded: false,
+        scrollPosition: 0,
+      });
+      const { result } = renderHook(() => useTabs({ snapshotFn }));
+      await flushMount();
+      const docA = makeDoc("a");
+      act(() => result.current.openTab(docA, "disk A", "/tmp/a.md"));
+      const tabA = result.current.tabs[0]!;
+      act(() => result.current.updateActiveTabDirty(true));
+      snapshot = { content: "draft A", isDirty: true };
+      act(() => result.current.snapshotActive());
+      act(() => result.current.openTab(makeDoc("b"), "B", "/tmp/b.md"));
+
+      act(() => result.current.openTab(docA, "disk A", "/tmp/a.md"));
+
+      expect(result.current.activeTabId).toBe(tabA.id);
+      expect(result.current.getCachedTab(tabA.id)!.content).toBe("draft A");
+      expect(result.current.getCachedTab(tabA.id)!.isDirty).toBe(true);
+      expect(result.current.tabs.find((t) => t.id === tabA.id)!.isDirty).toBe(true);
+    });
+
+    it("opening in the current tab leaves a dirty tab alone and opens a new one", async () => {
+      const { result } = renderHook(() => useTabs({ snapshotFn: dirtySnapshot("draft A") }));
+      await flushMount();
+      act(() => result.current.openTab(makeDoc("a"), "A", "/tmp/a.md"));
+      const tabA = result.current.tabs[0]!;
+      act(() => result.current.updateActiveTabDirty(true));
+      act(() => result.current.snapshotActive());
+
+      act(() => result.current.openInActiveTab(makeDoc("b"), "B", "/tmp/b.md"));
+
+      expect(result.current.tabs).toHaveLength(2);
+      expect(result.current.tabs[0]!.documentId).toBe("a");
+      expect(result.current.activeTabId).not.toBe(tabA.id);
+      expect(result.current.getCachedTab(tabA.id)!.content).toBe("draft A");
+    });
+
+    it("finds the tab already holding a document, by id or file path", async () => {
+      const { result } = renderHook(() => useTabs({ snapshotFn: makeSnapshotFn() }));
+      await flushMount();
+      act(() => result.current.openTab(makeDoc("a"), "A", "/tmp/a.md"));
+      act(() => result.current.openTab(makeDoc("b"), "B", "/tmp/b.md"));
+      const [tabA, tabB] = result.current.tabs;
+      expect(result.current.findTabFor({ documentId: "a" })).toBe(tabA!.id);
+      expect(result.current.findTabFor({ filePath: "/tmp/b.md" })).toBe(tabB!.id);
+      expect(result.current.findTabFor({ filePath: "/tmp/c.md" })).toBeNull();
+    });
+  });
 });
+
