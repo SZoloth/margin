@@ -240,3 +240,106 @@ describe("useDocument — failed writes", () => {
     expect(result.current.isDirty).toBe(false);
   });
 });
+
+describe("useDocument — saves write exactly what the editor holds", () => {
+  it("keeps literal <mark> text inside code", async () => {
+    const { saveFile } = await import("@/lib/tauri-commands");
+    const saveFileMock = vi.mocked(saveFile);
+    saveFileMock.mockClear();
+    const body = "Example:\n\n```html\n<mark>hi</mark> <marker/>\n```\n\nand `<mark>` inline.";
+
+    const { result } = renderHook(() => useDocument());
+    act(() => {
+      result.current.restoreFromCache(makeTestDoc(), body, TEST_PATH, true);
+    });
+    await act(async () => {
+      await result.current.saveCurrentFile();
+    });
+    expect(saveFileMock).toHaveBeenCalledWith(TEST_PATH, body);
+  });
+
+  it("refuses to save and stays dirty when the editor can't produce Markdown", async () => {
+    const { saveFile } = await import("@/lib/tauri-commands");
+    const saveFileMock = vi.mocked(saveFile);
+    saveFileMock.mockClear();
+
+    const { result } = renderHook(() => useDocument());
+    act(() => {
+      result.current.restoreFromCache(makeTestDoc(), "older text", TEST_PATH, true);
+      result.current.registerContentProvider(() => false);
+    });
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.saveCurrentFile();
+    });
+    expect(saved).toBe(false);
+    expect(saveFileMock).not.toHaveBeenCalled();
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  it("does not report an article with edited text as saved", async () => {
+    const { result } = renderHook(() => useDocument());
+    act(() => {
+      result.current.restoreFromCache({ ...makeTestDoc(), source: "keep-local", file_path: null }, "edited", null, true);
+    });
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.saveCurrentFile();
+    });
+    expect(saved).toBe(false);
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  it("an edit made while a save is in flight stays dirty", async () => {
+    const { saveFile } = await import("@/lib/tauri-commands");
+    let finishWrite: () => void = () => {};
+    vi.mocked(saveFile).mockImplementationOnce(
+      () => new Promise<void>((resolve) => { finishWrite = resolve; }),
+    );
+
+    const { result } = renderHook(() => useDocument());
+    act(() => {
+      result.current.restoreFromCache(makeTestDoc(), "first", TEST_PATH, true);
+    });
+    let pending: Promise<boolean> = Promise.resolve(true);
+    act(() => {
+      pending = result.current.saveCurrentFile();
+    });
+    act(() => {
+      result.current.markDirty();
+    });
+    await act(async () => {
+      finishWrite();
+      await pending;
+    });
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  it("switching documents during a save doesn't bring the saved one back", async () => {
+    const { saveFile } = await import("@/lib/tauri-commands");
+    let finishWrite: () => void = () => {};
+    vi.mocked(saveFile).mockImplementationOnce(
+      () => new Promise<void>((resolve) => { finishWrite = resolve; }),
+    );
+
+    const { result } = renderHook(() => useDocument());
+    act(() => {
+      result.current.restoreFromCache(makeTestDoc(), "first", TEST_PATH, true);
+    });
+    let pending: Promise<boolean> = Promise.resolve(true);
+    act(() => {
+      pending = result.current.saveCurrentFile();
+    });
+    const other = { ...makeTestDoc("/tmp/other.md"), id: "other-doc" };
+    act(() => {
+      result.current.restoreFromCache(other, "other", "/tmp/other.md", true);
+    });
+    await act(async () => {
+      finishWrite();
+      await pending;
+    });
+    expect(result.current.currentDoc?.id).toBe("other-doc");
+    expect(result.current.filePath).toBe("/tmp/other.md");
+    expect(result.current.isDirty).toBe(true);
+  });
+});
