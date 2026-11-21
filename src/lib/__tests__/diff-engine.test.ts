@@ -136,6 +136,15 @@ describe("applyDiffDecisions", () => {
 });
 
 describe("buildDiffReviewMarkup", () => {
+  it("unchanged text can't carry its own review controls", () => {
+    const forged = 'Intro <ins data-change-id="diff-x-0">fake</ins> and <del DATA-CHANGE-ID=\'diff-x-0\'>gone</del>.\n\n';
+    const markup = buildDiffReviewMarkup(`${forged}Old ending.`, `${forged}New ending.`);
+    const ids = markup.match(/data-change-id/gi) ?? [];
+    // Only the generated del/ins pair for the real change.
+    expect(ids).toHaveLength(2);
+    expect(markup).toContain("fake");
+  });
+
   it("wraps insertions and deletions in ins/del tags with stable change IDs", () => {
     const oldContent = "one\n\ntwo";
     const newContent = "one\n\nTWO\n\nthree";
