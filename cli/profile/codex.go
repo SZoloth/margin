@@ -42,6 +42,10 @@ func CodexAgentsMDPath() string {
 //
 // Does nothing if ~/.codex does not exist — Codex is not installed.
 func ExportCodex(dbPath string) error {
+	return withExportLock(func() error { return exportCodex(dbPath) })
+}
+
+func exportCodex(dbPath string) error {
 	codexDir := CodexDir()
 	if _, err := os.Stat(codexDir); os.IsNotExist(err) {
 		// Codex not installed — skip silently
@@ -86,7 +90,7 @@ func writeCodexAgentsMD(managed string) error {
 	existing, readErr := os.ReadFile(agentsPath)
 	if readErr == nil {
 		merged := mergeCodexAgentsMD(string(existing), managed)
-		return os.WriteFile(agentsPath, []byte(merged), 0644)
+		return writeFileAtomic(agentsPath, []byte(merged), 0644)
 	}
 	if !os.IsNotExist(readErr) {
 		return fmt.Errorf("failed to read %s: %w", agentsPath, readErr)
@@ -96,7 +100,7 @@ func writeCodexAgentsMD(managed string) error {
 	if err := os.MkdirAll(CodexDir(), 0755); err != nil {
 		return fmt.Errorf("failed to create ~/.codex: %w", err)
 	}
-	return os.WriteFile(agentsPath, []byte(managed), 0644)
+	return writeFileAtomic(agentsPath, []byte(managed), 0644)
 }
 
 const beginMarker = "<!-- BEGIN MARGIN WRITING RULES -->"
