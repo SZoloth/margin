@@ -112,6 +112,17 @@ fn remove_highlight(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Deletes a highlight, refusing when `expected_doc` is given and the row
+/// belongs to another document: highlight ids can arrive from document markup.
+fn delete_highlight_in(conn: &Connection, id: &str, expected_doc: Option<&str>) -> Result<String, String> {
+    let doc_id = document_id_for_highlight(conn, id)?;
+    if expected_doc.is_some_and(|d| d != doc_id) {
+        return Err("That highlight belongs to another document.".to_string());
+    }
+    remove_highlight(conn, id)?;
+    Ok(doc_id)
+}
+
 /// Fold one highlight into another on the same document: its notes move to
 /// the survivor, then the row is deleted. Used when a new highlight covers
 /// several existing ones, so their notes never cascade away with the row.
@@ -338,11 +349,14 @@ pub async fn update_highlight(
 }
 
 #[tauri::command]
-pub async fn delete_highlight(state: tauri::State<'_, DbPool>, id: String) -> Result<(), String> {
+pub async fn delete_highlight(
+    state: tauri::State<'_, DbPool>,
+    id: String,
+    document_id: Option<String>,
+) -> Result<(), String> {
     let conn = state.0.lock().unwrap_or_else(|e| e.into_inner());
 
-    let doc_id = document_id_for_highlight(&conn, &id)?;
-    remove_highlight(&conn, &id)?;
+    let doc_id = delete_highlight_in(&conn, &id, document_id.as_deref())?;
     touch_document(&conn, &doc_id)?;
 
     Ok(())

@@ -173,7 +173,7 @@ export function useAnnotations(
   );
 
   const deleteHighlight = useCallback(async (id: string) => {
-    await invoke("delete_highlight", { id });
+    await invoke("delete_highlight", { id, documentId: currentDocumentIdRef.current });
     setHighlights((prev) => prev.filter((h) => h.id !== id));
     setMarginNotes((prev) => prev.filter((n) => n.highlight_id !== id));
     onMutate?.();

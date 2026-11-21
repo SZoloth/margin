@@ -1357,8 +1357,9 @@ export default function App() {
     }
 
     try {
-      for (const id of ids) {
-        await annotationsRef.current.deleteHighlight(id);
+      // Only rows this document owns: ids in marks can come from file markup.
+      for (const h of removed) {
+        await annotationsRef.current.deleteHighlight(h.id);
       }
     } catch (err) {
       console.error("Failed to remove highlight:", err);
