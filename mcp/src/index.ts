@@ -33,6 +33,7 @@ import {
   setCorrectionPolarity,
   getVoiceSignals,
 } from "./tools/corrections.js";
+import { getSimilarCorrections } from "./tools/similar-corrections.js";
 import {
   getWritingRules,
   getWritingRulesMarkdown,
@@ -207,6 +208,28 @@ server.tool(
   {},
   async () => withDb(() => ({
     content: [{ type: "text", text: JSON.stringify(getCorrectionsSummary(getReadDb()), null, 2) }],
+  })),
+);
+
+server.tool(
+  "margin_get_similar_corrections",
+  "Retrieve the k most similar past human writing corrections for a draft passage using EmbeddingGemma 2 cosine nearest-neighbors backed by ~/.cache/embeddinggemma2/vectors.sqlite. Gracefully returns an empty unavailable result if uv or the local model is unavailable.",
+  {
+    query: z.string().describe("Draft passage or text to match against past human corrections"),
+    limit: z.number().optional().describe("Max results (default 6, max 50)"),
+    writing_type: z.string().optional().describe("Optional writing type filter (e.g. cover-letter, blog, outreach, general)"),
+  },
+  async ({ query, limit, writing_type }) => withDb(async () => ({
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          await getSimilarCorrections(getReadDb(), { query, limit, writing_type }),
+          null,
+          2,
+        ),
+      },
+    ],
   })),
 );
 
