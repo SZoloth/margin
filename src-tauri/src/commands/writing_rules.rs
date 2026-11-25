@@ -726,6 +726,7 @@ pub async fn delete_writing_rule(
         delete_rule(&conn, &id).map_err(|e| e.to_string())?;
     }
     export_artifacts();
+    emit_eidetic_outcome(&id, "harmful", "margin rule archived by user");
     Ok(())
 }
 
@@ -739,6 +740,7 @@ pub async fn unarchive_writing_rule(
         unarchive_rule(&conn, &id).map_err(|e| e.to_string())?;
     }
     export_artifacts();
+    emit_eidetic_outcome(&id, "helpful", "margin rule restored by user");
     Ok(())
 }
 
@@ -1190,6 +1192,47 @@ pub(crate) fn export_artifacts() {
     let _ = run_cli_export();
 }
 
+/// Returns true when the optional local Eidetic workspace (`~/.margin/eidetic/.ee/ee.db`)
+/// exists under `home`. Used to avoid spawning subprocesses for users without Eidetic enabled.
+fn eidetic_workspace_ready(home: &std::path::Path) -> bool {
+    home.join(".margin")
+        .join("eidetic")
+        .join(".ee")
+        .join("ee.db")
+        .exists()
+}
+
+/// Best-effort, non-blocking Bayesian outcome signal to the optional Eidetic Engine sidecar.
+/// Never blocks the Tauri UI and silently no-ops when Eidetic is not initialized or `margin` CLI is absent.
+fn emit_eidetic_outcome(rule_id: &str, signal: &str, reason: &str) {
+    let Some(home) = dirs::home_dir() else {
+        return;
+    };
+    if !eidetic_workspace_ready(&home) {
+        return;
+    }
+    let Ok(margin_cli) = resolve_margin_cli() else {
+        return;
+    };
+    let rule_id = rule_id.to_string();
+    let signal = signal.to_string();
+    let reason = reason.to_string();
+    std::thread::spawn(move || {
+        let _ = std::process::Command::new(&margin_cli)
+            .args([
+                "eidetic",
+                "outcome",
+                &rule_id,
+                &signal,
+                "--source",
+                "margin-app",
+                "--reason",
+                &reason,
+            ])
+            .output();
+    });
+}
+
 #[tauri::command]
 pub async fn mark_rules_reviewed(
     state: tauri::State<'_, DbPool>,
@@ -1203,6 +1246,9 @@ pub async fn mark_rules_reviewed(
     // cli/cmd/rules.go accept → profile.ExportProfile.
     if updated > 0 {
         export_artifacts();
+        for id in &rule_ids {
+            emit_eidetic_outcome(id, "helpful", "margin rule accepted by user");
+        }
     }
     Ok(updated)
 }
@@ -1218,6 +1264,9 @@ pub async fn mark_rules_unreviewed(
     };
     if updated > 0 {
         export_artifacts();
+        for id in &rule_ids {
+            emit_eidetic_outcome(id, "harmful", "margin rule unreviewed by user");
+        }
     }
     Ok(updated)
 }
