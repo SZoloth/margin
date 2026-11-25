@@ -628,6 +628,9 @@ func ExportJudgmentPack(eeBinOverride, workspace, outputDir, label string) (*Exp
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return nil, err
 	}
+	if resolved, err := filepath.EvalSymlinks(outputDir); err == nil {
+		outputDir = resolved
+	}
 	out, err := runEE(eeBin, workspace, nil, "export", "--output-dir", outputDir, "--label", label)
 	if err != nil {
 		return nil, err
