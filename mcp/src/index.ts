@@ -34,6 +34,7 @@ import {
   getVoiceSignals,
 } from "./tools/corrections.js";
 import { getSimilarCorrections } from "./tools/similar-corrections.js";
+import { compileThinkingPack } from "./tools/eidetic.js";
 import {
   getWritingRules,
   getWritingRulesMarkdown,
@@ -941,6 +942,27 @@ server.tool(
     } catch (err) {
       return draftToolResult({ error: err instanceof Error ? err.message : String(err) });
     }
+  },
+);
+
+server.tool(
+  "margin_compile_thinking_pack",
+  "Compile a deterministic, BLAKE3-hashed Thinking Pack from Margin's optional Eidetic Engine sidecar (`margin eidetic pack`). Returns budget-capped relevant writing rules, highlights, corrections, and surfaced conflicts.",
+  {
+    query: z.string().describe("Topic or writing task to compile a Thinking Pack for"),
+    max_tokens: z.number().int().positive().max(8000).optional().describe("Token budget (default 2000, max 8000)"),
+    workspace: z.string().optional().describe("Optional ee workspace path override (defaults to ~/.margin/eidetic)"),
+  },
+  async ({ query, max_tokens, workspace }) => {
+    const result = compileThinkingPack({
+      query,
+      maxTokens: max_tokens,
+      workspace,
+    });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      isError: "error" in result,
+    };
   },
 );
 
