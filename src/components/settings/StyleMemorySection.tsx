@@ -5,21 +5,23 @@ import { reportError } from "@/lib/error-bus";
 import { cn } from "@/lib/cn";
 import { CorrectionsTab } from "@/components/style-memory/CorrectionsTab";
 import { StyleGuide } from "@/components/style-memory/StyleGuide";
+import { ThinkingPackTab } from "@/components/style-memory/ThinkingPackTab";
 import type { RuleCounts } from "@/components/style-memory/rules-model";
 import { BUTTON_PRIMARY_CLASS, FOCUS_RING, plural } from "@/components/style-memory/controls";
 import type { CorrectionDetail } from "@/types/annotations";
 
 /**
- * Writing rules has two views. The style guide is home: the rules Claude
+ * Writing rules has three views. The style guide is home: the rules Claude
  * follows, with Claude's suggestions inline waiting for a yes. Notes holds the
- * raw material, the comments you left while reading, and the step that turns
- * them into suggestions.
+ * raw material, the comments you left while reading. Thinking pack compiles a
+ * deterministic, budget-capped brief via the optional Eidetic Engine sidecar.
  */
-type View = "guide" | "notes";
+type View = "guide" | "notes" | "pack";
 
 const VIEWS: { id: View; label: string }[] = [
   { id: "guide", label: "Style guide" },
   { id: "notes", label: "Notes" },
+  { id: "pack", label: "Thinking pack" },
 ];
 
 /** Mirrors CORRECTION_FILTER: what synthesis will actually consume. */
@@ -41,7 +43,7 @@ export function StyleMemorySection({ onAcceptEdit, onOpenRuleTests }: StyleMemor
   const [readyCount, setReadyCount] = useState<number | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
-  const tabRefs = useRef<Record<View, HTMLButtonElement | null>>({ guide: null, notes: null });
+  const tabRefs = useRef<Record<View, HTMLButtonElement | null>>({ guide: null, notes: null, pack: null });
 
   // The Notes count shows on its tab before the tab is opened.
   useEffect(() => {
@@ -97,7 +99,8 @@ export function StyleMemorySection({ onAcceptEdit, onOpenRuleTests }: StyleMemor
   const onTabKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     e.preventDefault();
-    const next = VIEWS[(index + 1) % VIEWS.length]!;
+    const delta = e.key === "ArrowRight" ? 1 : VIEWS.length - 1;
+    const next = VIEWS[(index + delta) % VIEWS.length]!;
     setView(next.id);
     tabRefs.current[next.id]?.focus();
   };
@@ -189,6 +192,8 @@ export function StyleMemorySection({ onAcceptEdit, onOpenRuleTests }: StyleMemor
               onAcceptEdit={onAcceptEdit}
             />
           </>
+        ) : view === "pack" ? (
+          <ThinkingPackTab />
         ) : (
           <StyleGuide
             onStatsChange={handleRuleStatsChange}
