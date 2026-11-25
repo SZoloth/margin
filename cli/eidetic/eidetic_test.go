@@ -140,3 +140,25 @@ func TestResolveEEBinaryMissingOverride(t *testing.T) {
 		t.Fatal("expected error for nonexistent ee override")
 	}
 }
+
+func TestIDMapRoundTripAndResolution(t *testing.T) {
+	ws := t.TempDir()
+	m := make(map[string]string)
+	recordIDMapping(m, "margin-rule-rule-123", "mem_01TESTRULE")
+	if err := saveIDMap(ws, m); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, ok := ResolveMemoryID(ws, "mem_DIRECT"); !ok || got != "mem_DIRECT" {
+		t.Fatalf("expected direct passthrough, got %q (%v)", got, ok)
+	}
+	if got, ok := ResolveMemoryID(ws, "rule-123"); !ok || got != "mem_01TESTRULE" {
+		t.Fatalf("expected bare Margin rule ID to resolve, got %q (%v)", got, ok)
+	}
+	if got, ok := ResolveMemoryID(ws, "margin-rule-rule-123"); !ok || got != "mem_01TESTRULE" {
+		t.Fatalf("expected prefixed idempotency key to resolve, got %q (%v)", got, ok)
+	}
+	if _, ok := ResolveMemoryID(ws, "missing-rule"); ok {
+		t.Fatal("expected missing rule ID to return ok=false")
+	}
+}

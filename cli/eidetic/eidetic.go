@@ -423,6 +423,8 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		CorrectionsPrepared: cCount,
 	}
 
+	idMap := loadIDMap(ws)
+
 	for _, chunk := range ChunkRecords(records, batchSize) {
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
@@ -444,9 +446,12 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 			} `json:"data"`
 		}
 		if err := json.Unmarshal(out, &resp); err == nil && len(resp.Data.Results) > 0 {
-			for _, item := range resp.Data.Results {
+			for idx, item := range resp.Data.Results {
 				if item.MemoryID != "" {
 					res.Stored++
+					if idx < len(chunk) && chunk[idx].IdempotencyKey != "" {
+						recordIDMapping(idMap, chunk[idx].IdempotencyKey, item.MemoryID)
+					}
 				} else {
 					res.Failed++
 				}
@@ -455,6 +460,8 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 			res.Stored += len(chunk)
 		}
 	}
+
+	_ = saveIDMap(ws, idMap)
 
 	idxOut, err := runEE(eeBin, ws, nil, "index", "rebuild")
 	if err != nil {
@@ -513,7 +520,58 @@ func Pack(eeBinOverride, workspace, query string, maxTokens int) (*PackResult, e
 	}, nil
 }
 
-// RecordOutcome logs a helpful or harmful outcome event against a memory ID in ee.
+func idMapPath(workspace string) string {
+	return filepath.Join(workspace, "id-map.json")
+}
+
+func loadIDMap(workspace string) map[string]string {
+	m := make(map[string]string)
+	raw, err := os.ReadFile(idMapPath(workspace))
+	if err != nil {
+		return m
+	}
+	_ = json.Unmarshal(raw, &m)
+	return m
+}
+
+func saveIDMap(workspace string, m map[string]string) error {
+	raw, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(idMapPath(workspace), raw, 0o600)
+}
+
+func recordIDMapping(m map[string]string, idemKey, memoryID string) {
+	m[idemKey] = memoryID
+	for _, prefix := range []string{"margin-rule-", "margin-hl-", "margin-corr-"} {
+		if strings.HasPrefix(idemKey, prefix) {
+			m[strings.TrimPrefix(idemKey, prefix)] = memoryID
+			break
+		}
+	}
+}
+
+// ResolveMemoryID maps either a direct `mem_...` ID or a Margin rule/highlight/correction ID
+// (via `<workspace>/id-map.json`) to an ee memory ID.
+func ResolveMemoryID(workspace, id string) (string, bool) {
+	if strings.HasPrefix(id, "mem_") {
+		return id, true
+	}
+	m := loadIDMap(workspace)
+	if mapped, ok := m[id]; ok && mapped != "" {
+		return mapped, true
+	}
+	for _, prefix := range []string{"margin-rule-", "margin-hl-", "margin-corr-"} {
+		if mapped, ok := m[prefix+id]; ok && mapped != "" {
+			return mapped, true
+		}
+	}
+	return "", false
+}
+
+// RecordOutcome logs a helpful or harmful outcome event against an ee memory ID
+// or a Margin rule/highlight/correction ID resolved through `<workspace>/id-map.json`.
 func RecordOutcome(eeBinOverride, workspace, memoryID, signal, sourceID, reason string) (json.RawMessage, error) {
 	if signal != "helpful" && signal != "harmful" {
 		return nil, fmt.Errorf("signal must be 'helpful' or 'harmful', got %q", signal)
@@ -525,11 +583,15 @@ func RecordOutcome(eeBinOverride, workspace, memoryID, signal, sourceID, reason 
 	if workspace == "" {
 		workspace = DefaultWorkspace()
 	}
+	resolvedID, ok := ResolveMemoryID(workspace, memoryID)
+	if !ok {
+		return nil, fmt.Errorf("id %q not found in %s; run `margin eidetic sync` first", memoryID, idMapPath(workspace))
+	}
 	if sourceID == "" {
 		sourceID = "margin-user"
 	}
 	line, err := json.Marshal(map[string]string{
-		"target":   memoryID,
+		"target":   resolvedID,
 		"signal":   signal,
 		"sourceId": sourceID,
 		"reason":   reason,
