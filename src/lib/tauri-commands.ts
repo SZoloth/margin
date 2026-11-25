@@ -170,6 +170,37 @@ export async function exportWritingRules(): Promise<WritingRulesExportResult> {
   return invoke<WritingRulesExportResult>("export_writing_rules");
 }
 
+export interface ThinkingPackResult {
+  workspace: string;
+  query: string;
+  hash: string;
+  itemsCount: number;
+  conflicts?: unknown[];
+  degraded?: unknown[];
+  text: string;
+}
+
+export interface EideticSyncResult {
+  workspace: string;
+  rulesPrepared: number;
+  highlightsPrepared: number;
+  correctionsPrepared: number;
+  stored: number;
+  failed: number;
+  memoriesIndexed: number;
+}
+
+export async function compileThinkingPack(
+  query: string,
+  maxTokens = 2000,
+): Promise<ThinkingPackResult> {
+  return invoke<ThinkingPackResult>("compile_thinking_pack", { query, maxTokens });
+}
+
+export async function syncEideticMemory(): Promise<EideticSyncResult> {
+  return invoke<EideticSyncResult>("sync_eidetic_memory");
+}
+
 /** Whether exports may write Claude Code's writing guard and Codex's AGENTS.md. */
 export async function getAgentIntegration(): Promise<boolean> {
   return invoke<boolean>("get_agent_integration");

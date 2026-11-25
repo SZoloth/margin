@@ -1242,6 +1242,97 @@ fn emit_eidetic_outcome(rule_id: &str, signal: &str, reason: &str) {
     emit_eidetic_outcomes(vec![rule_id.to_string()], signal, reason);
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThinkingPackResponse {
+    pub workspace: String,
+    pub query: String,
+    pub hash: String,
+    pub items_count: u64,
+    pub conflicts: Option<serde_json::Value>,
+    pub degraded: Option<serde_json::Value>,
+    pub text: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EideticSyncResponse {
+    pub workspace: String,
+    pub rules_prepared: u64,
+    pub highlights_prepared: u64,
+    pub corrections_prepared: u64,
+    pub stored: u64,
+    pub failed: u64,
+    pub memories_indexed: u64,
+}
+
+#[tauri::command]
+pub async fn compile_thinking_pack(
+    query: String,
+    max_tokens: Option<u32>,
+) -> Result<ThinkingPackResponse, String> {
+    let trimmed = query.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("Query must not be empty".to_string());
+    }
+    let budget = max_tokens.unwrap_or(2000).clamp(256, 8000);
+    let margin_cli = resolve_margin_cli()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = std::process::Command::new(&margin_cli)
+            .args([
+                "eidetic",
+                "pack",
+                &trimmed,
+                "--max-tokens",
+                &budget.to_string(),
+            ])
+            .output()
+            .map_err(|e| format!("Failed to run margin eidetic pack: {e}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("margin eidetic pack failed: {}", stderr.trim()));
+        }
+
+        serde_json::from_slice::<ThinkingPackResponse>(&output.stdout)
+            .map_err(|e| format!("Failed to parse Thinking Pack response: {e}"))
+    })
+    .await
+    .map_err(|e| format!("Thinking Pack task panicked: {e}"))?
+}
+
+#[tauri::command]
+pub async fn sync_eidetic_memory() -> Result<EideticSyncResponse, String> {
+    let margin_cli = resolve_margin_cli()?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = std::process::Command::new(&margin_cli)
+            .args([
+                "eidetic",
+                "sync",
+                "--max-rules",
+                "500",
+                "--max-highlights",
+                "200",
+                "--max-corrections",
+                "300",
+            ])
+            .output()
+            .map_err(|e| format!("Failed to run margin eidetic sync: {e}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("margin eidetic sync failed: {}", stderr.trim()));
+        }
+
+        serde_json::from_slice::<EideticSyncResponse>(&output.stdout)
+            .map_err(|e| format!("Failed to parse Eidetic sync response: {e}"))
+    })
+    .await
+    .map_err(|e| format!("Eidetic sync task panicked: {e}"))?
+}
+
 #[tauri::command]
 pub async fn mark_rules_reviewed(
     state: tauri::State<'_, DbPool>,
