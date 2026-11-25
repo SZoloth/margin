@@ -539,7 +539,25 @@ func saveIDMap(workspace string, m map[string]string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(idMapPath(workspace), raw, 0o600)
+	tmp, err := os.CreateTemp(workspace, ".id-map-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(raw); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return os.Rename(tmpPath, idMapPath(workspace))
 }
 
 func recordIDMapping(m map[string]string, idemKey, memoryID string) {

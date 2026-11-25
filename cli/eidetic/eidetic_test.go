@@ -161,4 +161,13 @@ func TestIDMapRoundTripAndResolution(t *testing.T) {
 	if _, ok := ResolveMemoryID(ws, "missing-rule"); ok {
 		t.Fatal("expected missing rule ID to return ok=false")
 	}
+	entries, err := os.ReadDir(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Fatalf("atomic saveIDMap left stray temp file: %s", e.Name())
+		}
+	}
 }

@@ -1202,9 +1202,13 @@ fn eidetic_workspace_ready(home: &std::path::Path) -> bool {
         .exists()
 }
 
-/// Best-effort, non-blocking Bayesian outcome signal to the optional Eidetic Engine sidecar.
-/// Never blocks the Tauri UI and silently no-ops when Eidetic is not initialized or `margin` CLI is absent.
-fn emit_eidetic_outcome(rule_id: &str, signal: &str, reason: &str) {
+/// Best-effort, non-blocking Bayesian outcome signal(s) to the optional Eidetic Engine sidecar.
+/// Drains multiple rule IDs sequentially on a single background thread to avoid contending on
+/// ee's single-writer lock. Silently no-ops when Eidetic is not initialized or `margin` CLI is absent.
+fn emit_eidetic_outcomes(rule_ids: Vec<String>, signal: &str, reason: &str) {
+    if rule_ids.is_empty() {
+        return;
+    }
     let Some(home) = dirs::home_dir() else {
         return;
     };
@@ -1214,23 +1218,28 @@ fn emit_eidetic_outcome(rule_id: &str, signal: &str, reason: &str) {
     let Ok(margin_cli) = resolve_margin_cli() else {
         return;
     };
-    let rule_id = rule_id.to_string();
     let signal = signal.to_string();
     let reason = reason.to_string();
     std::thread::spawn(move || {
-        let _ = std::process::Command::new(&margin_cli)
-            .args([
-                "eidetic",
-                "outcome",
-                &rule_id,
-                &signal,
-                "--source",
-                "margin-app",
-                "--reason",
-                &reason,
-            ])
-            .output();
+        for rule_id in rule_ids {
+            let _ = std::process::Command::new(&margin_cli)
+                .args([
+                    "eidetic",
+                    "outcome",
+                    &rule_id,
+                    &signal,
+                    "--source",
+                    "margin-app",
+                    "--reason",
+                    &reason,
+                ])
+                .output();
+        }
     });
+}
+
+fn emit_eidetic_outcome(rule_id: &str, signal: &str, reason: &str) {
+    emit_eidetic_outcomes(vec![rule_id.to_string()], signal, reason);
 }
 
 #[tauri::command]
@@ -1246,9 +1255,7 @@ pub async fn mark_rules_reviewed(
     // cli/cmd/rules.go accept → profile.ExportProfile.
     if updated > 0 {
         export_artifacts();
-        for id in &rule_ids {
-            emit_eidetic_outcome(id, "helpful", "margin rule accepted by user");
-        }
+        emit_eidetic_outcomes(rule_ids, "helpful", "margin rule accepted by user");
     }
     Ok(updated)
 }
@@ -1264,9 +1271,7 @@ pub async fn mark_rules_unreviewed(
     };
     if updated > 0 {
         export_artifacts();
-        for id in &rule_ids {
-            emit_eidetic_outcome(id, "harmful", "margin rule unreviewed by user");
-        }
+        emit_eidetic_outcomes(rule_ids, "harmful", "margin rule unreviewed by user");
     }
     Ok(updated)
 }
@@ -2261,6 +2266,24 @@ mod tests {
 
         assert!(!md.contains(r"(?:^|:\s*)[Tt]he\b"));
         assert!(md.contains("## An uncomfortable timeline"));
+    }
+
+    #[test]
+    fn eidetic_workspace_ready_detects_store() {
+        let dir = std::env::temp_dir().join(format!(
+            "margin-eidetic-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!eidetic_workspace_ready(&dir));
+        let ee_dir = dir.join(".margin").join("eidetic").join(".ee");
+        std::fs::create_dir_all(&ee_dir).unwrap();
+        std::fs::write(ee_dir.join("ee.db"), b"stub").unwrap();
+        assert!(eidetic_workspace_ready(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
 }
