@@ -392,6 +392,19 @@ const STRUCTURAL_PATTERNS: { label: string; regex: RegExp }[] = [
     label: "Hyperbolic claim (the real X is)",
     regex: /\bthe real\s+\w+\s+is\b/gi,
   },
+  // ── Psycholinguistic & word-order tells (arXiv:2610.29162 + 2026-11-26 blind review) ──
+  {
+    label: "Animacy violation (inanimate subject + animate verb)",
+    regex: /\b(?:workloads?|platforms?|systems?|models?|tools?|software|metrics?|data|code|features?|shifts?|markets?|roadmaps?|pipelines?|workflows?|agents?|infrastructure|compute|architecture|products?)\s+(?:buy|buys|bought|want|wants|care|cares|know|knows|decide|decides|think|thinks|choose|chooses|reward|rewards|punish|punishes|speak|speaks|tell|tells|feel|feels|believe|believes|assume|assumes|demand|demands|resist|resists)\b/gi,
+  },
+  {
+    label: "Backwards cleft / topic-stress inversion",
+    regex: /\b(?:is what makes|is what turns|is what separates|is what sets|the scarce part|what makes .{3,40} an? (?:opportunity|advantage))\b/gi,
+  },
+  {
+    label: "AI framing tell (nobody [verb]ed / quietly / timing feels right)",
+    regex: /\b(?:nobody\s+[a-z]+ed|no one\s+[a-z]+ed|quietly|timing feels right)\b/gi,
+  },
 ];
 
 export function scanStructuralTells(text: string): StructuralTellHit[] {

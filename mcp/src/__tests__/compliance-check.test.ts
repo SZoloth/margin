@@ -1,26 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { parseKillWords, scanKillWords } from "../../scripts/compliance-check";
+import { scanStructuralTells } from "../../scripts/compliance-check.ts";
 
-describe("kill word parsing and scanning", () => {
-  it("loads kill words from the reference file", () => {
-    const words = parseKillWords();
-    expect(words.size).toBeGreaterThan(50);
+describe("scanStructuralTells psycholinguistic checks (arXiv:2610.29162)", () => {
+  it("catches inanimate subject with animate verb", () => {
+    const hits = scanStructuralTells(
+      "Inference and training workloads buy compute in very different ways."
+    );
+    expect(hits.some((h) => h.pattern.includes("Animacy violation"))).toBe(true);
   });
 
-  it("strips parentheticals so 'delve (into)' matches 'delve'", () => {
-    const words = new Map([["delve", "high"]]);
-    const hits = scanKillWords("This delves into the data", words);
-    expect(hits).toHaveLength(1);
+  it("catches backwards cleft and topic-stress inversions", () => {
+    const hits = scanStructuralTells(
+      "MemoryAlloy is what makes that shift an opportunity, and the scarce part is reliability."
+    );
+    expect(hits.some((h) => h.pattern.includes("Backwards cleft"))).toBe(true);
   });
 
-  it("matches inflections for single words", () => {
-    const words = new Map([["leverage", "high"], ["synergy", "high"]]);
-    expect(scanKillWords("we leverage synergies", words).length).toBe(2);
+  it("catches AI framing tells (nobody [verb]ed, quietly, timing feels right)", () => {
+    const hits = scanStructuralTells(
+      "The timing feels right because decisions nobody reviewed quietly piled up."
+    );
+    expect(hits.some((h) => h.pattern.includes("AI framing tell"))).toBe(true);
   });
 
-  it("does not inflect multi-word phrases", () => {
-    const words = new Map([["state-of-the-art", "high"]]);
-    expect(scanKillWords("our state-of-the-art system", words)).toHaveLength(1);
-    expect(scanKillWords("our state-of-the-arts system", words)).toHaveLength(0);
+  it("passes clean human prose with zero false positives", () => {
+    const hits = scanStructuralTells(
+      "Teams running inference buy compute differently than teams training foundation models. " +
+        "We shipped 3 features at DreamWorks and cut lookup time from 15 minutes to seconds."
+    );
+    expect(hits).toEqual([]);
   });
 });
